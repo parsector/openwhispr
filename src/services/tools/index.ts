@@ -16,6 +16,8 @@ import {
   type ConnectorToolSettings,
 } from "./connectors/connectorToolModules";
 import type { ContainerScope } from "../../types/chat";
+import { createDelegateTaskTool, type AgentProject } from "./delegateTaskTool";
+import { agentJobTool } from "./agentJobTool";
 
 export { ToolRegistry } from "./ToolRegistry";
 export type { ToolDefinition, ToolResult } from "./ToolRegistry";
@@ -36,6 +38,8 @@ interface ToolRegistrySettings {
   /** Leaves out update_note, for a turn that must not change any note. */
   keepNotesUnchanged?: boolean;
   mcpTools?: import("./ToolRegistry").ToolDefinition[];
+  agentProjects?: AgentProject[];
+  agentAllowed?: boolean;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -68,6 +72,10 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   }
 
   if (settings.connectors) registerConnectorTools(registry, settings.connectors);
+  if (settings.agentAllowed && settings.agentProjects?.length) {
+    registry.register(createDelegateTaskTool(settings.agentProjects));
+    registry.register(agentJobTool);
+  }
   for (const tool of settings.mcpTools || []) {
     if (registry.get(tool.name)) throw new Error(`MCP tool name collision: ${tool.name}`);
     registry.register(tool);
