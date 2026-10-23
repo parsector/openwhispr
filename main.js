@@ -813,11 +813,6 @@ app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
 
-  if (url.includes("upgrade-success")) {
-    handleUpgradeDeepLink();
-    return;
-  }
-
   if (isNoteDeepLink(url)) {
     void handleNoteDeepLink(url);
     return;
@@ -1059,15 +1054,6 @@ async function handleOAuthDeepLink(deepLinkUrl) {
   }
 }
 
-function handleUpgradeDeepLink() {
-  if (isLiveWindow(windowManager?.controlPanelWindow)) {
-    windowManager.controlPanelWindow.webContents.executeJavaScript(
-      'window.dispatchEvent(new Event("upgrade-success"))'
-    );
-    windowManager.showControlPanel();
-  }
-}
-
 function parseJsonBody(req) {
   return new Promise((resolve, reject) => {
     let raw = "";
@@ -1299,9 +1285,7 @@ async function startApp() {
     await handleNoteDeepLink(initialProtocolUrl);
   } else {
     if (initialProtocolUrl && process.platform !== "darwin") {
-      if (initialProtocolUrl.includes("upgrade-success")) {
-        handleUpgradeDeepLink();
-      } else if (isInvitationDeepLink(initialProtocolUrl)) {
+      if (isInvitationDeepLink(initialProtocolUrl)) {
         handleInvitationDeepLink(initialProtocolUrl);
       } else {
         void handleOAuthDeepLink(initialProtocolUrl);
@@ -2035,9 +2019,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
-      if (url.includes("upgrade-success")) {
-        handleUpgradeDeepLink();
-      } else if (isNoteDeepLink(url)) {
+      if (isNoteDeepLink(url)) {
         await handleNoteDeepLink(url);
       } else if (isInvitationDeepLink(url)) {
         handleInvitationDeepLink(url);

@@ -6,7 +6,6 @@ import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
 import { cn } from "./lib/utils";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
 import { Download, RefreshCw, Loader2, AlertTriangle, Zap } from "./icons";
-import UpgradePrompt from "./UpgradePrompt";
 import PostMigrationOnboarding from "./PostMigrationOnboarding";
 import { RequiredModelsBanner } from "./RequiredModelsBanner";
 import { ConfirmDialog, AlertDialog } from "./ui/dialog";
@@ -20,7 +19,6 @@ import { useJoinableWorkspaces } from "../hooks/useJoinableWorkspaces";
 import { useWorkspace } from "../hooks/useWorkspace";
 import { manageableWorkspaces, selectWorkspaceForSpaceCreation } from "../lib/workspaceSelection";
 import { useUsage } from "../hooks/useUsage";
-import { decideUpsell } from "../lib/upsell";
 import { useCollapsibleSidebar } from "../hooks/useCollapsibleSidebar";
 import {
   useTranscriptions,
@@ -123,10 +121,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPostMigration, setShowPostMigration] = useState(false);
-  const [limitData, setLimitData] = useState<{ wordsUsed: number; limit: number } | null>(null);
-  const hasShownUpgradePrompt = useRef(false);
   const [settingsSection, setSettingsSection] = useState<string | undefined>(
     initialSettingsSection
   );
@@ -194,13 +189,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     null
   );
   const usage = useUsage();
-  const upsell = decideUpsell({
-    authLoaded,
-    isSignedIn,
-    hasPaidAccess: usage?.hasPaidAccess ?? null,
-    isPastDue: usage?.isPastDue ?? false,
-  });
-
   const {
     status: updateStatus,
     downloadProgress,
@@ -338,18 +326,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   useEffect(() => {
     const dispose = window.electronAPI?.onLimitReached?.(
-      (data: { wordsUsed: number; limit: number }) => {
-        if (!hasShownUpgradePrompt.current) {
-          hasShownUpgradePrompt.current = true;
-          setLimitData(data);
-          setShowUpgradePrompt(true);
-        } else {
-          toast({
-            title: t("controlPanel.limit.weeklyTitle"),
-            description: t("controlPanel.limit.weeklyDescription"),
-            duration: 5000,
-          });
-        }
+      () => {
+        toast({
+          title: t("controlPanel.limit.weeklyTitle"),
+          description: t("controlPanel.limit.weeklyDescription"),
+          duration: 5000,
+        });
       }
     );
 
@@ -954,13 +936,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onOk={() => {}}
       />
 
-      <UpgradePrompt
-        open={showUpgradePrompt}
-        onOpenChange={setShowUpgradePrompt}
-        wordsUsed={limitData?.wordsUsed}
-        limit={limitData?.limit}
-      />
-
       <PostMigrationOnboarding
         open={showPostMigration}
         onOpenChange={setShowPostMigration}
@@ -1065,17 +1040,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             }}
             onOpenReferrals={() => setShowReferrals(true)}
             onInviteTeam={inviteWorkspace ? () => setShowInviteTeam(true) : undefined}
-            onUpgrade={() => {
-              setSettingsSection("plansBilling");
-              setShowSettings(true);
-            }}
             isOverLimit={usage?.isOverLimit ?? false}
             userName={user?.name}
             userEmail={user?.email}
             userImage={user?.image}
             isSignedIn={isSignedIn}
             authLoaded={authLoaded}
-            upsell={upsell}
             updateAction={
               !updateStatus.isDevelopment &&
               (updateStatus.updateAvailable ||
@@ -1155,17 +1125,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                             limit: usage.limit.toLocaleString(),
                           })}
                         </p>
-                        <Button
-                          variant="default"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => {
-                            setSettingsSection("account");
-                            setShowSettings(true);
-                          }}
-                        >
-                          {t("controlPanel.billing.updatePayment")}
-                        </Button>
                       </div>
                     </div>
                   </div>
@@ -1299,10 +1258,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <Suspense fallback={null}>
                   <IntegrationsView
                     isPaid={usage?.hasPaidAccessOptimistic ?? false}
-                    onUpgrade={() => {
-                      setSettingsSection("plansBilling");
-                      setShowSettings(true);
-                    }}
                     section={integrationsSection}
                     onSectionChange={setIntegrationsSection}
                   />

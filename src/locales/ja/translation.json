@@ -142,21 +142,6 @@
     "screenRecording": "このプラットフォームでは画面収録の設定を利用できません。",
     "loginItems": "ログイン項目の設定はこのプラットフォームでは利用できません。"
   },
-  "upgradePrompt": {
-    "paymentFailed": "お支払いを処理できませんでした",
-    "weeklyLimit": "週間のクラウド上限に達しました",
-    "pastDueDescription": "現在は無料プランをご利用中です。ご安心ください、週 {{limit}} ワードまで引き続きご利用いただけます。\nお支払い方法を更新して、無制限の Pro に戻しましょう。",
-    "limitDescription": "{{used}} / {{limit}} ワード使用済み。\n文字起こしは保存・貼り付けされました。",
-    "updatePayment": "お支払い方法を更新",
-    "updatePaymentDescription": "無制限の Pro 文字起こしに戻りましょう。",
-    "upgradeToPro": "Pro にアップグレード",
-    "upgradeDescription": "月額 $8 から無制限の文字起こしを。",
-    "useApiKey": "自分の API キーを使用",
-    "useApiKeyDescription": "自分のキーで無制限に利用できます。",
-    "switchToLocal": "ローカルに切り替え",
-    "switchToLocalDescription": "オフライン文字起こし。制限なし。",
-    "rollingWeeklyLimit": "週間利用上限（ローリング）"
-  },
   "windowControls": {
     "minimize": "最小化",
     "maximize": "最大化",
@@ -215,7 +200,8 @@
     "managedConfigLoading": "組織のマネージド設定を確認しています。しばらくしてからもう一度お試しください。",
     "managedConfigUnavailable": "マネージド エンタープライズ アクセスを利用できません。再度サインインするか、管理者にお問い合わせください。",
     "managedPolicyConflict": "ワークスペースのポリシーによりマネージド アクセスがブロックされています。管理者にお問い合わせください。",
-    "resizePanel": "パネルのサイズを変更"
+    "resizePanel": "パネルのサイズを変更",
+    "unavailableInBuild": "このビルドではこの機能を利用できません。"
   },
   "onboarding": {
     "rehaul": {
@@ -565,7 +551,6 @@
         "title": "臨床文字起こしが目的とのことですね",
         "description": "私たちは Corti と提携しています — 最高精度の臨床グレード音声認識で、HIPAA に準拠しています。",
         "createAccount": "Corti アカウントを作成",
-        "creditBadge": "50ドルの無料クレジット",
         "regionHint": "音声の処理場所を選べます — 米国または EU。",
         "llmHint": "言語モデル機能も Corti モデルで実行されます。",
         "useCorti": "Corti を使う",
@@ -634,7 +619,7 @@
     },
     "limit": {
       "weeklyTitle": "週間のクラウド上限に達しました",
-      "weeklyDescription": "利用上限はローリング方式でリセットされます。Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。"
+      "weeklyDescription": "週間クラウド単語数の上限に達しました。 このビルドではクラウドのアップグレードを利用できません。"
     },
     "accessibilityMissing": {
       "title": "アクセシビリティの許可が必要です",
@@ -642,9 +627,8 @@
     },
     "billing": {
       "pastDueTitle": "お支払いを処理できませんでした",
-      "pastDueDescription": "ご安心ください。現在は無料プランをご利用中です。設定からお支払い方法を更新して Pro に戻しましょう。",
-      "bannerDescription": "現在は無料プランをご利用中です。週 {{limit}} ワードまで利用できます。お支払い方法を更新して Pro に戻しましょう。",
-      "updatePayment": "お支払い方法を更新"
+      "pastDueDescription": "このアカウントのクラウド利用は現在制限されています。",
+      "bannerDescription": "このアカウントのクラウド利用は現在制限されています。週間上限は {{limit}} 語です。"
     },
     "history": {
       "couldNotLoadTitle": "履歴を読み込めませんでした",
@@ -960,7 +944,7 @@
       "errorDescriptions": {
         "sessionExpired": "OpenWhispr Cloud のセッションが利用できません。「設定」から再度サインインしてください。",
         "offline": "オフラインです。クラウド文字起こしにはインターネット接続が必要です。",
-        "dailyLimitReached": "本日の文字起こし上限に達しました。明日もう一度お試しいただくか、プランをアップグレードしてください。",
+        "dailyLimitReached": "1 日の文字起こし上限に達しました。明日もう一度お試しください。",
         "providerRateLimited": "文字起こしプロバイダーがリクエストを制限しました。しばらく待ってからもう一度お試しください。",
         "chunkLoss": "ネットワークの問題で録音の大部分が失われました。履歴から再文字起こししてください。",
         "agentReasoningFailed": "音声アシスタントがコマンドを処理できなかったため、未処理の文字起こしを挿入しました。",
@@ -1541,10 +1525,6 @@
         "description": "プロフィールとサインイン",
         "label": "プロフィール"
       },
-      "plansBilling": {
-        "description": "プラン、使用状況、請求",
-        "label": "プランと請求"
-      },
       "general": {
         "description": "外観、サウンド、起動設定",
         "label": "環境設定"
@@ -1581,28 +1561,6 @@
     "title": "設定"
   },
   "settingsPage": {
-    "unifiedBilling": {
-      "workspaceTitle": "ワークスペースの請求",
-      "workspaceDescription": "各ワークスペースには独自のプラン、シート、請求管理者があります。",
-      "billableSeat": "あなたのシートは課金対象です",
-      "nonBillableSeat": "管理者専用アクセス · 有料シートなし",
-      "managedBy": "請求は {{owner}} が管理しています。",
-      "addSeat": "シートを追加",
-      "seatUpdated_one": "ワークスペースの容量を {{count}} シートに更新しました",
-      "seatUpdated_other": "ワークスペースの容量を {{count}} シートに更新しました",
-      "seatUpdateFailed": "ワークスペースのシートを更新できませんでした",
-      "businessWorkspaceOnly": "ワークスペースで利用可能",
-      "personalPlanTitle": "個人プラン",
-      "providedBy": "個人プラン: Free · 有料アクセスは {{workspaces}} から提供",
-      "confirmSeats": {
-        "title": "ワークスペースのシートを追加しますか？",
-        "description_one": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
-        "description_other": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
-        "newCapacity": "新しい容量",
-        "chargeToday": "本日の請求額",
-        "confirm": "シートを追加"
-      }
-    },
     "account": {
       "badges": {
         "free": "無料",
@@ -1612,24 +1570,6 @@
         "business": "Business",
         "trial": "トライアル"
       },
-      "billing": {
-        "couldNotOpenDescription": "請求ページを開く際に問題が発生しました。もう一度お試しください。",
-        "couldNotOpenTitle": "請求を開けませんでした",
-        "manageBilling": "請求を管理",
-        "opening": "開いています...",
-        "updatePaymentMethod": "お支払い方法を更新",
-        "contactOwnerTitle": "ワークスペースのオーナーにご連絡ください",
-        "contactOwnerDescription": "このワークスペースの請求を更新できるのはオーナーのみです。",
-        "manageInAppStore": "App Store で管理",
-        "manageInGooglePlay": "Google Play で管理",
-        "managedInMobileStore": "スマートフォンのアプリストアで請求されています。スマートフォンから管理してください。"
-      },
-      "checkout": {
-        "couldNotOpenDescription": "購入ページを開く際に問題が発生しました。もう一度お試しください。",
-        "couldNotOpenTitle": "購入ページを開けませんでした",
-        "opening": "開いています...",
-        "upgradeToPro": "Pro にアップグレード"
-      },
       "disabled": "無効",
       "featuresDisabled": "アカウント機能が無効です",
       "featuresDisabledDescription": ".env ファイルで VITE_AUTH_URL を設定してアカウント機能を有効にしてください。",
@@ -1637,146 +1577,25 @@
       "notSignedIn": "サインインしていません",
       "notSignedInDescription": "アカウントを作成してプレミアム機能をアンロックしましょう。",
       "offline": "オフライン",
-      "pastDue": {
-        "description": "現在は無料プランをご利用中です。お支払い方法を更新して Pro に戻しましょう。",
-        "title": "お支払いを処理できませんでした"
-      },
-      "planDescriptions": {
-        "freeUsage": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード",
-        "byokUnlimited": "独自の API キーとローカルモデルは引き続き無制限で利用できます。",
-        "nextBilling": "次の請求日: {{date}}",
-        "pastDue": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード - お支払い方法を更新して Pro を復元",
-        "trial": "残り {{days}} 日 - 無制限の文字起こし",
-        "unlimited": "無制限",
-        "accessUntil": "{{date}} まで利用可能",
-        "storePaymentIssue": "アプリストアでこのサブスクリプションを更新できませんでした。プランを継続するには、ストアでお支払い方法を更新してください。"
-      },
-      "planLabels": {
-        "free": "無料",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "トライアル"
-      },
-      "pricing": {
-        "title": "プラン",
-        "billedYearly": "年払い",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "永久",
-          "features": [
-            "## OpenWhispr Cloud",
-            "週2,000ワードの文字起こし",
-            "月5時間の会議録音",
-            "## 永久無料",
-            "無制限のローカルAIモデル",
-            "独自のAPIキーで無制限のクラウド文字起こし",
-            "100以上の言語に対応",
-            "カスタム辞書",
-            "データ保持なし",
-            "コミュニティサポート"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$80",
-          "annualPeriod": "/年",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Free の全機能 +",
-          "features": [
-            "無制限のクラウド文字起こし",
-            "月20時間の会議録音",
-            "デバイス間の同期",
-            "公開リンクでノートを共有",
-            "個人APIアクセス",
-            "すべてのアプリでMCP統合",
-            "モバイルアプリ",
-            "メールサポート"
-          ],
-          "cta": "始める",
-          "switchToAnnual": "年払いに切り替え"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$16",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$160",
-          "annualPeriod": "/年",
-          "annualEquivalent": "$13.33",
-          "includesPrefix": "Pro の全機能 +",
-          "badge": "一番人気",
-          "features": [
-            "無制限の会議録音",
-            "ワークスペースのロールとメンバー管理",
-            "アシスタントモード",
-            "データとチャット",
-            "優先サポート"
-          ],
-          "cta": "始める",
-          "switchToAnnual": "年払いに切り替え"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "カスタム",
-          "subtitle": "高度なセキュリティとサポート向け",
-          "includesPrefix": "Business の全機能 +",
-          "features": [
-            "管理されたAPIクレジット",
-            "デバイス間のクラウド同期",
-            "チーム機能と管理",
-            "SSO とコンプライアンス",
-            "専任サポート"
-          ],
-          "cta": "営業に問い合わせる",
-          "upgradeCta": "Enterpriseにアップグレード",
-          "askOwner": "{{name}}さんにワークスペースのアップグレードを依頼してください。"
-        },
-        "currentPlan": "現在のプラン",
-        "coveredByWorkspace": "ワークスペースのプランに含まれています",
-        "upgrade": "アップグレード",
-        "downgrade": "ダウングレード",
-        "planSwitched": "プランが正常に更新されました",
-        "confirmSwitch": {
-          "title": "プラン変更の確認",
-          "description": "{{plan}}（{{interval}}）に変更",
-          "monthly": "月額",
-          "yearly": "年額",
-          "chargeToday": "本日のご請求",
-          "accountCredit": "アカウントクレジット",
-          "newPrice": "新しい料金",
-          "nextBilling": "次回請求日",
-          "mo": "mo",
-          "yr": "yr",
-          "cancel": "キャンセル",
-          "confirm": "確認"
-        }
-      },
-      "rollingWeeklyLimit": "週間利用上限（ローリング）",
       "signOut": {
         "failedDescription": "サインアウト中に問題が発生しました。もう一度お試しください。",
         "failedTitle": "サインアウトできませんでした",
         "signOut": "サインアウト",
         "signingOut": "サインアウト中..."
       },
-      "signedOutPlans": {
-        "button": "無料アカウントを作成"
-      },
       "title": "アカウント",
       "toasts": {
         "approachingLimit": {
-          "description": "今週、OpenWhispr Cloud で {{limit}} ワード中 {{used}} ワードを使用しました。Pro にアップグレードして無制限にご利用ください。",
+          "description": "週間クラウド単語数の上限に近づいています。",
           "title": "クラウドのワード上限に近づいています"
         }
       },
       "trialCta": {
         "button": "無料アカウントを作成",
-        "description": "無制限の文字起こし、優先処理など。",
-        "title": "Pro を 7 日間無料でお試し"
+        "description": "アカウント機能を使用するにはサインインしてください。",
+        "title": "アカウントにサインイン"
       },
       "user": "ユーザー",
-      "wordsRemaining": "残り {{remaining}}",
       "deleteAccount": {
         "label": "アカウントを削除",
         "labelDescription": "アカウントと個人のクラウドデータを完全に削除します。他のローカルユーザーとワークスペース所有のコンテンツは保持されます。",
@@ -1827,10 +1646,6 @@
           "noPassword": "このアカウントにはパスワードが設定されていません。",
           "generic": "問題が発生しました。もう一度お試しください。"
         }
-      },
-      "planUnavailable": {
-        "title": "プランを取得できません",
-        "description": "現在プランを読み込めませんでした。ご利用の権限は変わりません。"
       }
     },
     "agentConfig": {
@@ -2513,28 +2328,6 @@
           "description": "{{email}} への招待リンクが無効になります。"
         }
       },
-      "billing": {
-        "plan": "プラン",
-        "seats": "シート",
-        "ownerOnly": "サブスクリプションを管理できるのはワークスペースのオーナーのみです。",
-        "nextInvoice": "次回の請求",
-        "manageStripe": "Stripe で管理",
-        "startSubscription": "サブスクリプションを開始",
-        "planLabel": {
-          "business": "Business",
-          "pro": "Pro",
-          "free": "Free",
-          "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "有効",
-          "trialing": "トライアル中",
-          "past_due": "支払い期限超過",
-          "canceled": "キャンセル済み",
-          "incomplete": "未完了",
-          "unpaid": "未払い"
-        }
-      },
       "developer": {
         "title": "API キー",
         "description": "このワークスペースに限定されたプログラムからのアクセス。",
@@ -2576,10 +2369,6 @@
             "read": "メンバーの読み取り",
             "write": "メンバーの管理"
           },
-          "billing": {
-            "title": "請求",
-            "read": "請求の読み取り"
-          },
           "full": {
             "title": "フルアクセス",
             "admin": "ワークスペース管理者"
@@ -2591,34 +2380,6 @@
         "description": "SSO、ポリシー、メンバーをウェブで管理",
         "open": "コンソールを開く"
       }
-    },
-    "enterpriseCheckout": {
-      "title": "Enterpriseにアップグレード",
-      "description": "ワークスペース、シート数、請求サイクルを選択してください。支払いはStripe Checkoutで完了します。",
-      "allSubscribed": "所有しているワークスペースは既にEnterpriseであるか、ここでは変更できません。プランの変更は営業までお問い合わせください。",
-      "workspaceLabel": "ワークスペース",
-      "seatsLabel": "シート数",
-      "seatsHint_one": "現在{{count}}シート使用中",
-      "seatsHint_other": "現在{{count}}シート使用中",
-      "intervalLabel": "請求サイクル",
-      "interval": {
-        "monthly": "月払い",
-        "annual": "年払い"
-      },
-      "proratedCharge": "日割り料金",
-      "prorationNote": "日割り計算された差額は次回の請求書に追加されます。",
-      "errors": {
-        "previewFailed": "アップグレードのプレビューを読み込めませんでした。",
-        "alreadyEnterprise": "このワークスペースはすでに Enterprise プランです。",
-        "subscriptionInactive": "このワークスペースのサブスクリプションが有効ではありません。請求情報を更新して再度お試しください。",
-        "priceNotConfigured": "Enterprise の料金は現在ご利用いただけません。営業までお問い合わせください。"
-      },
-      "priceNote": "最終的な価格はチェックアウト時に表示されます。",
-      "continueCta": "チェックアウトへ進む",
-      "upgradeDescription": "{{workspace}}を{{plan}}からEnterpriseにアップグレードします。シート数と請求サイクルは引き継がれ、変更は即時に適用されます。",
-      "upgradeCta": "今すぐアップグレード",
-      "upgradedTitle": "Enterpriseにアップグレードしました",
-      "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
     }
   },
   "models": {
@@ -3227,14 +2988,11 @@
       "fileTooLarge": "このファイルは 500 MB の制限を超えています。",
       "largeFileNote": "大容量ファイルは分割され、並列で文字起こしされます。",
       "chunkProgress": "パート {{completed}} / {{total}} を文字起こし中...",
-      "paidPlanRequired": "25 MB を超えるファイルのクラウド文字起こしには有料プランが必要です。大容量ファイルは OpenWhispr Cloud で信頼性の高い高品質な結果を得られます。",
       "byokTooLarge": "サードパーティの API キーは {{size}} MB までのファイルのみ対応しています。",
       "byokTooLargeDetail": "{{size}} MB を超えるファイルは、OpenWhispr Cloud が分割・並列処理・結合を行います。サードパーティの制限に依存せず、信頼性の高い結果が得られます。",
-      "byokTooLargeNeedsAccount": "アカウントを作成し、有料プランにアップグレードすると、OpenWhispr Cloud でより大きなファイルを文字起こしできます。",
-      "byokTooLargeNeedsUpgrade": "有料プランにアップグレードすると、OpenWhispr Cloud でより大きなファイルを文字起こしできます。",
+      "byokTooLargeNeedsAccount": "OpenWhispr Cloud でこのファイルを処理できるか確認するにはサインインしてください。",
       "switchToCloudForLargeFiles": "このファイルを文字起こしするには OpenWhispr Cloud に切り替えてください。",
       "createAccount": "アカウント作成",
-      "upgrade": "アップグレード",
       "switchToCloud": "OpenWhispr Cloud",
       "orDivider": "または",
       "urlPlaceholder": "YouTubeまたは音声URLを貼り付け",
@@ -3272,7 +3030,9 @@
       "urlFileTooLarge": "ファイルが大きすぎてダウンロードできません。最大サイズは500 MBです。",
       "urlYoutubeBlocked": "YouTubeがお使いのネットワークからのダウンロードを一時的にブロックしています。しばらくしてからもう一度お試しください。",
       "customEndpointInvalid": "カスタム文字起こしエンドポイントが未設定か無効です。設定から更新してください。",
-      "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。"
+      "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
+      "cloudLimitUnavailable": "このアカウントでは OpenWhispr Cloud に 25 MB 以下のファイルをアップロードできます。このビルドではクラウドのアップグレードを利用できません。",
+      "cloudUpgradeUnavailable": "このビルドではクラウドのアップグレードを利用できません。"
     },
     "meeting": {
       "title": "議事録",
@@ -3328,8 +3088,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "Pro でリアルタイム文字起こしが利用可能",
-      "upgrade": "アップグレード"
+      "message": "このビルドではこの機能を利用できません。"
     },
     "enhance": {
       "title": "強化エラー"
@@ -3690,14 +3449,7 @@
     "settings": "設定",
     "support": "サポート",
     "limitReached": "週間のクラウド上限に達しました",
-    "limitReachedDescription": "Pro にアップグレードするか、自分の API キーを使用して無制限にご利用ください。",
-    "viewPlans": "プランを見る",
-    "upgradeTitle": "Pro にアップグレード",
-    "upgradeDescription": "無制限・高精度・高速の文字起こし。",
-    "upgradeInstantSetup": "すぐに使える",
-    "upgradeZeroRetention": "データ保持ゼロ",
-    "upgradeEnterpriseSecurity": "エンタープライズセキュリティ SOC 2 Type II, HIPAA, ISO27001",
-    "learnMore": "詳しく見る",
+    "limitReachedDescription": "週間クラウド単語数の上限に達しました。 このビルドではクラウドのアップグレードを利用できません。",
     "integrations": "連携",
     "defaultUser": "ユーザー",
     "notSignedIn": "未サインイン",
@@ -3993,14 +3745,12 @@
     },
     "api": {
       "description": "プログラムからのアクセス用にAPIキーを管理",
-      "proRequired": "APIを利用するには有料プランへのアップグレードが必要です",
-      "viewPlans": "プランを表示",
       "useWith": "キーの利用先"
     },
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "Let apps on this computer read your local notes while OpenWhispr is running. No sign-in or paid plan required.",
+        "description": "OpenWhispr の実行中、このコンピューターのアプリがローカルノートを読み取れるようにします。",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
@@ -4018,7 +3768,6 @@
       },
       "description": "Claude、ChatGPT、Cursor内でメモを使ってチャット、検索、作業ができます。",
       "step1": "AIツールで、公開URLを使用してOpenWhispr MCPを追加します",
-      "proRequired": "OpenWhispr を Claude、ChatGPT、Cursor に接続するには、有料プランへのアップグレードが必要です。",
       "worksWith": "対応アプリ",
       "copyUrl": "MCP URLをコピー",
       "copied": "コピーしました",
@@ -4057,7 +3806,6 @@
     "cli": {
       "description": "ターミナルからアシスタントにメモへのアクセスを許可します。",
       "installLabel": "インストール",
-      "viewPlans": "プランを表示",
       "local": {
         "label": "ローカル",
         "freeBadge": "無料",
@@ -4065,20 +3813,8 @@
       },
       "cloud": {
         "label": "クラウド",
-        "description": "API キーを使ってデバイス間で同期します。",
-        "proRequired": "クラウドモードで CLI を利用するには有料プランへのアップグレードが必要です。"
+        "description": "API キーを使ってデバイス間で同期します。"
       }
-    },
-    "plan": {
-      "title": "プラン",
-      "current": "現在",
-      "free": "無料",
-      "freeLimit": "月5回の会議",
-      "essential": "Essential",
-      "essentialLimit": "月20回の会議",
-      "pro": "Pro",
-      "proLimit": "無制限",
-      "upgrade": "アップグレード"
     },
     "notABot": {
       "description": "OpenWhispr はシステムから直接オーディオをキャプチャします — 参加者としてミーティングに参加することはありません。カレンダーを接続して、通常通りノートを取るだけです。"
@@ -4552,8 +4288,7 @@
       "cardLimit": "1回のリクエストで準備できるカードは{{max}}件までです。"
     },
     "beta": "ベータ",
-    "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。",
-    "locked": "有料プランに含まれます"
+    "locked": "このビルドでは利用できません"
   },
   "calendar": {
     "title": "Google カレンダー",
@@ -4797,7 +4532,7 @@
     },
     "create": {
       "title": "ワークスペースを作成",
-      "description": "ワークスペースには組織のメンバーと請求がまとまります。その中に共有ノート用のチームスペースを作成できます。",
+      "description": "共有ノート用のチームスペースを作成できます。",
       "nameLabel": "ワークスペース名",
       "namePlaceholder": "Acme Corp",
       "submit": "ワークスペースを作成",
@@ -4815,7 +4550,6 @@
       "emailPlaceholder": "teammate@example.com",
       "roleLabel": "役割",
       "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
-      "seatCost": "承諾されるとプランに 1 席追加され、日割りの見積額 {{amount}} が請求されます。",
       "submit": "招待を送信",
       "submitting": "送信中…",
       "sentTitle": "招待を送信しました",
@@ -4828,7 +4562,7 @@
         "member": "メンバー"
       },
       "roleDescription": {
-        "admin": "メンバーと請求を管理できます",
+        "admin": "メンバーを管理できます",
         "member": "ワークスペースを利用できます"
       }
     },

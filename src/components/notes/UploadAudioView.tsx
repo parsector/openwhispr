@@ -340,7 +340,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
   // Mode-aware file size validation
   // Local: no limits at all
   // BYOK: 25 MB hard max regardless of plan (14 MB for Gemini's inline cap)
-  // Cloud free: 25 MB max (upgrade to Pro for more)
+  // Cloud free: 25 MB max
   // Cloud pro: 500 MB max
   const byokMaxFileSize = byokFileSizeLimit(cloudTranscriptionProvider);
   const byokMaxFileSizeMb = Math.floor(byokMaxFileSize / (1024 * 1024));
@@ -539,7 +539,7 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
     if (useLocalWhisper || isSelfHosted || cloudTranscriptionProvider === "custom") return null;
     if (isByok) return sizeBytes > byokMaxFileSize ? "byokTooLarge" : null;
     if (sizeBytes > CLOUD_PRO_MAX_FILE_SIZE) return "fileTooLarge";
-    if (!isProUser && sizeBytes > CLOUD_FREE_MAX_FILE_SIZE) return "paidPlanRequired";
+    if (!isProUser && sizeBytes > CLOUD_FREE_MAX_FILE_SIZE) return "cloudLimitUnavailable";
     return null;
   };
 
@@ -1154,7 +1154,6 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
             byokMaxFileSizeMb={byokMaxFileSizeMb}
             requiresAccount={requiresAccount}
             isProUser={!!isProUser}
-            onUpgrade={() => usage?.openCheckout()}
             onCreateAccount={requestSignIn}
             onSwitchToCloud={switchToCloud}
             onOpenSettings={onOpenSettings}
@@ -1553,7 +1552,6 @@ interface SelectedViewProps {
   byokMaxFileSizeMb: number;
   requiresAccount: boolean;
   isProUser: boolean;
-  onUpgrade: () => void;
   onCreateAccount: () => void;
   onSwitchToCloud: () => void;
   onOpenSettings?: (section: string) => void;
@@ -1574,7 +1572,6 @@ function SelectedView({
   byokMaxFileSizeMb,
   requiresAccount,
   isProUser,
-  onUpgrade,
   onCreateAccount,
   onSwitchToCloud,
   onOpenSettings,
@@ -1638,16 +1635,16 @@ function SelectedView({
               ? t("notes.upload.byokTooLargeNeedsAccount")
               : isProUser
                 ? t("notes.upload.switchToCloudForLargeFiles")
-                : t("notes.upload.byokTooLargeNeedsUpgrade")}
+                : t("notes.upload.cloudUpgradeUnavailable")}
           </p>
         </div>
       )}
 
-      {/* Cloud free user, file > 25 MB → needs paid plan */}
+      {/* Cloud file above this account’s 25 MB limit */}
       {requiresUpgrade && !fileTooLarge && (
         <div className="rounded-xl border border-primary/15 bg-primary/5 px-4 py-3 dark:bg-primary/10">
           <p className="text-[13px] leading-relaxed text-foreground/80">
-            {t("notes.upload.paidPlanRequired")}
+            {t("notes.upload.cloudLimitUnavailable")}
           </p>
         </div>
       )}
@@ -1674,19 +1671,12 @@ function SelectedView({
           </Button>
         )}
 
-        {/* BYOK too large — signed in, Free: Upgrade */}
-        {byokTooLarge && !requiresAccount && !isProUser && (
-          <Button onClick={onUpgrade} className={PRIMARY_ACTION_CLASS}>
-            {t("notes.upload.upgrade")}
-          </Button>
-        )}
-
-        {/* Cloud requires upgrade */}
-        {!byokTooLarge && requiresUpgrade && (
-          <Button onClick={onUpgrade} className={PRIMARY_ACTION_CLASS}>
-            {t("notes.upload.upgrade")}
-          </Button>
-        )}
+        {(byokTooLarge && !requiresAccount && !isProUser) ||
+        (!byokTooLarge && requiresUpgrade) ? (
+          <p className="text-center text-[13px] text-muted-foreground">
+            {t("notes.upload.cloudUpgradeUnavailable")}
+          </p>
+        ) : null}
 
         {/* Normal: can transcribe */}
         {canTranscribe && (

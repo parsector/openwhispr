@@ -38,7 +38,7 @@
       "errorDescriptions": {
         "sessionExpired": "جلسة OpenWhispr Cloud الخاصة بك غير متاحة. يرجى تسجيل الدخول مرة أخرى من الإعدادات.",
         "offline": "أنت غير متصل بالإنترنت. يتطلب التفريغ السحابي اتصالًا بالإنترنت.",
-        "dailyLimitReached": "لقد وصلت إلى حد التفريغ اليومي. حاول مرة أخرى غدًا أو قم بترقية خطتك.",
+        "dailyLimitReached": "تم بلوغ حد التفريغ اليومي. حاول مرة أخرى غدًا.",
         "providerRateLimited": "قام مزود التفريغ بتقييد معدل الطلب. انتظر لحظة وحاول مرة أخرى.",
         "chunkLoss": "أدت مشكلة في الشبكة إلى فقدان جزء كبير من التسجيل. أعد تفريغه من السجل.",
         "agentReasoningFailed": "لم يتمكن المساعد الصوتي من معالجة الأمر — تم إدراج النص المفرَّغ الخام بدلًا من ذلك.",
@@ -544,7 +544,7 @@
     },
     "limit": {
       "weeklyTitle": "تم بلوغ الحد السحابي الأسبوعي",
-      "weeklyDescription": "تتم إعادة تعيين الحد الخاص بك على أساس متجدد. قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود."
+      "weeklyDescription": "بلغت حد كلمات السحابة الأسبوعي. ترقية السحابة غير متاحة في هذا الإصدار."
     },
     "accessibilityMissing": {
       "title": "أذونات تسهيلات الاستخدام مطلوبة",
@@ -552,9 +552,8 @@
     },
     "billing": {
       "pastDueTitle": "لم نتمكن من معالجة دفعتك",
-      "pastDueDescription": "لا تقلق - أنت ضمن الخطة المجانية في الوقت الحالي. حدّث بيانات الدفع في الإعدادات للعودة إلى Pro.",
-      "bannerDescription": "أنت ضمن الخطة المجانية في الوقت الحالي - لا يزال لديك {{limit}} كلمة في الأسبوع. حدّث بيانات الدفع للعودة إلى Pro.",
-      "updatePayment": "تحديث الدفع"
+      "pastDueDescription": "الوصول إلى السحابة محدود حاليًا لهذا الحساب.",
+      "bannerDescription": "الوصول إلى السحابة محدود حاليًا لهذا الحساب. الحد الأسبوعي هو {{limit}} كلمة."
     },
     "history": {
       "couldNotLoadTitle": "تعذر تحميل سجلك",
@@ -698,14 +697,12 @@
     },
     "api": {
       "description": "إدارة مفاتيح API للوصول البرمجي",
-      "proRequired": "قم بالترقية إلى خطة مدفوعة للوصول إلى API",
-      "viewPlans": "عرض الخطط",
       "useWith": "استخدم مفتاحًا مع"
     },
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "Let apps on this computer read your local notes while OpenWhispr is running. No sign-in or paid plan required.",
+        "description": "اسمح للتطبيقات على هذا الكمبيوتر بقراءة ملاحظاتك المحلية أثناء تشغيل OpenWhispr.",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
@@ -723,7 +720,6 @@
       },
       "description": "الدردشة والبحث والعمل مع ملاحظاتك داخل Claude وChatGPT وCursor.",
       "step1": "في أداة الذكاء الاصطناعي الخاصة بك، أضف OpenWhispr MCP باستخدام عنوان URL العام",
-      "proRequired": "قم بالترقية إلى خطة مدفوعة لتوصيل OpenWhispr بـ Claude وChatGPT وCursor.",
       "worksWith": "يعمل مع",
       "copyUrl": "نسخ عنوان URL لـ MCP",
       "copied": "تم النسخ",
@@ -762,7 +758,6 @@
     "cli": {
       "description": "امنح مساعدك حق الوصول إلى ملاحظاتك من الجهاز الطرفي (terminal).",
       "installLabel": "تثبيت",
-      "viewPlans": "عرض الخطط",
       "local": {
         "label": "محلي (Local)",
         "freeBadge": "مجاني",
@@ -770,20 +765,8 @@
       },
       "cloud": {
         "label": "سحابي (Cloud)",
-        "description": "المزامنة عبر الأجهزة باستخدام مفتاح API الخاص بك.",
-        "proRequired": "قم بالترقية إلى خطة مدفوعة لاستخدام CLI في الوضع السحابي."
+        "description": "المزامنة عبر الأجهزة باستخدام مفتاح API الخاص بك."
       }
-    },
-    "plan": {
-      "title": "خطتك",
-      "current": "الحالية",
-      "free": "مجانية",
-      "freeLimit": "5 اجتماعات / شهر",
-      "essential": "أساسية (Essential)",
-      "essentialLimit": "20 اجتماعًا / شهر",
-      "pro": "Pro",
-      "proLimit": "غير محدود",
-      "upgrade": "ترقية"
     },
     "notABot": {
       "description": "يلتقط OpenWhispr الصوت مباشرة من نظامك — فهو لا ينضم أبدًا إلى اجتماعاتك كمشارك. ما عليك سوى ربط التقويم الخاص بك وتدوين الملاحظات كالمعتاد."
@@ -1257,8 +1240,7 @@
       "cardLimit": "يمكن تجهيز {{max}} بطاقات فقط لكل طلب."
     },
     "beta": "تجريبي",
-    "upsell": "الموصلات متاحة في الخطط المدفوعة. قم بالترقية ليعمل المساعد في أدواتك.",
-    "locked": "متاح ضمن الخطط المدفوعة"
+    "locked": "غير متاح في هذا الإصدار"
   },
   "auth": {
     "cloudNotConfigured": "السحابة غير مهيأة",
@@ -1347,7 +1329,7 @@
     },
     "create": {
       "title": "إنشاء مساحة عمل",
-      "description": "تجمع مساحة العمل أعضاء مؤسستك والفواتير معًا. أنشئ مساحات للفرق بداخلها للملاحظات المشتركة.",
+      "description": "أنشئ مساحات للفرق للملاحظات المشتركة.",
       "nameLabel": "اسم مساحة العمل",
       "namePlaceholder": "شركة تجريبية",
       "submit": "إنشاء مساحة عمل",
@@ -1365,7 +1347,6 @@
       "emailPlaceholder": "الزميل@example.com",
       "roleLabel": "الدور",
       "seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
-      "seatCost": "إذا تم القبول، سيتم إضافة مقعد إلى خطتك · التكلفة التقديرية التناسبية {{amount}}.",
       "submit": "إرسال دعوة",
       "submitting": "جاري الإرسال…",
       "sentTitle": "تم إرسال الدعوة",
@@ -1378,7 +1359,7 @@
         "member": "عضو"
       },
       "roleDescription": {
-        "admin": "يدير الأعضاء والفواتير",
+        "admin": "يدير الأعضاء",
         "member": "يستخدم مساحة العمل"
       }
     },
@@ -2294,16 +2275,13 @@
       "noProviderDescription": "أضف مفتاح API أو قم بتنزيل نموذج محلي لبدء التفريغ.",
       "noProviderAction": "فتح إعدادات التفريغ",
       "fileTooLarge": "يتجاوز هذا الملف حد الـ 500 ميغابايت.",
-      "paidPlanRequired": "التفريغ السحابي للملفات التي يزيد حجمها عن 25 ميغابايت يتطلب خطة مدفوعة. تتم معالجة الملفات الكبيرة باستخدام OpenWhispr Cloud للحصول على نتائج موثوقة وعالية الجودة.",
       "largeFileNote": "يتم تقسيم الملفات الكبيرة وتفريغها بالتوازي.",
       "chunkProgress": "جاري تفريغ الجزء {{completed}} من {{total}}...",
       "byokTooLarge": "تدعم مفاتيح API التابعة لجهات خارجية ملفات يصل حجمها إلى {{size}} ميغابايت فقط.",
       "byokTooLargeDetail": "بالنسبة إلى الملفات التي يزيد حجمها على {{size}} ميغابايت، يتولى OpenWhispr Cloud تقسيمها ومعالجتها بالتوازي وإعادة تجميعها — لتحصل على نتائج موثوقة دون الاعتماد على حدود مزودي الجهات الخارجية.",
-      "byokTooLargeNeedsAccount": "أنشئ حسابًا وقم بالترقية إلى خطة مدفوعة لتفريغ الملفات الأكبر حجمًا باستخدام OpenWhispr Cloud.",
-      "byokTooLargeNeedsUpgrade": "قم بالترقية إلى خطة مدفوعة لتفريغ الملفات الأكبر حجمًا باستخدام OpenWhispr Cloud.",
+      "byokTooLargeNeedsAccount": "سجّل الدخول للتحقق مما إذا كان بإمكان OpenWhispr Cloud معالجة هذا الملف.",
       "switchToCloudForLargeFiles": "قم بالتبديل إلى OpenWhispr Cloud لتفريغ هذا الملف.",
       "createAccount": "إنشاء حساب",
-      "upgrade": "ترقية",
       "switchToCloud": "OpenWhispr Cloud",
       "orDivider": "أو",
       "urlPlaceholder": "الصق رابط YouTube أو رابط صوتي",
@@ -2342,7 +2320,9 @@
       "urlYoutubeBlocked": "يحظر YouTube التنزيلات من شبكتك مؤقتًا. حاول مرة أخرى بعد قليل.",
       "customEndpointInvalid": "نقطة نهاية التفريغ المخصصة غير مهيأة أو غير صالحة. قم بتحديثها في الإعدادات.",
       "streamingOnlyProvider": "هذا المزود يدعم التفريغ المباشر فقط. اختر مزودًا آخر لرفع الملفات وإعادة المحاولة.",
-      "diarizationWarning": "تعذر تطبيق تحديد المتحدثين. حُفظ النص المفرَّغ دون تسميات المتحدثين."
+      "diarizationWarning": "تعذر تطبيق تحديد المتحدثين. حُفظ النص المفرَّغ دون تسميات المتحدثين.",
+      "cloudLimitUnavailable": "تقبل سحابة OpenWhispr ملفات حتى 25 ميغابايت لهذا الحساب. ترقية السحابة غير متاحة في هذا الإصدار.",
+      "cloudUpgradeUnavailable": "ترقية السحابة غير متاحة في هذا الإصدار."
     },
     "meeting": {
       "title": "ملاحظات الاجتماع",
@@ -2552,8 +2532,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "التفريغ في الوقت الفعلي متاح في خطة Pro",
-      "upgrade": "ترقية"
+      "message": "هذه الميزة غير متاحة في هذا الإصدار."
     },
     "enhance": {
       "title": "خطأ في التحسين"
@@ -3010,7 +2989,6 @@
         "title": "أخبرتنا أنك هنا من أجل التفريغ السريري",
         "description": "لقد عقدنا شراكة مع Corti — تحويل الكلام إلى نص من الدرجة السريرية بأعلى دقة، وهو متوافق مع قانون HIPAA.",
         "createAccount": "أنشئ حساب Corti الخاص بك",
-        "creditBadge": "رصيد مجاني بقيمة 50 دولارًا",
         "regionHint": "اختر مكان معالجة صوتك — الولايات المتحدة أو الاتحاد الأوروبي.",
         "llmHint": "ستعمل ميزات نموذج اللغة أيضًا على نماذج Corti.",
         "useCorti": "استخدام Corti",
@@ -3190,28 +3168,6 @@
           "description": "سيتوقف رابط الدعوة لـ {{email}} عن العمل."
         }
       },
-      "billing": {
-        "plan": "الخطة",
-        "seats": "المقاعد",
-        "ownerOnly": "يمكن لمالك مساحة العمل فقط إدارة الاشتراك.",
-        "nextInvoice": "الفاتورة القادمة",
-        "manageStripe": "إدارة في Stripe",
-        "startSubscription": "بدء الاشتراك",
-        "planLabel": {
-          "business": "Business",
-          "pro": "Pro",
-          "free": "مجاني",
-          "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "نشط",
-          "trialing": "في فترة تجريبية",
-          "past_due": "متأخر الدفع",
-          "canceled": "ملغى",
-          "incomplete": "غير مكتمل",
-          "unpaid": "غير مدفوع"
-        }
-      },
       "developer": {
         "title": "مفاتيح API",
         "description": "وصول برمجي مخصص لمساحة العمل هذه.",
@@ -3253,10 +3209,6 @@
             "read": "قراءة الأعضاء",
             "write": "إدارة الأعضاء"
           },
-          "billing": {
-            "title": "الفوترة",
-            "read": "قراءة الفوترة"
-          },
           "full": {
             "title": "وصول كامل",
             "admin": "مسؤول مساحة العمل"
@@ -3269,36 +3221,6 @@
         "open": "فتح وحدة التحكم"
       }
     },
-    "unifiedBilling": {
-      "workspaceTitle": "فوترة مساحة العمل",
-      "workspaceDescription": "لكل مساحة عمل خطة ومقاعد ومالك فوترة خاص بها.",
-      "billableSeat": "مقعدك قابل للفوترة",
-      "nonBillableSeat": "وصول للمسؤول فقط · بدون مقعد مدفوع",
-      "managedBy": "تتم إدارة الفوترة بواسطة {{owner}}.",
-      "addSeat": "إضافة مقعد",
-      "seatUpdated_zero": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
-      "seatUpdated_one": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
-      "seatUpdated_two": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدين",
-      "seatUpdated_few": "تم تحديث سعة مساحة العمل إلى {{count}} مقاعد",
-      "seatUpdated_many": "تم تحديث سعة مساحة العمل إلى {{count}} مقعدًا",
-      "seatUpdated_other": "تم تحديث سعة مساحة العمل إلى {{count}} مقعد",
-      "seatUpdateFailed": "تعذر تحديث مقاعد مساحة العمل",
-      "businessWorkspaceOnly": "متاح لمساحات العمل",
-      "personalPlanTitle": "الخطة الشخصية",
-      "providedBy": "الخطة الشخصية: مجاني · الوصول المدفوع مقدم من {{workspaces}}",
-      "confirmSeats": {
-        "title": "إضافة مقعد لمساحة العمل؟",
-        "description_zero": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_one": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_two": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدين. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_few": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقاعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_many": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعدًا. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "description_other": "زيادة عدد مقاعد {{workspace}} إلى {{count}} مقعد. سيحتسب Stripe الفرق بشكل تناسبي.",
-        "newCapacity": "السعة الجديدة",
-        "chargeToday": "رسوم اليوم",
-        "confirm": "إضافة مقعد"
-      }
-    },
     "account": {
       "badges": {
         "free": "مجاني",
@@ -3308,24 +3230,6 @@
         "business": "Business",
         "trial": "تجريبي"
       },
-      "billing": {
-        "couldNotOpenDescription": "واجهنا مشكلة في فتح صفحة الفوترة. يرجى المحاولة مرة أخرى.",
-        "couldNotOpenTitle": "تعذر فتح الفوترة",
-        "manageBilling": "إدارة الفوترة",
-        "opening": "جاري الفتح...",
-        "updatePaymentMethod": "تحديث طريقة الدفع",
-        "contactOwnerTitle": "اتصل بمالك مساحة العمل الخاصة بك",
-        "contactOwnerDescription": "يمكن لمالك مساحة العمل فقط تحديث الفوترة لمساحة العمل هذه.",
-        "manageInAppStore": "الإدارة في App Store",
-        "manageInGooglePlay": "الإدارة في Google Play",
-        "managedInMobileStore": "تتم الفوترة عبر متجر التطبيقات على هاتفك. أدِر الاشتراك من هاتفك."
-      },
-      "checkout": {
-        "couldNotOpenDescription": "واجهنا مشكلة في فتح صفحة الدفع. يرجى المحاولة مرة أخرى.",
-        "couldNotOpenTitle": "تعذر فتح صفحة الدفع",
-        "opening": "جاري الفتح...",
-        "upgradeToPro": "الترقية إلى Pro"
-      },
       "disabled": "معطل",
       "featuresDisabled": "ميزات الحساب معطلة",
       "featuresDisabledDescription": "قم بتعيين VITE_AUTH_URL في ملف .env الخاص بك لتمكين ميزات الحساب.",
@@ -3333,123 +3237,6 @@
       "notSignedIn": "لم يتم تسجيل الدخول",
       "notSignedInDescription": "أنشئ حسابًا للوصول إلى الميزات المميزة.",
       "offline": "غير متصل بالإنترنت",
-      "pastDue": {
-        "description": "أنت على الخطة المجانية في الوقت الحالي. قم بتحديث طريقة الدفع الخاصة بك للعودة إلى Pro.",
-        "title": "لم نتمكن من معالجة دفعتك"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع",
-        "byokUnlimited": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
-        "nextBilling": "الفوترة القادمة: {{date}}",
-        "pastDue": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
-        "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
-        "unlimited": "غير محدود",
-        "accessUntil": "الوصول حتى {{date}}",
-        "storePaymentIssue": "تعذّر على متجر التطبيقات تجديد هذا الاشتراك. حدّث طريقة الدفع هناك للاحتفاظ بخطتك."
-      },
-      "planLabels": {
-        "free": "مجاني",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "تجريبي"
-      },
-      "pricing": {
-        "title": "الخطط",
-        "billedYearly": "تدفع سنويًا",
-        "free": {
-          "name": "مجاني",
-          "price": "$0",
-          "period": "إلى الأبد",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2,000 كلمة/أسبوع للتفريغ",
-            "5 ساعات من تسجيلات الاجتماعات/شهر",
-            "## مجانًا دائمًا",
-            "نماذج ذكاء اصطناعي محلية غير محدودة",
-            "تفريغ سحابي غير محدود باستخدام مفاتيح API الخاصة بك",
-            "دعم أكثر من 100 لغة",
-            "قاموس مخصص",
-            "عدم الاحتفاظ بالبيانات",
-            "دعم مجتمعي"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/شهر",
-          "annualPrice": "$80",
-          "annualPeriod": "/سنة",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "جميع ميزات الخطة المجانية +",
-          "features": [
-            "تفريغ سحابي غير محدود",
-            "20 ساعة من تسجيلات الاجتماعات/شهر",
-            "مزامنة عبر الأجهزة",
-            "مشاركة الملاحظات بروابط عامة",
-            "وصول شخصي عبر API",
-            "تكامل MCP في جميع تطبيقاتك",
-            "تطبيق الجوال",
-            "دعم عبر البريد الإلكتروني"
-          ],
-          "cta": "البدء",
-          "switchToAnnual": "التبديل إلى السنوي"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$16",
-          "monthlyPeriod": "/شهر",
-          "annualPrice": "$160",
-          "annualPeriod": "/سنة",
-          "annualEquivalent": "$13.33",
-          "includesPrefix": "جميع ميزات Pro +",
-          "badge": "الأكثر شيوعًا",
-          "features": [
-            "تسجيلات اجتماعات غير محدودة",
-            "أدوار مساحة العمل وإدارة الأعضاء",
-            "وضع المساعد",
-            "الدردشة حول بياناتك",
-            "دعم ذو أولوية"
-          ],
-          "cta": "البدء",
-          "switchToAnnual": "التبديل إلى السنوي"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "مخصص",
-          "subtitle": "للأمان والدعم المتقدمين",
-          "includesPrefix": "جميع ميزات خطة Business +",
-          "features": [
-            "أرصدة API مُدارة",
-            "مزامنة سحابية عبر الأجهزة",
-            "ميزات الفريق والمسؤول",
-            "SSO والامتثال",
-            "دعم مخصص"
-          ],
-          "cta": "اتصل بالمبيعات",
-          "upgradeCta": "الترقية إلى Enterprise",
-          "askOwner": "اطلب من {{name}} ترقية مساحة العمل الخاصة بك."
-        },
-        "currentPlan": "الخطة الحالية",
-        "coveredByWorkspace": "مضمنة في خطة مساحة العمل الخاصة بك",
-        "upgrade": "ترقية",
-        "downgrade": "تخفيض الخطة",
-        "planSwitched": "تم تحديث الخطة بنجاح",
-        "confirmSwitch": {
-          "title": "تأكيد تغيير الخطة",
-          "description": "التبديل إلى {{plan}} ({{interval}})",
-          "monthly": "شهريًا",
-          "yearly": "سنويًا",
-          "chargeToday": "رسوم اليوم",
-          "accountCredit": "رصيد الحساب",
-          "newPrice": "السعر الجديد",
-          "nextBilling": "الفوترة القادمة",
-          "mo": "شهر",
-          "yr": "سنة",
-          "cancel": "إلغاء",
-          "confirm": "تأكيد"
-        }
-      },
-      "rollingWeeklyLimit": "حد أسبوعي متجدد",
       "signOut": {
         "failedDescription": "حدث خطأ أثناء تسجيل الخروج. يرجى المحاولة مرة أخرى.",
         "failedTitle": "تعذر تسجيل الخروج",
@@ -3459,20 +3246,16 @@
       "title": "الحساب",
       "toasts": {
         "approachingLimit": {
-          "description": "استخدمت {{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع. قم بالترقية إلى Pro للاستخدام غير المحدود.",
+          "description": "أوشكت على بلوغ حد كلمات السحابة الأسبوعي.",
           "title": "الاقتراب من الحد السحابي للكلمات"
         }
       },
       "trialCta": {
         "button": "إنشاء حساب مجاني",
-        "description": "تفريغ غير محدود، ومعالجة ذات أولوية، والمزيد.",
-        "title": "جرب Pro مجانًا لمدة 7 أيام"
-      },
-      "signedOutPlans": {
-        "button": "إنشاء حساب مجاني"
+        "description": "سجّل الدخول لاستخدام ميزات الحساب.",
+        "title": "سجّل الدخول إلى حسابك"
       },
       "user": "المستخدم",
-      "wordsRemaining": "متبقي {{remaining}}",
       "deleteAccount": {
         "label": "حذف الحساب",
         "labelDescription": "حذف حسابك وبياناتك السحابية الشخصية نهائيًا. ستبقى بيانات المستخدمين المحليين الآخرين والمحتوى المملوك لمساحة العمل محفوظة.",
@@ -3523,10 +3306,6 @@
           "noPassword": "لم يتم تعيين كلمة مرور لهذا الحساب.",
           "generic": "حدث خطأ ما. يرجى المحاولة مرة أخرى."
         }
-      },
-      "planUnavailable": {
-        "title": "الخطة غير متاحة",
-        "description": "لم نتمكن من تحميل خطتك في الوقت الحالي. وصولك لم يتغير."
       }
     },
     "agentConfig": {
@@ -4109,38 +3888,6 @@
       "endpointUrl": "عنوان URL لنقطة النهاية",
       "serverUrl": "عنوان URL للخادم",
       "apiKeyOptional": "مفتاح API (اختياري)"
-    },
-    "enterpriseCheckout": {
-      "title": "الترقية إلى Enterprise",
-      "description": "اختر مساحة عمل والمقاعد ودورة الفوترة. يتم الدفع في Stripe Checkout.",
-      "allSubscribed": "مساحات العمل التي تمتلكها على خطة Enterprise بالفعل أو لا يمكن تغييرها هنا. لإجراء تغييرات على الخطة، اتصل بالمبيعات.",
-      "workspaceLabel": "مساحة العمل",
-      "seatsLabel": "المقاعد",
-      "seatsHint_zero": "{{count}} مقاعد قيد الاستخدام حاليًا",
-      "seatsHint_one": "{{count}} مقعد قيد الاستخدام حاليًا",
-      "seatsHint_two": "{{count}} مقعدان قيد الاستخدام حاليًا",
-      "seatsHint_few": "{{count}} مقاعد قيد الاستخدام حاليًا",
-      "seatsHint_many": "{{count}} مقعدًا قيد الاستخدام حاليًا",
-      "seatsHint_other": "{{count}} مقعد قيد الاستخدام حاليًا",
-      "intervalLabel": "دورة الفوترة",
-      "interval": {
-        "monthly": "شهريًا",
-        "annual": "سنويًا"
-      },
-      "proratedCharge": "رسوم تناسبية",
-      "prorationNote": "تتم إضافة الفرق التناسبي إلى فاتورتك القادمة.",
-      "errors": {
-        "previewFailed": "تعذر تحميل معاينة الترقية.",
-        "alreadyEnterprise": "مساحة العمل هذه على خطة Enterprise بالفعل.",
-        "subscriptionInactive": "اشتراك مساحة العمل هذه غير نشط. قم بتحديث تفاصيل الفوترة وحاول مرة أخرى.",
-        "priceNotConfigured": "أسعار Enterprise غير متوفرة الآن. يرجى الاتصال بالمبيعات."
-      },
-      "priceNote": "يظهر السعر النهائي عند الدفع.",
-      "continueCta": "المتابعة إلى الدفع",
-      "upgradeDescription": "ترقية {{workspace}} من {{plan}} إلى Enterprise. يتم ترحيل المقاعد ودورة الفوترة؛ التغيير يسري فورًا.",
-      "upgradeCta": "الترقية الآن",
-      "upgradedTitle": "تمت الترقية إلى Enterprise",
-      "upgradedDescription": "أصبحت {{workspace}} الآن على Enterprise."
     }
   },
   "settings": {
@@ -4286,21 +4033,6 @@
     "screenRecording": "إعدادات تسجيل الشاشة غير متوفرة على هذه المنصة.",
     "loginItems": "إعدادات عناصر تسجيل الدخول غير متوفرة على هذه المنصة."
   },
-  "upgradePrompt": {
-    "paymentFailed": "لم نتمكن من معالجة دفعتك",
-    "weeklyLimit": "لقد وصلت إلى حدك السحابي الأسبوعي",
-    "pastDueDescription": "أنت الآن على الخطة المجانية — لا تقلق، ما زلت تحصل على {{limit}} كلمة في الأسبوع.\nقم بتحديث طريقة الدفع للعودة إلى خطة Pro غير المحدودة.",
-    "limitDescription": "تم استخدام {{used}} من {{limit}} كلمة.\nتم حفظ نصك المفرَّغ ولصقه.",
-    "updatePayment": "تحديث طريقة الدفع",
-    "updatePaymentDescription": "عد إلى تفريغ صوتي غير محدود مع Pro.",
-    "upgradeToPro": "الترقية إلى Pro",
-    "upgradeDescription": "احصل على تفريغ صوتي غير محدود بأسعار تبدأ من $8/شهر.",
-    "useApiKey": "استخدم مفتاح API الخاص بك",
-    "useApiKeyDescription": "أحضر مفتاحك الخاص لاستخدام غير محدود.",
-    "switchToLocal": "التبديل إلى الوضع المحلي",
-    "switchToLocalDescription": "تفريغ صوتي بدون إنترنت. بدون حدود.",
-    "rollingWeeklyLimit": "حد أسبوعي متجدد"
-  },
   "windowControls": {
     "minimize": "تصغير",
     "maximize": "تكبير",
@@ -4359,7 +4091,8 @@
     "managedConfigLoading": "جارٍ التحقق من الإعداد المُدار لمؤسستك. أعد المحاولة بعد لحظات.",
     "managedConfigUnavailable": "الوصول المُدار للمؤسسة غير متاح. سجّل الدخول مرة أخرى أو اتصل بالمسؤول.",
     "managedPolicyConflict": "الوصول المُدار محظور بموجب سياسة مساحة العمل الخاصة بك. اتصل بالمسؤول.",
-    "resizePanel": "تغيير حجم اللوحة"
+    "resizePanel": "تغيير حجم اللوحة",
+    "unavailableInBuild": "هذه الميزة غير متاحة في هذا الإصدار."
   },
   "streaming": {
     "errors": {
@@ -4588,10 +4321,6 @@
         "description": "الملف الشخصي وتسجيل الدخول",
         "label": "الملف الشخصي"
       },
-      "plansBilling": {
-        "description": "الخطط والاستخدام والفواتير",
-        "label": "الخطط والفواتير"
-      },
       "workspace": {
         "description": "الأعضاء، مساحات الفريق ومفاتيح API",
         "label": "مساحة العمل"
@@ -4637,14 +4366,7 @@
     "settings": "الإعدادات",
     "support": "الدعم",
     "limitReached": "تم بلوغ الحد السحابي الأسبوعي",
-    "limitReachedDescription": "قم بالترقية إلى Pro أو استخدم مفتاح API الخاص بك للاستخدام غير المحدود.",
-    "viewPlans": "عرض الخطط",
-    "upgradeTitle": "الترقية إلى Pro",
-    "upgradeDescription": "تفريغ صوتي غير محدود، أكثر دقة، وأسرع.",
-    "upgradeInstantSetup": "إعداد فوري",
-    "upgradeZeroRetention": "عدم الاحتفاظ بالبيانات",
-    "upgradeEnterpriseSecurity": "أمان على مستوى المؤسسات SOC 2 Type II, HIPAA, ISO27001",
-    "learnMore": "معرفة المزيد",
+    "limitReachedDescription": "بلغت حد كلمات السحابة الأسبوعي. ترقية السحابة غير متاحة في هذا الإصدار.",
     "integrations": "التكاملات",
     "defaultUser": "مستخدم",
     "notSignedIn": "لم يتم تسجيل الدخول",

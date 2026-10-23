@@ -10,7 +10,7 @@ import ApiKeysSection from "./ApiKeysSection";
 import { ConnectorsSection } from "./ConnectorsSection";
 import { CONNECTOR_ROWS } from "./connectors/connectorRows";
 import { IntegrationsNav } from "./integrations/IntegrationsNav";
-import { IntegrationsPane, UpsellBar } from "./integrations/IntegrationsPane";
+import { IntegrationsPane } from "./integrations/IntegrationsPane";
 import { CalendarsPane } from "./integrations/CalendarsPane";
 import { McpPane } from "./integrations/McpPane";
 import { CliPane } from "./integrations/CliPane";
@@ -27,14 +27,12 @@ const { mcp: McpIcon, cli: CliIcon } = INTEGRATIONS_SECTION_ICONS;
 
 interface IntegrationsViewProps {
   isPaid: boolean;
-  onUpgrade: () => void;
   section: IntegrationsSection;
   onSectionChange: (section: IntegrationsSection) => void;
 }
 
 export default function IntegrationsView({
   isPaid,
-  onUpgrade,
   section,
   onSectionChange,
 }: IntegrationsViewProps): ReactElement {
@@ -106,7 +104,7 @@ export default function IntegrationsView({
         title={titleOf("connectors")}
         description={t("integrations.connectors.description")}
       >
-        <ConnectorsSection onUpgrade={onUpgrade} />
+        <ConnectorsSection />
       </IntegrationsPane>
     ),
     calendars: <CalendarsPane title={titleOf("calendars")} />,
@@ -153,7 +151,7 @@ export default function IntegrationsView({
             </div>
           </>
         ) : (
-          <UpsellBar message={t("integrations.api.proRequired")} onUpgrade={onUpgrade} />
+          <p className="text-xs text-muted-foreground">{t("common.unavailableInBuild")}</p>
         )}
       </IntegrationsPane>
     ),
@@ -161,14 +159,13 @@ export default function IntegrationsView({
       <McpPane
         title={titleOf("mcp")}
         isPaid={isPaid}
-        onUpgrade={onUpgrade}
         onCreateKey={() => {
           setCreateKeyRequest((request) => request + 1);
           openSection("api");
         }}
       />
     ),
-    cli: <CliPane title={titleOf("cli")} isPaid={isPaid} onUpgrade={onUpgrade} />,
+    cli: <CliPane title={titleOf("cli")} isPaid={isPaid} />,
   };
 
   return (

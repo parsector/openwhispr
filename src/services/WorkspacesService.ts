@@ -6,26 +6,6 @@ import type {
   WorkspaceMember,
 } from "../types/electron";
 
-export interface SeatPreview {
-  next_quantity: number;
-  current_quantity: number;
-  seats_used: number;
-  amount_due: number;
-  currency: string;
-}
-
-export interface EnterpriseUpgradePreview {
-  // Prorated difference in cents, collected on the next invoice (Stripe
-  // create_prorations), not charged at confirmation time.
-  prorated_amount: number;
-  currency: string;
-  current_price_amount: number | null;
-  new_price_amount: number | null;
-  interval: "monthly" | "annual";
-  quantity: number;
-  next_billing_date: string | null;
-}
-
 async function list(): Promise<Workspace[]> {
   const res = await cloudGet<DataWrap<Workspace[]>>("/api/workspaces");
   return res.data;
@@ -60,61 +40,6 @@ async function updateMemberRole(
 
 async function removeMember(workspaceId: string, userId: string): Promise<void> {
   await cloudDelete(`/api/workspaces/${workspaceId}/members/${userId}`);
-}
-
-async function billingCheckout(
-  workspaceId: string,
-  interval: "monthly" | "annual" = "monthly",
-  options?: { tier?: "business" | "enterprise"; additionalSeats?: number }
-): Promise<string> {
-  const res = await cloudPost<DataWrap<{ url: string }>>(
-    `/api/workspaces/${workspaceId}/billing/checkout`,
-    {
-      interval,
-      ...(options?.tier ? { tier: options.tier } : {}),
-      ...(options?.additionalSeats ? { additional_seats: options.additionalSeats } : {}),
-    }
-  );
-  return res.data.url;
-}
-
-async function billingPortal(workspaceId: string): Promise<string> {
-  const res = await cloudPost<DataWrap<{ url: string }>>(
-    `/api/workspaces/${workspaceId}/billing/portal`
-  );
-  return res.data.url;
-}
-
-async function previewSeats(workspaceId: string, additionalSeats: number): Promise<SeatPreview> {
-  const res = await cloudPost<DataWrap<SeatPreview>>(
-    `/api/workspaces/${workspaceId}/billing/preview-seats`,
-    {
-      additional_seats: additionalSeats,
-    }
-  );
-  return res.data;
-}
-
-async function previewEnterpriseUpgrade(workspaceId: string): Promise<EnterpriseUpgradePreview> {
-  const res = await cloudPost<DataWrap<EnterpriseUpgradePreview>>(
-    `/api/workspaces/${workspaceId}/billing/preview-upgrade`
-  );
-  return res.data;
-}
-
-async function upgradeToEnterprise(workspaceId: string): Promise<void> {
-  await cloudPost<DataWrap<{ plan: string }>>(`/api/workspaces/${workspaceId}/billing/upgrade`);
-}
-
-async function updateSeats(
-  workspaceId: string,
-  quantity: number
-): Promise<{ quantity: number; seats_used: number }> {
-  const res = await cloudPost<DataWrap<{ quantity: number; seats_used: number }>>(
-    `/api/workspaces/${workspaceId}/billing/seats`,
-    { quantity }
-  );
-  return res.data;
 }
 
 /** Invitations the caller can accept and company-domain workspaces they can ask to join. */
@@ -164,10 +89,4 @@ export const WorkspacesService = {
   listMembers,
   updateMemberRole,
   removeMember,
-  billingCheckout,
-  billingPortal,
-  previewSeats,
-  previewEnterpriseUpgrade,
-  upgradeToEnterprise,
-  updateSeats,
 };
