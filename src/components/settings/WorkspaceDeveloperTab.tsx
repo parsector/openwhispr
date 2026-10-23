@@ -50,10 +50,6 @@ const SCOPE_GROUPS_DEF: { groupKey: string; scopes: { id: string; labelKey: stri
     ],
   },
   {
-    groupKey: "billing",
-    scopes: [{ id: "workspace:billing:read", labelKey: "read" }],
-  },
-  {
     groupKey: "full",
     scopes: [{ id: "workspace:*", labelKey: "admin" }],
   },

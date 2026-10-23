@@ -1,8 +1,7 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { CreditCard, Gift, LogOut, UserCircle } from "./icons";
+import { Gift, LogOut, UserCircle } from "./icons";
 import MemberAvatar from "./MemberAvatar";
-import { Badge } from "./ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,8 +10,6 @@ import {
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import { useAuth } from "../hooks/useAuth";
-import { useUsage } from "../hooks/useUsage";
-import { useAccountPlan } from "../hooks/useAccountPlan";
 
 const triggerClass =
   "flex h-8 w-8 shrink-0 items-center justify-center rounded-full outline-none transition-opacity duration-150 hover:opacity-85 active:opacity-75 focus-visible:ring-2 focus-visible:ring-primary/40";
@@ -32,8 +29,6 @@ export default function ProfileMenu({
 }: ProfileMenuProps): React.ReactElement {
   const { t } = useTranslation();
   const { isSignedIn, isLoaded, user } = useAuth();
-  const usage = useUsage();
-  const { planLabel } = useAccountPlan(usage);
 
   // Until the session settles a signed-in user reads as signed out; hold the slot instead of
   // flashing Sign in.
@@ -69,11 +64,6 @@ export default function ProfileMenu({
               <p dir="auto" className="min-w-0 truncate text-[13px] font-medium text-foreground">
                 {name}
               </p>
-              {planLabel && (
-                <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px] font-medium">
-                  {planLabel}
-                </Badge>
-              )}
             </div>
             {user.email && (
               <p className="truncate text-[11px] text-muted-foreground">
@@ -86,10 +76,6 @@ export default function ProfileMenu({
         <DropdownMenuItem onSelect={() => onOpenSettings("account")} className={itemClass}>
           <UserCircle size={15} className={itemIconClass} />
           {t("settingsModal.sections.account.label")}
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onOpenSettings("plansBilling")} className={itemClass}>
-          <CreditCard size={15} className={itemIconClass} />
-          {t("settingsModal.sections.plansBilling.label")}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onOpenReferrals} className={itemClass}>
           <Gift size={15} className={itemIconClass} />

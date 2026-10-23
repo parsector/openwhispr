@@ -16,8 +16,7 @@ import { cn } from "./lib/utils";
 import { useWorkspaceStore } from "../stores/workspaceStore";
 import { useDelayedFlag } from "../hooks/useDelayedFlag";
 import { InvitationsService } from "../services/InvitationsService";
-import { WorkspacesService, type SeatPreview } from "../services/WorkspacesService";
-import { formatAmount } from "../utils/formatAmount";
+import { WorkspacesService } from "../services/WorkspacesService";
 import { useToast } from "./ui/useToast";
 
 interface Props {
@@ -53,27 +52,24 @@ export default function InviteTeammateDialog({
   const [submitting, setSubmitting] = useState(false);
   const showSpinner = useDelayedFlag(submitting);
   const [seatsUsed, setSeatsUsed] = useState<number | null>(null);
-  const [seatPreview, setSeatPreview] = useState<SeatPreview | null>(null);
   const workspace = useWorkspaceStore((s) => s.workspaces.find((w) => w.id === workspaceId));
   const seats = workspace?.seats ?? null;
-  // A subscribed workspace already at capacity bills a seat if this invite is
-  // accepted. Say so before sending. Both sides of the
-  // comparison come from the same preview so a stale store can't misprice it.
-  const addsBilledSeat =
-    seatPreview !== null && seatPreview.seats_used >= seatPreview.current_quantity;
+  // An invite must not create a billable seat in this build.
+  const seatBlocked =
+    Boolean(workspace?.stripe_subscription_id) &&
+    (seatsUsed === null || seats === null || seatsUsed >= seats);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    WorkspacesService.previewSeats(workspaceId, 1)
-      .then((preview) => {
+    WorkspacesService.list()
+      .then((workspaces) => {
         if (cancelled) return;
-        setSeatPreview(preview);
-        setSeatsUsed(preview.seats_used);
+        setSeatsUsed(workspaces.find((item) => item.id === workspaceId)?.seats_used ?? null);
       })
       .catch(async () => {
-        // Free workspace — the preview needs a subscription. Fall back to the
-        // member count so the seat line still renders, with nothing to bill.
+        // A subscribed workspace stays blocked when capacity cannot be confirmed.
+        if (workspace?.stripe_subscription_id) return;
         try {
           const members = await WorkspacesService.listMembers(workspaceId);
           if (!cancelled) setSeatsUsed(members.length);
@@ -84,7 +80,7 @@ export default function InviteTeammateDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, workspaceId]);
+  }, [open, workspaceId, workspace?.stripe_subscription_id]);
 
   useEffect(() => {
     if (open) {
@@ -93,7 +89,6 @@ export default function InviteTeammateDialog({
       setEmail("");
       setRole("member");
       setSeatsUsed(null);
-      setSeatPreview(null);
     }
   }, [open, initialEmail]);
 
@@ -196,11 +191,9 @@ export default function InviteTeammateDialog({
             </div>
           </div>
 
-          {addsBilledSeat && (
+          {seatBlocked && (
             <p className="text-[11px] text-muted-foreground">
-              {t("workspaces.invite.seatCost", {
-                amount: formatAmount(seatPreview.amount_due, seatPreview.currency),
-              })}
+              {t("common.unavailableInBuild")}
             </p>
           )}
 
@@ -213,7 +206,7 @@ export default function InviteTeammateDialog({
             >
               {cancelLabel ?? t("common.cancel")}
             </Button>
-            <Button type="submit" disabled={!email.trim() || submitting}>
+            <Button type="submit" disabled={!email.trim() || submitting || seatBlocked}>
               {showSpinner && <Loader2 className="me-1.5 h-3.5 w-3.5 animate-spin" />}
               {submitting ? t("workspaces.invite.submitting") : t("workspaces.invite.submit")}
             </Button>
