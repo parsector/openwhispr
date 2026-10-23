@@ -8,6 +8,7 @@ const { installBrowserGlobals } = require("../lib/rendererTestHarness");
 // the sync-toggle flip fires before that leave has reached the account.
 
 const pendingKey = (userId) => `leaderboardLeavePending:${encodeURIComponent(userId)}`;
+const participationKey = (userId) => `leaderboardParticipation:${userId}`;
 // The record carries a delivery-attempt count, so presence is the signal.
 const pendingUserIds = (storage) =>
   ["user_1", "user_2"].filter((userId) => storage.getItem(pendingKey(userId)) != null);
@@ -107,8 +108,8 @@ test("a leave the API can no longer act on is not reported as still owed", async
   assert.deepEqual(pendingUserIds(storage), []);
 });
 
-test("a refresh reports a leave the account is still waiting on", async (t) => {
-  const { context, store } = await loadStore(t, {
+test("a refresh after local opt-out does not read an old joined account row", async (t) => {
+  const { context, requests, storage, store } = await loadStore(t, {
     initialStorage: { [pendingKey("user_1")]: "true" },
     cloudApiRequest: async (request) =>
       request.method === "PATCH"
@@ -119,14 +120,16 @@ test("a refresh reports a leave the account is still waiting on", async (t) => {
   await store.getState().refresh(context);
 
   assert.equal(store.getState().enabled, false, "the row still says joined, but the user left");
-  assert.equal(store.getState().leavePending, true);
+  assert.equal(store.getState().leavePending, false);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(pendingUserIds(storage), ["user_1"]);
 });
 
-test("a delivered leave, or a newer join, retires the owed-leave notice", async (t) => {
+test("a newer join retires an owed leave after a locally gated refresh", async (t) => {
   let patchFails = true;
   // The account row: a PATCH that lands moves it, a GET reads it back.
   let serverEnabled = true;
-  const { context, store } = await loadStore(t, {
+  const { context, requests, storage, store } = await loadStore(t, {
     initialStorage: { [pendingKey("user_1")]: "true" },
     cloudApiRequest: async (request) => {
       if (request.method === "PATCH") {
@@ -141,16 +144,14 @@ test("a delivered leave, or a newer join, retires the owed-leave notice", async 
   });
 
   await store.getState().refresh(context);
-  assert.equal(store.getState().leavePending, true);
-
-  patchFails = false;
-  await store.getState().refresh(context);
-  assert.equal(store.getState().leavePending, false, "the retry landed on this read");
+  assert.deepEqual(requests, []);
   assert.equal(store.getState().enabled, false);
 
+  patchFails = false;
   assert.equal(await store.getState().join(context), true);
   assert.equal(store.getState().leavePending, false);
   assert.equal(store.getState().enabled, true);
+  assert.deepEqual(pendingUserIds(storage), []);
 });
 
 // A refresh trigger can arrive while the leave PATCH is still in flight. The
@@ -158,6 +159,7 @@ test("a delivered leave, or a newer join, retires the owed-leave notice", async 
 test("a read started during a leave never reports the account still joined", async (t) => {
   let releaseLeave;
   const { context, requests, store } = await loadStore(t, {
+    initialStorage: { [participationKey("user_1")]: "true" },
     cloudApiRequest: async (request) => {
       if (request.method === "PATCH") {
         await new Promise((resolve) => {
@@ -187,6 +189,7 @@ test("a read started during a leave never reports the account still joined", asy
 test("a read that resolves after a write is retired by it", async (t) => {
   let releaseRead;
   const { context, store } = await loadStore(t, {
+    initialStorage: { [participationKey("user_1")]: "true" },
     cloudApiRequest: async (request) => {
       if (request.method === "GET") {
         await new Promise((resolve) => {
@@ -332,7 +335,7 @@ test("a newer join clears an older failed leave without being undone later", asy
   assert.equal(store.getState().enabled, true);
 });
 
-test("a refresh flushes the pending leave before reporting the answer", async (t) => {
+test("a refresh after opt-out leaves delivery to the pending-leave path", async (t) => {
   let accountEnabled = true;
   const { context, requests, storage, store } = await loadStore(t, {
     initialStorage: { [pendingKey("user_1")]: "true" },
@@ -343,17 +346,14 @@ test("a refresh flushes the pending leave before reporting the answer", async (t
   });
 
   await store.getState().refresh(context);
-  assert.deepEqual(
-    requests.map((request) => request.method),
-    ["PATCH", "GET"],
-    "the opt-out has to land before the read that reports it"
-  );
-  assert.deepEqual(pendingUserIds(storage), []);
+  assert.deepEqual(requests, []);
+  assert.deepEqual(pendingUserIds(storage), ["user_1"]);
   assert.equal(store.getState().enabled, false);
 });
 
 test("a participation read that fails offers a retry rather than a stale answer", async (t) => {
   const { context, store } = await loadStore(t, {
+    initialStorage: { [participationKey("user_1")]: "true" },
     cloudApiRequest: async () => ({ success: false, status: 0, error: "offline" }),
   });
   store.setState({ enabled: true, ready: true });
@@ -367,6 +367,7 @@ test("a participation read that fails offers a retry rather than a stale answer"
 test("simultaneous participation reads for one account share one request", async (t) => {
   let releaseRead;
   const { context, requests, store } = await loadStore(t, {
+    initialStorage: { [participationKey("user_1")]: "true" },
     cloudApiRequest: async () => {
       await new Promise((resolve) => {
         releaseRead = resolve;

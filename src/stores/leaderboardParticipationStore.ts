@@ -52,8 +52,7 @@ let readId = 0;
 let writeId = 0;
 let activeRefresh: { key: string; promise: Promise<void> } | null = null;
 const participationKey = (userId: string) => `leaderboardParticipation:${userId}`;
-const hasOptedIn = (userId: string) =>
-  localStorage.getItem(participationKey(userId)) === "true";
+const hasOptedIn = (userId: string) => localStorage.getItem(participationKey(userId)) === "true";
 
 export const useLeaderboardParticipationStore = create<LeaderboardParticipationState>(
   (set, get) => ({
@@ -108,8 +107,8 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         const currentReadId = ++readId;
         set({ ready: false, error: null });
         try {
-          // An opt-out the network never delivered is retried first, so the answer
-          // below is the one the user asked for rather than the row it left behind.
+          // Only an explicit local opt-in reaches this read. A pending opt-out
+          // is delivered separately and cannot re-enable the local answer.
           const participation = await LeaderboardService.getParticipation(context);
           if (currentReadId !== readId) return;
           set({
