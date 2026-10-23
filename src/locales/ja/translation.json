@@ -4011,6 +4011,24 @@
       "useWith": "キーの利用先"
     },
     "mcp": {
+      "local": {
+        "title": "Local server",
+        "description": "Let apps on this computer read your local notes while OpenWhispr is running. No sign-in or paid plan required.",
+        "enable": "Enable local server",
+        "copyUrl": "Copy local MCP URL",
+        "tokens": "Access tokens",
+        "tokenLabel": "Token name",
+        "create": "Create token",
+        "shownOnce": "Copy this token now. It will not be shown again.",
+        "copyToken": "Copy token",
+        "dismiss": "Dismiss",
+        "noTokens": "No tokens yet.",
+        "created": "Created",
+        "lastUsed": "Last used",
+        "revoke": "Revoke",
+        "activity": "Recent reads",
+        "noActivity": "No external reads yet."
+      },
       "description": "Claude、ChatGPT、Cursor内でメモを使ってチャット、検索、作業ができます。",
       "step1": "AIツールで、公開URLを使用してOpenWhispr MCPを追加します",
       "proRequired": "OpenWhispr を Claude、ChatGPT、Cursor に接続するには、有料プランへのアップグレードが必要です。",

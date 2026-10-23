@@ -366,6 +366,7 @@ let windowsLoopbackAudioManager = null;
 let meetingAecManager = null;
 let semanticSearch = null;
 let ipcHandlers = null;
+let stopLocalMcp = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
 let macAccessibilityFeaturesReady = false;
@@ -722,6 +723,12 @@ function initializeCoreManagers() {
     getTrayManager: () => trayManager,
     oauthProtocolRegistered: protocolRegistered,
     oauthProtocol: OAUTH_PROTOCOL,
+  });
+  stopLocalMcp = require("./src/services/mcp/server").registerLocalMcp({
+    ipcMain,
+    userData: app.getPath("userData"),
+    database: databaseManager,
+    getSemanticSearch: () => semanticSearch,
   });
 }
 
@@ -2142,6 +2149,7 @@ if (gotSingleInstanceLock) {
 }
 
 function performSyncTeardown() {
+  stopLocalMcp?.();
   if (wakeRewarmTimer) {
     clearTimeout(wakeRewarmTimer);
     wakeRewarmTimer = null;
