@@ -51,6 +51,9 @@ let readId = 0;
 // Keep write invalidation separate so an older account cannot clear a newer account's pending state.
 let writeId = 0;
 let activeRefresh: { key: string; promise: Promise<void> } | null = null;
+const participationKey = (userId: string) => `leaderboardParticipation:${userId}`;
+const hasOptedIn = (userId: string) =>
+  localStorage.getItem(participationKey(userId)) === "true";
 
 export const useLeaderboardParticipationStore = create<LeaderboardParticipationState>(
   (set, get) => ({
@@ -88,6 +91,10 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     // source of truth for who is on a leaderboard, and nothing here may join or
     // leave one on the user's behalf.
     refresh: async (context) => {
+      if (!hasOptedIn(context.userId)) {
+        set({ enabled: false, configured: true, ready: true, error: null, leavePending: false });
+        return;
+      }
       const key = `${context.userId}:${context.authGeneration}`;
       if (activeRefresh?.key === key) {
         await activeRefresh.promise;
@@ -103,13 +110,12 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         try {
           // An opt-out the network never delivered is retried first, so the answer
           // below is the one the user asked for rather than the row it left behind.
-          const stillLeaving = await LeaderboardService.flushPendingLeave(context);
           const participation = await LeaderboardService.getParticipation(context);
           if (currentReadId !== readId) return;
           set({
-            enabled: participation.enabled && !stillLeaving,
-            configured: participation.configured || stillLeaving,
-            leavePending: stillLeaving,
+            enabled: participation.enabled,
+            configured: participation.configured,
+            leavePending: false,
           });
         } catch (error) {
           if (currentReadId !== readId) return;
@@ -139,6 +145,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
       try {
         const participation = await LeaderboardService.joinParticipation(context);
         if (currentWriteId === writeId) {
+          if (participation.enabled) localStorage.setItem(participationKey(context.userId), "true");
           get().publishAnswer(participation.enabled, participation.configured, generation);
         }
         return participation.enabled;
@@ -168,6 +175,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
       try {
         const participation = await LeaderboardService.leaveParticipation(context);
         if (currentWriteId === writeId) {
+          localStorage.removeItem(participationKey(context.userId));
           get().publishAnswer(participation.enabled, participation.configured, generation);
         }
         return true;
@@ -191,6 +199,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     // presenting participation now and deliver the account-scoped leave as
     // soon as that same account regains a validated credential.
     queueLeave: (userId) => {
+      localStorage.removeItem(participationKey(userId));
       writePendingLeaderboardLeave(userId);
       const generation = readId;
       get().publishAnswer(false, true, generation, true);
