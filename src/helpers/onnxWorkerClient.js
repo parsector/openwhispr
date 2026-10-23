@@ -66,10 +66,7 @@ class OnnxWorkerClient {
       });
 
       const forwardStderr = (chunk) => {
-        const text = chunk.toString();
-        for (const line of text.split(/\r?\n/)) {
-          if (line) debugLogger.warn("onnx worker stderr", { line });
-        }
+        debugLogger.warn("onnx worker output", { byteLength: chunk.length });
       };
       child.stderr?.on("data", forwardStderr);
       child.stdout?.on("data", forwardStderr);
@@ -187,7 +184,7 @@ class OnnxWorkerClient {
     try {
       ({ sessions } = await this.request("ping", {}));
     } catch (err) {
-      debugLogger.debug("onnx worker release probe failed", { error: err?.message });
+      debugLogger.debug("onnx worker release probe failed", { failed: Boolean(err) });
       return false;
     }
     if (!this.child || sessions.speaker || sessions.text || this.pending.size) return false;

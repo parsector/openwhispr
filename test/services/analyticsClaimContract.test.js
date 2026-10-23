@@ -27,66 +27,6 @@ test("the Insights view uses the shared predicate for the claim offer", () => {
   );
 });
 
-test("Insights Sync and leaderboard participation have separate owners", () => {
-  const syncHook = read("src/hooks/useInsightsSyncOptIn.tsx");
-  const participationHook = read("src/hooks/useLeaderboardParticipation.ts");
-  const settings = read("src/components/SettingsPage.tsx");
-  const leaderboard = read("src/components/LeaderboardView.tsx");
-
-  assert.ok(syncHook.includes("const enableInsightsSync"));
-  assert.ok(syncHook.includes("const disableInsightsSync"));
-  assert.equal(syncHook.includes("LeaderboardParticipation"), false);
-  assert.equal(syncHook.includes("joinParticipation"), false);
-  assert.equal(syncHook.includes("leaveParticipation"), false);
-
-  assert.ok(participationHook.includes("store.join(context)"));
-  assert.ok(participationHook.includes("store.leave(context)"));
-  assert.equal(participationHook.includes("setInsightsSyncEnabled"), false);
-
-  assert.ok(settings.includes("if (enabled) void enableInsightsSync()"));
-  assert.ok(settings.includes("disableInsightsSync()"));
-  assert.ok(settings.includes("useLeaderboardParticipation()"));
-  assert.ok(settings.includes("join: joinLeaderboard"));
-  assert.ok(settings.includes("leave: leaveLeaderboard"));
-  assert.ok(settings.includes("updateLeaderboardParticipation"));
-  assert.ok(leaderboard.includes("useLeaderboardParticipation()"));
-});
-
-test("joining obtains explicit analytics consent first without rollback coupling", () => {
-  const view = read("src/components/LeaderboardView.tsx");
-  const joinStart = view.indexOf("const joinLeaderboard");
-  const join = view.slice(joinStart, view.indexOf("return (", joinStart));
-  assert.match(
-    join,
-    /!insightsSyncEnabled\s*&&\s*!\(await enableInsightsSync\(\{ confirmWhenEmpty: true \}\)\)/
-  );
-  assert.ok(
-    join.indexOf("await enableInsightsSync({") < join.indexOf("joinParticipation()"),
-    "analytics consent must land before the account is published"
-  );
-  assert.equal(
-    join.includes("disableInsightsSync"),
-    false,
-    "a failed participation write must preserve accepted analytics consent"
-  );
-});
-
-test("the Privacy leaderboard toggle preserves the same consent ordering", () => {
-  const settings = read("src/components/SettingsPage.tsx");
-  const updateStart = settings.indexOf("const updateLeaderboardParticipation");
-  const update = settings.slice(updateStart, settings.indexOf("// Signed out", updateStart));
-
-  assert.ok(update.includes("enableInsightsSync({ confirmWhenEmpty: true })"));
-  assert.ok(
-    update.indexOf("await enableInsightsSync({") < update.indexOf("await joinLeaderboard()")
-  );
-  assert.ok(update.includes("await leaveLeaderboard()"));
-  assert.equal(update.includes("disableInsightsSync"), false);
-  assert.ok(settings.includes('label={t("insights.leaderboard.title")}'));
-  assert.ok(settings.includes("checked={isSignedIn && leaderboardParticipationEnabled}"));
-  assert.ok(settings.includes('t("settingsPage.privacy.leaderboardDescription")'));
-});
-
 test("enabling sync with no queued rows needs no empty-data prompt", () => {
   const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
   const enable = hook.slice(
@@ -100,14 +40,6 @@ test("enabling sync with no queued rows needs no empty-data prompt", () => {
       enable.indexOf("requestInsightsConsent({"),
     "an empty sync must finish before the data-upload prompt is requested"
   );
-});
-
-test("joining cannot silently turn on future Insights uploads when the queue is empty", () => {
-  const hook = read("src/hooks/useInsightsSyncOptIn.tsx");
-  const leaderboard = read("src/components/LeaderboardView.tsx");
-  assert.ok(hook.includes("confirmWhenEmpty?: boolean"));
-  assert.ok(hook.includes("pending === 0 && !options.confirmWhenEmpty"));
-  assert.ok(leaderboard.includes("enableInsightsSync({ confirmWhenEmpty: true })"));
 });
 
 test("an account switch cancels pending Insights consent", () => {
@@ -170,7 +102,7 @@ test("a failed participation read cannot leave the board looking joined", () => 
   const refresh = store.slice(store.indexOf("refresh: async"), store.indexOf("join: async"));
   assert.ok(refresh.slice(refresh.indexOf("} catch")).includes("enabled: false"));
   assert.equal(refresh.includes("setParticipation("), false);
-  assert.ok(refresh.includes("LeaderboardService.flushPendingLeave(context)"));
+  assert.ok(refresh.includes("if (!hasOptedIn(context.userId))"));
 });
 
 test("an unknown participation answer offers retry instead of Join", () => {
@@ -189,32 +121,6 @@ test("an unknown participation answer offers retry instead of Join", () => {
   assert.ok(retrySurface.includes("onRetry={onRefreshParticipation}"));
   assert.equal(retrySurface.includes("onJoin"), false);
   assert.ok(joinSurface.includes("onJoin={onJoin}"));
-});
-
-test("an undelivered leave is durable and retried without gating analytics", () => {
-  const store = read("src/stores/leaderboardParticipationStore.ts");
-  const service = read("src/services/LeaderboardService.ts");
-  const sync = read("src/services/SyncService.ts");
-  const leave = store.slice(store.indexOf("leave: async"));
-  const serviceLeave = service.slice(
-    service.indexOf("async function leaveParticipation"),
-    service.indexOf("async function flushPendingLeave")
-  );
-  assert.ok(service.includes("writePendingLeaderboardLeave(userId)"));
-  assert.ok(
-    serviceLeave.indexOf("writePendingLeaderboardLeave(userId)") <
-      serviceLeave.indexOf("serializeParticipationOperation(context")
-  );
-  assert.ok(leave.includes("publishAnswer(false, true, generation"));
-  const flush = service.slice(
-    service.indexOf("async function flushPendingLeave"),
-    service.indexOf("async function getAccess")
-  );
-  assert.ok(flush.includes("setParticipation(false, authGeneration)"));
-  assert.equal(flush.includes("setParticipation(true,"), false);
-  assert.ok(sync.includes("LeaderboardService.flushPendingLeave("));
-  assert.ok(sync.includes("pendingLeaderboardLeave"));
-  assert.equal(sync.includes("LeaderboardService.getParticipation("), false);
 });
 
 test("only an ambiguous request failure compensates a join", () => {

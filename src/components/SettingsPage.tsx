@@ -1230,8 +1230,6 @@ export default function SettingsPage({
     cloudBackupEnabled,
     setCloudBackupEnabled,
     insightsSyncEnabled,
-    telemetryEnabled,
-    setTelemetryEnabled,
     audioRetentionDays,
     setAudioRetentionDays,
     transcriptRetentionDays,
@@ -1807,12 +1805,7 @@ export default function SettingsPage({
       setLeaderboardPreferencePending(true);
       try {
         if (enabled) {
-          if (
-            !effectiveDataRetentionEnabled ||
-            !insightsSyncAllowedByPolicy ||
-            (!insightsSyncEnabled && !(await enableInsightsSync({ confirmWhenEmpty: true })))
-          )
-            return;
+          if (!effectiveDataRetentionEnabled || !insightsSyncAllowedByPolicy) return;
           if (!(await joinLeaderboard())) {
             toast({
               title: t("insights.leaderboard.activationError"),
@@ -1831,9 +1824,7 @@ export default function SettingsPage({
     },
     [
       effectiveDataRetentionEnabled,
-      enableInsightsSync,
       insightsSyncAllowedByPolicy,
-      insightsSyncEnabled,
       isSignedIn,
       joinLeaderboard,
       leaderboardParticipationReady,
@@ -4285,39 +4276,6 @@ EOF`,
               <SettingsPanel>
                 <SettingsPanelRow>
                   <SettingsRow
-                    label={t("settingsPage.privacy.insightsSync")}
-                    description={
-                      !isSignedIn
-                        ? t("settingsPage.privacy.insightsSyncRequiresAccount")
-                        : !insightsSyncAllowedByPolicy
-                          ? t("common.managedByOrg")
-                          : effectiveDataRetentionEnabled
-                            ? t("settingsPage.privacy.insightsSyncDescription")
-                            : t("settingsPage.privacy.insightsSyncRequiresHistory")
-                    }
-                  >
-                    {/* With history off nothing is counted anywhere: this
-                        device records no counter, and the cloud writes none
-                        either, because analyticsSyncEnabled withholds the
-                        localDate its analytics write requires. Turning this on
-                        could therefore only promise a sync that never happens —
-                        but an already-on toggle must stay switchable off. */}
-                    <Toggle
-                      checked={insightsSyncEnabled}
-                      disabled={
-                        !isSignedIn ||
-                        !canToggleInsightsSync ||
-                        (!effectiveDataRetentionEnabled && !insightsSyncEnabled)
-                      }
-                      onChange={(enabled) => {
-                        if (enabled) void enableInsightsSync();
-                        else disableInsightsSync();
-                      }}
-                    />
-                  </SettingsRow>
-                </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
                     label={t("insights.leaderboard.title")}
                     description={
                       !isSignedIn
@@ -4343,21 +4301,13 @@ EOF`,
                         leaderboardParticipationError === "read" ||
                         (!leaderboardParticipationEnabled &&
                           (!effectiveDataRetentionEnabled ||
-                            !insightsSyncAllowedByPolicy ||
-                            (!insightsSyncEnabled && !canToggleInsightsSync)))
+                            !insightsSyncAllowedByPolicy))
                       }
                       onChange={(enabled) => void updateLeaderboardParticipation(enabled)}
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.privacy.usageAnalytics")}
-                    description={t("settingsPage.privacy.usageAnalyticsDescription")}
-                  >
-                    <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
-                  </SettingsRow>
-                </SettingsPanelRow>
+
               </SettingsPanel>
             </div>
 

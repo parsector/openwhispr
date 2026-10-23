@@ -169,7 +169,6 @@ async function loadTonedOrukeetStart(t, cachePrefix) {
     workletModuleLoaded: true,
     preparedMicCapture: { take: async () => null },
     isRecordingAllowedByPolicy: () => true,
-    _beginActivationCapture: async () => true,
     getAudioConstraints: async () => ({}),
     _acquireCaptureStream: async () => ({ getAudioTracks: () => [] }),
     _startRecordingSpool: () => null,

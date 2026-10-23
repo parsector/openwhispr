@@ -1,3 +1,4 @@
+const { textLength } = require("./logRedaction");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
 const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
@@ -20,7 +21,6 @@ const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
-const { MetaActivation } = require("./metaActivation");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
 const {
@@ -1347,8 +1347,8 @@ class IPCHandlers {
       const { originalText, newFieldValue } = data;
 
       debugLogger.debug("[AutoLearn] text-edited event", {
-        originalPreview: originalText.substring(0, 80),
-        newValuePreview: newFieldValue.substring(0, 80),
+        originalPreviewLength: textLength(originalText),
+        newValuePreviewLength: textLength(newFieldValue),
       });
 
       this._autoLearnLatestData = { originalText, newFieldValue };
@@ -2443,7 +2443,6 @@ class IPCHandlers {
       );
       this.connectorManager?.accountChanged();
       void this.connectorManager?.notifyStatusChanged();
-      void this.metaActivation?.flush();
       return { success: true };
     });
 
@@ -2479,7 +2478,6 @@ class IPCHandlers {
             erasingDevice: options?.erasingDevice === true,
           });
           const result = this.databaseManager.deleteAccountData(accountId);
-          this.metaActivation?.purge(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
@@ -4235,15 +4233,6 @@ class IPCHandlers {
         errors.push(`Connector revoke: ${errorCode ?? errorName}`);
       }
 
-      try {
-        this.metaActivation?.dispose();
-        this.metaActivation = null;
-        const activationPath = path.join(app.getPath("userData"), "meta-activation.db");
-        for (const suffix of ["", "-wal", "-shm"])
-          fs.rmSync(activationPath + suffix, { force: true });
-      } catch (e) {
-        errors.push(`Activation data cleanup: ${e.message}`);
-      }
 
       // Close DB connection before deleting the file
       try {
@@ -6299,10 +6288,6 @@ class IPCHandlers {
 
     ipcMain.handle("auth-clear-session", async (event) => {
       try {
-        await Promise.race([
-          this.metaActivation?.close(),
-          new Promise((resolve) => setTimeout(resolve, 1500)),
-        ]).catch(() => {});
         const tokenState = tokenStore.clear();
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win) {
@@ -6438,46 +6423,6 @@ class IPCHandlers {
       tokenStore,
       logger: debugLogger,
     });
-    try {
-      const ActivationDatabase = require("better-sqlite3");
-      const activationDb = new ActivationDatabase(
-        path.join(app.getPath("userData"), "meta-activation.db")
-      );
-      activationDb.pragma("foreign_keys = ON");
-      this.metaActivation = new MetaActivation({
-        db: activationDb,
-        getScope: () =>
-          accountScopeBinding.resolveActiveAccountScope({
-            ...tokenStore.getState(),
-            binding: accountScopeBinding.read(),
-          }),
-        request: createCloudApiRequestHandler({
-          getApiUrl,
-          getAppVersion: () => app.getVersion(),
-          tokenStore,
-          proxyFetch: (url, init) =>
-            proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
-        }),
-      });
-      this.metaActivation.start();
-    } catch {
-      // Marketing bookkeeping must never prevent ordinary dictation/startup.
-      debugLogger.warn("Activation storage unavailable");
-    }
-    ipcMain.handle("activation-close", async () => {
-      await Promise.race([
-        this.metaActivation?.close(),
-        new Promise((resolve) => setTimeout(resolve, 1500)),
-      ]).catch(() => {});
-    });
-    ipcMain.handle("activation-begin", () => this.metaActivation?.begin() ?? null);
-    ipcMain.handle("activation-stop", (_event, id) => {
-      if (typeof id === "string") this.metaActivation?.stopCapture(id);
-    });
-    ipcMain.handle("activation-finish", (_event, id, words) =>
-      this.metaActivation?.finish(id, words)
-    );
-    ipcMain.handle("activation-cancel", (_event, id) => this.metaActivation?.cancel(id));
     const workspacePolicyManager = createWorkspacePolicyManager({
       cachePath: path.join(app.getPath("userData"), "workspace-policy.json"),
       getApiUrl,
@@ -6694,8 +6639,6 @@ class IPCHandlers {
           clientVersion: app.getVersion(),
           sessionId: this.sessionId,
           clientTranscriptionId,
-          localDate: opts.localDate,
-          analyticsOccurredAt: opts.analyticsOccurredAt,
           streamingFallbackReason: opts.streamingFallbackReason,
           sttDetectedLanguage: opts.sttDetectedLanguage,
           sttDetectedLanguageConfidence: opts.sttDetectedLanguageConfidence,
@@ -7330,7 +7273,7 @@ class IPCHandlers {
         debugLogger.debug(
           "Dropping buffered mic segment after system context confirmed duplicate",
           {
-            text: pending.text.slice(0, 80),
+            textLength: textLength(pending.text),
             averageCorrelation: pending.micSuppression?.averageCorrelation?.toFixed(3),
             averageResidual: pending.micSuppression?.averageResidual?.toFixed(3),
           }
@@ -7343,7 +7286,7 @@ class IPCHandlers {
             ? "Releasing bleed-flagged mic segment after holdback (no transcript match)"
             : "Releasing buffered mic segment after duplicate holdback",
           {
-            text: pending.text.slice(0, 80),
+            textLength: textLength(pending.text),
             holdbackMs: pending.holdbackMs,
             reason: pending.micSuppression?.reason,
             averageCorrelation: pending.micSuppression?.averageCorrelation?.toFixed(3),
@@ -7479,7 +7422,7 @@ class IPCHandlers {
               reason: micSuppression.reason,
               averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
               averageResidual: micSuppression.averageResidual?.toFixed(3),
-              text: latestSegment.slice(0, 80),
+              textLength: textLength(latestSegment),
             });
             send("meeting-transcription-segment", { text: "", source, type: "partial" });
             return;
@@ -7487,7 +7430,7 @@ class IPCHandlers {
 
           if (shouldSkipDuplicateMicSegment(latestSegment, timestamp, micSuppression)) {
             debugLogger.debug("Skipping duplicate mic segment that matches recent system audio", {
-              text: latestSegment.slice(0, 80),
+              textLength: textLength(latestSegment),
               averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
               averageResidual: micSuppression.averageResidual?.toFixed(3),
             });
@@ -7501,7 +7444,7 @@ class IPCHandlers {
           if (pending.length > 0) {
             debugLogger.debug("Dropping buffered mic segments after system transcript arrived", {
               count: pending.length,
-              text: latestSegment.slice(0, 80),
+              textLength: textLength(latestSegment),
             });
           }
 
@@ -7518,7 +7461,7 @@ class IPCHandlers {
 
         debugLogger.debug("Meeting segment sending to renderer", {
           source,
-          text: latestSegment.slice(0, 80),
+          textLength: textLength(latestSegment),
           segmentCount: segments.length,
           micCorrelation: micSuppression?.averageCorrelation?.toFixed(3),
           micSuppressionReason: micSuppression?.reason,
@@ -7528,7 +7471,7 @@ class IPCHandlers {
         });
         if (source === "mic" && hasRiskyMicDuplicateProfile(micSuppression)) {
           debugLogger.debug("Buffering risky mic segment before renderer commit", {
-            text: latestSegment.slice(0, 80),
+            textLength: textLength(latestSegment),
             holdbackMs: STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS,
             reason: micSuppression?.reason,
             hasBleedEvidence: micSuppression?.hasBleedEvidence,
@@ -8482,7 +8425,7 @@ class IPCHandlers {
             );
             debugLogger.debug("Local meeting transcription candidate", {
               source,
-              text: text.slice(0, 80),
+              textLength: textLength(text),
               suppress: micSuppression.suppress,
               reason: micSuppression.reason,
               hasBleedEvidence: micSuppression.hasBleedEvidence,
@@ -8495,14 +8438,14 @@ class IPCHandlers {
                 reason: micSuppression.reason,
                 averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
                 averageResidual: micSuppression.averageResidual?.toFixed(3),
-                text: text.slice(0, 80),
+                textLength: textLength(text),
               });
               return;
             }
 
             if (shouldSkipDuplicateMicSegment(text, segTimestamp, micSuppression)) {
               debugLogger.debug("Skipping duplicate local mic segment that matches system audio", {
-                text: text.slice(0, 80),
+                textLength: textLength(text),
                 averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
                 averageResidual: micSuppression.averageResidual?.toFixed(3),
               });
@@ -8511,7 +8454,7 @@ class IPCHandlers {
           } else {
             debugLogger.debug("Local meeting transcription candidate", {
               source,
-              text: text.slice(0, 80),
+              textLength: textLength(text),
             });
           }
 
@@ -8522,7 +8465,7 @@ class IPCHandlers {
                 "Dropping buffered local mic segments after system transcript arrived",
                 {
                   count: pending.length,
-                  text: text.slice(0, 80),
+                  textLength: textLength(text),
                 }
               );
             }
@@ -8552,7 +8495,7 @@ class IPCHandlers {
 
           if (source === "mic" && hasRiskyMicDuplicateProfile(micSuppression)) {
             debugLogger.debug("Buffering risky local mic segment before renderer commit", {
-              text: text.slice(0, 80),
+              textLength: textLength(text),
               holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
               reason: micSuppression?.reason,
               hasBleedEvidence: micSuppression?.hasBleedEvidence,
@@ -10277,7 +10220,7 @@ class IPCHandlers {
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        debugLogger.debug("Agent web search request", { query, numResults }, "cloud-api");
+        debugLogger.debug("Agent web search request", { queryLength: textLength(query), numResults }, "cloud-api");
 
         const response = await proxyFetch(`${apiUrl}/api/agent/web-search`, {
           method: "POST",
@@ -10345,10 +10288,6 @@ class IPCHandlers {
               clientTotalMs: opts.clientTotalMs,
               sendLogs: opts.sendLogs,
               clientTranscriptionId: opts.clientTranscriptionId,
-              localDate: opts.localDate,
-              analyticsOccurredAt: opts.analyticsOccurredAt,
-              analyticsWordCount: opts.analyticsWordCount,
-              analyticsCounterVersion: opts.analyticsCounterVersion,
             }),
           });
 
