@@ -184,7 +184,7 @@ class OnnxWorkerClient {
     try {
       ({ sessions } = await this.request("ping", {}));
     } catch (err) {
-      debugLogger.debug("onnx worker release probe failed", { error: err?.message });
+      debugLogger.debug("onnx worker release probe failed", { failed: Boolean(err) });
       return false;
     }
     if (!this.child || sessions.speaker || sessions.text || this.pending.size) return false;
