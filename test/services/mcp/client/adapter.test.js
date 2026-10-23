@@ -28,6 +28,13 @@ test("cloud defaults do not request local context", async () => {
   assert.equal(await resolveMcpResultBudget("unknown", "cloud", false, noLocalLookup), 8_000);
 });
 
+test("openrouter cloud budget uses the 5% context share above the floor", async () => {
+  const noLocalLookup = async () => {
+    throw Error("unexpected local lookup");
+  };
+  assert.equal(await resolveMcpResultBudget("openrouter", "cloud", false, noLocalLookup), 25_600);
+});
+
 test("failed local lookup falls back and warns once", async () => {
   const warnings = [];
   const log = (message) => warnings.push(message);
