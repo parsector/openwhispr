@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"synthetic-session","model":"sonnet"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Working"},{"type":"tool_use","name":"Read","input":{"file_path":"src/x.ts"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","is_error":false}]}}
+{"type":"result","result":"Finished","duration_ms":1234,"total_cost_usd":0.01,"is_error":false,"session_id":"synthetic-session"}

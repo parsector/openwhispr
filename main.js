@@ -368,6 +368,7 @@ let semanticSearch = null;
 let ipcHandlers = null;
 let stopLocalMcp = null;
 let mcpClientManager = null;
+let agentJobManager = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
 let macAccessibilityFeaturesReady = false;
@@ -706,6 +707,56 @@ function initializeCoreManagers() {
     }
   );
   registerMcpIpc(mcpClientManager);
+  const { createProjectStore } = require("./src/services/agents/projectStore");
+  const { createCliResolver } = require("./src/services/agents/cliResolver");
+  const { createClaudeRunner } = require("./src/services/agents/claudeRunner");
+  const { createJobManager } = require("./src/services/agents/jobManager");
+  const { registerAgentIpc } = require("./src/services/agents/ipc");
+  const tokenStore = require("./src/helpers/tokenStore");
+  const { compareAppVersions } = require("./src/helpers/appVersion");
+  const projectStore = createProjectStore(
+    path.join(app.getPath("userData"), "agents", "projects.json")
+  );
+  const repoFolder = app.getAppPath();
+  if (
+    !app.isPackaged &&
+    path.basename(repoFolder) === "openwhispr" &&
+    require("node:fs").existsSync(path.join(repoFolder, ".git")) &&
+    projectStore.read().projects.length === 0
+  ) {
+    projectStore.save({
+      name: "openwhispr",
+      folder: repoFolder,
+      defaultHarness: "claude",
+      mode: "read-only",
+      model: "sonnet",
+    });
+  }
+  const resolver = createCliResolver();
+  agentJobManager = createJobManager({
+    file: path.join(app.getPath("userData"), "agents", "jobs.json"),
+    projectStore,
+    resolver,
+    runnerFactory: (cliPath) => createClaudeRunner({ cliPath }),
+    databaseManager,
+    broadcast: broadcastToWindows,
+    policyAllowed: async () => {
+      const state = tokenStore.getState();
+      if (!state?.token) return true;
+      const snapshot = await ipcHandlers?.workspacePolicyManager?.getPolicy({
+        accountId: databaseManager.activeAccountId,
+        expectedAuthGeneration: state.generation,
+      });
+      return Boolean(
+        snapshot?.success &&
+        (!snapshot.managed ||
+          (snapshot.policy?.features?.agentEnabled === true &&
+            (!snapshot.policy.minAppVersion ||
+              compareAppVersions(app.getVersion(), snapshot.policy.minAppVersion) >= 0)))
+      );
+    },
+  });
+  registerAgentIpc({ ipcMain, projectStore, resolver, manager: agentJobManager });
   void mcpClientManager
     .sync()
     .catch((error) => debugLogger.warn("MCP client startup failed", error));
@@ -747,6 +798,7 @@ function initializeCoreManagers() {
 }
 
 function registerSidecars() {
+  if (agentJobManager) sidecarRegistry.register("agent-jobs", () => agentJobManager.stopAll());
   if (whisperManager) sidecarRegistry.register("whisper", () => whisperManager.stopServer());
   if (parakeetManager) sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
   if (diarizationManager) {
@@ -1505,7 +1557,6 @@ async function startApp() {
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 
-
   if (process.platform === "darwin") {
     const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");
     let globeKeyDownTime = 0;
@@ -2119,6 +2170,7 @@ if (gotSingleInstanceLock) {
     if (isShuttingDown) return;
     isShuttingDown = true;
     mcpClientManager?.stopAll();
+    agentJobManager?.stopAll();
     if (updateManager && updateManager.isQuittingForUpdate) {
       // Quit must proceed for the installer to run, so no preventDefault;
       // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).

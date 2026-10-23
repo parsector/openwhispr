@@ -6432,6 +6432,7 @@ class IPCHandlers {
       broadcast: (snapshot) => broadcastToWindows("workspace-policy-changed", snapshot),
       logger: debugLogger,
     });
+    this.workspacePolicyManager = workspacePolicyManager;
     registerProductHelpIpc({
       ipcMain,
       fetch: proxyFetch,

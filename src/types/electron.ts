@@ -1334,8 +1334,72 @@ export interface ReferralItem {
   first_payment_at: string | null;
 }
 
+export interface AgentJob {
+  jobId: string;
+  project: { name: string; folder: string };
+  harness: string;
+  model: string | null;
+  prompt: string;
+  status: "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
+  steps: Array<{ kind: string; [key: string]: unknown }>;
+  result: string | null;
+  reason: string | null;
+  costEstimate: number | null;
+  sessionId: string | null;
+  createdAt: number;
+  expiresAt: number;
+  startedAt: number | null;
+  endedAt: number | null;
+  stalled: boolean;
+  position: number | null;
+}
+
 declare global {
   interface Window {
+    agentJobs: {
+      projectsList: () => Promise<{
+        projects: Array<{
+          name: string;
+          folder: string;
+          defaultHarness: "claude" | "cursor-agent";
+          mode: "read-only";
+          model: string | null;
+        }>;
+      }>;
+      projectsSave: (project: {
+        name: string;
+        folder: string;
+        defaultHarness: "claude" | "cursor-agent";
+        mode: "read-only";
+        model: string | null;
+      }) => Promise<unknown>;
+      projectsRemove: (name: string) => Promise<unknown>;
+      testHarness: (
+        harness: "claude" | "cursor-agent"
+      ) => Promise<{
+        ok: boolean;
+        path: string | null;
+        version: string | null;
+        error: string | null;
+      }>;
+      prepare: (input: {
+        project: string;
+        task: string;
+        harness?: "claude";
+        model?: string;
+      }) => Promise<{
+        jobId: string;
+        project: { name: string; folder: string };
+        harness: string;
+        model: string | null;
+        prompt: string;
+      }>;
+      approve: (id: string, input?: { prompt?: string }) => Promise<AgentJob>;
+      cancel: (id: string) => Promise<AgentJob>;
+      list: () => Promise<AgentJob[]>;
+      get: (id: string) => Promise<AgentJob | null>;
+      onUpdated: (callback: (job: AgentJob) => void) => () => void;
+    };
     mcpClient: import("../services/tools/mcpTools").McpClientApi;
     electronAPI: {
       localMcpState: () => Promise<{
