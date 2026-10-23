@@ -198,7 +198,7 @@ test("cloud auto-language routing uses detected speech before the UI language", 
   assert.equal(italianResult.text, "agent output");
 });
 
-test("cloud transcription returns the occurrence time sent with analytics", async (t) => {
+test("cloud transcription keeps local occurrence time without sending analytics metadata", async (t) => {
   const { window, setSettings, createManager } = await loadAudioManager(t);
   const analyticsOccurredAt = "2026-09-02T14:00:00.000Z";
   const audioBlob = {
@@ -230,7 +230,8 @@ test("cloud transcription returns the occurrence time sent with analytics", asyn
     analyticsOccurredAt,
   });
 
-  assert.equal(requestOptions.analyticsOccurredAt, analyticsOccurredAt);
+  assert.equal(requestOptions.analyticsOccurredAt, undefined);
+  assert.equal(requestOptions.localDate, undefined);
   assert.equal(result.analyticsOccurredAt, analyticsOccurredAt);
 });
 
