@@ -1336,6 +1336,7 @@ export interface ReferralItem {
 
 declare global {
   interface Window {
+    mcpClient: import("../services/tools/mcpTools").McpClientApi;
     electronAPI: {
       // Basic window operations
       setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;

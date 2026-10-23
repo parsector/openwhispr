@@ -7,6 +7,7 @@ import { useToast } from "../ui/useToast";
 import { IntegrationsPane, UpsellBar } from "./IntegrationsPane";
 import claudeIcon from "../../assets/icons/providers/claude.svg";
 import openaiIcon from "../../assets/icons/providers/openai.svg";
+import { McpServers } from "./McpServers";
 import cursorIcon from "../../assets/icons/providers/cursor.svg";
 
 const MCP_URL = "https://mcp.openwhispr.com/mcp";
@@ -53,6 +54,8 @@ export function McpPane({ title, isPaid, onUpgrade, onCreateKey }: McpPaneProps)
           </span>
         ))}
       </div>
+
+      <McpServers />
 
       {!isPaid && <UpsellBar message={t("integrations.mcp.proRequired")} onUpgrade={onUpgrade} />}
 

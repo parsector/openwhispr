@@ -366,6 +366,7 @@ let windowsLoopbackAudioManager = null;
 let meetingAecManager = null;
 let semanticSearch = null;
 let ipcHandlers = null;
+let mcpClientManager = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
 let macAccessibilityFeaturesReady = false;
@@ -664,6 +665,49 @@ function initializeCoreManagers() {
   }
 
   // IPC handlers must be registered before window content loads
+  const { createConfigStore } = require("./src/services/mcp/client/configStore");
+  const { McpManager } = require("./src/services/mcp/client/manager");
+  const { registerMcpIpc } = require("./src/services/mcp/client/ipc");
+  mcpClientManager = new McpManager(
+    createConfigStore(path.join(app.getPath("userData"), "mcp", "servers.json")),
+    {
+      reservedNames: [
+        "search_openwhispr_help",
+        "read_openwhispr_help",
+        "get_openwhispr_context",
+        "search_notes",
+        "get_note",
+        "create_note",
+        "update_note",
+        "list_folders",
+        "copy_to_clipboard",
+        "web_search",
+        "get_calendar_events",
+        "get_calendar_availability",
+        "get_snippet",
+        "update_snippets",
+        "update_dictionary",
+        "find_contact",
+        "email_draft",
+        "linear_search_issues",
+        "linear_create_issue",
+        "linear_comment",
+        "github_search_issues",
+        "github_create_issue",
+        "github_comment",
+        "slack_send_message",
+      ],
+      credentials: createCredentialStore({
+        dir: path.join(app.getPath("userData"), "mcp", "credentials"),
+        secretCrypto: require("./src/helpers/secretCrypto"),
+        logger: debugLogger,
+      }),
+    }
+  );
+  registerMcpIpc(mcpClientManager);
+  void mcpClientManager
+    .sync()
+    .catch((error) => debugLogger.warn("MCP client startup failed", error));
   ipcHandlers = new IPCHandlers({
     environmentManager,
     databaseManager,
@@ -2086,6 +2130,7 @@ if (gotSingleInstanceLock) {
   app.on("before-quit", (event) => {
     if (isShuttingDown) return;
     isShuttingDown = true;
+    mcpClientManager?.stopAll();
     if (updateManager && updateManager.isQuittingForUpdate) {
       // Quit must proceed for the installer to run, so no preventDefault;
       // sidecar shutdown is best-effort (the reaper cleans up orphans on relaunch).

@@ -712,7 +712,31 @@
       "oauthTitle": "تسجيل الدخول باستخدام OAuth",
       "oauthDescription": "في عميل يدعم OAuth، أضف عنوان URL للخادم، ثم سجّل الدخول إلى OpenWhispr واسمح بالوصول. لا تحتاج إلى مفتاح API.",
       "apiKeyTitle": "استخدام مفتاح API",
-      "apiKeyDescription": "للعملاء الذين يقبلون ترويسات الطلبات، أنشئ مفتاح API شخصيًا بالأذونات التي تحتاجها واستخدم الترويسة أدناه."
+      "apiKeyDescription": "للعملاء الذين يقبلون ترويسات الطلبات، أنشئ مفتاح API شخصيًا بالأذونات التي تحتاجها واستخدم الترويسة أدناه.",
+      "servers": {
+        "title": "Servers",
+        "description": "Connect tools from your own MCP servers. This works while signed out.",
+        "oneServer": "Paste one server in an mcpServers object.",
+        "confirmCommand": "Confirm this command, arguments and working directory:",
+        "enabled": "Enabled",
+        "allowWithoutAsking": "Allow without asking",
+        "confirm": "Confirm command",
+        "edit": "Edit",
+        "remove": "Remove",
+        "removeConfirm": "Remove {{name}}?",
+        "add": "Add server",
+        "form": "Form",
+        "json": "mcpServers JSON",
+        "name": "Server name",
+        "command": "Command",
+        "args": "Arguments as JSON array",
+        "url": "HTTP URL (leave blank for stdio)",
+        "cwd": "Working directory",
+        "env": "Environment variables as JSON object",
+        "headers": "HTTP headers as JSON object",
+        "secrets": "Secret fields as JSON, for example {\"env.API_KEY\":\"value\"}",
+        "save": "Save server"
+      }
     },
     "cli": {
       "description": "امنح مساعدك حق الوصول إلى ملاحظاتك من الجهاز الطرفي (terminal).",

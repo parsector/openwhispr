@@ -39,6 +39,7 @@ import { getDictionaryHintWords } from "../../utils/snippets";
 import { noteAttendeesContext, withoutAttendeesFence } from "../../utils/noteAttendees";
 import { FULL_TRANSCRIPT_MAX_TOKENS } from "../../utils/transcriptEvidence";
 import { createToolRegistry } from "../../services/tools";
+import { loadMcpTools } from "../../services/tools/mcpTools";
 import {
   executeTool,
   type HoldDeliveryOptions,
@@ -444,7 +445,10 @@ export function useChatStreaming({
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
           const keepNotesUnchanged = !!options?.keepNotesUnchanged;
-          const cacheKey = `${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
+          const mcp = window.mcpClient
+            ? await loadMcpTools(window.mcpClient).catch(() => ({ key: "unavailable", tools: [] }))
+            : { key: "unavailable", tools: [] };
+          const cacheKey = `${mcp.key}-${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
@@ -464,6 +468,7 @@ export function useChatStreaming({
               },
               connectors,
               keepNotesUnchanged,
+              mcpTools: mcp.tools,
             });
             toolRegistryRef.current = { key: cacheKey, registry };
           }

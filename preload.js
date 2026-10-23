@@ -62,6 +62,19 @@ const registerListener = (channel, handlerFactory) => {
   };
 };
 
+contextBridge.exposeInMainWorld("mcpClient", {
+  list: () => ipcRenderer.invoke("mcp-client-list"),
+  tools: (name) => ipcRenderer.invoke("mcp-client-tools", name),
+  upsert: (name, server, options) => ipcRenderer.invoke("mcp-client-upsert", name, server, options),
+  enable: (name, enabled) => ipcRenderer.invoke("mcp-client-enable", name, enabled),
+  confirm: (name, details) => ipcRenderer.invoke("mcp-client-confirm", name, details),
+  allow: (name, allowed) => ipcRenderer.invoke("mcp-client-allow", name, allowed),
+  remove: (name) => ipcRenderer.invoke("mcp-client-remove", name),
+  recent: () => ipcRenderer.invoke("mcp-client-recent"),
+  call: (name, tool, args, requestId) =>
+    ipcRenderer.invoke("mcp-client-call", name, tool, args, requestId),
+  cancel: (requestId) => ipcRenderer.invoke("mcp-client-cancel", requestId),
+});
 contextBridge.exposeInMainWorld("electronAPI", {
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
