@@ -1,13 +1,13 @@
 import { isEnterpriseProvider } from "../../models/ModelRegistry";
 
-const TOOL_RESULT_SHARE = 0.05; // Target 5% of the model window for one result, then clamp.
+const TOOL_RESULT_SHARE = 0.08; // Target 8% of the model window for one result, then clamp.
 const CHARS_PER_TOKEN = 4; // Conservative planning conversion, not tokenization.
-const MIN_RESULT_CHARS = 8_000;
+const MIN_RESULT_CHARS = 12_000;
 const MAX_RESULT_CHARS = 256_000;
 const LOCAL_FALLBACK_TOKENS = 16_384;
 
-// Conservative provider planning defaults, not guarantees for every model. The 5% share
-// and 256k ceiling keep an over-estimate survivable until model-specific metadata is available.
+// Conservative provider planning defaults, not guarantees for every model. The 8% share,
+// 12k floor, and 256k ceiling keep an over-estimate survivable until model-specific metadata is available.
 const CLOUD_CONTEXT_TOKENS: Record<string, number> = {
   openai: 400_000,
   anthropic: 200_000,
