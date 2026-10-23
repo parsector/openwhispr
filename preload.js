@@ -77,6 +77,18 @@ contextBridge.exposeInMainWorld("mcpClient", {
     ipcRenderer.invoke("mcp-client-call", name, tool, args, requestId),
   cancel: (requestId) => ipcRenderer.invoke("mcp-client-cancel", requestId),
 });
+contextBridge.exposeInMainWorld("agentJobs", {
+  projectsList: () => ipcRenderer.invoke("agent-projects-list"),
+  projectsSave: (project) => ipcRenderer.invoke("agent-projects-save", project),
+  projectsRemove: (name) => ipcRenderer.invoke("agent-projects-remove", name),
+  testHarness: (harness) => ipcRenderer.invoke("agent-projects-test-harness", harness),
+  prepare: (input) => ipcRenderer.invoke("agent-job-prepare", input),
+  approve: (id, input) => ipcRenderer.invoke("agent-job-approve", id, input),
+  cancel: (id) => ipcRenderer.invoke("agent-job-cancel", id),
+  list: () => ipcRenderer.invoke("agent-job-list"),
+  get: (id) => ipcRenderer.invoke("agent-job-get", id),
+  onUpdated: registerListener("agent-job-updated", (callback) => (_event, job) => callback(job)),
+});
 contextBridge.exposeInMainWorld("electronAPI", {
   localMcpState: () => ipcRenderer.invoke("local-mcp-state"),
   localMcpEnable: (enabled) => ipcRenderer.invoke("local-mcp-enable", enabled),
