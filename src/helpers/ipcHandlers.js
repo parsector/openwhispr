@@ -20,7 +20,6 @@ const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
 const { createCloudApiRequestHandler } = require("./cloudApiRequest");
-const { MetaActivation } = require("./metaActivation");
 const { decodeLeaderboardPngDataUrl, leaderboardImageFilename } = require("./leaderboardImage");
 const { withPolicyRequestHeaders } = require("./policyRequestHeaders");
 const {
@@ -2443,7 +2442,6 @@ class IPCHandlers {
       );
       this.connectorManager?.accountChanged();
       void this.connectorManager?.notifyStatusChanged();
-      void this.metaActivation?.flush();
       return { success: true };
     });
 
@@ -2479,7 +2477,6 @@ class IPCHandlers {
             erasingDevice: options?.erasingDevice === true,
           });
           const result = this.databaseManager.deleteAccountData(accountId);
-          this.metaActivation?.purge(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this._asyncMirrorDelete(noteId);
@@ -4235,15 +4232,6 @@ class IPCHandlers {
         errors.push(`Connector revoke: ${errorCode ?? errorName}`);
       }
 
-      try {
-        this.metaActivation?.dispose();
-        this.metaActivation = null;
-        const activationPath = path.join(app.getPath("userData"), "meta-activation.db");
-        for (const suffix of ["", "-wal", "-shm"])
-          fs.rmSync(activationPath + suffix, { force: true });
-      } catch (e) {
-        errors.push(`Activation data cleanup: ${e.message}`);
-      }
 
       // Close DB connection before deleting the file
       try {
@@ -6299,10 +6287,6 @@ class IPCHandlers {
 
     ipcMain.handle("auth-clear-session", async (event) => {
       try {
-        await Promise.race([
-          this.metaActivation?.close(),
-          new Promise((resolve) => setTimeout(resolve, 1500)),
-        ]).catch(() => {});
         const tokenState = tokenStore.clear();
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win) {
@@ -6438,46 +6422,6 @@ class IPCHandlers {
       tokenStore,
       logger: debugLogger,
     });
-    try {
-      const ActivationDatabase = require("better-sqlite3");
-      const activationDb = new ActivationDatabase(
-        path.join(app.getPath("userData"), "meta-activation.db")
-      );
-      activationDb.pragma("foreign_keys = ON");
-      this.metaActivation = new MetaActivation({
-        db: activationDb,
-        getScope: () =>
-          accountScopeBinding.resolveActiveAccountScope({
-            ...tokenStore.getState(),
-            binding: accountScopeBinding.read(),
-          }),
-        request: createCloudApiRequestHandler({
-          getApiUrl,
-          getAppVersion: () => app.getVersion(),
-          tokenStore,
-          proxyFetch: (url, init) =>
-            proxyFetch(url, { ...init, signal: AbortSignal.timeout(10_000) }),
-        }),
-      });
-      this.metaActivation.start();
-    } catch {
-      // Marketing bookkeeping must never prevent ordinary dictation/startup.
-      debugLogger.warn("Activation storage unavailable");
-    }
-    ipcMain.handle("activation-close", async () => {
-      await Promise.race([
-        this.metaActivation?.close(),
-        new Promise((resolve) => setTimeout(resolve, 1500)),
-      ]).catch(() => {});
-    });
-    ipcMain.handle("activation-begin", () => this.metaActivation?.begin() ?? null);
-    ipcMain.handle("activation-stop", (_event, id) => {
-      if (typeof id === "string") this.metaActivation?.stopCapture(id);
-    });
-    ipcMain.handle("activation-finish", (_event, id, words) =>
-      this.metaActivation?.finish(id, words)
-    );
-    ipcMain.handle("activation-cancel", (_event, id) => this.metaActivation?.cancel(id));
     const workspacePolicyManager = createWorkspacePolicyManager({
       cachePath: path.join(app.getPath("userData"), "workspace-policy.json"),
       getApiUrl,
