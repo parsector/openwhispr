@@ -1,16 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BarChart3, Cloud, CloudUpload, Flame, Gauge, Mic2, Trophy } from "./icons";
+import { BarChart3, Cloud, Flame, Gauge, Mic2, Trophy } from "./icons";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useHotkey } from "../hooks/useHotkey";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
 import { hasValidatedAuthContext } from "../lib/authRequestContext";
-import {
-  getAccountAnalyticsSummary,
-  subscribeToAnalyticsRefresh,
-} from "../services/AnalyticsService";
-import { syncService } from "../services/SyncService";
+import { subscribeToAnalyticsRefresh } from "../services/AnalyticsService";
 import { buildAnalyticsActivityDays } from "../helpers/analytics";
 import { canOfferAnalyticsClaim } from "../services/syncPassPolicy";
 import { effectiveLocalHistoryEnabled } from "../stores/policyRules";
@@ -19,7 +15,6 @@ import { usePolicyStore } from "../stores/policyStore";
 import type { AnalyticsDailyBucket, AnalyticsSummary } from "../types/electron";
 import { cn } from "./lib/utils";
 import LeaderboardSkeleton from "./LeaderboardSkeleton";
-import { Button } from "./ui/button";
 import DictationHotkeyHint from "./ui/DictationHotkeyHint";
 import EmptyStateCard from "./ui/EmptyStateCard";
 import { PAGE_CONTENT_WIDTH_CLASS } from "./ui/pageWidth";
@@ -403,28 +398,11 @@ function YourUsage({
     if (requestId !== requestIdRef.current) return;
     setLoadFailed(false);
 
-    try {
-      if (isLoaded && syncActive) {
-        if (!(await syncService.syncAnalyticsNow())) {
-          throw new Error("Insights uploads are not enabled for this account");
-        }
-        const account = await getAccountAnalyticsSummary(accountId);
-        if (requestId !== requestIdRef.current) return;
-        setSummary(account);
-      } else {
-        setSummary(local);
-      }
-    } catch {
-      if (requestId !== requestIdRef.current) return;
-      // Real device data, and the pill says the cloud is the part that failed.
-      setSummary(local);
-      setSyncError(true);
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [accountId, isLoaded, syncActive]);
+    setSummary(local);
+    setLoading(false);
+  }, []);
 
-  useEffect(() => subscribeToAnalyticsRefresh(load, syncActive), [load, syncActive]);
+  useEffect(() => subscribeToAnalyticsRefresh(load), [load, syncActive]);
 
   useEffect(() => {
     onSyncErrorChange(syncError);
@@ -481,12 +459,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
   const [syncError, setSyncError] = useState(false);
   // A managed workspace that forbids cloud backup forbids these counters with
   // it, so the page stays device-scoped even with the preference left on.
-  const syncActive =
-    isSignedIn &&
-    authValidated &&
-    insightsSyncEnabled &&
-    syncAllowedByPolicy &&
-    dataRetentionEnabled;
+  const syncActive = false;
   const claimAvailable = canOfferAnalyticsClaim({
     signedIn: isSignedIn,
     syncAllowedByPolicy,
@@ -494,14 +467,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
     insightsSyncEnabled,
     unclaimedCount,
   });
-  const showSyncAction =
-    activeTab === "usage" && isSignedIn && authValidated && (!syncActive || claimAvailable);
-  const syncActionDisabled = !canToggleSync || !dataRetentionEnabled || !syncAllowedByPolicy;
-  const syncStatusLabel = syncActive
-    ? syncError
-      ? t("insights.syncFallback")
-      : t("insights.synced")
-    : t("insights.onDevice");
+  const syncStatusLabel = t("insights.onDevice");
 
   return (
     <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex min-h-full flex-col px-6 py-6")}>
@@ -522,19 +488,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
                 <Cloud size={13} />
                 {syncStatusLabel}
               </div>
-              {showSyncAction && (
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  className="h-7 rounded-[7px] px-2.5 text-[11px]"
-                  disabled={syncActionDisabled}
-                  onClick={() => void enableInsightsSync()}
-                >
-                  <CloudUpload size={13} />
-                  {t(syncActive ? "insights.claimInclude" : "insights.enableSync")}
-                </Button>
-              )}
+
             </div>
           ) : (
             isSignedIn &&
@@ -559,7 +513,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
             dataRetentionEnabled={dataRetentionEnabled}
             isLoaded={isLoaded}
             onSyncErrorChange={setSyncError}
-            syncActive={syncActive}
+            syncActive={false}
           />
           {isLoaded && !syncActive && (
             <p className="mt-auto pt-8 text-center text-[11px] text-muted-foreground/70">
@@ -570,8 +524,6 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
         <TabsContent value="leaderboard" className="mt-0">
           <Suspense fallback={isSignedIn ? <LeaderboardSkeleton /> : null}>
             <LeaderboardView
-              enableInsightsSync={enableInsightsSync}
-              insightsSyncEnabled={insightsSyncEnabled}
               onSignIn={onSignIn}
               syncAllowedByPolicy={syncAllowedByPolicy}
             />
