@@ -38,7 +38,39 @@ export interface McpClientApi {
   cancel(requestId: string): Promise<unknown>;
 }
 export const TOOL_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
-export const RESULT_SIZE_OPTIONS = [8_000, 32_000, 64_000, 128_000, 256_000] as const;
+export const RESULT_SIZE_OPTIONS = [12_000, 32_000, 64_000, 128_000, 256_000] as const;
+
+/** One limiter per user turn; count UTF-8 bytes actually sent to the model. */
+export function createMcpTurnResultLimiter(perResultBudget: number): (result: string) => string {
+  const encoder = new TextEncoder();
+  const aggregateBudget = perResultBudget * 3;
+  let emitted = 0;
+  return (result) => {
+    const remaining = aggregateBudget - emitted;
+    if (remaining < "[truncated]".length)
+      return "[MCP tool result omitted: turn result budget exhausted]";
+    const bytes = encoder.encode(result).length;
+    if (bytes <= remaining) {
+      emitted += bytes;
+      return result;
+    }
+    let low = 0;
+    let high = result.length;
+    let fitted = "";
+    while (low <= high) {
+      const kept = Math.floor((low + high) / 2);
+      const candidate = `${result.slice(0, kept)}\n[truncated: ${result.length - kept} of ${result.length} characters]`;
+      if (encoder.encode(candidate).length <= remaining) {
+        fitted = candidate;
+        low = kept + 1;
+      } else high = kept - 1;
+    }
+    // An almost empty allowance cannot hold the full marker; still signal truncation.
+    const output = fitted || "[truncated]".slice(0, remaining);
+    emitted += encoder.encode(output).length;
+    return output;
+  };
+}
 
 function trimText(text: string, budget: number): string {
   if (text.length <= budget) return text;
@@ -176,10 +208,11 @@ export async function loadMcpTools(
             if (context?.signal.aborted)
               return { success: false, data: null, displayText: "Cancelled" };
             const result = await api.call(server.name, tool.name, args, requestId);
-            const data = capResult(
+            const capped = capResult(
               result.content || [],
               Math.min(server.maxResultChars ?? modelBudget, modelBudget)
             );
+            const data = context?.limitMcpResult?.(capped) ?? capped;
             return { success: !result.isError, data, displayText: data };
           } catch (error) {
             return { success: false, data: null, displayText: (error as Error).message };
