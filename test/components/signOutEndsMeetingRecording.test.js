@@ -127,4 +127,3 @@ test("switching account from an invitation ends a live meeting before signing ou
     "signed out",
   ]);
 });
-
