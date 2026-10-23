@@ -6,19 +6,19 @@ const MIN_RESULT_CHARS = 8_000;
 const MAX_RESULT_CHARS = 256_000;
 const LOCAL_FALLBACK_TOKENS = 16_384;
 
-// Provider planning defaults, not guarantees for every model. Unknown and configurable
-// endpoints use a small window until model-specific metadata is available.
+// Conservative provider planning defaults, not guarantees for every model. The 5% share
+// and 256k ceiling keep an over-estimate survivable until model-specific metadata is available.
 const CLOUD_CONTEXT_TOKENS: Record<string, number> = {
-  openai: 128_000,
+  openai: 400_000,
   anthropic: 200_000,
   gemini: 1_000_000,
-  openrouter: 16_384,
-  groq: 32_768,
+  openrouter: 128_000,
+  groq: 128_000,
   tinfoil: 32_768,
   corti: 16_384,
-  custom: 16_384,
+  custom: 32_768,
 };
-const DEFAULT_CONTEXT_TOKENS = 16_384;
+const DEFAULT_CONTEXT_TOKENS = 32_768;
 const warnedModels = new Set<string>();
 
 export function mcpResultBudgetChars(contextTokens: number): number {
