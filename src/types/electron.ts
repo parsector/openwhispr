@@ -1336,6 +1336,7 @@ export interface ReferralItem {
 
 declare global {
   interface Window {
+    mcpClient: import("../services/tools/mcpTools").McpClientApi;
     electronAPI: {
       localMcpState: () => Promise<{
         enabled: boolean;

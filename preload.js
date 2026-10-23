@@ -62,6 +62,21 @@ const registerListener = (channel, handlerFactory) => {
   };
 };
 
+contextBridge.exposeInMainWorld("mcpClient", {
+  list: () => ipcRenderer.invoke("mcp-client-list"),
+  tools: (name) => ipcRenderer.invoke("mcp-client-tools", name),
+  upsert: (name, server, options) => ipcRenderer.invoke("mcp-client-upsert", name, server, options),
+  enable: (name, enabled) => ipcRenderer.invoke("mcp-client-enable", name, enabled),
+  confirm: (name, details) => ipcRenderer.invoke("mcp-client-confirm", name, details),
+  allow: (name, allowed) => ipcRenderer.invoke("mcp-client-allow", name, allowed),
+  resultSize: (name, maxResultChars) =>
+    ipcRenderer.invoke("mcp-client-result-size", name, maxResultChars),
+  remove: (name) => ipcRenderer.invoke("mcp-client-remove", name),
+  recent: () => ipcRenderer.invoke("mcp-client-recent"),
+  call: (name, tool, args, requestId) =>
+    ipcRenderer.invoke("mcp-client-call", name, tool, args, requestId),
+  cancel: (requestId) => ipcRenderer.invoke("mcp-client-cancel", requestId),
+});
 contextBridge.exposeInMainWorld("electronAPI", {
   localMcpState: () => ipcRenderer.invoke("local-mcp-state"),
   localMcpEnable: (enabled) => ipcRenderer.invoke("local-mcp-enable", enabled),

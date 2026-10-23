@@ -191,7 +191,7 @@ test("sectionMeta shows counts on a paid plan and plan badges on a free one", as
   assert.deepEqual(sectionMeta("connectors", free), { kind: "badge", badge: "pro" });
   assert.deepEqual(sectionMeta("calendars", free), { kind: "count", value: 1 });
   assert.deepEqual(sectionMeta("api", free), { kind: "badge", badge: "pro" });
-  assert.deepEqual(sectionMeta("mcp", free), { kind: "badge", badge: "pro" });
+  assert.equal(sectionMeta("mcp", free), null);
   assert.deepEqual(sectionMeta("cli", free), { kind: "badge", badge: "free" });
 
   assert.equal(sectionMeta("connectors", empty), null);
@@ -334,7 +334,7 @@ test("a free plan sees plan badges, the API upsell, and no key list", async (t) 
   );
   assert.equal(
     label(navButton(container, "mcp")),
-    "integrations.nav.sections.mcpintegrations.plan.pro"
+    "integrations.nav.sections.mcp"
   );
   assert.equal(
     label(navButton(container, "cli")),
