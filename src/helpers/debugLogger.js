@@ -11,11 +11,26 @@ const LOG_LEVELS = {
   error: 50,
   fatal: 60,
 };
+const MAX_DEBUG_LOG_FILES = 5;
+
+function pruneDebugLogs(logsDir) {
+  const files = fs.readdirSync(logsDir)
+    .filter((name) => /^debug-.*\.log$/.test(name))
+    .sort()
+    .reverse();
+  for (const name of files.slice(MAX_DEBUG_LOG_FILES)) {
+    fs.rmSync(path.join(logsDir, name), { force: true });
+  }
+}
 
 const normalizeLevel = (value) => {
   if (!value) return null;
   const lower = String(value).toLowerCase();
   return Object.prototype.hasOwnProperty.call(LOG_LEVELS, lower) ? lower : null;
+};
+const explicitFileLogging = () => {
+  const level = normalizeLevel(process.env.OPENWHISPR_LOG_LEVEL);
+  return level !== null && LOG_LEVELS[level] <= LOG_LEVELS.debug;
 };
 
 const readArgLogLevel = () => {
@@ -42,7 +57,7 @@ class DebugLogger {
     this.logFile = null;
     this.logStream = null;
     this.fileLoggingEnabled = false;
-    this.fileLoggingPending = this.debugMode; // Track if we need to initialize file logging later
+    this.fileLoggingPending = this.debugMode && explicitFileLogging();
     this.consoleLoggingEnabled = this.resolveConsoleLogging();
 
     // IMPORTANT: Do NOT call initializeFileLogging() here!
@@ -69,9 +84,11 @@ class DebugLogger {
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
       this.logFile = path.join(logsDir, `debug-${timestamp}.log`);
 
+      fs.closeSync(fs.openSync(this.logFile, "a"));
       this.logStream = fs.createWriteStream(this.logFile, { flags: "a" });
       this.fileLoggingEnabled = true;
       this.fileLoggingPending = false;
+      pruneDebugLogs(logsDir);
 
       this.debug("Debug logging enabled", { logFile: this.logFile });
       this.info("System Info", {
@@ -127,13 +144,17 @@ class DebugLogger {
 
   refreshLogLevel() {
     const nextLevel = this.resolveLogLevel();
-    if (nextLevel === this.logLevel) return;
-
     this.logLevel = nextLevel;
     this.levelValue = LOG_LEVELS[this.logLevel] || LOG_LEVELS.info;
     this.debugMode = this.isDebugEnabled();
 
-    if (this.debugMode && !this.fileLoggingEnabled) {
+    if ((!this.debugMode || !explicitFileLogging()) && this.logStream) {
+      this.logStream.end();
+      this.logStream = null;
+      this.logFile = null;
+      this.fileLoggingEnabled = false;
+    }
+    if (this.debugMode && explicitFileLogging() && !this.fileLoggingEnabled) {
       this.initializeFileLogging();
     }
   }
@@ -403,9 +424,9 @@ class DebugLogger {
   logProcessOutput(processName, type, data) {
     if (!this.isDebugEnabled()) return;
 
-    const output = data.toString().trim();
-    if (output) {
-      this.debug(`${processName} ${type}`, output, "process");
+    const outputLength = data.toString().trim().length;
+    if (outputLength) {
+      this.debug(`${processName} ${type}`, { outputLength }, "process");
     }
   }
 

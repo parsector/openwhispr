@@ -1,3 +1,4 @@
+const { textLength } = require("./logRedaction");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
 const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
@@ -1346,8 +1347,8 @@ class IPCHandlers {
       const { originalText, newFieldValue } = data;
 
       debugLogger.debug("[AutoLearn] text-edited event", {
-        originalPreview: originalText.substring(0, 80),
-        newValuePreview: newFieldValue.substring(0, 80),
+        originalPreviewLength: textLength(originalText),
+        newValuePreviewLength: textLength(newFieldValue),
       });
 
       this._autoLearnLatestData = { originalText, newFieldValue };
@@ -7272,7 +7273,7 @@ class IPCHandlers {
         debugLogger.debug(
           "Dropping buffered mic segment after system context confirmed duplicate",
           {
-            text: pending.text.slice(0, 80),
+            textLength: textLength(pending.text),
             averageCorrelation: pending.micSuppression?.averageCorrelation?.toFixed(3),
             averageResidual: pending.micSuppression?.averageResidual?.toFixed(3),
           }
@@ -7285,7 +7286,7 @@ class IPCHandlers {
             ? "Releasing bleed-flagged mic segment after holdback (no transcript match)"
             : "Releasing buffered mic segment after duplicate holdback",
           {
-            text: pending.text.slice(0, 80),
+            textLength: textLength(pending.text),
             holdbackMs: pending.holdbackMs,
             reason: pending.micSuppression?.reason,
             averageCorrelation: pending.micSuppression?.averageCorrelation?.toFixed(3),
@@ -7421,7 +7422,7 @@ class IPCHandlers {
               reason: micSuppression.reason,
               averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
               averageResidual: micSuppression.averageResidual?.toFixed(3),
-              text: latestSegment.slice(0, 80),
+              textLength: textLength(latestSegment),
             });
             send("meeting-transcription-segment", { text: "", source, type: "partial" });
             return;
@@ -7429,7 +7430,7 @@ class IPCHandlers {
 
           if (shouldSkipDuplicateMicSegment(latestSegment, timestamp, micSuppression)) {
             debugLogger.debug("Skipping duplicate mic segment that matches recent system audio", {
-              text: latestSegment.slice(0, 80),
+              textLength: textLength(latestSegment),
               averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
               averageResidual: micSuppression.averageResidual?.toFixed(3),
             });
@@ -7443,7 +7444,7 @@ class IPCHandlers {
           if (pending.length > 0) {
             debugLogger.debug("Dropping buffered mic segments after system transcript arrived", {
               count: pending.length,
-              text: latestSegment.slice(0, 80),
+              textLength: textLength(latestSegment),
             });
           }
 
@@ -7460,7 +7461,7 @@ class IPCHandlers {
 
         debugLogger.debug("Meeting segment sending to renderer", {
           source,
-          text: latestSegment.slice(0, 80),
+          textLength: textLength(latestSegment),
           segmentCount: segments.length,
           micCorrelation: micSuppression?.averageCorrelation?.toFixed(3),
           micSuppressionReason: micSuppression?.reason,
@@ -7470,7 +7471,7 @@ class IPCHandlers {
         });
         if (source === "mic" && hasRiskyMicDuplicateProfile(micSuppression)) {
           debugLogger.debug("Buffering risky mic segment before renderer commit", {
-            text: latestSegment.slice(0, 80),
+            textLength: textLength(latestSegment),
             holdbackMs: STREAMING_RISKY_MIC_SEGMENT_HOLDBACK_MS,
             reason: micSuppression?.reason,
             hasBleedEvidence: micSuppression?.hasBleedEvidence,
@@ -8424,7 +8425,7 @@ class IPCHandlers {
             );
             debugLogger.debug("Local meeting transcription candidate", {
               source,
-              text: text.slice(0, 80),
+              textLength: textLength(text),
               suppress: micSuppression.suppress,
               reason: micSuppression.reason,
               hasBleedEvidence: micSuppression.hasBleedEvidence,
@@ -8437,14 +8438,14 @@ class IPCHandlers {
                 reason: micSuppression.reason,
                 averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
                 averageResidual: micSuppression.averageResidual?.toFixed(3),
-                text: text.slice(0, 80),
+                textLength: textLength(text),
               });
               return;
             }
 
             if (shouldSkipDuplicateMicSegment(text, segTimestamp, micSuppression)) {
               debugLogger.debug("Skipping duplicate local mic segment that matches system audio", {
-                text: text.slice(0, 80),
+                textLength: textLength(text),
                 averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
                 averageResidual: micSuppression.averageResidual?.toFixed(3),
               });
@@ -8453,7 +8454,7 @@ class IPCHandlers {
           } else {
             debugLogger.debug("Local meeting transcription candidate", {
               source,
-              text: text.slice(0, 80),
+              textLength: textLength(text),
             });
           }
 
@@ -8464,7 +8465,7 @@ class IPCHandlers {
                 "Dropping buffered local mic segments after system transcript arrived",
                 {
                   count: pending.length,
-                  text: text.slice(0, 80),
+                  textLength: textLength(text),
                 }
               );
             }
@@ -8494,7 +8495,7 @@ class IPCHandlers {
 
           if (source === "mic" && hasRiskyMicDuplicateProfile(micSuppression)) {
             debugLogger.debug("Buffering risky local mic segment before renderer commit", {
-              text: text.slice(0, 80),
+              textLength: textLength(text),
               holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
               reason: micSuppression?.reason,
               hasBleedEvidence: micSuppression?.hasBleedEvidence,
@@ -10219,7 +10220,7 @@ class IPCHandlers {
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        debugLogger.debug("Agent web search request", { query, numResults }, "cloud-api");
+        debugLogger.debug("Agent web search request", { queryLength: textLength(query), numResults }, "cloud-api");
 
         const response = await proxyFetch(`${apiUrl}/api/agent/web-search`, {
           method: "POST",
