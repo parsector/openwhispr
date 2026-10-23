@@ -21,13 +21,10 @@ const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.teams.grantsAccessToSpaces",
   "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
   "settingsPage.workspace.invites.expiresIn",
-  "settingsPage.unifiedBilling.seatUpdated",
-  "settingsPage.unifiedBilling.confirmSeats.description",
   "settingsPage.privacy.retentionDays",
   "settingsPage.privacy.audioStorageFiles",
   "settingsPage.privacy.hoursAgo",
   "settingsPage.privacy.minutesAgo",
-  "settingsPage.enterpriseCheckout.seatsHint",
   "workspaces.join.memberCount",
   "notes.spaces.noteCount",
   "notes.spaces.invitedTo",
@@ -46,7 +43,6 @@ const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
   "notes.spaces.members.addFailed": "عدد الأشخاص الذين تعذرت إضافتهم: {{failed}} من أصل {{total}}",
   "notes.upload.partialWarningCount":
     "عدد الأجزاء الصوتية التي تعذر تفريغها: {{failed}} من أصل {{total}}.",
-  "settingsPage.account.planDescriptions.trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
   "emailVerification.resendIn": "إعادة الإرسال بعد {{seconds}} ث",
   "insights.wpmCoverage": "استنادًا إلى نسبة {{count}}% من الكلمات المقاسة",
   "dictionary.promptLimitNotice":

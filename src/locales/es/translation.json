@@ -142,21 +142,6 @@
     "screenRecording": "La configuración de grabación de pantalla no está disponible en esta plataforma.",
     "loginItems": "La configuración de elementos de inicio no está disponible en esta plataforma."
   },
-  "upgradePrompt": {
-    "paymentFailed": "No pudimos procesar tu pago",
-    "weeklyLimit": "Has alcanzado tu límite semanal de la nube",
-    "pastDueDescription": "Estás en el plan gratuito por ahora, pero no te preocupes: aún tienes {{limit}} palabras por semana.\nActualiza tu método de pago para volver a Pro ilimitado.",
-    "limitDescription": "{{used}} de {{limit}} palabras usadas.\nTu transcripción fue guardada y pegada.",
-    "updatePayment": "Actualizar método de pago",
-    "updatePaymentDescription": "Vuelve a las transcripciones Pro ilimitadas.",
-    "upgradeToPro": "Mejorar a Pro",
-    "upgradeDescription": "Transcripciones ilimitadas desde solo $8/mes.",
-    "useApiKey": "Usa tu propia clave API",
-    "useApiKeyDescription": "Trae tu propia clave para uso ilimitado.",
-    "switchToLocal": "Cambiar a local",
-    "switchToLocalDescription": "Transcripción sin conexión. Sin límites.",
-    "rollingWeeklyLimit": "Límite semanal móvil"
-  },
   "windowControls": {
     "minimize": "Minimizar",
     "maximize": "Maximizar",
@@ -215,7 +200,8 @@
     "managedConfigLoading": "Comprobando la configuración gestionada de tu organización. Inténtalo de nuevo en un momento.",
     "managedConfigUnavailable": "El acceso empresarial gestionado no está disponible. Vuelve a iniciar sesión o contacta a tu administrador.",
     "managedPolicyConflict": "El acceso gestionado está bloqueado por la política de tu espacio de trabajo. Contacta a tu administrador.",
-    "resizePanel": "Cambiar el tamaño del panel"
+    "resizePanel": "Cambiar el tamaño del panel",
+    "unavailableInBuild": "Esta función no está disponible en esta versión."
   },
   "onboarding": {
     "rehaul": {
@@ -565,7 +551,6 @@
         "title": "Nos dijiste que vienes por la transcripción clínica",
         "description": "Nos hemos asociado con Corti: voz a texto de nivel clínico con la máxima precisión y conforme a la HIPAA.",
         "createAccount": "Crea tu cuenta de Corti",
-        "creditBadge": "50 $ de crédito gratis",
         "regionHint": "Elige dónde se procesa tu audio: EE. UU. o UE.",
         "llmHint": "Las funciones de modelos de lenguaje también se ejecutarán en los modelos de Corti.",
         "useCorti": "Usar Corti",
@@ -634,7 +619,7 @@
     },
     "limit": {
       "weeklyTitle": "Límite semanal de la nube alcanzado",
-      "weeklyDescription": "Tu límite se restablece de forma continua. Mejora a Pro o usa tu propia clave API para uso ilimitado."
+      "weeklyDescription": "Has alcanzado el límite semanal de palabras de Cloud. Las ampliaciones de Cloud no están disponibles en esta versión."
     },
     "accessibilityMissing": {
       "title": "Se necesitan permisos de accesibilidad",
@@ -642,9 +627,8 @@
     },
     "billing": {
       "pastDueTitle": "No pudimos procesar tu pago",
-      "pastDueDescription": "No te preocupes: estás en el plan gratuito por ahora. Actualiza tu pago en Ajustes para volver a Pro.",
-      "bannerDescription": "Estás en el plan gratuito por ahora: aún tienes {{limit}} palabras por semana. Actualiza tu pago para volver a Pro.",
-      "updatePayment": "Actualizar pago"
+      "pastDueDescription": "El acceso a Cloud de esta cuenta está limitado actualmente.",
+      "bannerDescription": "El acceso a Cloud de esta cuenta está limitado actualmente. El límite semanal es de {{limit}} palabras."
     },
     "history": {
       "couldNotLoadTitle": "No se pudo cargar tu historial",
@@ -960,7 +944,7 @@
       "errorDescriptions": {
         "sessionExpired": "Tu sesión de OpenWhispr Cloud no está disponible. Vuelve a iniciar sesión desde Ajustes.",
         "offline": "Estás sin conexión. La transcripción en la nube requiere conexión a Internet.",
-        "dailyLimitReached": "Has alcanzado el límite de transcripción de hoy. Inténtalo mañana o mejora tu plan.",
+        "dailyLimitReached": "Se alcanzó el límite diario de transcripción. Vuelve a intentarlo mañana.",
         "providerRateLimited": "Tu proveedor de transcripción limitó la solicitud. Espera un momento e inténtalo de nuevo.",
         "chunkLoss": "Un problema de red hizo que se perdiera demasiada parte de la grabación. Vuelve a transcribirla desde el historial.",
         "agentReasoningFailed": "Tu asistente de voz no pudo procesar el comando; se insertó la transcripción sin procesar.",
@@ -1593,10 +1577,6 @@
         "description": "Perfil e inicio de sesión",
         "label": "Perfil"
       },
-      "plansBilling": {
-        "description": "Planes, uso y facturación",
-        "label": "Planes y facturación"
-      },
       "general": {
         "description": "Apariencia, sonidos e inicio",
         "label": "Preferencias"
@@ -1633,28 +1613,6 @@
     "title": "Ajustes"
   },
   "settingsPage": {
-    "unifiedBilling": {
-      "workspaceTitle": "Facturación del espacio de trabajo",
-      "workspaceDescription": "Cada espacio de trabajo tiene su propio plan, asientos y responsable de facturación.",
-      "billableSeat": "Tu asiento es facturable",
-      "nonBillableSeat": "Acceso solo de administrador · sin asiento de pago",
-      "managedBy": "La facturación la gestiona {{owner}}.",
-      "addSeat": "Añadir asiento",
-      "seatUpdated_one": "Capacidad del espacio de trabajo actualizada a {{count}} asiento",
-      "seatUpdated_other": "Capacidad del espacio de trabajo actualizada a {{count}} asientos",
-      "seatUpdateFailed": "No se pudieron actualizar los asientos del espacio de trabajo",
-      "businessWorkspaceOnly": "Disponible para espacios de trabajo",
-      "personalPlanTitle": "Plan personal",
-      "providedBy": "Plan personal: Gratis · Acceso de pago proporcionado por {{workspaces}}",
-      "confirmSeats": {
-        "title": "¿Añadir un asiento al espacio de trabajo?",
-        "description_one": "Ampliar {{workspace}} a {{count}} asiento. Stripe prorrateará el cambio.",
-        "description_other": "Ampliar {{workspace}} a {{count}} asientos. Stripe prorrateará el cambio.",
-        "newCapacity": "Nueva capacidad",
-        "chargeToday": "Cargo de hoy",
-        "confirm": "Añadir asiento"
-      }
-    },
     "account": {
       "badges": {
         "free": "Gratis",
@@ -1664,24 +1622,6 @@
         "business": "Business",
         "trial": "Prueba"
       },
-      "billing": {
-        "couldNotOpenDescription": "Tuvimos problemas al abrir la página de facturación. Inténtalo de nuevo.",
-        "couldNotOpenTitle": "No se pudo abrir facturación",
-        "manageBilling": "Administrar facturación",
-        "opening": "Abriendo...",
-        "updatePaymentMethod": "Actualizar método de pago",
-        "contactOwnerTitle": "Contacta al propietario del espacio de trabajo",
-        "contactOwnerDescription": "Solo el propietario del espacio de trabajo puede actualizar su facturación.",
-        "manageInAppStore": "Gestionar en App Store",
-        "manageInGooglePlay": "Gestionar en Google Play",
-        "managedInMobileStore": "Se factura a través de la tienda de aplicaciones de tu teléfono. Gestiónala desde tu teléfono."
-      },
-      "checkout": {
-        "couldNotOpenDescription": "Tuvimos problemas al abrir la página de pago. Inténtalo de nuevo.",
-        "couldNotOpenTitle": "No se pudo abrir el pago",
-        "opening": "Abriendo...",
-        "upgradeToPro": "Mejorar a Pro"
-      },
       "disabled": "Desactivado",
       "featuresDisabled": "Funciones de cuenta desactivadas",
       "featuresDisabledDescription": "Configura VITE_AUTH_URL en tu archivo .env para habilitar las funciones de cuenta.",
@@ -1689,123 +1629,6 @@
       "notSignedIn": "Sin sesión iniciada",
       "notSignedInDescription": "Crea una cuenta para desbloquear funciones premium.",
       "offline": "Sin conexión",
-      "pastDue": {
-        "description": "Estás en el plan gratuito por ahora. Actualiza tu método de pago para volver a Pro.",
-        "title": "No pudimos procesar tu pago"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} palabras de OpenWhispr Cloud esta semana",
-        "byokUnlimited": "Tus propias claves API y los modelos locales siguen sin límite.",
-        "nextBilling": "Próxima facturación: {{date}}",
-        "pastDue": "{{used}} / {{limit}} palabras de OpenWhispr Cloud esta semana: actualiza el pago para restaurar Pro",
-        "trial": "{{days}} días restantes: transcripciones ilimitadas",
-        "unlimited": "Ilimitado",
-        "accessUntil": "Acceso hasta el {{date}}",
-        "storePaymentIssue": "Tu tienda de aplicaciones no pudo renovar esta suscripción. Actualiza allí tu método de pago para conservar tu plan."
-      },
-      "planLabels": {
-        "free": "Gratis",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Prueba"
-      },
-      "pricing": {
-        "title": "Planes",
-        "billedYearly": "Facturación anual",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "para siempre",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2.000 palabras/semana de transcripción",
-            "5 horas de grabaciones de reuniones/mes",
-            "## Siempre gratis",
-            "Modelos de IA locales ilimitados",
-            "Transcripción en la nube ilimitada con tus propias claves API",
-            "Más de 100 idiomas compatibles",
-            "Diccionario personalizado",
-            "Sin retención de datos",
-            "Soporte de la comunidad"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/mes",
-          "annualPrice": "$80",
-          "annualPeriod": "/año",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Todas las funciones de Free +",
-          "features": [
-            "Transcripción en la nube ilimitada",
-            "20 horas de grabaciones de reuniones/mes",
-            "Sincronización entre dispositivos",
-            "Comparte notas con enlaces públicos",
-            "Acceso personal a la API",
-            "Integración MCP en todas tus apps",
-            "Aplicación móvil",
-            "Soporte por correo electrónico"
-          ],
-          "cta": "Comenzar",
-          "switchToAnnual": "Cambiar a Anual"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$16",
-          "monthlyPeriod": "/mes",
-          "annualPrice": "$160",
-          "annualPeriod": "/año",
-          "annualEquivalent": "$13.33",
-          "includesPrefix": "Todas las funciones de Pro +",
-          "badge": "Más popular",
-          "features": [
-            "Grabaciones de reuniones ilimitadas",
-            "Roles y gestión de miembros del espacio de trabajo",
-            "Modo asistente",
-            "Chatea sobre tus datos",
-            "Soporte prioritario"
-          ],
-          "cta": "Comenzar",
-          "switchToAnnual": "Cambiar a Anual"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "Personalizado",
-          "subtitle": "Para seguridad avanzada y soporte",
-          "includesPrefix": "Todas las funciones de Business +",
-          "features": [
-            "Créditos API gestionados",
-            "Sincronización en la nube entre dispositivos",
-            "Funciones de equipo y administración",
-            "SSO y cumplimiento normativo",
-            "Soporte dedicado"
-          ],
-          "cta": "Contactar a ventas",
-          "upgradeCta": "Mejorar a Enterprise",
-          "askOwner": "Pide a {{name}} que actualice tu espacio de trabajo."
-        },
-        "currentPlan": "Plan actual",
-        "coveredByWorkspace": "Incluido en tu plan de espacio de trabajo",
-        "upgrade": "Mejorar plan",
-        "downgrade": "Reducir plan",
-        "planSwitched": "Plan actualizado correctamente",
-        "confirmSwitch": {
-          "title": "Confirmar cambio de plan",
-          "description": "Cambiar a {{plan}} ({{interval}})",
-          "monthly": "mensual",
-          "yearly": "anual",
-          "chargeToday": "Cargo hoy",
-          "accountCredit": "Crédito en cuenta",
-          "newPrice": "Nuevo precio",
-          "nextBilling": "Próxima facturación",
-          "mo": "mo",
-          "yr": "yr",
-          "cancel": "Cancelar",
-          "confirm": "Confirmar"
-        }
-      },
-      "rollingWeeklyLimit": "Límite semanal móvil",
       "signOut": {
         "endMeetingDescription": "Al cerrar sesión se detiene la grabación de la reunión en curso. Lo capturado hasta ahora se queda en su nota.",
         "endMeetingTitle": "¿Detener la grabación de la reunión?",
@@ -1814,23 +1637,19 @@
         "signOut": "Cerrar sesión",
         "signingOut": "Cerrando sesión..."
       },
-      "signedOutPlans": {
-        "button": "Crear cuenta gratuita"
-      },
       "title": "Cuenta",
       "toasts": {
         "approachingLimit": {
-          "description": "Has usado {{used}} de {{limit}} palabras de OpenWhispr Cloud esta semana. Mejora a Pro para uso ilimitado.",
+          "description": "Casi has alcanzado el límite semanal de palabras de Cloud.",
           "title": "Cerca del límite de palabras de la nube"
         }
       },
       "trialCta": {
         "button": "Crear cuenta gratuita",
-        "description": "Transcripciones ilimitadas, procesamiento prioritario y más.",
-        "title": "Prueba Pro gratis por 7 días"
+        "description": "Inicia sesión para usar las funciones de la cuenta.",
+        "title": "Inicia sesión en tu cuenta"
       },
       "user": "Usuario",
-      "wordsRemaining": "{{remaining}} restantes",
       "deleteAccount": {
         "label": "Eliminar cuenta",
         "labelDescription": "Eliminar permanentemente tu cuenta y datos personales en la nube. Se conservan los demás usuarios locales y el contenido de los espacios de trabajo.",
@@ -1881,10 +1700,6 @@
           "noPassword": "Esta cuenta no tiene una contraseña configurada.",
           "generic": "Algo salió mal. Inténtalo de nuevo."
         }
-      },
-      "planUnavailable": {
-        "title": "Plan no disponible",
-        "description": "No pudimos cargar tu plan ahora mismo. Tu acceso no ha cambiado."
       }
     },
     "agentConfig": {
@@ -2567,28 +2382,6 @@
           "description": "El enlace de invitación para {{email}} dejará de funcionar."
         }
       },
-      "billing": {
-        "plan": "Plan",
-        "seats": "Asientos",
-        "ownerOnly": "Solo el propietario del espacio de trabajo puede gestionar la suscripción.",
-        "nextInvoice": "Próxima factura",
-        "manageStripe": "Administrar en Stripe",
-        "startSubscription": "Iniciar suscripción",
-        "planLabel": {
-          "business": "Business",
-          "pro": "Pro",
-          "free": "Gratis",
-          "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Activa",
-          "trialing": "En prueba",
-          "past_due": "Pago vencido",
-          "canceled": "Cancelada",
-          "incomplete": "Incompleta",
-          "unpaid": "Sin pagar"
-        }
-      },
       "developer": {
         "title": "Claves API",
         "description": "Acceso programático limitado a este espacio de trabajo.",
@@ -2630,10 +2423,6 @@
             "read": "Leer miembros",
             "write": "Administrar miembros"
           },
-          "billing": {
-            "title": "Facturación",
-            "read": "Leer facturación"
-          },
           "full": {
             "title": "Acceso completo",
             "admin": "Administrador del espacio de trabajo"
@@ -2645,34 +2434,6 @@
         "description": "Gestiona SSO, políticas y miembros desde la web",
         "open": "Abrir consola"
       }
-    },
-    "enterpriseCheckout": {
-      "title": "Mejorar a Enterprise",
-      "description": "Elige el espacio de trabajo, los puestos y el ciclo de facturación. El pago se completa en Stripe Checkout.",
-      "allSubscribed": "Los espacios de trabajo de tu propiedad ya están en Enterprise o no se pueden cambiar aquí. Para cambios de plan, contacta con ventas.",
-      "workspaceLabel": "Espacio de trabajo",
-      "seatsLabel": "Puestos",
-      "seatsHint_one": "{{count}} puesto en uso actualmente",
-      "seatsHint_other": "{{count}} puestos en uso actualmente",
-      "intervalLabel": "Ciclo de facturación",
-      "interval": {
-        "monthly": "Mensual",
-        "annual": "Anual"
-      },
-      "proratedCharge": "Cargo prorrateado",
-      "prorationNote": "La diferencia prorrateada se añade a tu próxima factura.",
-      "errors": {
-        "previewFailed": "No se pudo cargar la vista previa de la mejora.",
-        "alreadyEnterprise": "Este espacio de trabajo ya está en Enterprise.",
-        "subscriptionInactive": "La suscripción de este espacio de trabajo no está activa. Actualiza tus datos de facturación e inténtalo de nuevo.",
-        "priceNotConfigured": "Los precios de Enterprise no están disponibles ahora mismo. Contacta con ventas."
-      },
-      "priceNote": "El precio final se muestra al pagar.",
-      "continueCta": "Continuar al pago",
-      "upgradeDescription": "Actualiza {{workspace}} de {{plan}} a Enterprise. Los puestos y el ciclo de facturación se mantienen; el cambio se aplica de inmediato.",
-      "upgradeCta": "Actualizar ahora",
-      "upgradedTitle": "Actualizado a Enterprise",
-      "upgradedDescription": "{{workspace}} ahora está en Enterprise."
     }
   },
   "models": {
@@ -3205,14 +2966,11 @@
       "fileTooLarge": "Este archivo supera el límite de 500 MB.",
       "largeFileNote": "Los archivos grandes se dividen y transcriben en paralelo.",
       "chunkProgress": "Transcribiendo parte {{completed}} de {{total}}...",
-      "paidPlanRequired": "La transcripción en la nube para archivos de más de 25 MB requiere un plan de pago. Los archivos grandes se procesan con OpenWhispr Cloud para resultados fiables y de alta calidad.",
       "byokTooLarge": "Las claves API de terceros solo admiten archivos de hasta {{size}} MB.",
       "byokTooLargeDetail": "Para archivos de más de {{size}} MB, OpenWhispr Cloud se encarga de dividir, procesar en paralelo y reensamblar, obteniendo resultados fiables sin depender de los límites de proveedores de terceros.",
-      "byokTooLargeNeedsAccount": "Crea una cuenta y cambia a un plan de pago para transcribir archivos más grandes con OpenWhispr Cloud.",
-      "byokTooLargeNeedsUpgrade": "Cambia a un plan de pago para transcribir archivos más grandes con OpenWhispr Cloud.",
+      "byokTooLargeNeedsAccount": "Inicia sesión para comprobar si OpenWhispr Cloud puede procesar este archivo.",
       "switchToCloudForLargeFiles": "Cambia a OpenWhispr Cloud para transcribir este archivo.",
       "createAccount": "Crear cuenta",
-      "upgrade": "Mejorar plan",
       "switchToCloud": "OpenWhispr Cloud",
       "orDivider": "o",
       "urlPlaceholder": "Pega una URL de YouTube o de audio",
@@ -3250,7 +3008,9 @@
       "urlFileTooLarge": "El archivo es demasiado grande para descargar. El tamaño máximo es 500 MB.",
       "urlYoutubeBlocked": "YouTube está bloqueando temporalmente las descargas desde tu red. Inténtalo de nuevo más tarde.",
       "customEndpointInvalid": "El endpoint de transcripción personalizado no está configurado o no es válido. Actualízalo en Ajustes.",
-      "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos."
+      "streamingOnlyProvider": "Este proveedor solo admite transcripción en directo. Elige otro proveedor para subir archivos y reintentos.",
+      "cloudLimitUnavailable": "OpenWhispr Cloud acepta archivos de hasta 25 MB para esta cuenta. Las ampliaciones de Cloud no están disponibles en esta versión.",
+      "cloudUpgradeUnavailable": "Las ampliaciones de Cloud no están disponibles en esta versión."
     },
     "meeting": {
       "title": "Notas de reunión",
@@ -3454,8 +3214,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "Transcripción en tiempo real disponible con Pro",
-      "upgrade": "Mejorar"
+      "message": "Esta función no está disponible en esta versión."
     },
     "enhance": {
       "title": "Error de mejora"
@@ -3743,14 +3502,7 @@
     "settings": "Configuración",
     "support": "Soporte",
     "limitReached": "Límite semanal de la nube alcanzado",
-    "limitReachedDescription": "Mejora a Pro o usa tu propia clave API para uso ilimitado.",
-    "viewPlans": "Ver planes",
-    "upgradeTitle": "Mejorar a Pro",
-    "upgradeDescription": "Transcripción ilimitada, más precisa y más rápida.",
-    "upgradeInstantSetup": "Configuración instantánea",
-    "upgradeZeroRetention": "Cero retención de datos",
-    "upgradeEnterpriseSecurity": "Seguridad empresarial SOC 2 Type II, HIPAA, ISO27001",
-    "learnMore": "Más información",
+    "limitReachedDescription": "Has alcanzado el límite semanal de palabras de Cloud. Las ampliaciones de Cloud no están disponibles en esta versión.",
     "integrations": "Integraciones",
     "defaultUser": "Usuario",
     "accountMenu": "Cuenta: {{name}}",
@@ -4052,14 +3804,12 @@
     },
     "api": {
       "description": "Administra las claves API para acceso programático",
-      "proRequired": "Actualiza a un plan de pago para acceder a la API",
-      "viewPlans": "Ver planes",
       "useWith": "Usa una clave con"
     },
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "Let apps on this computer read your local notes while OpenWhispr is running. No sign-in or paid plan required.",
+        "description": "Permite que las aplicaciones de este equipo lean tus notas locales mientras OpenWhispr está abierto.",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
@@ -4077,7 +3827,6 @@
       },
       "description": "Chatea, busca y trabaja con tus notas en Claude, ChatGPT y Cursor.",
       "step1": "En tu herramienta de IA, añade OpenWhispr MCP usando la URL pública",
-      "proRequired": "Actualiza a un plan de pago para conectar OpenWhispr con Claude, ChatGPT y Cursor.",
       "worksWith": "Funciona con",
       "copyUrl": "Copiar URL de MCP",
       "copied": "Copiado",
@@ -4116,7 +3865,6 @@
     "cli": {
       "description": "Dale a tu asistente acceso a tus notas desde la terminal.",
       "installLabel": "Instalar",
-      "viewPlans": "Ver planes",
       "local": {
         "label": "Local",
         "freeBadge": "Gratis",
@@ -4124,20 +3872,8 @@
       },
       "cloud": {
         "label": "Nube",
-        "description": "Sincroniza entre dispositivos con tu clave API.",
-        "proRequired": "Actualiza a un plan de pago para usar la CLI en modo nube."
+        "description": "Sincroniza entre dispositivos con tu clave API."
       }
-    },
-    "plan": {
-      "title": "Tu Plan",
-      "current": "Actual",
-      "free": "Gratis",
-      "freeLimit": "5 reuniones / mes",
-      "essential": "Essential",
-      "essentialLimit": "20 reuniones / mes",
-      "pro": "Pro",
-      "proLimit": "Ilimitado",
-      "upgrade": "Mejorar"
     },
     "notABot": {
       "description": "OpenWhispr captura el audio directamente de tu sistema — nunca se une a tus reuniones como participante. Solo conecta tu calendario y toma notas con normalidad."
@@ -4611,8 +4347,7 @@
       "cardLimit": "Solo se pueden preparar {{max}} tarjetas por solicitud."
     },
     "beta": "Beta",
-    "upsell": "Los conectores se incluyen en los planes de pago. Mejora tu plan para que el asistente trabaje en tus herramientas.",
-    "locked": "Incluido en los planes de pago"
+    "locked": "No disponible en esta versión"
   },
   "calendar": {
     "title": "Google Calendar",
@@ -4806,7 +4541,7 @@
     },
     "create": {
       "title": "Crear espacio de trabajo",
-      "description": "Un espacio de trabajo reúne a los miembros y la facturación de tu organización. Crea dentro espacios de equipo para notas compartidas.",
+      "description": "Crea espacios de equipo para notas compartidas.",
       "nameLabel": "Nombre del espacio de trabajo",
       "namePlaceholder": "Acme Corp",
       "submit": "Crear espacio de trabajo",
@@ -4824,7 +4559,6 @@
       "emailPlaceholder": "colega@ejemplo.com",
       "roleLabel": "Rol",
       "seatUsage": "Usando {{used}} de {{seats}} asientos",
-      "seatCost": "Si acepta, se añadirá un puesto a tu plan · cargo prorrateado estimado de {{amount}}.",
       "submit": "Enviar invitación",
       "submitting": "Enviando…",
       "sentTitle": "Invitación enviada",
@@ -4837,7 +4571,7 @@
         "member": "Miembro"
       },
       "roleDescription": {
-        "admin": "Administra miembros y facturación",
+        "admin": "Administra miembros",
         "member": "Usa el espacio de trabajo"
       }
     },
