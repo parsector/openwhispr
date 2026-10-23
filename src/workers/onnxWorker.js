@@ -395,18 +395,18 @@ async function dispatch({ id, method, payload }) {
     // MessagePortMain transfers only ports, not ArrayBuffers — clone the result buffers instead.
     return { reply: { id, result }, transferList: [] };
   } catch (err) {
-    log("error", "handler threw", { method, errorName: err?.name });
+    log("error", "handler threw", { method, failed: Boolean(err) });
     return { reply: { id, error: { message: err?.message || String(err) } }, transferList: [] };
   }
 }
 
 process.on("uncaughtException", (err) => {
-  log("fatal", "uncaughtException", { errorName: err?.name });
+  log("fatal", "uncaughtException", { failed: Boolean(err) });
   process.stderr.write("onnx worker uncaughtException\n");
   process.exit(1);
 });
 process.on("unhandledRejection", (err) => {
-  log("fatal", "unhandledRejection", { errorName: err?.name });
+  log("fatal", "unhandledRejection", { failed: Boolean(err) });
   process.stderr.write("onnx worker unhandledRejection\n");
   process.exit(1);
 });
