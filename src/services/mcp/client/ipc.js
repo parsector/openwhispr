@@ -53,6 +53,9 @@ function registerMcpIpc(manager, { ipcMain, dialog } = require("electron")) {
     }
     return manager.setAllow(name, allowed);
   });
+  ipcMain.handle("mcp-client-result-size", (_event, name, maxResultChars) =>
+    manager.setResultSize(validName(name), maxResultChars)
+  );
   ipcMain.handle("mcp-client-remove", (_event, name) => {
     clearApprovals(validName(name));
     return manager.remove(name);

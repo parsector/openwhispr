@@ -69,6 +69,8 @@ contextBridge.exposeInMainWorld("mcpClient", {
   enable: (name, enabled) => ipcRenderer.invoke("mcp-client-enable", name, enabled),
   confirm: (name, details) => ipcRenderer.invoke("mcp-client-confirm", name, details),
   allow: (name, allowed) => ipcRenderer.invoke("mcp-client-allow", name, allowed),
+  resultSize: (name, maxResultChars) =>
+    ipcRenderer.invoke("mcp-client-result-size", name, maxResultChars),
   remove: (name) => ipcRenderer.invoke("mcp-client-remove", name),
   recent: () => ipcRenderer.invoke("mcp-client-recent"),
   call: (name, tool, args, requestId) =>

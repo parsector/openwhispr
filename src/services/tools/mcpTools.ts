@@ -13,6 +13,7 @@ export interface McpServerInfo {
   config: Record<string, unknown>;
   lastError: string | null;
   confirmed: boolean;
+  maxResultChars?: number;
 }
 export interface McpClientApi {
   list(): Promise<{ revision: number; servers: McpServerInfo[] }>;
@@ -25,6 +26,7 @@ export interface McpClientApi {
   enable(name: string, enabled: boolean): Promise<unknown>;
   confirm(name: string, details: Record<string, unknown>): Promise<unknown>;
   allow(name: string, allowed: boolean): Promise<unknown>;
+  resultSize(name: string, maxResultChars: number | null): Promise<unknown>;
   remove(name: string): Promise<unknown>;
   recent(): Promise<unknown>;
   call(
@@ -36,21 +38,118 @@ export interface McpClientApi {
   cancel(requestId: string): Promise<unknown>;
 }
 export const TOOL_NAME = /^[a-zA-Z0-9_-]{1,64}$/;
-export const MAX_RESULT = 8000;
-export function capResult(value: unknown): string {
-  const text = typeof value === "string" ? value : JSON.stringify(value);
-  const marker = "\n[truncated: MCP result exceeded 8000 characters]";
-  return text.length <= MAX_RESULT ? text : `${text.slice(0, MAX_RESULT - marker.length)}${marker}`;
+export const RESULT_SIZE_OPTIONS = [8_000, 32_000, 64_000, 128_000, 256_000] as const;
+
+function trimText(text: string, budget: number): string {
+  if (text.length <= budget) return text;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    let kept = Math.max(0, budget - 35);
+    let marker = `\n[truncated: ${text.length - kept} of ${text.length} characters]`;
+    kept = Math.max(0, budget - marker.length);
+    marker = `\n[truncated: ${text.length - kept} of ${text.length} characters]`;
+    return text.slice(0, Math.max(0, budget - marker.length)) + marker;
+  }
+  const entries = Array.isArray(parsed)
+    ? parsed
+    : parsed !== null && typeof parsed === "object"
+      ? Object.entries(parsed)
+      : [parsed];
+  const isArray = Array.isArray(parsed);
+  const total = entries.length;
+  const output: unknown[] | Record<string, unknown> = isArray ? [] : {};
+  for (let i = 0; i < total; i++) {
+    if (isArray) (output as unknown[]).push(entries[i]);
+    else if (Array.isArray(entries[i])) {
+      const [key, item] = entries[i] as [string, unknown];
+      (output as Record<string, unknown>)[key] = item;
+    }
+    const metadata = { truncated: true, returned: i + 1, total };
+    const candidate = isArray
+      ? [...(output as unknown[]), metadata]
+      : { ...(output as Record<string, unknown>), ...metadata };
+    if (JSON.stringify(candidate).length > budget) {
+      if (isArray) (output as unknown[]).pop();
+      else if (Array.isArray(entries[i])) {
+        const [key, item] = entries[i] as [string, unknown];
+        delete (output as Record<string, unknown>)[key];
+        if (item !== null && typeof item === "object") {
+          const empty = Array.isArray(item) ? [] : {};
+          const nestedBudget =
+            budget - JSON.stringify({ ...output, [key]: empty, ...metadata }).length + 2;
+          if (nestedBudget > 0) {
+            const nested = JSON.parse(trimText(JSON.stringify(item), nestedBudget));
+            const withNested = { ...output, [key]: nested };
+            const result = i + 1 === total ? withNested : { ...withNested, ...metadata };
+            if (JSON.stringify(result).length <= budget) return JSON.stringify(result);
+          }
+        }
+      }
+      break;
+    }
+  }
+  const returned = isArray ? (output as unknown[]).length : Object.keys(output).length;
+  if (returned === total) return JSON.stringify(output);
+  const metadata = { truncated: true, returned, total };
+  return JSON.stringify(
+    isArray ? [...(output as unknown[]), metadata] : { ...output, ...metadata }
+  );
 }
-export function mcpCacheKey(servers: McpServerInfo[], revision: number): string {
-  return `${revision}:${servers
+
+export function capResult(value: unknown, budget: number): string {
+  if (typeof value === "string") return trimText(value, budget);
+  const parts = Array.isArray(value) ? value : [value];
+  const kept: unknown[] = [];
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index];
+    const remaining = parts.length - index - 1;
+    const reserve = remaining
+      ? JSON.stringify({ type: "text", text: `[truncated: ${remaining} content parts omitted]` })
+          .length + 1
+      : 0;
+    const partBudget = budget - reserve;
+    const text = part && typeof part === "object" && "text" in part ? part.text : undefined;
+    if (typeof text !== "string") {
+      if (JSON.stringify([...kept, part]).length > partBudget) break;
+      kept.push(part);
+      continue;
+    }
+    let low = 0;
+    let high = budget;
+    let fitted = "";
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const candidate = trimText(text, mid);
+      if (JSON.stringify([...kept, { ...part, text: candidate }]).length <= partBudget) {
+        fitted = candidate;
+        low = mid + 1;
+      } else high = mid - 1;
+    }
+    if (!fitted && text) break;
+    kept.push({ ...part, text: fitted });
+    if (fitted !== text) break;
+  }
+  if (kept.length < parts.length) {
+    const marker = {
+      type: "text",
+      text: `[truncated: ${parts.length - kept.length} content parts omitted]`,
+    };
+    if (JSON.stringify([...kept, marker]).length <= budget) kept.push(marker);
+  }
+  return JSON.stringify(kept);
+}
+export function mcpCacheKey(servers: McpServerInfo[], revision: number, budget: number): string {
+  return `${revision}:${budget}:${servers
     .filter((server) => server.enabled)
     .map((server) => `${server.name}:${server.status}`)
     .sort()
     .join("|")}`;
 }
 export async function loadMcpTools(
-  api: McpClientApi
+  api: McpClientApi,
+  modelBudget: number
 ): Promise<{ key: string; tools: ToolDefinition[] }> {
   const state = await api.list();
   const seen = new Set<string>();
@@ -77,7 +176,10 @@ export async function loadMcpTools(
             if (context?.signal.aborted)
               return { success: false, data: null, displayText: "Cancelled" };
             const result = await api.call(server.name, tool.name, args, requestId);
-            const data = capResult(result.content || []);
+            const data = capResult(
+              result.content || [],
+              Math.min(server.maxResultChars ?? modelBudget, modelBudget)
+            );
             return { success: !result.isError, data, displayText: data };
           } catch (error) {
             return { success: false, data: null, displayText: (error as Error).message };
@@ -88,5 +190,5 @@ export async function loadMcpTools(
       });
     }
   }
-  return { key: mcpCacheKey(state.servers, state.revision), tools };
+  return { key: mcpCacheKey(state.servers, state.revision, modelBudget), tools };
 }
