@@ -2204,8 +2204,6 @@
       "leaderboardDescription": "Mostre seu nome, e-mail e atividade nas classificações qualificadas de espaços de trabalho e domínios profissionais. As transcrições permanecem privadas.",
       "leaderboardRequiresAccount": "Entre na sua conta para gerenciar sua participação nas classificações.",
       "leaderboardRequiresHistory": "Ative a retenção de dados antes de participar das classificações.",
-      "usageAnalytics": "Análise de uso",
-      "usageAnalyticsDescription": "Ajude-nos a melhorar o OpenWhispr compartilhando métricas anônimas de desempenho. Nunca enviamos conteúdo de transcrição — apenas dados de tempo e erros.",
       "dataRetention": "Retenção de dados",
       "dataRetentionDescription": "Armazenar transcrições e áudio localmente no seu histórico. Quando desativado, as transcrições são coladas mas não salvas.",
       "transcriptRetention": "Retenção de transcrições",

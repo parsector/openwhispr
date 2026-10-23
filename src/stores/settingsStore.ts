@@ -290,7 +290,6 @@ const BOOLEAN_SETTINGS = new Set([
   "preferBuiltInMic",
   "cloudBackupEnabled",
   "insightsSyncEnabled",
-  "telemetryEnabled",
   "audioCuesEnabled",
   "pauseMediaOnDictation",
   "floatingIconAutoHide",
@@ -1233,7 +1232,6 @@ export interface SettingsState
   setTheme: (value: "light" | "dark" | "auto") => void;
   setCloudBackupEnabled: (value: boolean) => void;
   setInsightsSyncEnabled: (value: boolean) => void;
-  setTelemetryEnabled: (value: boolean) => void;
   setAudioRetentionDays: (days: number) => void;
   setTranscriptRetentionDays: (days: number) => void;
   setDataRetentionEnabled: (value: boolean) => void;
@@ -1652,7 +1650,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   })(),
   cloudBackupEnabled: readBoolean("cloudBackupEnabled", false),
   insightsSyncEnabled: readBoolean("insightsSyncEnabled", false),
-  telemetryEnabled: readBoolean("telemetryEnabled", false),
   audioRetentionDays: readNumber("audioRetentionDays", 30),
   transcriptRetentionDays: readNumber("transcriptRetentionDays", 0),
   dataRetentionEnabled: readBoolean("dataRetentionEnabled", true),
@@ -2422,7 +2419,6 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   setCloudBackupEnabled: createBooleanSetter("cloudBackupEnabled"),
   setInsightsSyncEnabled: createBooleanSetter("insightsSyncEnabled"),
-  setTelemetryEnabled: createBooleanSetter("telemetryEnabled"),
   setMicWarmHoldSeconds: (value: number) => {
     const snapped = snapMicWarmHold(value);
     if (isBrowser) localStorage.setItem("micWarmHoldSeconds", String(snapped));
