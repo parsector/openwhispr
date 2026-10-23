@@ -1,3 +1,4 @@
+const { textLength, byteLength } = require("./logRedaction");
 const { spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
@@ -174,12 +175,12 @@ class ParakeetWsServer {
     });
 
     child.stdout.on("data", (data) => {
-      debugLogger.debug("parakeet-ws stdout", { data: data.toString().trim() });
+      debugLogger.debug("parakeet-ws stdout", { byteLength: byteLength(data) });
     });
 
     child.stderr.on("data", (data) => {
       stderrBuffer += data.toString();
-      debugLogger.debug("parakeet-ws stderr", { data: data.toString().trim() });
+      debugLogger.debug("parakeet-ws stderr", { byteLength: byteLength(data) });
       if (data.toString().includes("Listening on:")) {
         readyResolve(true);
       }
@@ -244,8 +245,8 @@ class ParakeetWsServer {
 
     if (!ready) {
       const info = getProcessInfo ? getProcessInfo() : {};
-      const stderr = info.stderr ? info.stderr.trim().slice(0, 200) : "";
-      const details = stderr || (info.exitCode !== null ? `exit code: ${info.exitCode}` : "");
+      const stderrLength = textLength(info.stderr);
+      const details = info.exitCode !== null ? `exit code: ${info.exitCode}` : `stderr length: ${stderrLength}`;
       throw new Error(`parakeet-ws process died during startup${details ? `: ${details}` : ""}`);
     }
 
@@ -378,8 +379,7 @@ class ParakeetWsServer {
         debugLogger.debug("parakeet-ws transcription completed", {
           elapsed,
           code,
-          resultLength: result.length,
-          resultPreview: result.slice(0, 200),
+          resultLength: textLength(result),
         });
 
         resolve({ text: parseOfflineMessage(result), elapsed });
@@ -439,8 +439,7 @@ class ParakeetWsServer {
       debugLogger.debug("parakeet-ws streaming transcription completed", {
         elapsed,
         truncated,
-        resultLength: text.length,
-        resultPreview: text.slice(0, 200),
+        resultLength: textLength(text),
       });
       return truncated ? { text, elapsed, truncated } : { text, elapsed };
     } finally {

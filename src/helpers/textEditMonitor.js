@@ -1,3 +1,4 @@
+const { textLength, byteLength } = require("./logRedaction");
 const { spawn, execFile } = require("child_process");
 const path = require("path");
 const EventEmitter = require("events");
@@ -271,7 +272,7 @@ class TextEditMonitor extends EventEmitter {
               {
                 pid,
                 error: error?.message || null,
-                stderr: stderr?.trim() || null,
+                stderrLength: textLength(stderr),
                 nativeSkippedNextTime: this._nativeSelectionUnsupportedPids.has(pid),
               }
             );
@@ -501,13 +502,13 @@ class TextEditMonitor extends EventEmitter {
     this._stdoutBuffer = "";
     this.process.stdout.setEncoding("utf8");
     this.process.stdout.on("data", (chunk) => {
-      debugLogger.debug("[TextEditMonitor] stdout", { data: chunk.trim() });
+      debugLogger.debug("[TextEditMonitor] stdout", { byteLength: byteLength(chunk) });
       this._handleProcessStdoutChunk(chunk);
     });
 
     this.process.stderr.setEncoding("utf8");
     this.process.stderr.on("data", (data) => {
-      debugLogger.debug("[TextEditMonitor] stderr", { data: data.trim() });
+      debugLogger.debug("[TextEditMonitor] stderr", { byteLength: byteLength(data) });
     });
 
     this.process.on("error", (err) => {
@@ -574,7 +575,7 @@ class TextEditMonitor extends EventEmitter {
     }
 
     debugLogger.debug("[TextEditMonitor] Text changed", {
-      newFieldValue: newFieldValue.substring(0, 80),
+      newFieldValueLength: textLength(newFieldValue),
     });
     this.emit("text-edited", {
       originalText: this.currentOriginalText,
@@ -659,14 +660,14 @@ class TextEditMonitor extends EventEmitter {
     this._stdoutBuffer = "";
     this.process.stdout.setEncoding("utf8");
     this.process.stdout.on("data", (chunk) => {
-      debugLogger.debug("[TextEditMonitor] stdout", { data: chunk.trim() });
+      debugLogger.debug("[TextEditMonitor] stdout", { byteLength: byteLength(chunk) });
       if (chunk.includes("NO_ELEMENT")) axRun.noElement = true;
       this._handleProcessStdoutChunk(chunk);
     });
 
     this.process.stderr.setEncoding("utf8");
     this.process.stderr.on("data", (data) => {
-      debugLogger.debug("[TextEditMonitor] stderr", { data: data.trim() });
+      debugLogger.debug("[TextEditMonitor] stderr", { byteLength: byteLength(data) });
       axRun.stderr += data;
     });
 
@@ -794,7 +795,7 @@ class TextEditMonitor extends EventEmitter {
       if (currentValue !== this._lastValue) {
         this._lastValue = currentValue;
         debugLogger.debug("[TextEditMonitor] macOS: text changed", {
-          newValuePreview: currentValue.substring(0, 80),
+          newValueLength: textLength(currentValue),
         });
         this.emit("text-edited", {
           originalText: this.currentOriginalText,
