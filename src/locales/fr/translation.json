@@ -4210,7 +4210,31 @@
       "oauthTitle": "Se connecter avec OAuth",
       "oauthDescription": "Dans un client compatible OAuth, ajoutez l’URL du serveur, puis connectez-vous à OpenWhispr et autorisez l’accès. Aucune clé API requise.",
       "apiKeyTitle": "Utiliser une clé API",
-      "apiKeyDescription": "Pour les clients acceptant les en-têtes de requête, créez une clé API personnelle avec les autorisations nécessaires et utilisez l’en-tête ci-dessous."
+      "apiKeyDescription": "Pour les clients acceptant les en-têtes de requête, créez une clé API personnelle avec les autorisations nécessaires et utilisez l’en-tête ci-dessous.",
+      "servers": {
+        "title": "Servers",
+        "description": "Connect tools from your own MCP servers. This works while signed out.",
+        "oneServer": "Paste one server in an mcpServers object.",
+        "confirmCommand": "Confirm this command, arguments and working directory:",
+        "enabled": "Enabled",
+        "allowWithoutAsking": "Allow without asking",
+        "confirm": "Confirm command",
+        "edit": "Edit",
+        "remove": "Remove",
+        "removeConfirm": "Remove {{name}}?",
+        "add": "Add server",
+        "form": "Form",
+        "json": "mcpServers JSON",
+        "name": "Server name",
+        "command": "Command",
+        "args": "Arguments as JSON array",
+        "url": "HTTP URL (leave blank for stdio)",
+        "cwd": "Working directory",
+        "env": "Environment variables as JSON object",
+        "headers": "HTTP headers as JSON object",
+        "secrets": "Secret fields as JSON, for example {\"env.API_KEY\":\"value\"}",
+        "save": "Save server"
+      }
     },
     "cli": {
       "description": "Donnez à votre assistant l'accès à vos notes depuis le terminal.",
