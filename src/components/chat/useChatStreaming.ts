@@ -455,6 +455,7 @@ export function useChatStreaming({
                 (message) => logger.warn(message)
               )
             : 0;
+          if (mcpBudget > 0) toolScope.setMcpResultBudget(mcpBudget);
           const mcp = window.mcpClient
             ? await loadMcpTools(window.mcpClient, mcpBudget).catch(() => ({
                 key: "unavailable",
