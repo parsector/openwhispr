@@ -255,3 +255,39 @@ test("routine window-drag activity obeys the packaged Windows console policy", a
 
   assert.deepEqual(calls, []);
 });
+
+test("default logger creates no file or logs directory", async () => {
+  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-private-logger-"));
+  try {
+    const logger = loadLogger({ platform: "linux", isPackaged: true, isReady: true, userDataPath });
+    await captureConsole(() => logger.error("structural failure", { code: "TEST" }));
+    assert.equal(logger.getLogPath(), null);
+    assert.equal(fs.existsSync(path.join(userDataPath, "logs")), false);
+  } finally {
+    fs.rmSync(userDataPath, { recursive: true, force: true });
+  }
+});
+
+test("debug file retention keeps five newest files", async () => {
+  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-log-retention-"));
+  const logsDir = path.join(userDataPath, "logs");
+  fs.mkdirSync(logsDir);
+  for (let day = 1; day <= 7; day++) {
+    fs.writeFileSync(path.join(logsDir, `debug-2020-01-${String(day).padStart(2, "0")}.log`), "old");
+  }
+  const logger = loadLogger({
+    platform: "win32", isPackaged: true, isReady: true, userDataPath,
+    env: { OPENWHISPR_LOG_LEVEL: "debug" },
+  });
+  try {
+    await captureConsole(() => logger.info("retention check"));
+    await closeLogStream(logger);
+    const files = fs.readdirSync(logsDir).filter((name) => name.startsWith("debug-"));
+    assert.equal(files.length, 5);
+    assert.ok(files.some((name) => name.includes("2020-01-04")));
+    assert.ok(files.some((name) => name.includes("2020-01-07")));
+  } finally {
+    await closeLogStream(logger);
+    fs.rmSync(userDataPath, { recursive: true, force: true });
+  }
+});
