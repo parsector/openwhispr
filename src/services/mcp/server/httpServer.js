@@ -10,6 +10,7 @@ const DEFAULT_PORT = 51874;
 function createMcpHttpServer({ tokens, tools, port = DEFAULT_PORT }) {
   const sessions = new Map();
   let server;
+  let starting;
   const json = (response, status, body, headers = {}) => {
     response.writeHead(status, { "Content-Type": "application/json", ...headers });
     response.end(JSON.stringify(body));
@@ -101,6 +102,7 @@ function createMcpHttpServer({ tokens, tools, port = DEFAULT_PORT }) {
     } else json(response, 200, payload, headers);
   }
   function start() {
+    if (starting) return starting;
     if (server) return Promise.resolve(`http://127.0.0.1:${server.address().port}/mcp`);
     server = http.createServer((request, response) => {
       const deadline = setTimeout(() => { if (!response.writableEnded) json(response, 504, { error: "Request timed out" }); }, REQUEST_TIMEOUT_MS);
@@ -108,10 +110,27 @@ function createMcpHttpServer({ tokens, tools, port = DEFAULT_PORT }) {
       handle(request, response).catch(() => { if (!response.writableEnded) json(response, 500, { error: "Internal error" }); });
     });
     server.requestTimeout = REQUEST_TIMEOUT_MS;
-    return new Promise((resolve, reject) => {
-      server.once("error", (cause) => { server = null; reject(cause); });
-      server.listen(port, "127.0.0.1", () => { server.removeListener("error", reject); resolve(`http://127.0.0.1:${server.address().port}/mcp`); });
+    starting = new Promise((resolve, reject) => {
+      function listen(candidatePort) {
+        const onError = (cause) => {
+          if (cause.code === "EADDRINUSE" && candidatePort !== 0) {
+            listen(0);
+          } else {
+            server = null;
+            starting = null;
+            reject(cause);
+          }
+        };
+        server.once("error", onError);
+        server.listen(candidatePort, "127.0.0.1", () => {
+          server.removeListener("error", onError);
+          starting = null;
+          resolve(`http://127.0.0.1:${server.address().port}/mcp`);
+        });
+      }
+      listen(port);
     });
+    return starting;
   }
   function stop() { sessions.clear(); if (server) { server.closeAllConnections(); server.close(); server = null; } }
   return { start, stop };
