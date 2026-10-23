@@ -8,6 +8,7 @@ import { resolveChatStreamingInference } from "../../helpers/dictationAgentInfer
 import { describeProviderError } from "../../utils/describeProviderError";
 import { productHelpMetadata } from "../../services/help/productHelp";
 import logger from "../../utils/logger";
+import { estimateModelSizeB, modelSupportsToolCalls } from "../../utils/modelCapability";
 import {
   isAgentAllowed,
   isConnectorsAllowed,
@@ -60,12 +61,7 @@ const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
 
-const LOCAL_TOOL_MIN_PARAMS_B = 4;
-
-function estimateModelSizeB(modelId: string): number {
-  const match = modelId.match(/-([\d.]+)[bB]/);
-  return match ? parseFloat(match[1]) : 0;
-}
+const warnedUnknownToolModels = new Set<string>();
 
 // Main adds the note's identified speakers and its calendar event's
 // organizer (calendars often leave them out of the attendees), then drops
@@ -411,8 +407,19 @@ export function useChatStreaming({
             "openrouter",
             "corti",
           ].includes(llmConfig.provider);
-        const localModelCanUseTool =
-          isLocalProvider && estimateModelSizeB(llmConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B;
+        if (
+          isLocalProvider &&
+          estimateModelSizeB(llmConfig.model) === null &&
+          !warnedUnknownToolModels.has(llmConfig.model)
+        ) {
+          warnedUnknownToolModels.add(llmConfig.model);
+          logger.warn(
+            "Unknown model size; allowing tool calls",
+            { modelId: llmConfig.model },
+            "chat"
+          );
+        }
+        const localModelCanUseTool = isLocalProvider && modelSupportsToolCalls(llmConfig.model);
         const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
 
         const scope = searchScopeRef.current;
