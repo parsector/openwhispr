@@ -14,7 +14,6 @@ class UpdateManager {
     this.isQuittingForUpdate = false;
     this.handleBeforeQuitForUpdate = null;
     this.eventListeners = [];
-    this.updateCheckInterval = null;
     this.windowManager = null;
     // null until the renderer syncs the preference, so nothing downloads unasked.
     this.autoUpdatesEnabled = null;
@@ -329,33 +328,7 @@ class UpdateManager {
     this.downloadUpdate().catch(() => {});
   }
 
-  // Checks always run so the sidebar can offer a manual download when automatic
-  // updates are off; a failed background check is logged and never surfaced.
-  _autoCheckForUpdates(label) {
-    console.log(`🔄 ${label} update check...`);
-    autoUpdater.checkForUpdates().catch((err) => {
-      console.error(`${label} update check failed:`, err);
-    });
-  }
-
-  checkForUpdatesOnStartup() {
-    if (process.env.NODE_ENV !== "development" && isUpdaterSupported) {
-      setTimeout(() => {
-        this._autoCheckForUpdates("Startup");
-      }, 3000);
-
-      const FOUR_HOURS_MS = 4 * 60 * 60 * 1000;
-      this.updateCheckInterval = setInterval(() => {
-        this._autoCheckForUpdates("Periodic");
-      }, FOUR_HOURS_MS);
-    }
-  }
-
   cleanup() {
-    if (this.updateCheckInterval) {
-      clearInterval(this.updateCheckInterval);
-      this.updateCheckInterval = null;
-    }
     this.eventListeners.forEach(({ event, handler }) => {
       autoUpdater.removeListener(event, handler);
     });
