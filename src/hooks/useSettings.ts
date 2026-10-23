@@ -108,7 +108,6 @@ export interface ApiKeySettings {
 export interface PrivacySettings {
   cloudBackupEnabled: boolean;
   insightsSyncEnabled: boolean;
-  telemetryEnabled: boolean;
   audioRetentionDays: number;
   transcriptRetentionDays: number;
   dataRetentionEnabled: boolean;
@@ -451,8 +450,6 @@ function useSettingsInternal() {
     setCloudBackupEnabled: store.setCloudBackupEnabled,
     insightsSyncEnabled: store.insightsSyncEnabled,
     setInsightsSyncEnabled: store.setInsightsSyncEnabled,
-    telemetryEnabled: store.telemetryEnabled,
-    setTelemetryEnabled: store.setTelemetryEnabled,
     audioRetentionDays: store.audioRetentionDays,
     setAudioRetentionDays: store.setAudioRetentionDays,
     transcriptRetentionDays: store.transcriptRetentionDays,
