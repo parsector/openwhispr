@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
-import { Calendar, Key, Link2, Network, Terminal } from "../icons";
+import { Calendar, Code2, Key, Link2, Network, Terminal } from "../icons";
 
-export type IntegrationsSection = "connectors" | "calendars" | "api" | "mcp" | "cli";
+export type IntegrationsSection = "connectors" | "calendars" | "api" | "mcp" | "cli" | "agents";
 
 export const DEFAULT_INTEGRATIONS_SECTION: IntegrationsSection = "calendars";
 
@@ -11,7 +11,7 @@ export const INTEGRATIONS_SECTION_GROUPS: ReadonlyArray<{
 }> = [
   { id: "meetings", sections: ["calendars"] },
   { id: "assistant", sections: ["connectors"] },
-  { id: "developer", sections: ["api", "mcp", "cli"] },
+  { id: "developer", sections: ["api", "mcp", "cli", "agents"] },
 ];
 
 export const INTEGRATIONS_SECTION_ICONS: Record<
@@ -23,6 +23,7 @@ export const INTEGRATIONS_SECTION_ICONS: Record<
   api: Key,
   mcp: Network,
   cli: Terminal,
+  agents: Code2,
 };
 
 export type SectionMeta = { kind: "count"; value: number };
@@ -52,6 +53,7 @@ export function sectionMeta(
     case "mcp":
       return null;
     case "cli":
+    case "agents":
       return null;
   }
 }
