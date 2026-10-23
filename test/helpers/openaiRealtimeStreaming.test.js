@@ -2,6 +2,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const WS = require("ws");
+const Module = require("node:module");
+
+const originalLoad = Module._load;
+Module._load = function loadWithElectronMock(request, parent, isMain) {
+  if (request === "electron") return { app: { isReady: () => false, isPackaged: false } };
+  return originalLoad.call(this, request, parent, isMain);
+};
 
 const load = () => import("../../src/helpers/openaiRealtimeStreaming.js");
 
