@@ -4,7 +4,7 @@ import { Button } from "../ui/button";
 import { CopyableCommand } from "../ui/CopyableCommand";
 import { SettingsPanel, SettingsPanelRow } from "../ui/SettingsSection";
 import { useToast } from "../ui/useToast";
-import { IntegrationsPane, UpsellBar } from "./IntegrationsPane";
+import { IntegrationsPane } from "./IntegrationsPane";
 import claudeIcon from "../../assets/icons/providers/claude.svg";
 import openaiIcon from "../../assets/icons/providers/openai.svg";
 import { McpServers } from "./McpServers";
@@ -23,11 +23,10 @@ const MCP_CLIENTS = [
 interface McpPaneProps {
   title: string;
   isPaid: boolean;
-  onUpgrade: () => void;
   onCreateKey: () => void;
 }
 
-export function McpPane({ title, isPaid, onUpgrade, onCreateKey }: McpPaneProps): ReactElement {
+export function McpPane({ title, isPaid, onCreateKey }: McpPaneProps): ReactElement {
   const { t } = useTranslation();
   const { toast } = useToast();
 
@@ -59,7 +58,7 @@ export function McpPane({ title, isPaid, onUpgrade, onCreateKey }: McpPaneProps)
 
       <McpServers />
 
-      {!isPaid && <UpsellBar message={t("integrations.mcp.proRequired")} onUpgrade={onUpgrade} />}
+      {!isPaid && <p className="text-xs text-muted-foreground">{t("common.unavailableInBuild")}</p>}
 
       <SettingsPanel>
         <SettingsPanelRow>
