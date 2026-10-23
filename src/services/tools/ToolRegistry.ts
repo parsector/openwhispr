@@ -38,6 +38,8 @@ export interface ToolExecutionContext {
   claimTurnSlot: (key: string, limit: number) => boolean;
   /** Gives back a claimed use of `key` whose action never happened. */
   releaseTurnSlot: (key: string) => void;
+  /** Shares the model-facing MCP result allowance across this chat turn. */
+  limitMcpResult?: (result: string) => string;
 }
 
 export interface ToolDefinition {
