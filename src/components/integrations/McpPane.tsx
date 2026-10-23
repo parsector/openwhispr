@@ -8,6 +8,7 @@ import { IntegrationsPane, UpsellBar } from "./IntegrationsPane";
 import claudeIcon from "../../assets/icons/providers/claude.svg";
 import openaiIcon from "../../assets/icons/providers/openai.svg";
 import cursorIcon from "../../assets/icons/providers/cursor.svg";
+import { LocalMcpBlock } from "./LocalMcpBlock";
 
 const MCP_URL = "https://mcp.openwhispr.com/mcp";
 const MCP_DOCS_URL = "https://docs.openwhispr.com/integrations/mcp";
@@ -35,6 +36,7 @@ export function McpPane({ title, isPaid, onUpgrade, onCreateKey }: McpPaneProps)
       description={t("integrations.mcp.description")}
       docsUrl={MCP_DOCS_URL}
     >
+      <LocalMcpBlock />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 ps-1 text-xs">
         <span className="text-muted-foreground/80">{t("integrations.mcp.worksWith")}</span>
         {MCP_CLIENTS.map((client) => (
