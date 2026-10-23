@@ -5,6 +5,7 @@ const {
   mcpCacheKey,
   loadMcpTools,
   TOOL_NAME,
+  RESULT_SIZE_OPTIONS,
 } = require("../../../../src/services/tools/mcpTools.ts");
 const {
   mcpResultBudgetChars,
@@ -13,10 +14,10 @@ const {
 
 test("model context maps to bounded result characters", () => {
   assert.deepEqual(
-    [4_000, 16_000, 128_000, 1_000_000].map(mcpResultBudgetChars),
-    [8_000, 8_000, 25_600, 200_000]
+    [4_000, 16_000, 32_000, 128_000, 200_000, 400_000, 1_000_000].map(mcpResultBudgetChars),
+    [12_000, 12_000, 12_000, 40_960, 64_000, 128_000, 256_000]
   );
-  assert.equal(mcpResultBudgetChars(1_000), 8_000);
+  assert.equal(mcpResultBudgetChars(1_000), 12_000);
   assert.equal(mcpResultBudgetChars(2_000_000), 256_000);
 });
 
@@ -24,15 +25,15 @@ test("cloud defaults do not request local context", async () => {
   const noLocalLookup = async () => {
     throw Error("unexpected local lookup");
   };
-  assert.equal(await resolveMcpResultBudget("gemini", "cloud", false, noLocalLookup), 200_000);
-  assert.equal(await resolveMcpResultBudget("unknown", "cloud", false, noLocalLookup), 8_000);
+  assert.equal(await resolveMcpResultBudget("gemini", "cloud", false, noLocalLookup), 256_000);
+  assert.equal(await resolveMcpResultBudget("unknown", "cloud", false, noLocalLookup), 12_000);
 });
 
-test("openrouter cloud budget uses the 5% context share above the floor", async () => {
+test("openrouter cloud budget uses the 8% context share above the floor", async () => {
   const noLocalLookup = async () => {
     throw Error("unexpected local lookup");
   };
-  assert.equal(await resolveMcpResultBudget("openrouter", "cloud", false, noLocalLookup), 25_600);
+  assert.equal(await resolveMcpResultBudget("openrouter", "cloud", false, noLocalLookup), 40_960);
 });
 
 test("failed local lookup falls back and warns once", async () => {
@@ -40,7 +41,7 @@ test("failed local lookup falls back and warns once", async () => {
   const log = (message) => warnings.push(message);
   assert.equal(
     await resolveMcpResultBudget("llama", "missing", true, async () => ({ success: false }), log),
-    8_000
+    12_000
   );
   assert.equal(
     await resolveMcpResultBudget(
@@ -52,7 +53,7 @@ test("failed local lookup falls back and warns once", async () => {
       },
       log
     ),
-    8_000
+    12_000
   );
   assert.equal(warnings.length, 1);
   assert.equal(
@@ -63,7 +64,7 @@ test("failed local lookup falls back and warns once", async () => {
       async () => ({ success: true, maxContextTokens: 128_000 }),
       log
     ),
-    25_600
+    40_960
   );
   assert.equal(warnings.length, 1);
 });
@@ -116,7 +117,8 @@ test("non-JSON text marks omissions and shares budget across parts", () => {
 });
 
 test("override is respected and clamped by model budget; cache tracks budget", async () => {
-  const a = { name: "a", enabled: true, status: "connected", maxResultChars: 8_000 };
+  assert.equal(RESULT_SIZE_OPTIONS[0], 12_000);
+  const a = { name: "a", enabled: true, status: "connected", maxResultChars: 12_000 };
   assert.notEqual(mcpCacheKey([a], 1, 8_000), mcpCacheKey([a], 1, 32_000));
   assert.notEqual(mcpCacheKey([a], 1, 8_000), mcpCacheKey([{ ...a, enabled: false }], 1, 8_000));
   const api = {
@@ -127,10 +129,49 @@ test("override is respected and clamped by model budget; cache tracks budget", a
   };
   const small = await loadMcpTools(api, 32_000);
   assert.equal(small.tools[0].name, "a__echo");
-  assert.ok((await small.tools[0].execute({})).displayText.length <= 8_000);
+  assert.ok((await small.tools[0].execute({})).displayText.length <= 12_000);
   a.maxResultChars = 256_000;
   const clamped = await loadMcpTools(api, 32_000);
   assert.ok((await clamped.tools[0].execute({})).displayText.length <= 32_000);
   assert.equal(TOOL_NAME.test("server__tool"), true);
   assert.equal(TOOL_NAME.test("server.tool"), false);
+});
+
+test("MCP result bytes share a three-result turn allowance that resets for the next turn", async () => {
+  const { createToolExecutionScope } =
+    await import("../../../../src/components/chat/toolExecutionScope.ts");
+  const responses = ["é".repeat(7_000), "é".repeat(7_000), "x".repeat(9_000), "later"];
+  const api = {
+    list: async () => ({
+      revision: 1,
+      servers: [{ name: "a", enabled: true, status: "connected" }],
+    }),
+    tools: async () => [{ name: "echo", inputSchema: { type: "object" } }],
+    call: async () => ({ content: [{ type: "text", text: responses.shift() }] }),
+    cancel: async () => {},
+  };
+  const { tools } = await loadMcpTools(api, 12_000);
+  const scope = createToolExecutionScope();
+  scope.setMcpResultBudget(12_000);
+  const results = [];
+  for (let i = 0; i < 4; i++) {
+    results.push(
+      (await tools[0].execute({}, scope.createContext({ messageId: "turn-1", toolCallId: `${i}` })))
+        .data
+    );
+  }
+  assert.equal(results[0].includes("[truncated:"), false);
+  assert.equal(results[1].includes("[truncated:"), false);
+  assert.match(results[2], /\[truncated: \d+ of \d+ characters\]/);
+  assert.match(results[3], /turn result budget exhausted/);
+  assert.ok(new TextEncoder().encode(results.slice(0, 3).join("")).length <= 36_000);
+
+  responses.push("next turn");
+  const nextScope = createToolExecutionScope();
+  nextScope.setMcpResultBudget(12_000);
+  const next = await tools[0].execute(
+    {},
+    nextScope.createContext({ messageId: "turn-2", toolCallId: "0" })
+  );
+  assert.match(next.data, /next turn/);
 });
