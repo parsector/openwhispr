@@ -37,7 +37,6 @@ import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./m
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import {
-  ANALYTICS_COUNTER_VERSION,
   countSpokenWords,
   localDateKey,
   resolveAnalyticsMode,
@@ -56,7 +55,6 @@ import {
   effectiveAudioRetentionDays,
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
-  isCloudBackupAllowed,
   isLlmSelectionAllowed,
   isTranscriptionContextAllowed,
   isTranscriptionSelectionAllowed,
@@ -233,20 +231,6 @@ function getEffectiveRetentionPreferences() {
     dataRetentionEnabled: effectiveLocalHistoryEnabled(policyState, settings.dataRetentionEnabled),
     audioRetentionDays: effectiveAudioRetentionDays(policyState, settings.audioRetentionDays),
   };
-}
-
-// Insights sync is opt-in, so nothing analytics-only may ride along on a cloud
-// request until the user has enabled it. History retention gates it too: the
-// local write below the same gate is skipped, and the cloud must not keep rows
-// the device never recorded. Managed workspaces that forbid cloud backup forbid
-// these counters with it — they are user data leaving the device like any other.
-function analyticsSyncEnabled(settings = getSettings()) {
-  return (
-    settings.isSignedIn &&
-    settings.insightsSyncEnabled &&
-    isCloudBackupAllowed(usePolicyStore.getState()) &&
-    getEffectiveRetentionPreferences().dataRetentionEnabled
-  );
 }
 
 // Shared by the agent route and its text-only retry, which needs the prompt
@@ -3671,10 +3655,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // would make without Orukeet.
     const detectedLanguageFields = metadata.detectedLanguageFields || {};
     Object.assign(opts, detectedLanguageFields);
-    if (analyticsSyncEnabled(settings)) {
-      opts.analyticsOccurredAt = analyticsOccurredAt.toISOString();
-      opts.localDate = localDateKey(analyticsOccurredAt);
-    }
     // Only cloud cleanup writes a combined STT log; translation alone does not.
     // A voice assistant recording never runs cleanup, so this upload is its log.
     if (settings.useCleanupModel && isCloudCleanup && !this.voiceAgentRequested) {
@@ -6273,14 +6253,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   // event. Held back until opt-in, a later sync would push the
                   // local copy under a second id and double every total.
                   clientTranscriptionId,
-                  ...(analyticsSyncEnabled()
-                    ? {
-                        localDate: localDateKey(analyticsOccurredAt),
-                        analyticsOccurredAt: analyticsOccurredAt.toISOString(),
-                        analyticsWordCount: streamingSttWordCount,
-                        analyticsCounterVersion: ANALYTICS_COUNTER_VERSION,
-                      }
-                    : {}),
+
                 }
               );
               if (!res.success) {

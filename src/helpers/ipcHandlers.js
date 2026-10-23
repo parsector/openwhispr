@@ -6682,8 +6682,6 @@ class IPCHandlers {
           clientVersion: app.getVersion(),
           sessionId: this.sessionId,
           clientTranscriptionId,
-          localDate: opts.localDate,
-          analyticsOccurredAt: opts.analyticsOccurredAt,
           streamingFallbackReason: opts.streamingFallbackReason,
           sttDetectedLanguage: opts.sttDetectedLanguage,
           sttDetectedLanguageConfidence: opts.sttDetectedLanguageConfidence,
@@ -10333,10 +10331,6 @@ class IPCHandlers {
               clientTotalMs: opts.clientTotalMs,
               sendLogs: opts.sendLogs,
               clientTranscriptionId: opts.clientTranscriptionId,
-              localDate: opts.localDate,
-              analyticsOccurredAt: opts.analyticsOccurredAt,
-              analyticsWordCount: opts.analyticsWordCount,
-              analyticsCounterVersion: opts.analyticsCounterVersion,
             }),
           });
 
