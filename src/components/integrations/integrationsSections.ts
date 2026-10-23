@@ -49,8 +49,9 @@ export function sectionMeta(
     case "calendars":
       return connectedCalendars > 0 ? { kind: "count", value: connectedCalendars } : null;
     case "api":
-    case "mcp":
       return isPaid ? null : { kind: "badge", badge: "pro" };
+    case "mcp":
+      return null;
     case "cli":
       // Local mode is free; saying so is the point of surfacing it to free plans.
       return isPaid ? null : { kind: "badge", badge: "free" };

@@ -4063,6 +4063,24 @@
       "useWith": "Usa una clave con"
     },
     "mcp": {
+      "local": {
+        "title": "Local server",
+        "description": "Let apps on this computer read your local notes while OpenWhispr is running. No sign-in or paid plan required.",
+        "enable": "Enable local server",
+        "copyUrl": "Copy local MCP URL",
+        "tokens": "Access tokens",
+        "tokenLabel": "Token name",
+        "create": "Create token",
+        "shownOnce": "Copy this token now. It will not be shown again.",
+        "copyToken": "Copy token",
+        "dismiss": "Dismiss",
+        "noTokens": "No tokens yet.",
+        "created": "Created",
+        "lastUsed": "Last used",
+        "revoke": "Revoke",
+        "activity": "Recent reads",
+        "noActivity": "No external reads yet."
+      },
       "description": "Chatea, busca y trabaja con tus notas en Claude, ChatGPT y Cursor.",
       "step1": "En tu herramienta de IA, añade OpenWhispr MCP usando la URL pública",
       "proRequired": "Actualiza a un plan de pago para conectar OpenWhispr con Claude, ChatGPT y Cursor.",

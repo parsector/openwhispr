@@ -703,6 +703,24 @@
       "useWith": "استخدم مفتاحًا مع"
     },
     "mcp": {
+      "local": {
+        "title": "Local server",
+        "description": "Let apps on this computer read your local notes while OpenWhispr is running. No sign-in or paid plan required.",
+        "enable": "Enable local server",
+        "copyUrl": "Copy local MCP URL",
+        "tokens": "Access tokens",
+        "tokenLabel": "Token name",
+        "create": "Create token",
+        "shownOnce": "Copy this token now. It will not be shown again.",
+        "copyToken": "Copy token",
+        "dismiss": "Dismiss",
+        "noTokens": "No tokens yet.",
+        "created": "Created",
+        "lastUsed": "Last used",
+        "revoke": "Revoke",
+        "activity": "Recent reads",
+        "noActivity": "No external reads yet."
+      },
       "description": "الدردشة والبحث والعمل مع ملاحظاتك داخل Claude وChatGPT وCursor.",
       "step1": "في أداة الذكاء الاصطناعي الخاصة بك، أضف OpenWhispr MCP باستخدام عنوان URL العام",
       "proRequired": "قم بالترقية إلى خطة مدفوعة لتوصيل OpenWhispr بـ Claude وChatGPT وCursor.",
