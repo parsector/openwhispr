@@ -10,7 +10,7 @@ export type UnavailableReason =
   | "signedOut"
   | "policyOff"
   | "policyLoading"
-  | "planRequired"
+  | "unavailableInBuild"
   | "notConnected"
   | "needsReconnect"
   | "modelTooSmall";
@@ -27,7 +27,6 @@ export interface UnavailableCapability {
 /** Where each fix lives, as the UI labels it (localized by the caller). */
 export interface CapabilityLocations {
   account: string;
-  plans: string;
   calendars: string;
   connectors: string;
   models: string;
@@ -107,10 +106,10 @@ export function resolveUnavailableCapabilities(
   if (!input.isSignedIn) {
     unavailableConnector(CONNECTORS_NAME, "signedOut", locations.account);
   } else if (connectors.blockedByOrg) {
-    // Before the plan: paying wouldn't help while the organization keeps them off.
+    // Organization policy takes precedence over the account entitlement.
     unavailableConnector(CONNECTORS_NAME, "policyOff");
   } else if (!connectors.hasPlan) {
-    unavailableConnector(CONNECTORS_NAME, "planRequired", locations.plans);
+    unavailableConnector(CONNECTORS_NAME, "unavailableInBuild");
   } else if (!connectors.allowed) {
     unavailableConnector(CONNECTORS_NAME, "policyLoading");
   } else {
@@ -139,8 +138,8 @@ function describeOne({ name, reason, where }: UnavailableCapability): string {
       return `${name}: turned off by the user's organization; only their admin can turn it back on.`;
     case "policyLoading":
       return `${name}: not available right now; the user can try again in a moment.`;
-    case "planRequired":
-      return `${name}: needs a paid OpenWhispr plan${at}.`;
+    case "unavailableInBuild":
+      return `${name}: unavailable in this build.`;
     case "notConnected":
       return `${name}: not connected; the user can connect it${at}.`;
     case "needsReconnect":

@@ -5,7 +5,6 @@ const load = () => import("../../src/config/agentCapabilities.ts");
 
 const LOCATIONS = {
   account: "Settings → Profile",
-  plans: "Settings → Plans & Billing",
   calendars: "Integrations → Calendars",
   connectors: "Integrations → Connectors",
   models: "Settings → Language Models",
@@ -86,7 +85,7 @@ test("web search off by the org reads as policy, while a loading policy is tempo
   assert.equal(loading[0].reason, "policyLoading");
 });
 
-test("connectors name the org, then the plan, then a loading policy, as one line", async () => {
+test("connectors name the org, then build availability, then a loading policy, as one line", async () => {
   const { resolveUnavailableCapabilities } = await load();
   const connectors = input().connectors;
   const reasonFor = (overrides) =>
@@ -94,11 +93,11 @@ test("connectors name the org, then the plan, then a loading policy, as one line
       (item) => item.reason
     );
 
-  // A free member of an org that turned connectors off isn't told to buy a plan.
+  // Organization policy takes precedence over account entitlement.
   assert.deepEqual(reasonFor({ hasPlan: false, allowed: false, blockedByOrg: true }), [
     "policyOff",
   ]);
-  assert.deepEqual(reasonFor({ hasPlan: false }), ["planRequired"]);
+  assert.deepEqual(reasonFor({ hasPlan: false }), ["unavailableInBuild"]);
   assert.deepEqual(reasonFor({ allowed: false, blockedByOrg: true }), ["policyOff"]);
   assert.deepEqual(reasonFor({ allowed: false }), ["policyLoading"]);
 });
@@ -191,7 +190,7 @@ test("the description tells the model to explain how to enable each one", async 
   assert.doesNotMatch(text, /still write it in full/);
 });
 
-test("a connector that can't send still gets the text written, with a pitch at the end", async () => {
+test("a connector that can't send still gets the text written, with a short explanation at the end", async () => {
   const { describeUnavailable } = await load();
   const text = describeUnavailable([
     { name: "Web search", reason: "signedOut", where: LOCATIONS.account },

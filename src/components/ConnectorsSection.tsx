@@ -5,7 +5,6 @@ import { SettingsPanel, SettingsPanelRow } from "./ui/SettingsSection";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { ConnectorLoginRow } from "./connectors/ConnectorLoginRow";
 import { CONNECTOR_ROWS } from "./connectors/connectorRows";
-import { UpsellBar } from "./integrations/IntegrationsPane";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useConnectorStatusStore } from "../stores/connectorStatusStore";
 import { useConnectorAccess } from "../hooks/useConnectorAccess";
@@ -16,11 +15,7 @@ import {
   type EmailDraftTargetSetting,
 } from "../utils/emailDraftTarget";
 
-interface ConnectorsSectionProps {
-  onUpgrade: () => void;
-}
-
-export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactElement {
+export function ConnectorsSection(): ReactElement {
   const { t } = useTranslation();
   const { isPaid, blockedByOrg, connectorsAllowed } = useConnectorAccess();
   const emailDraftTarget = useSettingsStore((state) => state.emailDraftTarget);
@@ -68,7 +63,7 @@ export function ConnectorsSection({ onUpgrade }: ConnectorsSectionProps): ReactE
 
   return (
     <div className="space-y-3">
-      {locked && <UpsellBar message={t("connectors.upsell")} onUpgrade={onUpgrade} />}
+      {locked && <p className="text-xs text-muted-foreground">{t("common.unavailableInBuild")}</p>}
       <SettingsPanel>
         <SettingsPanelRow>
           <div className={`flex flex-wrap items-center gap-3 ${locked ? "opacity-60" : ""}`}>
