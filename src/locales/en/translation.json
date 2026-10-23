@@ -142,21 +142,6 @@
     "screenRecording": "Screen recording settings are not available on this platform.",
     "loginItems": "Login item settings are not available on this platform."
   },
-  "upgradePrompt": {
-    "paymentFailed": "We couldn't process your payment",
-    "weeklyLimit": "You've reached your weekly Cloud limit",
-    "pastDueDescription": "You're on the free plan for now — don't worry, you still get {{limit}} words per week.\nUpdate your payment method to get back to unlimited Pro.",
-    "limitDescription": "{{used}} of {{limit}} words used.\nYour transcription was saved and pasted.",
-    "updatePayment": "Update payment method",
-    "updatePaymentDescription": "Get back to unlimited Pro transcriptions.",
-    "upgradeToPro": "Upgrade to Pro",
-    "upgradeDescription": "Get unlimited transcriptions from as little as $8/month.",
-    "useApiKey": "Use your own API key",
-    "useApiKeyDescription": "Bring your own key for unlimited use.",
-    "switchToLocal": "Switch to local",
-    "switchToLocalDescription": "Offline transcription. No limits.",
-    "rollingWeeklyLimit": "Rolling weekly limit"
-  },
   "windowControls": {
     "minimize": "Minimize",
     "maximize": "Maximize",
@@ -215,7 +200,8 @@
     "managedConfigLoading": "Checking your organization's managed setup. Try again in a moment.",
     "managedConfigUnavailable": "Managed enterprise access is unavailable. Sign in again or contact your administrator.",
     "managedPolicyConflict": "Managed access is blocked by your workspace policy. Contact your administrator.",
-    "resizePanel": "Resize panel"
+    "resizePanel": "Resize panel",
+    "unavailableInBuild": "This feature is unavailable in this build."
   },
   "onboarding": {
     "rehaul": {
@@ -565,7 +551,6 @@
         "title": "You told us you're here for clinical transcription",
         "description": "We've partnered with Corti — clinical-grade speech-to-text with the highest accuracy, and it's HIPAA compliant.",
         "createAccount": "Create your Corti account",
-        "creditBadge": "$50 free credit",
         "regionHint": "Choose where your audio is processed — US or EU.",
         "llmHint": "Language model features will also run on Corti models.",
         "useCorti": "Use Corti",
@@ -634,7 +619,7 @@
     },
     "limit": {
       "weeklyTitle": "Weekly Cloud limit reached",
-      "weeklyDescription": "Your limit resets on a rolling basis. Upgrade to Pro or use your own API key for unlimited use."
+      "weeklyDescription": "Your weekly Cloud word limit has been reached. Cloud upgrades are unavailable in this build."
     },
     "accessibilityMissing": {
       "title": "Accessibility permissions needed",
@@ -642,9 +627,8 @@
     },
     "billing": {
       "pastDueTitle": "We couldn't process your payment",
-      "pastDueDescription": "Don't worry - you're on the free plan for now. Update your payment in Settings to get back to Pro.",
-      "bannerDescription": "You're on the free plan for now - you still get {{limit}} words per week. Update your payment to get back to Pro.",
-      "updatePayment": "Update Payment"
+      "pastDueDescription": "Your account currently has limited Cloud access.",
+      "bannerDescription": "Your account currently has limited Cloud access. The weekly limit is {{limit}} words."
     },
     "history": {
       "couldNotLoadTitle": "Couldn't load your history",
@@ -960,7 +944,7 @@
       "errorDescriptions": {
         "sessionExpired": "Your OpenWhispr Cloud session is unavailable. Please sign in again from Settings.",
         "offline": "You're offline. Cloud transcription requires an internet connection.",
-        "dailyLimitReached": "You've reached today's transcription limit. Try again tomorrow or upgrade your plan.",
+        "dailyLimitReached": "Daily transcription limit reached. Try again tomorrow.",
         "providerRateLimited": "Your transcription provider rate-limited the request. Wait a moment and try again.",
         "chunkLoss": "A network problem lost too much of the recording. Re-transcribe it from History.",
         "agentReasoningFailed": "Your voice assistant couldn't process the command — the raw transcript was inserted instead.",
@@ -1635,10 +1619,6 @@
         "description": "Profile & sign in",
         "label": "Profile"
       },
-      "plansBilling": {
-        "description": "Plans, usage & billing",
-        "label": "Plans & Billing"
-      },
       "workspace": {
         "description": "Members, team spaces & API keys",
         "label": "Workspace"
@@ -1796,28 +1776,6 @@
           "description": "The invitation link for {{email}} will stop working."
         }
       },
-      "billing": {
-        "plan": "Plan",
-        "seats": "Seats",
-        "ownerOnly": "Only the workspace owner can manage the subscription.",
-        "nextInvoice": "Next invoice",
-        "manageStripe": "Manage in Stripe",
-        "startSubscription": "Start subscription",
-        "planLabel": {
-          "business": "Business",
-          "pro": "Pro",
-          "free": "Free",
-          "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Active",
-          "trialing": "Trialing",
-          "past_due": "Past due",
-          "canceled": "Canceled",
-          "incomplete": "Incomplete",
-          "unpaid": "Unpaid"
-        }
-      },
       "developer": {
         "title": "API keys",
         "description": "Programmatic access scoped to this workspace.",
@@ -1859,10 +1817,6 @@
             "read": "Read members",
             "write": "Manage members"
           },
-          "billing": {
-            "title": "Billing",
-            "read": "Read billing"
-          },
           "full": {
             "title": "Full access",
             "admin": "Workspace admin"
@@ -1875,28 +1829,6 @@
         "open": "Open console"
       }
     },
-    "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
-      "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
-      "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description_one": "Increase {{workspace}} to {{count}} seat. Stripe will prorate the change.",
-        "description_other": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
-      }
-    },
     "account": {
       "badges": {
         "free": "Free",
@@ -1906,24 +1838,6 @@
         "business": "Business",
         "trial": "Trial"
       },
-      "billing": {
-        "couldNotOpenDescription": "We had trouble opening the billing page. Please try again.",
-        "couldNotOpenTitle": "Couldn't open billing",
-        "manageBilling": "Manage Billing",
-        "opening": "Opening...",
-        "updatePaymentMethod": "Update Payment Method",
-        "contactOwnerTitle": "Contact your workspace owner",
-        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace.",
-        "manageInAppStore": "Manage in App Store",
-        "manageInGooglePlay": "Manage in Google Play",
-        "managedInMobileStore": "Billed through your phone's app store. Manage it from your phone."
-      },
-      "checkout": {
-        "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
-        "couldNotOpenTitle": "Couldn't open checkout",
-        "opening": "Opening...",
-        "upgradeToPro": "Upgrade to Pro"
-      },
       "disabled": "Disabled",
       "featuresDisabled": "Account Features Disabled",
       "featuresDisabledDescription": "Set VITE_AUTH_URL in your .env file to enable account features.",
@@ -1931,123 +1845,6 @@
       "notSignedIn": "Not signed in",
       "notSignedInDescription": "Create an account to unlock premium features.",
       "offline": "Offline",
-      "pastDue": {
-        "description": "You're on the free plan for now. Update your payment method to get back to Pro.",
-        "title": "We couldn't process your payment"
-      },
-      "planDescriptions": {
-        "freeUsage": "{{used}} / {{limit}} OpenWhispr Cloud words this week",
-        "byokUnlimited": "Your own API keys and local models remain unlimited.",
-        "nextBilling": "Next billing: {{date}}",
-        "pastDue": "{{used}} / {{limit}} OpenWhispr Cloud words this week - update payment to restore Pro",
-        "trial": "{{days}} days remaining - unlimited transcriptions",
-        "unlimited": "Unlimited",
-        "accessUntil": "Access until {{date}}",
-        "storePaymentIssue": "Your app store couldn't renew this subscription. Update your payment method there to keep your plan."
-      },
-      "planLabels": {
-        "free": "Free",
-        "pro": "Pro",
-        "business": "Business",
-        "trial": "Trial"
-      },
-      "pricing": {
-        "title": "Plans",
-        "billedYearly": "Billed yearly",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "forever",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$80",
-          "annualPeriod": "/yr",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "All Free features +",
-          "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Sync across devices",
-            "Share notes with public links",
-            "Personal API access",
-            "MCP integration in all your apps",
-            "Mobile app",
-            "Email support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$16",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$160",
-          "annualPeriod": "/yr",
-          "annualEquivalent": "$13.33",
-          "includesPrefix": "All Pro features +",
-          "badge": "Most Popular",
-          "features": [
-            "Unlimited meeting recordings",
-            "Workspace roles & member management",
-            "Assistant mode",
-            "Chat over your data",
-            "Priority support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "Custom",
-          "subtitle": "For advanced security & support",
-          "includesPrefix": "All Business features +",
-          "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
-          ],
-          "cta": "Contact Sales",
-          "upgradeCta": "Upgrade to Enterprise",
-          "askOwner": "Ask {{name}} to upgrade your workspace."
-        },
-        "currentPlan": "Current plan",
-        "coveredByWorkspace": "Included with your workspace plan",
-        "upgrade": "Upgrade",
-        "downgrade": "Downgrade",
-        "planSwitched": "Plan updated successfully",
-        "confirmSwitch": {
-          "title": "Confirm plan change",
-          "description": "Switch to {{plan}} ({{interval}})",
-          "monthly": "monthly",
-          "yearly": "yearly",
-          "chargeToday": "Charge today",
-          "accountCredit": "Account credit",
-          "newPrice": "New price",
-          "nextBilling": "Next billing",
-          "mo": "mo",
-          "yr": "yr",
-          "cancel": "Cancel",
-          "confirm": "Confirm"
-        }
-      },
-      "rollingWeeklyLimit": "Rolling weekly limit",
       "signOut": {
         "failedDescription": "Something went wrong signing out. Please try again.",
         "failedTitle": "Couldn't sign out",
@@ -2057,20 +1854,16 @@
       "title": "Account",
       "toasts": {
         "approachingLimit": {
-          "description": "You've used {{used}} of {{limit}} OpenWhispr Cloud words this week. Upgrade to Pro for unlimited use.",
+          "description": "Your weekly Cloud word limit is almost reached.",
           "title": "Approaching Cloud word limit"
         }
       },
       "trialCta": {
         "button": "Create Free Account",
-        "description": "Unlimited transcriptions, priority processing, and more.",
-        "title": "Try Pro free for 7 days"
-      },
-      "signedOutPlans": {
-        "button": "Create Free Account"
+        "description": "Sign in to use account features.",
+        "title": "Sign in to your account"
       },
       "user": "User",
-      "wordsRemaining": "{{remaining}} remaining",
       "deleteAccount": {
         "label": "Delete Account",
         "labelDescription": "Permanently delete your account and personal cloud data. Other local users and workspace-owned content are preserved.",
@@ -2121,10 +1914,6 @@
           "noPassword": "No password is set for this account.",
           "generic": "Something went wrong. Please try again."
         }
-      },
-      "planUnavailable": {
-        "title": "Plan unavailable",
-        "description": "We couldn't load your plan right now. Your access is unchanged."
       }
     },
     "agentConfig": {
@@ -2691,34 +2480,6 @@
       "endpointUrl": "Endpoint URL",
       "serverUrl": "Server URL",
       "apiKeyOptional": "API Key (optional)"
-    },
-    "enterpriseCheckout": {
-      "title": "Upgrade to Enterprise",
-      "description": "Choose a workspace, seats, and billing cycle. Payment is completed in Stripe Checkout.",
-      "allSubscribed": "The workspaces you own are already on Enterprise or can't be changed here. To make plan changes, contact sales.",
-      "workspaceLabel": "Workspace",
-      "seatsLabel": "Seats",
-      "seatsHint_one": "{{count}} seat currently in use",
-      "seatsHint_other": "{{count}} seats currently in use",
-      "intervalLabel": "Billing cycle",
-      "interval": {
-        "monthly": "Monthly",
-        "annual": "Annual"
-      },
-      "proratedCharge": "Prorated charge",
-      "prorationNote": "The prorated difference is added to your next invoice.",
-      "errors": {
-        "previewFailed": "Couldn't load the upgrade preview.",
-        "alreadyEnterprise": "This workspace is already on Enterprise.",
-        "subscriptionInactive": "This workspace's subscription isn't active. Update your billing details and try again.",
-        "priceNotConfigured": "Enterprise pricing isn't available right now. Please contact sales."
-      },
-      "priceNote": "Final pricing is shown at checkout.",
-      "continueCta": "Continue to checkout",
-      "upgradeDescription": "Upgrade {{workspace}} from {{plan}} to Enterprise. Seats and billing cycle carry over; the change takes effect immediately.",
-      "upgradeCta": "Upgrade now",
-      "upgradedTitle": "Upgraded to Enterprise",
-      "upgradedDescription": "{{workspace}} is now on Enterprise."
     }
   },
   "models": {
@@ -2878,14 +2639,7 @@
     "settings": "Settings",
     "support": "Support",
     "limitReached": "Weekly Cloud limit reached",
-    "limitReachedDescription": "Upgrade to Pro or use your own API key for unlimited use.",
-    "viewPlans": "View Plans",
-    "upgradeTitle": "Upgrade to Pro",
-    "upgradeDescription": "Unlimited, more accurate, faster transcription.",
-    "upgradeInstantSetup": "Instant setup",
-    "upgradeZeroRetention": "Zero data retention",
-    "upgradeEnterpriseSecurity": "Enterprise security SOC 2 Type II, HIPAA, ISO27001",
-    "learnMore": "Learn More",
+    "limitReachedDescription": "Your weekly Cloud word limit has been reached. Cloud upgrades are unavailable in this build.",
     "integrations": "Integrations",
     "defaultUser": "User",
     "notSignedIn": "Not signed in",
@@ -3026,7 +2780,7 @@
     },
     "create": {
       "title": "Create workspace",
-      "description": "A workspace brings your organization's members and billing together. Create team spaces inside it for shared notes.",
+      "description": "Create team spaces for shared notes.",
       "nameLabel": "Workspace name",
       "namePlaceholder": "Acme Corp",
       "submit": "Create workspace",
@@ -3044,7 +2798,6 @@
       "emailPlaceholder": "teammate@example.com",
       "roleLabel": "Role",
       "seatUsage": "Using {{used}} of {{seats}} seats",
-      "seatCost": "If accepted, adds a seat to your plan · estimated prorated charge {{amount}}.",
       "submit": "Send invite",
       "submitting": "Sending…",
       "sentTitle": "Invite sent",
@@ -3057,7 +2810,7 @@
         "member": "Member"
       },
       "roleDescription": {
-        "admin": "Manages members and billing",
+        "admin": "Manages members",
         "member": "Uses the workspace"
       }
     },
@@ -3506,16 +3259,13 @@
       "noProviderDescription": "Add an API key or download a local model to start transcribing.",
       "noProviderAction": "Open Transcription Settings",
       "fileTooLarge": "This file exceeds the 500 MB limit.",
-      "paidPlanRequired": "Cloud transcription for files over 25 MB requires a paid plan. Large files are processed with OpenWhispr Cloud for reliable, high-quality results.",
       "largeFileNote": "Large files are split and transcribed in parallel.",
       "chunkProgress": "Transcribing part {{completed}} of {{total}}...",
       "byokTooLarge": "Third-party API keys only support files up to {{size}} MB.",
       "byokTooLargeDetail": "For files over {{size}} MB, OpenWhispr Cloud handles splitting, parallel processing, and reassembly — so you get reliable results without depending on third-party provider limits.",
-      "byokTooLargeNeedsAccount": "Create an account and upgrade to a paid plan to transcribe larger files with OpenWhispr Cloud.",
-      "byokTooLargeNeedsUpgrade": "Upgrade to a paid plan to transcribe larger files with OpenWhispr Cloud.",
+      "byokTooLargeNeedsAccount": "Sign in to check whether OpenWhispr Cloud can process this file.",
       "switchToCloudForLargeFiles": "Switch to OpenWhispr Cloud to transcribe this file.",
       "createAccount": "Create Account",
-      "upgrade": "Upgrade",
       "switchToCloud": "OpenWhispr Cloud",
       "orDivider": "or",
       "urlPlaceholder": "Paste a YouTube or audio URL",
@@ -3553,7 +3303,9 @@
       "urlFileTooLarge": "File is too large to download. The maximum size is 500 MB.",
       "urlYoutubeBlocked": "YouTube is temporarily blocking downloads from your network. Try again in a little while.",
       "customEndpointInvalid": "Custom transcription endpoint is not configured or invalid. Update it in Settings.",
-      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries."
+      "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
+      "cloudLimitUnavailable": "OpenWhispr Cloud accepts files up to 25 MB for this account. Cloud upgrades are unavailable in this build.",
+      "cloudUpgradeUnavailable": "Cloud upgrades are unavailable in this build."
     },
     "meeting": {
       "title": "Meeting Notes",
@@ -3757,8 +3509,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "Real-time transcription available on Pro",
-      "upgrade": "Upgrade"
+      "message": "This feature is unavailable in this build."
     },
     "enhance": {
       "title": "Enhancement error"
@@ -4169,14 +3920,12 @@
     },
     "api": {
       "description": "Manage API keys for programmatic access",
-      "proRequired": "Upgrade to a paid plan to access the API",
-      "viewPlans": "View Plans",
       "useWith": "Use a key with"
     },
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "Let apps on this computer read your local notes while OpenWhispr is running. No sign-in or paid plan required.",
+        "description": "Let apps on this computer read your local notes while OpenWhispr is running.",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
@@ -4194,7 +3943,6 @@
       },
       "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
       "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
-      "proRequired": "Upgrade to a paid plan to connect OpenWhispr to Claude, ChatGPT, and Cursor.",
       "worksWith": "Works with",
       "copyUrl": "Copy MCP URL",
       "copied": "Copied",
@@ -4233,7 +3981,6 @@
     "cli": {
       "description": "Give your assistant access to your notes from the terminal.",
       "installLabel": "Install",
-      "viewPlans": "View Plans",
       "local": {
         "label": "Local",
         "freeBadge": "Free",
@@ -4241,20 +3988,8 @@
       },
       "cloud": {
         "label": "Cloud",
-        "description": "Sync across machines using your API key.",
-        "proRequired": "Upgrade to a paid plan to use the CLI in cloud mode."
+        "description": "Sync across machines using your API key."
       }
-    },
-    "plan": {
-      "title": "Your Plan",
-      "current": "Current",
-      "free": "Free",
-      "freeLimit": "5 meetings / month",
-      "essential": "Essential",
-      "essentialLimit": "20 meetings / month",
-      "pro": "Pro",
-      "proLimit": "Unlimited",
-      "upgrade": "Upgrade"
     },
     "notABot": {
       "description": "OpenWhispr captures audio directly from your system — it never joins your meetings as a participant. Just connect your calendar and take notes as normal."
@@ -4728,8 +4463,7 @@
       "cardLimit": "Only {{max}} cards can be prepared per request."
     },
     "beta": "Beta",
-    "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools.",
-    "locked": "Included with paid plans"
+    "locked": "Unavailable in this build"
   },
   "notesView": {
     "searchPlaceholder": "Search notes…",
