@@ -25,8 +25,7 @@ export const INTEGRATIONS_SECTION_ICONS: Record<
   cli: Terminal,
 };
 
-export type SectionMeta =
-  { kind: "count"; value: number } | { kind: "badge"; badge: "pro" | "free" };
+export type SectionMeta = { kind: "count"; value: number };
 
 export interface SectionMetaInput {
   isPaid: boolean;
@@ -35,26 +34,25 @@ export interface SectionMetaInput {
   connectedCalendars: number;
 }
 
-/** The status shown beside a section in the nav: what's connected, or which plan it needs. */
+/** The connected count shown beside a section in the nav. */
 export function sectionMeta(
   section: IntegrationsSection,
-  { isPaid, connectors, connectedCalendars }: SectionMetaInput
+  { connectors, connectedCalendars }: SectionMetaInput
 ): SectionMeta | null {
   switch (section) {
     case "connectors":
       // Turned off by the organization: no plan would change that, and no login can act.
       if (connectors.blockedByOrg) return null;
-      if (!connectors.isPaid) return { kind: "badge", badge: "pro" };
+      if (!connectors.isPaid) return null;
       return connectors.ready > 0 ? { kind: "count", value: connectors.ready } : null;
     case "calendars":
       return connectedCalendars > 0 ? { kind: "count", value: connectedCalendars } : null;
     case "api":
-      return isPaid ? null : { kind: "badge", badge: "pro" };
+      return null;
     case "mcp":
       return null;
     case "cli":
-      // Local mode is free; saying so is the point of surfacing it to free plans.
-      return isPaid ? null : { kind: "badge", badge: "free" };
+      return null;
   }
 }
 
