@@ -261,8 +261,7 @@ class DatabaseManager {
       typeof accountId === "string" && accountId.trim().length > 0 ? accountId.trim() : null;
   }
 
-  _accountScopeCondition(tableName, allSpaces = false) {
-    if (allSpaces) return { sql: "1 = 1", params: [] };
+  _accountScopeCondition(tableName) {
     return {
       sql: `((${tableName}.account_id IS NULL AND EXISTS (
         SELECT 1 FROM spaces account_scope_space
@@ -3323,12 +3322,12 @@ class DatabaseManager {
     }
   }
 
-  getNote(id, allSpaces = false) {
+  getNote(id) {
     try {
       if (!this.db) {
         throw new Error("Database not initialized");
       }
-      const accountScope = this._accountScopeCondition("notes", allSpaces);
+      const accountScope = this._accountScopeCondition("notes");
       const stmt = this.db.prepare(`SELECT * FROM notes WHERE id = ? AND ${accountScope.sql}`);
       return stmt.get(id, ...accountScope.params) || null;
     } catch (error) {
@@ -3416,13 +3415,13 @@ class DatabaseManager {
   // Authoritative scope membership for semantic-search candidates. Qdrant
   // payload writes are asynchronous/best-effort, so its filters are only an
   // optimization and must not decide which space or folder a hit belongs to.
-  getNoteIdsInScope(spaceId = null, folderId = null, candidateIds = null, allSpaces = false) {
+  getNoteIdsInScope(spaceId = null, folderId = null, candidateIds = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       if (candidateIds && candidateIds.length === 0) return [];
       const conditions = ["deleted_at IS NULL"];
       const params = [];
-      const accountScope = this._accountScopeCondition("notes", allSpaces);
+      const accountScope = this._accountScopeCondition("notes");
       conditions.push(accountScope.sql);
       params.push(...accountScope.params);
       if (candidateIds) {
@@ -3640,12 +3639,12 @@ class DatabaseManager {
     }
   }
 
-  getFolders(spaceId = null, allSpaces = false) {
+  getFolders(spaceId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const conditions = ["deleted_at IS NULL"];
       const params = [];
-      const accountScope = this._accountScopeCondition("folders", allSpaces);
+      const accountScope = this._accountScopeCondition("folders");
       conditions.push(accountScope.sql);
       params.push(...accountScope.params);
       if (spaceId != null) {
@@ -4052,21 +4051,21 @@ class DatabaseManager {
     return { ...row, teams };
   }
 
-  getSpaces(allSpaces = false) {
+  getSpaces() {
     try {
       if (!this.db) throw new Error("Database not initialized");
       return this.db
         .prepare(
           `SELECT * FROM spaces
            WHERE deleted_at IS NULL
-             AND (? = 1 OR kind = 'private' OR EXISTS (
+             AND (kind = 'private' OR EXISTS (
                SELECT 1 FROM space_accounts
                WHERE space_accounts.space_id = spaces.id
                  AND space_accounts.account_id = ?
              ))
            ORDER BY CASE WHEN kind = 'private' THEN 0 ELSE 1 END, sort_order ASC, name ASC`
         )
-        .all(allSpaces ? 1 : 0, this.activeAccountId)
+        .all(this.activeAccountId)
         .map((row) => this._spaceRow(row));
     } catch (error) {
       debugLogger.error("Error getting spaces", { error: error.message }, "spaces");
@@ -5146,12 +5145,12 @@ class DatabaseManager {
     }
   }
 
-  searchNotes(query, limit = 50, spaceId = null, folderId = null, allSpaces = false) {
+  searchNotes(query, limit = 50, spaceId = null, folderId = null) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const ftsQuery = buildNoteSearchQuery(query);
       if (!ftsQuery) return [];
-      const accountScope = this._accountScopeCondition("n", allSpaces);
+      const accountScope = this._accountScopeCondition("n");
       const params = [ftsQuery, ...accountScope.params];
       let scopeFilter = "";
       if (spaceId != null) {

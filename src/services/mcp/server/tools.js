@@ -1,7 +1,7 @@
-const { searchNotes } = require("./searchNotes");
+const { searchNotes } = require("../../../helpers/noteSearch");
 
 const definitions = [
-  { name: "search_notes", description: "Search local notes in every space.", inputSchema: {
+  { name: "search_notes", description: "Search local notes in every space available to the signed-in user.", inputSchema: {
     type: "object", properties: { query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 20 }, space: { type: "string" } }, required: ["query"], additionalProperties: false,
   } },
   { name: "get_note", description: "Read a local note by numeric ID.", inputSchema: {
@@ -15,8 +15,28 @@ const definitions = [
 function capResult(value) {
   const full = JSON.stringify(value);
   if (full.length <= 8000) return full;
-  const marker = `\n[TRUNCATED; untruncated length: ${full.length} characters]`;
-  return full.slice(0, 8000 - marker.length) + marker;
+  const shorten = (item) => {
+    if (typeof item === "string" && item.length > 1000) {
+      return `${item.slice(0, 1000)}\n[TRUNCATED; original field length: ${item.length} characters]`;
+    }
+    if (Array.isArray(item)) return item.map(shorten);
+    if (item && typeof item === "object") {
+      return Object.fromEntries(Object.entries(item).map(([key, field]) => [key, shorten(field)]));
+    }
+    return item;
+  };
+  const shortened = JSON.stringify(shorten(value));
+  if (shortened.length <= 8000) return shortened;
+  let low = 0;
+  let high = Math.min(8000, shortened.length);
+  let capped = "";
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const candidate = JSON.stringify({ truncated: true, untruncatedLength: full.length, data: shortened.slice(0, middle) });
+    if (candidate.length <= 8000) { capped = candidate; low = middle + 1; }
+    else high = middle - 1;
+  }
+  return capped;
 }
 
 function createTools(database, getSemanticSearch) {
@@ -26,7 +46,7 @@ function createTools(database, getSemanticSearch) {
     const definition = definitions.find((tool) => tool.name === name);
     if (!definition) throw new Error("Unknown tool");
     if (keys.some((key) => !(key in definition.inputSchema.properties))) throw new Error("Unknown argument");
-    const spaces = database.getSpaces(true);
+    const spaces = database.getSpaces();
     const spaceNames = new Map(spaces.map((space) => [space.id, space.name]));
     let result;
     if (name === "search_notes") {
@@ -40,7 +60,7 @@ function createTools(database, getSemanticSearch) {
         space = spaces.find((item) => item.name.toLowerCase() === args.space.toLowerCase());
         if (!space) throw new Error("Space not found");
       }
-      const notes = await searchNotes({ database, getSemanticSearch, query: args.query, limit: args.limit ?? 5, spaceId: space?.id, allSpaces: true });
+      const notes = await searchNotes({ database, getSemanticSearch, query: args.query, limit: args.limit ?? 5, spaceId: space?.id });
       const data = notes.map((note) => ({
         id: note.id, title: note.title, date: note.created_at, type: note.note_type,
         space: spaceNames.get(note.space_id) ?? null,
@@ -49,7 +69,7 @@ function createTools(database, getSemanticSearch) {
       result = { success: true, data, displayText: data.length ? `Found ${data.length} notes for "${args.query}" (semantic search)` : `No notes found for "${args.query}"` };
     } else if (name === "get_note") {
       if (!Number.isSafeInteger(args.id) || args.id < 1) throw new Error("Invalid note ID");
-      const note = database.getNote(args.id, true);
+      const note = database.getNote(args.id);
       result = note ? { success: true, data: {
         id: note.id, title: note.title, content: note.content, summary: note.enhanced_content ?? "",
         transcript: (note.transcript ?? "").slice(0, 500), type: note.note_type,
@@ -57,7 +77,7 @@ function createTools(database, getSemanticSearch) {
       }, displayText: `Retrieved note: "${note.title}"` } :
         { success: false, data: null, displayText: `Note with ID ${args.id} not found` };
     } else {
-      const data = database.getFolders(null, true).map((folder) => ({ id: folder.id, name: folder.name, space: spaceNames.get(folder.space_id) ?? null }));
+      const data = database.getFolders().map((folder) => ({ id: folder.id, name: folder.name, space: spaceNames.get(folder.space_id) ?? null }));
       result = { success: true, data, displayText: data.length ? `Folders: ${data.map((folder) => folder.name).join(", ")}` : "No folders" };
     }
     return { content: [{ type: "text", text: capResult(result) }], isError: !result.success };
