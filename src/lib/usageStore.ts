@@ -84,7 +84,6 @@ let inFlight: Promise<void> | null = null;
 let retryAttempt = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 let queuedForce: Promise<void> | null = null;
-let upgradeWatchActive = false;
 const subscribers = new Set<() => void>();
 
 function storage(): Storage | null {
@@ -268,22 +267,4 @@ export function loadUsage(fetcher: UsageFetcher, opts: { force?: boolean } = {})
 export function retryUsage(fetcher: UsageFetcher): Promise<void> {
   retryAttempt = 0;
   return loadUsage(fetcher, { force: true });
-}
-
-/** Post-checkout poll that outlives Stripe webhook lag. */
-export async function watchForUpgrade(fetcher: UsageFetcher): Promise<void> {
-  if (upgradeWatchActive) return;
-  upgradeWatchActive = true;
-  const startGeneration = generation;
-  try {
-    for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
-      await loadUsage(fetcher, { force: true });
-      if (generation !== startGeneration) return;
-      if (state.status === "success" && state.data.isSubscribed) return;
-      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt] ?? 0));
-      if (generation !== startGeneration) return;
-    }
-  } finally {
-    upgradeWatchActive = false;
-  }
 }
