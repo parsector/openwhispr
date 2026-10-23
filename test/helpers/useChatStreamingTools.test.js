@@ -879,7 +879,7 @@ test("signed out, the model is told to point the user at signing in", async (t) 
   );
 });
 
-test("on a free plan, the model still writes the email and then says a paid plan can send it", async (t) => {
+test("on a free plan, the model still writes the email and says sending is unavailable", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
@@ -887,7 +887,7 @@ test("on a free plan, the model still writes the email and then says a paid plan
   const prompt = systemPromptOf(sentMessages[0]);
   assert.match(
     prompt,
-    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): needs a paid OpenWhispr plan in Settings → Plans & Billing\./
+    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): unavailable in this build\./
   );
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
 });
