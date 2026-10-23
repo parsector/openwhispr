@@ -28,7 +28,7 @@ export function useToneStylePrompt() {
     return subscribeToAnalyticsRefresh(async () => {
       const summary = await window.electronAPI.getAnalyticsSummary();
       setTotalWords(summary.totalWords);
-    }, false);
+    });
   }, [pending]);
 
   const eligible = pending && totalWords >= TONE_STYLE_PROMPT_MIN_WORDS;
