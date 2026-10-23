@@ -1,0 +1,116 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+
+const project = { name: "openwhispr", defaultHarness: "claude", model: "sonnet" };
+function context() {
+  let slots = 0;
+  const events = [];
+  return {
+    messageId: "m1",
+    toolCallId: "t1",
+    signal: new AbortController().signal,
+    onApprovalRequested: () => events.push("approval"),
+    onHoldDelivery: () => events.push("hold"),
+    claimTurnSlot: (_key, limit) => ++slots <= limit,
+    releaseTurnSlot: () => slots--,
+    events,
+  };
+}
+test("delegate_task rejects unknown project, prepares a card immediately, and caps the turn", async () => {
+  const { createDelegateTaskTool } =
+    await import("../../../src/services/tools/delegateTaskTool.ts");
+  const { useLocalApprovalStore } = await import("../../../src/stores/localApprovalStore.ts");
+  const tool = createDelegateTaskTool([project]);
+  const ctx = context();
+  let prepared = 0;
+  global.window = {
+    agentJobs: {
+      prepare: async () => {
+        prepared++;
+        return {
+          jobId: String(prepared),
+          project: { name: project.name },
+          harness: "claude",
+          model: "sonnet",
+          prompt: "Review code",
+        };
+      },
+    },
+  };
+  assert.equal(
+    (await tool.execute({ project: "unknown", task: "Review code" }, ctx)).success,
+    false
+  );
+  assert.equal(prepared, 0);
+  const first = await tool.execute({ project: project.name, task: "Review code" }, ctx);
+  assert.deepEqual(first.data.status, "awaiting_approval");
+  assert.equal(first.data.jobId, "1");
+  assert.ok(useLocalApprovalStore.getState().entries["m1::t1"]);
+  assert.deepEqual(ctx.events, ["approval", "hold"]);
+  await tool.execute({ project: project.name, task: "Review code" }, { ...ctx, toolCallId: "t2" });
+  const third = await tool.execute(
+    { project: project.name, task: "Review code" },
+    { ...ctx, toolCallId: "t3" }
+  );
+  assert.equal(third.success, false);
+  assert.match(third.displayText, /two/i);
+  assert.equal(prepared, 2);
+});
+test("not_authenticated reaches the model and tools obey project and policy gates", async () => {
+  const { createDelegateTaskTool } =
+    await import("../../../src/services/tools/delegateTaskTool.ts");
+  const { createToolRegistry } = await import("../../../src/services/tools/index.ts");
+  global.window = {
+    agentJobs: {
+      prepare: async () => {
+        throw new Error("not_authenticated");
+      },
+    },
+  };
+  const failed = await createDelegateTaskTool([project]).execute(
+    { project: project.name, task: "Review" },
+    context()
+  );
+  assert.match(failed.displayText, /not_authenticated/);
+  const settings = {
+    isSignedIn: false,
+    calendarConnected: false,
+    cloudBackupEnabled: false,
+    webSearchEnabled: false,
+  };
+  assert.equal(
+    createToolRegistry({ ...settings, agentAllowed: true, agentProjects: [] }).get("delegate_task"),
+    undefined
+  );
+  assert.equal(
+    createToolRegistry({ ...settings, agentAllowed: false, agentProjects: [project] }).get(
+      "delegate_task"
+    ),
+    undefined
+  );
+  assert.ok(
+    createToolRegistry({ ...settings, agentAllowed: true, agentProjects: [project] }).get(
+      "delegate_task"
+    )
+  );
+});
+
+test("local approval sends edited prompt and clears the pending entry", async () => {
+  const { addLocalApproval, approveLocal, useLocalApprovalStore } =
+    await import("../../../src/stores/localApprovalStore.ts");
+  const ctx = { ...context(), messageId: "approval", toolCallId: "call" };
+  let sent;
+  global.window = {
+    agentJobs: {
+      approve: async (_id, input) => {
+        sent = input.prompt;
+        return { status: "running", reason: null };
+      },
+    },
+  };
+  addLocalApproval(ctx, { jobId: "job", prompt: "Edited task" }, "summary");
+  await approveLocal("approval::call");
+  assert.equal(sent, "Edited task");
+  assert.equal(useLocalApprovalStore.getState().entries["approval::call"], undefined);
+  assert.equal(useLocalApprovalStore.getState().receipts["approval::call"].state, "started");
+});

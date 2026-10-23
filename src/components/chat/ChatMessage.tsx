@@ -22,6 +22,8 @@ import { extractHelpEvidence } from "./helpEvidence";
 import { toolIcons } from "./toolIcons";
 import { ApprovalCard } from "./ApprovalCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { LocalApprovalCard } from "./LocalApprovalCard";
+import { useLocalApprovalStore } from "../../stores/localApprovalStore";
 
 interface ChatMessageProps {
   messageId: string;
@@ -145,7 +147,18 @@ function ToolCallItem({ messageId, toolCall }: { messageId: string; toolCall: To
   const approval = useConnectorApprovalStore(
     (state) => state.entries[approvalKey(messageId, toolCall.id)]
   );
-  return approval ? <ApprovalCard entry={approval} /> : <ToolCallStep toolCall={toolCall} />;
+  const local = useLocalApprovalStore(
+    (state) =>
+      state.entries[approvalKey(messageId, toolCall.id)] ??
+      state.receipts[approvalKey(messageId, toolCall.id)]
+  );
+  return local ? (
+    <LocalApprovalCard entry={local} />
+  ) : approval ? (
+    <ApprovalCard entry={approval} />
+  ) : (
+    <ToolCallStep toolCall={toolCall} />
+  );
 }
 
 function NoteCard({

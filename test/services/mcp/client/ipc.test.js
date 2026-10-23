@@ -73,3 +73,41 @@ test("stdio command confirmation shows exact spawn details in main", async () =>
   assert.match(shown, /server.js/);
   assert.match(shown, /\/tmp\/work/);
 });
+
+test("write tool approvals follow normalized arguments; read tools remain sticky", async () => {
+  const handlers = new Map();
+  const prompts = [];
+  let readOnly = false;
+  let allowed = false;
+  registerMcpIpc(
+    {
+      config: () => ({ mcpServers: { demo: { type: "http", url: "http://localhost" } } }),
+      isEnabled: () => true,
+      tools: () => [{ name: "echo", annotations: { readOnlyHint: readOnly } }],
+      settings: () => ({ allowWithoutAsking: allowed }),
+      call: async () => ({ content: [] }),
+    },
+    {
+      ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+      dialog: {
+        showMessageBox: async (options) => {
+          prompts.push(options.title);
+          return { response: 1 };
+        },
+      },
+    }
+  );
+  const call = (args, id) =>
+    handlers.get("mcp-client-call")({ sender: { id: 1 } }, "demo", "echo", args, id);
+  await call({ a: 1, b: 2 }, "one");
+  await call({ b: 2, a: 1 }, "two");
+  await call({ a: 2, b: 2 }, "three");
+  assert.equal(prompts.length, 2);
+  readOnly = true;
+  await call({ a: 3 }, "four");
+  await call({ a: 4 }, "five");
+  assert.equal(prompts.length, 3);
+  allowed = true;
+  await call({ a: 5 }, "six");
+  assert.equal(prompts.length, 3);
+});

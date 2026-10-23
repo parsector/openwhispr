@@ -50,6 +50,8 @@ import {
 import { buildAssistantCommandSendOptions } from "./assistantCommandOptions";
 import { ApprovalCard } from "../chat/ApprovalCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
+import { LocalApprovalCard } from "../chat/LocalApprovalCard";
+import { useLocalApprovalStore } from "../../stores/localApprovalStore";
 
 export interface AssistantCommand {
   id: number;
@@ -282,14 +284,21 @@ export function AssistantPanel({
   ]);
 
   const approvalEntries = useConnectorApprovalStore((state) => state.entries);
+  const localApprovalEntries = useLocalApprovalStore((state) => state.entries);
+  const localApprovalReceipts = useLocalApprovalStore((state) => state.receipts);
   const panelApprovals = latestAssistantMessage
     ? (latestAssistantMessage.toolCalls ?? [])
         .map((toolCall) => approvalEntries[approvalKey(latestAssistantMessage.id, toolCall.id)])
         .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
     : [];
-  const approvalAwaitingUser = panelApprovals.some(
-    (entry) => entry.state === "pending" || entry.state === "committing"
-  );
+  const approvalAwaitingUser =
+    panelApprovals.some((entry) => entry.state === "pending" || entry.state === "committing") ||
+    (latestAssistantMessage?.toolCalls ?? []).some((toolCall) => {
+      const entry = localApprovalEntries[approvalKey(latestAssistantMessage!.id, toolCall.id)];
+      return (
+        entry?.state === "pending" || entry?.state === "approving" || entry?.state === "cancelling"
+      );
+    });
   const isToolExecuting = Boolean(streaming.activeToolName) && !approvalAwaitingUser;
   const isBusy = resolveAssistantPanelBusy({
     agentState: streaming.agentState,
@@ -569,6 +578,16 @@ export function AssistantPanel({
             {panelApprovals.map((entry) => (
               <ApprovalCard key={entry.key} entry={entry} />
             ))}
+            {(latestAssistantMessage?.toolCalls ?? [])
+              .map(
+                (toolCall) =>
+                  localApprovalEntries[approvalKey(latestAssistantMessage!.id, toolCall.id)] ??
+                  localApprovalReceipts[approvalKey(latestAssistantMessage!.id, toolCall.id)]
+              )
+              .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry))
+              .map((entry) => (
+                <LocalApprovalCard key={entry.key} entry={entry} />
+              ))}
             {thinking && (
               <div role="status">
                 <span className="sr-only">{t("agentMode.input.thinking")}</span>

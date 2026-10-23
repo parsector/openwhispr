@@ -1,4 +1,15 @@
 const { NAME } = require("./configStore");
+const { createHash } = require("node:crypto");
+function normalized(value) {
+  if (Array.isArray(value)) return value.map(normalized);
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, normalized(value[key])])
+    );
+  return value;
+}
 function registerMcpIpc(manager, { ipcMain, dialog } = require("electron")) {
   const calls = new Map();
   const approvedTools = new Set();
@@ -73,14 +84,17 @@ function registerMcpIpc(manager, { ipcMain, dialog } = require("electron")) {
     )
       throw new Error("Invalid MCP call");
     const config = manager.config();
-    if (!manager.isEnabled(config, name) || !manager.tools(name).some((item) => item.name === tool))
-      throw new Error("MCP tool unavailable");
+    const toolInfo = manager.tools(name).find((item) => item.name === tool);
+    if (!manager.isEnabled(config, name) || !toolInfo) throw new Error("MCP tool unavailable");
     const key = `${event.sender.id}:${requestId}`;
     if (calls.has(key)) throw new Error("Duplicate MCP call");
     const controller = new AbortController();
     calls.set(key, controller);
     try {
-      const approvalKey = `${name}__${tool}:${JSON.stringify(config.mcpServers[name])}`;
+      const argsHash = createHash("sha256")
+        .update(JSON.stringify(normalized(args)))
+        .digest("hex");
+      const approvalKey = `${name}__${tool}:${JSON.stringify(config.mcpServers[name])}${toolInfo.annotations?.readOnlyHint === true ? "" : `:${argsHash}`}`;
       if (!manager.settings(config, name).allowWithoutAsking && !approvedTools.has(approvalKey)) {
         const answer = await dialog.showMessageBox({
           type: "question",
