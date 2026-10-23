@@ -46,6 +46,9 @@ class McpManager {
       enabled: this.isEnabled(config, name),
       confirmed: server.type === "http" || settings.confirmed === signature(server),
       allowWithoutAsking: settings.allowWithoutAsking === true,
+      maxResultChars: [8000, 32000, 64000, 128000, 256000].includes(settings.maxResultChars)
+        ? settings.maxResultChars
+        : undefined,
       status: this.clients.has(name)
         ? "connected"
         : settings.enabled === false
@@ -249,6 +252,21 @@ class McpManager {
     config._openwhispr[name] = { ...this.settings(config, name), allowWithoutAsking: allowed };
     this.store.write(config);
     this.configText = JSON.stringify(config);
+    return this.list();
+  }
+  setResultSize(name, maxResultChars) {
+    if (maxResultChars !== null && ![8000, 32000, 64000, 128000, 256000].includes(maxResultChars))
+      throw new Error("Invalid MCP result size");
+    const config = this.config();
+    if (!config.mcpServers[name]) throw new Error("Unknown MCP server");
+    config._openwhispr ||= {};
+    const settings = { ...this.settings(config, name) };
+    if (maxResultChars === null) delete settings.maxResultChars;
+    else settings.maxResultChars = maxResultChars;
+    config._openwhispr[name] = settings;
+    this.store.write(config);
+    this.configText = JSON.stringify(config);
+    this.revision++;
     return this.list();
   }
   remove(name) {

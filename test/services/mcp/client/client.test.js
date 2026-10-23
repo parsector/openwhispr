@@ -34,6 +34,22 @@ test("config validates and writes private, atomic JSON", () => {
   assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(file, "utf8"))), ["mcpServers"]);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+test("result size override persists in client settings and validates choices", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-result-size-"));
+  try {
+    const store = createConfigStore(path.join(dir, "servers.json"));
+    store.write({ mcpServers: { demo: { type: "http", url: "http://localhost" } } });
+    const manager = new McpManager(store);
+    manager.setResultSize("demo", 32000);
+    assert.equal(store.read()._openwhispr.demo.maxResultChars, 32000);
+    assert.equal(manager.list().servers[0].maxResultChars, 32000);
+    assert.throws(() => manager.setResultSize("demo", 12345), /Invalid MCP result size/);
+    manager.setResultSize("demo", null);
+    assert.equal(store.read()._openwhispr.demo.maxResultChars, undefined);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 test("name regex and collision on server enable", async () => {
   assert.equal(NAME.test("x".repeat(65)), false);
   assert.equal(NAME.test("bad space"), false);

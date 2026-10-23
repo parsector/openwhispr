@@ -2,10 +2,30 @@ import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { SettingsPanel, SettingsPanelRow } from "../ui/SettingsSection";
-import type { McpServerInfo } from "../../services/tools/mcpTools";
+import { RESULT_SIZE_OPTIONS, type McpServerInfo } from "../../services/tools/mcpTools";
+import { isLocalMcpProvider, resolveMcpResultBudget } from "../../services/tools/mcpResultBudget";
+import { resolveChatStreamingInference } from "../../helpers/dictationAgentInference.js";
+import { useSettingsStore } from "../../stores/settingsStore";
 
 export function McpServers(): ReactElement {
   const { t } = useTranslation();
+  const settings = useSettingsStore();
+  const { provider, model, mode: llmMode } = resolveChatStreamingInference(settings).config;
+  const [modelBudget, setModelBudget] = useState(8_000);
+  useEffect(() => {
+    let active = true;
+    void resolveMcpResultBudget(
+      provider,
+      model,
+      isLocalMcpProvider(provider) && !(llmMode === "openwhispr" && settings.isSignedIn),
+      (modelId) => window.electronAPI.getLocalContextBudget(modelId)
+    ).then((budget) => {
+      if (active) setModelBudget(budget);
+    });
+    return () => {
+      active = false;
+    };
+  }, [provider, model, llmMode, settings.isSignedIn]);
   const [servers, setServers] = useState<McpServerInfo[]>([]);
   const [name, setName] = useState("");
   const [raw, setRaw] = useState("");
@@ -115,6 +135,33 @@ export function McpServers(): ReactElement {
             </p>
           )}
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+            <label className="flex items-center gap-2">
+              <span>{t("integrations.mcp.servers.resultSize")}</span>
+              <select
+                className="rounded border bg-background px-2 py-1"
+                value={server.maxResultChars ?? ""}
+                onChange={(event) =>
+                  void run(() =>
+                    window.mcpClient.resultSize(
+                      server.name,
+                      event.target.value ? Number(event.target.value) : null
+                    )
+                  )
+                }
+              >
+                <option value="">{t("integrations.mcp.servers.modelDefault")}</option>
+                {RESULT_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size / 1_000}k
+                  </option>
+                ))}
+              </select>
+              {server.maxResultChars !== undefined && server.maxResultChars > modelBudget && (
+                <span className="text-muted-foreground">
+                  {t("integrations.mcp.servers.modelClamp", { size: `${modelBudget / 1_000}k` })}
+                </span>
+              )}
+            </label>
             <label>
               <input
                 type="checkbox"
