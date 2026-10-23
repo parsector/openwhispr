@@ -1814,11 +1814,6 @@ declare global {
         accountId: string | null,
         expectedAuthGeneration?: number
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
-      closeActivationStream?: () => Promise<void>;
-      beginActivationCapture?: () => Promise<string | null>;
-      stopActivationCapture?: (id: string) => Promise<void>;
-      finishActivationCapture?: (id: string, words: number) => Promise<void>;
-      cancelActivationCapture?: (id: string) => Promise<void>;
       getActiveAccountScope?: () => Promise<ActiveAccountScope | null>;
       onActiveAccountScopeChanged?: (
         callback: (scope: ActiveAccountScope | null) => void

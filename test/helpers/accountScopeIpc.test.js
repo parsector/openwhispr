@@ -129,7 +129,6 @@ test.before(() => {
 });
 
 test.after(() => {
-  fakeThis.metaActivation?.dispose?.();
   Module._load = originalLoad;
   fs.rmSync(userDataDirectory, { recursive: true, force: true });
 });
@@ -230,22 +229,4 @@ test("meeting prompt retirement precedes scope mutation and skips a true no-op",
   handleAuthTokenChange({ token: null, generation: 22 });
   assert.deepEqual(calls, ["old-account", "meeting-account", "meeting-account"]);
   fakeThis.windowManager = originalManager;
-});
-
-test("activation storage failure cannot prevent clearing the local bearer", async () => {
-  const manager = fakeThis.metaActivation;
-  fakeThis.metaActivation = {
-    close: async () => {
-      throw new Error("disk full");
-    },
-  };
-  tokenState = { token: "must-clear", generation: 30 };
-  try {
-    const result = await handlers.get("auth-clear-session")({ sender: {} });
-    assert.equal(result.success, true);
-    assert.equal(tokenState.token, null);
-    assert.equal(tokenState.generation, 31);
-  } finally {
-    fakeThis.metaActivation = manager;
-  }
 });
