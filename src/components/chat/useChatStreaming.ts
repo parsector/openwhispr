@@ -453,15 +453,26 @@ export function useChatStreaming({
           // Triggers ride in the tool description, so a snippet edit rebuilds the registry.
           const snippetKey = settings.snippets.map((s) => s.trigger).join("|");
           const keepNotesUnchanged = !!options?.keepNotesUnchanged;
-          const mcpBudget = window.mcpClient
-            ? await resolveMcpResultBudget(
-                llmConfig.provider,
-                llmConfig.model,
-                isLocalProvider && !isCloudAgent,
-                (modelId) => window.electronAPI.getLocalContextBudget(modelId),
-                (message) => logger.warn(message)
-              )
-            : 0;
+          const agentAllowed = isAgentAllowed(policy);
+          const agentProjects = agentAllowed
+            ? ((await window.agentJobs
+                ?.projectsList()
+                .then((value) => value.projects)
+                .catch(() => [])) ?? [])
+            : [];
+          const projectsKey = JSON.stringify(
+            agentProjects.map(({ name, defaultHarness, model }) => [name, defaultHarness, model])
+          );
+          const mcpBudget =
+            window.mcpClient || agentProjects.length > 0
+              ? await resolveMcpResultBudget(
+                  llmConfig.provider,
+                  llmConfig.model,
+                  isLocalProvider && !isCloudAgent,
+                  (modelId) => window.electronAPI.getLocalContextBudget(modelId),
+                  (message) => logger.warn(message)
+                )
+              : 0;
           if (mcpBudget > 0) toolScope.setMcpResultBudget(mcpBudget);
           const mcp = window.mcpClient
             ? await loadMcpTools(window.mcpClient, mcpBudget).catch(() => ({
@@ -469,7 +480,7 @@ export function useChatStreaming({
                 tools: [],
               }))
             : { key: "unavailable", tools: [] };
-          const cacheKey = `${mcp.key}-${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}`;
+          const cacheKey = `${mcp.key}-${settings.isSignedIn}-${calendarConnected}-${settings.cloudBackupEnabled}-${scopeKey}-${webSearchEnabled}-${productHelpEnabled}-${snippetKey}-${connectors?.emailDraftTarget ?? "no-connectors"}-${connectors?.readyConnectorIds.join(",") ?? ""}-${keepNotesUnchanged}-${projectsKey}`;
           if (toolRegistryRef.current?.key === cacheKey) {
             registry = toolRegistryRef.current.registry;
           } else {
@@ -490,6 +501,8 @@ export function useChatStreaming({
               connectors,
               keepNotesUnchanged,
               mcpTools: mcp.tools,
+              agentProjects,
+              agentAllowed,
             });
             toolRegistryRef.current = { key: cacheKey, registry };
           }
