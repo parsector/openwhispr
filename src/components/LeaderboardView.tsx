@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../hooks/useAuth";
 import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
-import type { EnableInsightsSyncOptions } from "../hooks/useInsightsSyncOptIn";
 import { useSettings } from "../hooks/useSettings";
 import { signInWithSSO } from "../lib/auth";
 import { getValidatedAuthGeneration } from "../lib/authRequestContext";
@@ -11,15 +10,11 @@ import { usePolicyStore } from "../stores/policyStore";
 import LeaderboardSection from "./LeaderboardSection";
 
 interface LeaderboardViewProps {
-  enableInsightsSync: (options?: EnableInsightsSyncOptions) => Promise<boolean>;
-  insightsSyncEnabled: boolean;
   onSignIn: () => void;
   syncAllowedByPolicy: boolean;
 }
 
 export default function LeaderboardView({
-  enableInsightsSync,
-  insightsSyncEnabled,
   onSignIn,
   syncAllowedByPolicy,
 }: LeaderboardViewProps) {
@@ -91,11 +86,7 @@ export default function LeaderboardView({
     setSsoStarting(false);
   }, [oauthProtocolRegistered, onSignIn, ssoStarting, t, user?.email]);
 
-  const joinLeaderboard = useCallback(async () => {
-    if (!insightsSyncEnabled && !(await enableInsightsSync({ confirmWhenEmpty: true })))
-      return false;
-    return joinParticipation();
-  }, [enableInsightsSync, insightsSyncEnabled, joinParticipation]);
+  const joinLeaderboard = useCallback(() => joinParticipation(), [joinParticipation]);
 
   return (
     <>
