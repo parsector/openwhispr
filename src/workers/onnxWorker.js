@@ -194,7 +194,7 @@ async function speakerLoad({ modelPath }) {
   loadOrt();
   speakerSession = await ort.InferenceSession.create(modelPath, SESSION_OPTIONS);
   speakerInputName = speakerSession.inputNames[0];
-  log("info", "speaker session loaded", { modelPath });
+  log("info", "speaker session loaded");
   return { ok: true };
 }
 
@@ -333,7 +333,7 @@ async function textLoad({ modelDir }) {
     SESSION_OPTIONS
   );
   textTokenizer = tokenizer;
-  log("info", "text session loaded", { modelDir });
+  log("info", "text session loaded");
   return { ok: true };
 }
 
@@ -395,19 +395,19 @@ async function dispatch({ id, method, payload }) {
     // MessagePortMain transfers only ports, not ArrayBuffers — clone the result buffers instead.
     return { reply: { id, result }, transferList: [] };
   } catch (err) {
-    log("error", "handler threw", { method, error: err?.message, stack: err?.stack });
+    log("error", "handler threw", { method, errorName: err?.name });
     return { reply: { id, error: { message: err?.message || String(err) } }, transferList: [] };
   }
 }
 
 process.on("uncaughtException", (err) => {
-  log("fatal", "uncaughtException", { error: err?.message, stack: err?.stack });
-  process.stderr.write(`onnx worker uncaughtException: ${err?.stack || err?.message}\n`);
+  log("fatal", "uncaughtException", { errorName: err?.name });
+  process.stderr.write("onnx worker uncaughtException\n");
   process.exit(1);
 });
 process.on("unhandledRejection", (err) => {
-  log("fatal", "unhandledRejection", { error: err?.message, stack: err?.stack });
-  process.stderr.write(`onnx worker unhandledRejection: ${err?.stack || err?.message}\n`);
+  log("fatal", "unhandledRejection", { errorName: err?.name });
+  process.stderr.write("onnx worker unhandledRejection\n");
   process.exit(1);
 });
 

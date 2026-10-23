@@ -1,3 +1,4 @@
+const { textLength } = require("./logRedaction");
 const WebSocket = require("ws");
 const debugLogger = require("./debugLogger");
 
@@ -332,7 +333,7 @@ class OpenAIRealtimeStreaming {
             debugLogger.debug(
               `${this.providerLabel} turn completed`,
               this._logContext({
-                turnText: transcript.slice(0, 100),
+                turnLength: textLength(transcript),
                 totalLength: fullText.length,
                 segments: this.completedSegments.length,
               })
