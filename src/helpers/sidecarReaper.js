@@ -54,6 +54,19 @@ function signalProcess(pid, signal) {
   }
 }
 
+function signalAgentGroup(pid, signal) {
+  try {
+    if (process.platform === "win32") {
+      execFileSync("taskkill", ["/PID", String(pid), "/T", "/F"], {
+        stdio: "ignore",
+        windowsHide: true,
+      });
+    } else process.kill(-pid, signal);
+  } catch {
+    signalProcess(pid, signal);
+  }
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -69,11 +82,12 @@ async function waitForExit(pid, timeoutMs) {
 
 async function killStaleSidecar(name, pid, { sigtermGraceMs, sigkillGraceMs }) {
   debugLogger.warn("Reaping stale sidecar", { name, pid });
-  signalProcess(pid, "SIGTERM");
+  const signal = name.startsWith("agent-job-") ? signalAgentGroup : signalProcess;
+  signal(pid, "SIGTERM");
   if (await waitForExit(pid, sigtermGraceMs)) return true;
 
   debugLogger.warn("Stale sidecar ignored SIGTERM, escalating to SIGKILL", { name, pid });
-  signalProcess(pid, "SIGKILL");
+  signal(pid, "SIGKILL");
   if (await waitForExit(pid, sigkillGraceMs)) return true;
 
   debugLogger.error("Stale sidecar survived SIGKILL, keeping PID entry for next launch", {
@@ -90,7 +104,9 @@ async function reapStaleSidecars({
   const entries = sidecarPidFile.readAll();
   await Promise.all(
     entries.map(async ({ name, pid }) => {
-      const fragments = EXPECTED_BINARY_FRAGMENTS[name];
+      const fragments = name.startsWith("agent-job-")
+        ? ["claude"]
+        : EXPECTED_BINARY_FRAGMENTS[name];
       if (fragments && isProcessAlive(pid)) {
         const command = processCommand(pid);
         if (fragments.some((fragment) => command.includes(fragment))) {
