@@ -34,7 +34,6 @@ import {
 } from "../lib/teamSpacesCapability";
 import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag";
 import { readNoteConflictIds } from "../lib/noteConflictRegistry";
-import { pendingLeaderboardLeaveDeservesPriority } from "../lib/pendingLeaderboardLeave";
 import {
   cloudBackupResumed,
   effectiveLocalHistoryEnabled,
@@ -592,16 +591,7 @@ export class SyncService {
       reason === "start" &&
       this.canSyncTeamSpaces() &&
       localStorage.getItem("teamSpacesCapability.probedAt") == null;
-    // A leaderboard opt-out is a user-requested account mutation, not ambient
-    // sync work. Retry it on the next trigger even when an otherwise idle
-    // collaboration-only pass has backed off. That priority is spent after a
-    // few undelivered attempts: an opt-out that can never land keeps being
-    // retried, but stops disabling the throttle, the in-flight guard and the
-    // ambient backoff for the life of the install.
-    const sessionUserId = getAuthRequestContextSnapshot().sessionUserId;
-    const pendingLeaderboardLeave =
-      sessionUserId != null && pendingLeaderboardLeaveDeservesPriority(sessionUserId);
-    const bypassThrottle = waitForLock || firstTeamSpacesProbe || pendingLeaderboardLeave;
+    const bypassThrottle = waitForLock || firstTeamSpacesProbe;
     if (
       !bypassThrottle &&
       (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
