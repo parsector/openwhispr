@@ -15,6 +15,7 @@ import { IntegrationsPane } from "./integrations/IntegrationsPane";
 import { CalendarsPane } from "./integrations/CalendarsPane";
 import { McpPane } from "./integrations/McpPane";
 import { CliPane } from "./integrations/CliPane";
+import { AgentsPane } from "./integrations/AgentsPane";
 import {
   INTEGRATIONS_SECTION_ICONS,
   INTEGRATIONS_SECTIONS,
@@ -168,6 +169,7 @@ export default function IntegrationsView({
       />
     ),
     cli: <CliPane title={titleOf("cli")} isPaid={isPaid} />,
+    agents: <AgentsPane title={titleOf("agents")} />,
   };
 
   return (

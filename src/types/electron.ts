@@ -1347,6 +1347,7 @@ export interface AgentJob {
   status: "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
   steps: Array<{ kind: string; [key: string]: unknown }>;
   result: string | null;
+  noteId?: number;
   reason: string | null;
   costEstimate: number | null;
   sessionId: string | null;
@@ -1378,9 +1379,7 @@ declare global {
         model: string | null;
       }) => Promise<unknown>;
       projectsRemove: (name: string) => Promise<unknown>;
-      testHarness: (
-        harness: "claude" | "cursor-agent"
-      ) => Promise<{
+      testHarness: (harness: "claude" | "cursor-agent") => Promise<{
         ok: boolean;
         path: string | null;
         version: string | null;

@@ -210,7 +210,7 @@ function createJobManager({
         }
         if (outcome.exitCode === 0 && outcome.resultEvent && !outcome.resultEvent.is_error) {
           try {
-            saveNote(job);
+            job.noteId = saveNote(job);
             job.status = "done";
             job.endedAt = now();
             update(job);
@@ -262,6 +262,7 @@ function createJobManager({
     );
     if (!saved?.success) throw new Error(saved?.error || "Could not save note");
     broadcast("note-added", saved.note);
+    return saved.note.id;
   }
   function drain() {
     while (activeCount() < 2 && queue.length) {
