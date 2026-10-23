@@ -1521,7 +1521,6 @@ async function startApp() {
   trayManager.setCreateControlPanelCallback(() => windowManager.createControlPanelWindow());
   await trayManager.createTray();
 
-  updateManager.checkForUpdatesOnStartup();
 
   if (process.platform === "darwin") {
     const { isGlobeLikeHotkey, isMouseButtonHotkey } = require("./src/helpers/hotkeyManager");

@@ -10,8 +10,6 @@ const originalLoad = Module._load;
 const originalPlatform = process.platform;
 const originalAppImage = process.env.APPIMAGE;
 
-const STARTUP_DELAY_MS = 3000;
-const PERIODIC_INTERVAL_MS = 4 * 60 * 60 * 1000;
 
 function makeAutoUpdater({ offline = false } = {}) {
   const listeners = {};
@@ -86,22 +84,13 @@ afterEach(() => {
   else process.env.APPIMAGE = originalAppImage;
 });
 
-test("startup and periodic checks run whether or not automatic updates are on", (t) => {
-  for (const enabled of [true, false, null]) {
-    t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
-    const autoUpdater = makeAutoUpdater();
-    const manager = createUpdateManager(autoUpdater);
-    if (enabled !== null) manager.setAutoUpdatesEnabled(enabled);
-
-    manager.checkForUpdatesOnStartup();
-    t.mock.timers.tick(STARTUP_DELAY_MS);
-    assert.equal(autoUpdater.calls, 1, `startup check with preference ${enabled}`);
-    t.mock.timers.tick(PERIODIC_INTERVAL_MS);
-    assert.equal(autoUpdater.calls, 2, `periodic check with preference ${enabled}`);
-
-    manager.cleanup();
-    t.mock.timers.reset();
-  }
+test("packaged startup schedules no update checks; manual checks remain available", async () => {
+  const autoUpdater = makeAutoUpdater();
+  const manager = createUpdateManager(autoUpdater);
+  assert.equal(autoUpdater.calls, 0);
+  await manager.checkForUpdates();
+  assert.equal(autoUpdater.calls, 1);
+  manager.cleanup();
 });
 
 test("before the renderer syncs the preference, an available update is not downloaded", () => {
@@ -169,7 +158,7 @@ test("only a macOS update that Squirrel already holds counts as staged", () => {
   manager.cleanup();
 });
 
-test("enabling automatic updates after the startup check found one starts the download", () => {
+test("enabling automatic updates after a manual check found one starts the download", () => {
   const autoUpdater = makeAutoUpdater();
   const manager = createUpdateManager(autoUpdater);
 
@@ -181,23 +170,6 @@ test("enabling automatic updates after the startup check found one starts the do
 
   manager.setAutoUpdatesEnabled(true);
   assert.equal(autoUpdater.downloads, 1, "re-syncing the preference does not restart it");
-
-  manager.cleanup();
-});
-
-test("a failed background check only reaches renderers as update-error", (t) => {
-  t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
-  const autoUpdater = makeAutoUpdater({ offline: true });
-  const manager = createUpdateManager(autoUpdater);
-  const sent = [];
-  manager.setWindowManager({
-    mainWindow: makeRendererWindow(sent),
-    controlPanelWindow: makeRendererWindow(sent),
-  });
-
-  manager.checkForUpdatesOnStartup();
-  t.mock.timers.tick(STARTUP_DELAY_MS);
-  assert.deepEqual([...new Set(sent)], ["update-error"]);
 
   manager.cleanup();
 });
@@ -226,8 +198,6 @@ test("a Linux AppImage is supported, but deb/rpm/tar.gz installs never touch the
   packaged.setAutoUpdatesEnabled(true);
   assert.equal((await packaged.getUpdateStatus()).isSupported, false);
 
-  packaged.checkForUpdatesOnStartup();
-  t.mock.timers.tick(STARTUP_DELAY_MS + PERIODIC_INTERVAL_MS);
   assert.equal(autoUpdater.calls, 0, "no automatic checks are scheduled");
 
   const result = await packaged.checkForUpdates();
