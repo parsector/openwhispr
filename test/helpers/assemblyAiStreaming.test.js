@@ -2,8 +2,15 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { once } = require("node:events");
 const { WebSocketServer } = require("ws");
+const Module = require("node:module");
 
+const originalLoad = Module._load;
+Module._load = function loadWithElectronMock(request, parent, isMain) {
+  if (request === "electron") return { app: { isReady: () => false, isPackaged: false } };
+  return originalLoad.call(this, request, parent, isMain);
+};
 const AssemblyAiStreaming = require("../../src/helpers/assemblyAiStreaming");
+Module._load = originalLoad;
 const { audioRecorder } = require("./harness/audioRecorder");
 const { deferred } = require("./harness/deferred");
 
