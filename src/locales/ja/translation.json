@@ -4038,7 +4038,31 @@
       "oauthTitle": "OAuth でログイン",
       "oauthDescription": "OAuth 対応のクライアントにサーバー URL を追加し、OpenWhispr にログインしてアクセスを許可します。API キーは不要です。",
       "apiKeyTitle": "API キーを使用",
-      "apiKeyDescription": "リクエストヘッダーに対応するクライアントでは、必要な権限を持つ個人用 API キーを作成し、以下のヘッダーを使用してください。"
+      "apiKeyDescription": "リクエストヘッダーに対応するクライアントでは、必要な権限を持つ個人用 API キーを作成し、以下のヘッダーを使用してください。",
+      "servers": {
+        "title": "Servers",
+        "description": "Connect tools from your own MCP servers. This works while signed out.",
+        "oneServer": "Paste one server in an mcpServers object.",
+        "confirmCommand": "Confirm this command, arguments and working directory:",
+        "enabled": "Enabled",
+        "allowWithoutAsking": "Allow without asking",
+        "confirm": "Confirm command",
+        "edit": "Edit",
+        "remove": "Remove",
+        "removeConfirm": "Remove {{name}}?",
+        "add": "Add server",
+        "form": "Form",
+        "json": "mcpServers JSON",
+        "name": "Server name",
+        "command": "Command",
+        "args": "Arguments as JSON array",
+        "url": "HTTP URL (leave blank for stdio)",
+        "cwd": "Working directory",
+        "env": "Environment variables as JSON object",
+        "headers": "HTTP headers as JSON object",
+        "secrets": "Secret fields as JSON, for example {\"env.API_KEY\":\"value\"}",
+        "save": "Save server"
+      }
     },
     "cli": {
       "description": "ターミナルからアシスタントにメモへのアクセスを許可します。",

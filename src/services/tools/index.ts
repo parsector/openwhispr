@@ -35,6 +35,7 @@ interface ToolRegistrySettings {
   connectors?: ConnectorToolSettings;
   /** Leaves out update_note, for a turn that must not change any note. */
   keepNotesUnchanged?: boolean;
+  mcpTools?: import("./ToolRegistry").ToolDefinition[];
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -67,6 +68,10 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   }
 
   if (settings.connectors) registerConnectorTools(registry, settings.connectors);
+  for (const tool of settings.mcpTools || []) {
+    if (registry.get(tool.name)) throw new Error(`MCP tool name collision: ${tool.name}`);
+    registry.register(tool);
+  }
 
   return registry;
 }
