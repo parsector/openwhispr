@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { ExternalLink, Sparkles } from "../icons";
+import { ExternalLink } from "../icons";
 import { Button } from "../ui/button";
 
 interface IntegrationsPaneProps {
@@ -49,25 +49,6 @@ export function IntegrationsPane({
         )}
       </div>
       {children}
-    </div>
-  );
-}
-
-interface UpsellBarProps {
-  message: string;
-  onUpgrade: () => void;
-}
-
-/** Shown under a section's header when the user's plan doesn't include it. */
-export function UpsellBar({ message, onUpgrade }: UpsellBarProps): ReactElement {
-  const { t } = useTranslation();
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-primary/20 dark:border-primary/30 bg-primary/5 dark:bg-primary/10 ps-3.5 pe-2 py-2">
-      <Sparkles size={15} className="shrink-0 text-primary" />
-      <p className="flex-1 min-w-0 text-xs text-foreground/85 leading-relaxed">{message}</p>
-      <Button size="sm" onClick={onUpgrade} className="shrink-0">
-        {t("integrations.api.viewPlans")}
-      </Button>
     </div>
   );
 }

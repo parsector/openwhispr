@@ -1,7 +1,6 @@
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { BookOpen } from "../icons";
-import { Badge } from "../ui/badge";
 import { cn } from "../lib/utils";
 import {
   INTEGRATIONS_SECTION_GROUPS,
@@ -20,20 +19,12 @@ interface IntegrationsNavProps {
 }
 
 function SectionMetaTag({ meta }: { meta: SectionMeta | null }): ReactElement | null {
-  const { t } = useTranslation();
   if (!meta) return null;
-  if (meta.kind === "count") {
-    return (
-      <span className="ms-auto flex items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground">
-        <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
-        {meta.value}
-      </span>
-    );
-  }
   return (
-    <Badge variant="outline" className="ms-auto text-[10px] px-1.5 py-0 font-normal">
-      {meta.badge === "pro" ? t("integrations.plan.pro") : t("integrations.cli.local.freeBadge")}
-    </Badge>
+    <span className="ms-auto flex items-center gap-1.5 text-[11px] tabular-nums text-muted-foreground">
+      <span className="h-1.5 w-1.5 rounded-full bg-success" aria-hidden="true" />
+      {meta.value}
+    </span>
   );
 }
 

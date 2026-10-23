@@ -51,6 +51,14 @@ const MOCKS = {
       return React.createElement("div", null, "API KEYS SECTION create:" + createRequest);
     }
   `,
+  "/McpServers": `
+    import React from "react";
+    export function McpServers() { return React.createElement("div", null, "LOCAL MCP SERVERS"); }
+  `,
+  "/LocalMcpBlock": `
+    import React from "react";
+    export function LocalMcpBlock() { return React.createElement("div", null, "LOCAL MCP BLOCK"); }
+  `,
   "/integrations/CalendarsPane": `
     import React from "react";
     export function CalendarsPane() { return React.createElement("div", null, "CALENDARS PANE"); }
@@ -155,22 +163,20 @@ async function renderView(
   const { default: IntegrationsView } = await vite.ssrLoadModule(
     "/components/IntegrationsView.tsx"
   );
-  const upgrades = { count: 0 };
   function Harness() {
     const [current, setCurrent] = React.useState(section);
     return createElement(IntegrationsView, {
       isPaid,
-      onUpgrade: () => upgrades.count++,
       section: current,
       onSectionChange: setCurrent,
     });
   }
   root = createRoot(container);
   await React.act(async () => root.render(createElement(Harness)));
-  return { container, upgrades, openedUrls };
+  return { container, openedUrls };
 }
 
-test("sectionMeta shows counts on a paid plan and plan badges on a free one", async (t) => {
+test("sectionMeta shows counts without plan badges", async (t) => {
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-integrations-sections-test-",
   });
@@ -188,11 +194,11 @@ test("sectionMeta shows counts on a paid plan and plan badges on a free one", as
   assert.equal(sectionMeta("mcp", paid), null);
   assert.equal(sectionMeta("cli", paid), null);
 
-  assert.deepEqual(sectionMeta("connectors", free), { kind: "badge", badge: "pro" });
+  assert.equal(sectionMeta("connectors", free), null);
   assert.deepEqual(sectionMeta("calendars", free), { kind: "count", value: 1 });
-  assert.deepEqual(sectionMeta("api", free), { kind: "badge", badge: "pro" });
+  assert.equal(sectionMeta("api", free), null);
   assert.equal(sectionMeta("mcp", free), null);
-  assert.deepEqual(sectionMeta("cli", free), { kind: "badge", badge: "free" });
+  assert.equal(sectionMeta("cli", free), null);
 
   assert.equal(sectionMeta("connectors", empty), null);
   assert.equal(sectionMeta("calendars", empty), null);
@@ -320,37 +326,23 @@ test("the Connectors tag follows the plan check the Connectors pane uses", async
 
   assert.equal(
     label(navButton(container, "connectors")),
-    "integrations.nav.sections.connectorsintegrations.plan.pro"
+    "integrations.nav.sections.connectors"
   );
   assert.equal(label(navButton(container, "api")), "integrations.nav.sections.api");
 });
 
-test("a free plan sees plan badges, the API upsell, and no key list", async (t) => {
-  const { container, upgrades } = await renderView(t, { isPaid: false, section: "api" });
-
-  assert.equal(
-    label(navButton(container, "connectors")),
-    "integrations.nav.sections.connectorsintegrations.plan.pro"
-  );
-  assert.equal(
-    label(navButton(container, "mcp")),
-    "integrations.nav.sections.mcp"
-  );
-  assert.equal(
-    label(navButton(container, "cli")),
-    "integrations.nav.sections.cliintegrations.cli.local.freeBadge"
-  );
-  assert.match(shownText(container), /integrations\.api\.proRequired/);
-  assert.doesNotMatch(container.textContent, /API KEYS SECTION/);
-
-  await React.act(async () => click(buttonWithText(container, "integrations.api.viewPlans")));
-  assert.equal(upgrades.count, 1);
+test("a locked API shows a neutral notice and no key list", async (t) => {
+  const { container } = await renderView(t, { isPaid: false, section: "api" });
+  assert.equal(label(navButton(container, "connectors")), "integrations.nav.sections.connectors");
+  assert.equal(label(navButton(container, "cli")), "integrations.nav.sections.cli");
+  assert.match(shownText(container), /common\.unavailableInBuild/);
+  assert.doesNotMatch(container.textContent, /API KEYS SECTION|integrations\.api\.viewPlans/);
 });
 
 test("a free plan still sees MCP's setup steps, with Create API key disabled", async (t) => {
   const { container } = await renderView(t, { isPaid: false, section: "mcp" });
 
-  assert.match(container.textContent, /integrations\.mcp\.proRequired/);
+  assert.match(container.textContent, /common\.unavailableInBuild/);
   assert.match(container.textContent, /https:\/\/mcp\.openwhispr\.com\/mcp/);
   assert.notEqual(
     buttonWithText(container, "apiKeysSection.createButton").getAttribute("disabled"),
