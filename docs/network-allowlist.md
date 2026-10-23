@@ -3,7 +3,7 @@
 Outbound hosts the OpenWhispr desktop app contacts. For firewall, proxy, and
 DNS filter configuration.
 
-All connections are client-initiated over TLS. No inbound ports.
+Outbound connections are client-initiated. No non-loopback inbound ports: the local MCP server and CLI bridge listen on loopback.
 
 ## Required by default
 
@@ -12,9 +12,8 @@ onboarding).
 
 | Host                                          | Protocol | Port | Purpose                                                                            |
 | --------------------------------------------- | -------- | ---- | ---------------------------------------------------------------------------------- |
-| `api.openwhispr.com`                          | HTTPS    | 443  | Cloud API: transcription, sync, agent reasoning, settings, usage.                  |
+| `api.openwhispr.com`                          | HTTPS    | 443  | Cloud API: transcription, optional sync, agent reasoning, and settings.                  |
 | `auth.openwhispr.com`                         | HTTPS    | 443  | Account sign-in and session refresh (Better Auth).                                 |
-| `github.com`, `objects.githubusercontent.com` | HTTPS    | 443  | Application auto-update (release artifacts via electron-updater, GitHub provider). |
 
 ## Required for streaming transcription
 
@@ -94,6 +93,26 @@ provider. Skip any provider not in use.
 | `streaming.assemblyai.com`                                                       | WSS, HTTPS | 443  | AssemblyAI API key configured. `/v3/token` mints the short-lived session token over HTTPS; the live session is WSS. Realtime-only, like Deepgram.                                                                                                                                                                                                        |
 | `api.assemblyai.com`                                                             | HTTPS      | 443  | AssemblyAI API key configured. Credential check when onboarding or Settings checks the key (`/v2/transcript`).                                                                                                                                                                                                                                           |
 | `openrouter.ai`                                                                  | HTTPS      | 443  | OpenRouter selected as a reasoning provider (`/api/v1/models` is fetched even without a key; the key check calls `/api/v1/key`).                                                                                                                                                                                                                         |
+
+## User-configured MCP clients (optional)
+
+When you add an HTTP MCP server, the app connects to the host and port in the
+URL you supplied. Allowlist those user-configured MCP client hosts as needed.
+Stdio MCP servers launch local commands and need no outbound host unless the
+command itself makes network requests.
+
+| Host | Protocol | Port | Purpose |
+| ---- | -------- | ---- | ------- |
+| _User-configured MCP server hosts_ | HTTP or HTTPS | Configured port | MCP tools and resources selected by the user. |
+
+## Manual update check (optional)
+
+The fork does not check for updates automatically. A manual check contacts the
+upstream GitHub release feed; its artifacts cannot update this unsigned fork.
+
+| Host | Protocol | Port | Purpose |
+| ---- | -------- | ---- | ------- |
+| `github.com`, `objects.githubusercontent.com` | HTTPS | 443 | Manual release feed check. |
 
 ## Notes
 
