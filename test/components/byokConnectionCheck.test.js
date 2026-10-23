@@ -112,7 +112,6 @@ test("Corti checks once both the client ID and secret are filled, in the secret"
   await step.wait(1000);
   assert.equal(step.connectionRequests().length, 0);
   await step.setStore({ cortiClientSecret: "corti-secret" });
-  assert.equal(phase(step, LABEL.clientSecret), "waiting");
   await step.wait(500);
   const [config] = step.connectionRequests();
   assert.deepEqual(

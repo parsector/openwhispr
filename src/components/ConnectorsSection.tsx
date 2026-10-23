@@ -52,7 +52,7 @@ export function ConnectorsSection(): ReactElement {
     return t(`connectors.email.targets.${option}`);
   };
 
-  // A free plan sees what drafting does, dimmed; the one upsell sits above the list.
+  // A free plan sees what drafting does, dimmed, with a neutral notice above the list.
   const locked = !isPaid && !blockedByOrg;
   const description = blockedByOrg
     ? t("connectors.policyOff")
