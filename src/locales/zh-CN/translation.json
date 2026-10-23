@@ -4004,6 +4004,24 @@
       "useWith": "密钥可用于"
     },
     "mcp": {
+      "local": {
+        "title": "Local server",
+        "description": "Let apps on this computer read your local notes while OpenWhispr is running. No sign-in or paid plan required.",
+        "enable": "Enable local server",
+        "copyUrl": "Copy local MCP URL",
+        "tokens": "Access tokens",
+        "tokenLabel": "Token name",
+        "create": "Create token",
+        "shownOnce": "Copy this token now. It will not be shown again.",
+        "copyToken": "Copy token",
+        "dismiss": "Dismiss",
+        "noTokens": "No tokens yet.",
+        "created": "Created",
+        "lastUsed": "Last used",
+        "revoke": "Revoke",
+        "activity": "Recent reads",
+        "noActivity": "No external reads yet."
+      },
       "description": "在 Claude、ChatGPT 和 Cursor 中与你的笔记一起聊天、搜索和工作。",
       "step1": "在你的 AI 工具中，使用公开 URL 添加 OpenWhispr MCP",
       "proRequired": "升级到付费计划，以将 OpenWhispr 连接到 Claude、ChatGPT 和 Cursor。",
