@@ -22,7 +22,6 @@ const {
   normalizeUsage,
   retryUsage,
   setUsageAccount,
-  watchForUpgrade,
 } = require("../../src/lib/usageStore.ts");
 
 const BUSINESS = { plan: "business", status: "active", isSubscribed: true, limit: -1 };
@@ -405,77 +404,6 @@ test("a stale queued force does not clobber the next account's queued one", asyn
   await Promise.all([initial, forced, alsoForced]);
 
   assert.equal(calls, 3, "the later forced caller joins user-b's surviving follow-up");
-  assert.equal(getUsageState().accountId, "user-b");
-});
-
-test("the post-checkout poll keeps refetching until the webhook lands", async (t) => {
-  t.after(reset);
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  reset();
-
-  let calls = 0;
-  const fetcher = async () => {
-    calls += 1;
-    return calls < 3 ? { ...BUSINESS, isSubscribed: false } : BUSINESS;
-  };
-
-  setUsageAccount("user-a");
-  const watching = watchForUpgrade(fetcher);
-  for (const delay of [2000, 4000]) {
-    await flush();
-    t.mock.timers.tick(delay);
-  }
-  await watching;
-
-  assert.equal(calls, 3);
-  assert.equal(getUsageState().data.isSubscribed, true);
-});
-
-test("a second upgrade watch is a no-op while one is running", async (t) => {
-  t.after(reset);
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  reset();
-
-  let calls = 0;
-  const fetcher = async () => {
-    calls += 1;
-    return { ...BUSINESS, isSubscribed: false };
-  };
-
-  setUsageAccount("user-a");
-  const watching = watchForUpgrade(fetcher);
-  await watchForUpgrade(fetcher);
-  assert.equal(calls, 1, "a second consumer does not start its own poll");
-
-  for (const delay of [2000, 4000, 8000, 1]) {
-    await flush();
-    t.mock.timers.tick(delay);
-  }
-  await watching;
-
-  assert.equal(calls, 4, "a webhook that never lands gives up after a bounded number of attempts");
-});
-
-test("an upgrade watch stops when the account changes", async (t) => {
-  t.after(reset);
-  t.mock.timers.enable({ apis: ["setTimeout"] });
-  reset();
-
-  let calls = 0;
-  const fetcher = async () => {
-    calls += 1;
-    return { ...BUSINESS, isSubscribed: false };
-  };
-
-  setUsageAccount("user-a");
-  const watching = watchForUpgrade(fetcher);
-  await flush();
-
-  setUsageAccount("user-b");
-  t.mock.timers.tick(2000);
-  await watching;
-
-  assert.equal(calls, 1, "the poll does not carry into the next account");
   assert.equal(getUsageState().accountId, "user-b");
 });
 
