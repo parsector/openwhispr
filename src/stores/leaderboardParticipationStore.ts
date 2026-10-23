@@ -181,6 +181,7 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         return true;
       } catch (error) {
         console.error("Leaving the leaderboard failed:", error);
+        localStorage.removeItem(participationKey(context.userId));
         // The opt-out is kept and retried until the account takes it, so this
         // device stops showing the user as participating straight away rather
         // than asking them to remember to try again — and says the leave is
