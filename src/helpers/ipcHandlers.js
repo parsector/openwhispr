@@ -7,6 +7,7 @@ const os = require("os");
 const { isRestorablePasteTarget } = require("./windowsPasteTarget");
 const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
+const { searchNotes } = require("../services/mcp/server/searchNotes");
 const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
@@ -2354,67 +2355,13 @@ class IPCHandlers {
       return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
     });
 
-    ipcMain.handle(
-      "db-semantic-search-notes",
-      async (event, query, limit = 5, spaceId, folderId) => {
-        try {
-          // Qdrant payload updates are best-effort. Use its space filter to
-          // reduce the candidate set, then validate every scoped vector hit
-          // against SQLite before it can enter the fused ranking.
-          const overFetch = folderId != null ? limit * 4 : limit * 2;
-          const vectorFilter =
-            spaceId != null
-              ? { must: [{ key: "space_id", match: { value: spaceId } }] }
-              : undefined;
-          const [ftsResults, vectorResults] = await Promise.all([
-            this.databaseManager.searchNotes(query, overFetch, spaceId, folderId),
-            this.getSemanticSearch?.()?.search(query, overFetch, vectorFilter),
-          ]);
-          if (vectorResults == null) return ftsResults.slice(0, limit);
-          const scopedIds = new Set(
-            this.databaseManager.getNoteIdsInScope(
-              spaceId,
-              folderId,
-              vectorResults.map(({ noteId }) => noteId)
-            )
-          );
-
-          // Filter low-confidence semantic matches before RRF
-          const filteredVectorResults = vectorResults.filter(
-            ({ noteId, score }) => score > 0.3 && scopedIds.has(noteId)
-          );
-
-          // Reciprocal Rank Fusion (K=60, matching cloud implementation)
-          const scores = new Map();
-          ftsResults.forEach((note, i) => {
-            scores.set(note.id, (scores.get(note.id) || 0) + 1 / (60 + i));
-          });
-          filteredVectorResults.forEach(({ noteId }, i) => {
-            scores.set(noteId, (scores.get(noteId) || 0) + 1 / (60 + i));
-          });
-
-          const rankedIds = [...scores.entries()]
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, limit)
-            .map(([id]) => id);
-
-          const noteMap = new Map();
-          ftsResults.forEach((n) => noteMap.set(n.id, n));
-          for (const id of rankedIds) {
-            if (!noteMap.has(id)) {
-              const note = this.databaseManager.getNote(id);
-              if (note) noteMap.set(id, note);
-            }
-          }
-
-          return rankedIds.map((id) => noteMap.get(id)).filter(Boolean);
-        } catch (error) {
-          debugLogger.error("Semantic search failed, falling back to FTS5", {
-            error: error.message,
-          });
-          return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
-        }
-      }
+    ipcMain.handle("db-semantic-search-notes", (_event, query, limit = 5, spaceId, folderId) =>
+      searchNotes({
+        database: this.databaseManager,
+        getSemanticSearch: this.getSemanticSearch,
+        query, limit, spaceId, folderId,
+        logger: debugLogger,
+      })
     );
 
     ipcMain.handle("db-update-note-cloud-id", async (event, id, cloudId) => {
