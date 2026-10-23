@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { useAuth } from "./useAuth";
 import { withSessionRefresh } from "../lib/auth";
 import {
@@ -9,14 +9,13 @@ import {
   setUsageAccount,
   storeBillingOf,
   subscribeUsage,
-  watchForUpgrade,
   type StoreBilling,
   type UsageResponse,
   type UsageState,
 } from "../lib/usageStore";
 
 export interface UseUsageResult {
-  /** Entitlement is only known when this is `"success"`. Gate billing UI on it. */
+  /** Entitlement is only known when this is `"success"`. */
   status: UsageState["status"];
   isRefreshing: boolean;
   isRetrying: boolean;
@@ -38,7 +37,7 @@ export interface UseUsageResult {
   limit: number;
   isSubscribed: boolean;
   isPersonallySubscribed: boolean;
-  /** Set when the plan was bought in the mobile app; manage it in the store, never through Stripe. */
+  /** Set when the plan was bought in the mobile app. */
   storeBilling: StoreBilling | null;
   entitledWorkspaceIds: string[];
   isTrial: boolean;
@@ -48,29 +47,6 @@ export interface UseUsageResult {
   isOverLimit: boolean;
   isApproachingLimit: boolean;
   resetAt: string | null;
-  /** Any Stripe action — checkout, switch-plan or portal — is in flight; they share one guard. */
-  checkoutLoading: boolean;
-  openCheckout: (opts?: {
-    plan?: "monthly" | "annual";
-    tier?: "pro" | "business";
-  }) => Promise<{ success: boolean; error?: string }>;
-  openBillingPortal: () => Promise<{ success: boolean; error?: string; code?: string }>;
-  switchPlan: (opts: {
-    plan: "monthly" | "annual";
-    tier: "pro" | "business";
-  }) => Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }>;
-  previewSwitchPlan: (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => Promise<{
-    success: boolean;
-    immediateAmount?: number;
-    currency?: string;
-    currentPriceAmount?: number;
-    currentInterval?: string;
-    newPriceAmount?: number;
-    newInterval?: string;
-    nextBillingDate?: string;
-    alreadyOnPlan?: boolean;
-    error?: string;
-  }>;
 }
 
 async function fetchUsageResponse(): Promise<UsageResponse> {
@@ -90,9 +66,6 @@ async function fetchUsageResponse(): Promise<UsageResponse> {
 export function useUsage(): UseUsageResult | null {
   const { isSignedIn, isLoaded, user } = useAuth();
   const state = useSyncExternalStore(subscribeUsage, getUsageState);
-  const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const checkoutInFlightRef = useRef(false);
-  const pendingRefetchRef = useRef(false);
 
   const accountId = isSignedIn ? (user?.id ?? null) : null;
 
@@ -106,119 +79,17 @@ export function useUsage(): UseUsageResult | null {
 
     void loadUsage(fetchUsageResponse);
 
-    const handleFocus = () => {
-      if (!pendingRefetchRef.current) return;
-      pendingRefetchRef.current = false;
-      void loadUsage(fetchUsageResponse, { force: true });
-    };
     const handleUsageChanged = () => {
       void loadUsage(fetchUsageResponse, { force: true });
     };
-    const handleUpgradeSuccess = () => {
-      void watchForUpgrade(fetchUsageResponse);
-    };
-    window.addEventListener("focus", handleFocus);
     window.addEventListener("usage-changed", handleUsageChanged);
-    window.addEventListener("upgrade-success", handleUpgradeSuccess);
     return () => {
-      window.removeEventListener("focus", handleFocus);
       window.removeEventListener("usage-changed", handleUsageChanged);
-      window.removeEventListener("upgrade-success", handleUpgradeSuccess);
     };
   }, [isLoaded, accountId]);
 
   const refetch = useCallback(() => loadUsage(fetchUsageResponse, { force: true }), []);
   const retry = useCallback(() => retryUsage(fetchUsageResponse), []);
-
-  const openCheckout = useCallback(
-    async (opts?: {
-      plan?: "monthly" | "annual";
-      tier?: "pro" | "business";
-    }): Promise<{ success: boolean; error?: string }> => {
-      if (checkoutInFlightRef.current)
-        return { success: false, error: "Checkout already in progress" };
-      if (!window.electronAPI?.cloudCheckout || !window.electronAPI?.openExternal) {
-        return { success: false, error: "App not ready" };
-      }
-      checkoutInFlightRef.current = true;
-      setCheckoutLoading(true);
-      try {
-        const result = await window.electronAPI.cloudCheckout(opts);
-        if (result.success && result.url) {
-          pendingRefetchRef.current = true;
-          await window.electronAPI.openExternal(result.url);
-          return { success: true };
-        }
-        return { success: false, error: result.error || "Failed to start checkout" };
-      } finally {
-        checkoutInFlightRef.current = false;
-        setCheckoutLoading(false);
-      }
-    },
-    []
-  );
-
-  const openBillingPortal = useCallback(async (): Promise<{
-    success: boolean;
-    error?: string;
-    code?: string;
-  }> => {
-    if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
-    if (!window.electronAPI?.cloudBillingPortal || !window.electronAPI?.openExternal) {
-      return { success: false, error: "App not ready" };
-    }
-    checkoutInFlightRef.current = true;
-    setCheckoutLoading(true);
-    try {
-      const result = await window.electronAPI.cloudBillingPortal();
-      if (result.success && result.url) {
-        pendingRefetchRef.current = true;
-        await window.electronAPI.openExternal(result.url);
-        return { success: true };
-      }
-      return {
-        success: false,
-        error: result.error || "Failed to open billing portal",
-        code: result.code,
-      };
-    } finally {
-      checkoutInFlightRef.current = false;
-      setCheckoutLoading(false);
-    }
-  }, []);
-
-  const switchPlan = useCallback(
-    async (opts: {
-      plan: "monthly" | "annual";
-      tier: "pro" | "business";
-    }): Promise<{ success: boolean; alreadyOnPlan?: boolean; error?: string }> => {
-      if (checkoutInFlightRef.current) return { success: false, error: "Already loading" };
-      if (!window.electronAPI?.cloudSwitchPlan) {
-        return { success: false, error: "App not ready" };
-      }
-      checkoutInFlightRef.current = true;
-      setCheckoutLoading(true);
-      try {
-        const result = await window.electronAPI.cloudSwitchPlan(opts);
-        if (result.success) await refetch();
-        return result;
-      } finally {
-        checkoutInFlightRef.current = false;
-        setCheckoutLoading(false);
-      }
-    },
-    [refetch]
-  );
-
-  const previewSwitchPlan = useCallback(
-    async (opts: { plan: "monthly" | "annual"; tier: "pro" | "business" }) => {
-      if (!window.electronAPI?.cloudPreviewSwitch) {
-        return { success: false as const, error: "App not ready" };
-      }
-      return window.electronAPI.cloudPreviewSwitch(opts);
-    },
-    []
-  );
 
   if (!isSignedIn) return null;
 
@@ -257,10 +128,5 @@ export function useUsage(): UseUsageResult | null {
     isOverLimit,
     isApproachingLimit,
     resetAt: data?.resetAt ?? null,
-    checkoutLoading,
-    openCheckout,
-    openBillingPortal,
-    switchPlan,
-    previewSwitchPlan,
   };
 }
