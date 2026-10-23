@@ -2223,8 +2223,6 @@
       "leaderboardDescription": "在符合條件的工作區與工作網域排行榜中顯示你的姓名、電子郵件和活動。轉錄內容維持私密。",
       "leaderboardRequiresAccount": "登入後即可管理排行榜參與狀態。",
       "leaderboardRequiresHistory": "加入排行榜前，請先開啟資料保留。",
-      "usageAnalytics": "使用分析",
-      "usageAnalyticsDescription": "分享匿名的效能指標，協助我們改善 OpenWhispr。我們絕不會傳送轉錄內容——只有計時和錯誤資料。",
       "dataRetention": "資料保留",
       "dataRetentionDescription": "將轉錄和音訊本地儲存至歷史記錄。停用後，轉錄內容會被貼上但不會被儲存。",
       "transcriptRetention": "轉錄保留",

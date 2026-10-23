@@ -1230,8 +1230,6 @@ export default function SettingsPage({
     cloudBackupEnabled,
     setCloudBackupEnabled,
     insightsSyncEnabled,
-    telemetryEnabled,
-    setTelemetryEnabled,
     audioRetentionDays,
     setAudioRetentionDays,
     transcriptRetentionDays,
@@ -4309,14 +4307,7 @@ EOF`,
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
-                <SettingsPanelRow>
-                  <SettingsRow
-                    label={t("settingsPage.privacy.usageAnalytics")}
-                    description={t("settingsPage.privacy.usageAnalyticsDescription")}
-                  >
-                    <Toggle checked={telemetryEnabled} onChange={setTelemetryEnabled} />
-                  </SettingsRow>
-                </SettingsPanelRow>
+
               </SettingsPanel>
             </div>
 

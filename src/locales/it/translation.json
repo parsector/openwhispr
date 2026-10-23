@@ -2223,8 +2223,6 @@
       "leaderboardDescription": "Mostra il tuo nome, l'indirizzo email e la tua attività nelle classifiche degli spazi di lavoro e dei domini aziendali idonei. Le trascrizioni restano private.",
       "leaderboardRequiresAccount": "Accedi per gestire la partecipazione alle classifiche.",
       "leaderboardRequiresHistory": "Attiva la conservazione dei dati prima di partecipare alle classifiche.",
-      "usageAnalytics": "Analisi dell'utilizzo",
-      "usageAnalyticsDescription": "Aiutaci a migliorare OpenWhispr condividendo metriche di prestazione anonime. Non inviamo mai il contenuto delle trascrizioni, solo dati su tempi ed errori.",
       "dataRetention": "Conservazione dei dati",
       "dataRetentionDescription": "Salva trascrizioni e audio localmente nella cronologia. Se disattivato, le trascrizioni vengono incollate ma non salvate.",
       "transcriptRetention": "Conservazione delle trascrizioni",
