@@ -4090,7 +4090,31 @@
       "oauthTitle": "Iniciar sesión con OAuth",
       "oauthDescription": "En un cliente compatible con OAuth, añade la URL del servidor, inicia sesión en OpenWhispr y autoriza el acceso. No necesitas una clave API.",
       "apiKeyTitle": "Usar una clave API",
-      "apiKeyDescription": "Para clientes que acepten encabezados de solicitud, crea una clave API personal con los permisos necesarios y usa el encabezado siguiente."
+      "apiKeyDescription": "Para clientes que acepten encabezados de solicitud, crea una clave API personal con los permisos necesarios y usa el encabezado siguiente.",
+      "servers": {
+        "title": "Servers",
+        "description": "Connect tools from your own MCP servers. This works while signed out.",
+        "oneServer": "Paste one server in an mcpServers object.",
+        "confirmCommand": "Confirm this command, arguments and working directory:",
+        "enabled": "Enabled",
+        "allowWithoutAsking": "Allow without asking",
+        "confirm": "Confirm command",
+        "edit": "Edit",
+        "remove": "Remove",
+        "removeConfirm": "Remove {{name}}?",
+        "add": "Add server",
+        "form": "Form",
+        "json": "mcpServers JSON",
+        "name": "Server name",
+        "command": "Command",
+        "args": "Arguments as JSON array",
+        "url": "HTTP URL (leave blank for stdio)",
+        "cwd": "Working directory",
+        "env": "Environment variables as JSON object",
+        "headers": "HTTP headers as JSON object",
+        "secrets": "Secret fields as JSON, for example {\"env.API_KEY\":\"value\"}",
+        "save": "Save server"
+      }
     },
     "cli": {
       "description": "Dale a tu asistente acceso a tus notas desde la terminal.",
