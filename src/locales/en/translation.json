@@ -4000,7 +4000,8 @@
         "calendars": "Calendars",
         "api": "API keys",
         "mcp": "MCP server",
-        "cli": "Command line"
+        "cli": "Command line",
+        "agents": "Agents"
       },
       "docs": "Integration docs"
     },
@@ -4869,6 +4870,56 @@
       "started": "Started",
       "failed": "Failed",
       "cancelled": "Cancelled"
+    },
+    "pane": {
+      "description": "Manage local coding agents for configured projects. Jobs run only after you approve them.",
+      "projects": "Projects",
+      "addProject": "Add project",
+      "noProjects": "No projects configured.",
+      "readOnly": "Read only",
+      "defaultModel": "Default model",
+      "edit": "Edit",
+      "remove": "Remove",
+      "editProject": "Edit project",
+      "name": "Name",
+      "folder": "Folder",
+      "browse": "Browse",
+      "harness": "Harness",
+      "mode": "Mode",
+      "model": "Model",
+      "fullModelName": "Full model name",
+      "optional": "Optional",
+      "testHarness": "Test harness",
+      "save": "Save",
+      "jobs": "Jobs",
+      "noJobs": "No jobs yet.",
+      "progress": "Progress",
+      "queuePosition": "Queue position {{position}}",
+      "openNote": "Open note",
+      "stallWarning": "no output for 20 minutes",
+      "status": {
+        "pending": "Pending",
+        "queued": "Queued",
+        "running": "Running",
+        "done": "Done",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      },
+      "auth": {
+        "authenticated": "Authenticated",
+        "not_authenticated": "Not authenticated",
+        "unknown": "Authentication state unavailable"
+      },
+      "failure": {
+        "notAuthenticated": "Sign in to Claude to run this job.",
+        "interrupted": "The job was interrupted.",
+        "cancelled": "The job was cancelled."
+      }
+    },
+    "toast": {
+      "done": "Agent job finished for {{project}}",
+      "failed": "Agent job failed for {{project}}",
+      "unknownError": "The job failed."
     }
   }
 }

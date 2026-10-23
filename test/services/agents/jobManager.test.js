@@ -104,6 +104,7 @@ test("success saves private note and failure saves none", async (t) => {
   const success = (await manager.prepare({ project: "openwhispr", task: "okay" })).jobId;
   await manager.approve(success);
   await until(() => manager.get(success).status === "done");
+  assert.equal(manager.get(success).noteId, 1);
   assert.equal(notes[0][6], 7);
   assert.equal(notes[0][5], 9);
   const failure = (await manager.prepare({ project: "openwhispr", task: "fail" })).jobId;

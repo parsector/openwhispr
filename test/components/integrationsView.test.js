@@ -193,12 +193,14 @@ test("sectionMeta shows counts without plan badges", async (t) => {
   assert.equal(sectionMeta("api", paid), null);
   assert.equal(sectionMeta("mcp", paid), null);
   assert.equal(sectionMeta("cli", paid), null);
+  assert.equal(sectionMeta("agents", paid), null);
 
   assert.equal(sectionMeta("connectors", free), null);
   assert.deepEqual(sectionMeta("calendars", free), { kind: "count", value: 1 });
   assert.equal(sectionMeta("api", free), null);
   assert.equal(sectionMeta("mcp", free), null);
   assert.equal(sectionMeta("cli", free), null);
+  assert.equal(sectionMeta("agents", free), null);
 
   assert.equal(sectionMeta("connectors", empty), null);
   assert.equal(sectionMeta("calendars", empty), null);
@@ -220,7 +222,7 @@ test("the nav lists every section and switches the pane it shows", async (t) => 
     }
     return false;
   });
-  assert.deepEqual(order, ["calendars", "connectors", "api", "mcp", "cli"]);
+  assert.deepEqual(order, ["calendars", "connectors", "api", "mcp", "cli", "agents"]);
   assert.equal(navButton(container, "connectors").getAttribute("aria-current"), "page");
   assert.match(container.textContent, /CONNECTORS SECTION/);
 
@@ -324,10 +326,7 @@ test("the Connectors tag follows the plan check the Connectors pane uses", async
     connectorAccess: { isPaid: false, blockedByOrg: false, connectorsAllowed: false },
   });
 
-  assert.equal(
-    label(navButton(container, "connectors")),
-    "integrations.nav.sections.connectors"
-  );
+  assert.equal(label(navButton(container, "connectors")), "integrations.nav.sections.connectors");
   assert.equal(label(navButton(container, "api")), "integrations.nav.sections.api");
 });
 

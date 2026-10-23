@@ -83,6 +83,7 @@ import { applyChineseScript, resolveChineseScriptTarget } from "../utils/chinese
 import { getAgentName } from "../utils/agentName";
 import HistoryView from "./HistoryView";
 import BackgroundActionToastListener from "./notes/BackgroundActionToastListener";
+import { AgentJobToastListener } from "./AgentJobToastListener";
 import AssistantNoteUndoListener from "./notes/AssistantNoteUndoListener";
 import { providerErrorToastProps } from "../utils/describeProviderError";
 import SpaceSyncToastListener from "./notes/SpaceSyncToastListener";
@@ -325,15 +326,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [updateStatus.updateDownloaded, isDownloading, toast, t]);
 
   useEffect(() => {
-    const dispose = window.electronAPI?.onLimitReached?.(
-      () => {
-        toast({
-          title: t("controlPanel.limit.weeklyTitle"),
-          description: t("controlPanel.limit.weeklyDescription"),
-          duration: 5000,
-        });
-      }
-    );
+    const dispose = window.electronAPI?.onLimitReached?.(() => {
+      toast({
+        title: t("controlPanel.limit.weeklyTitle"),
+        description: t("controlPanel.limit.weeklyDescription"),
+        duration: 5000,
+      });
+    });
 
     return () => {
       dispose?.();
@@ -1268,6 +1267,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         </main>
       </div>
       <BackgroundActionToastListener />
+      <AgentJobToastListener />
       <AssistantNoteUndoListener />
       <SpaceSyncToastListener />
     </div>
