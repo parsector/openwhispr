@@ -1,4 +1,5 @@
 import type { HoldDeliveryOptions, ToolExecutionContext } from "../../services/tools/ToolRegistry";
+import { createMcpTurnResultLimiter } from "../../services/tools/mcpTools";
 
 export interface ToolContextRequest {
   /** The assistant message the tool call belongs to. */
@@ -10,6 +11,7 @@ export interface ToolContextRequest {
 
 export interface ToolExecutionScope {
   createContext: (request: ToolContextRequest) => ToolExecutionContext;
+  setMcpResultBudget: (perResultBudget: number) => void;
   abort: () => void;
 }
 
@@ -28,6 +30,7 @@ interface ToolExecutionHandlers {
 export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): ToolExecutionScope {
   const controller = new AbortController();
   const turnSlots = new Map<string, number>();
+  let limitMcpResult: ((result: string) => string) | undefined;
   const notify =
     <Args extends unknown[]>(handler?: (...args: Args) => void) =>
     (...args: Args): void => {
@@ -69,7 +72,11 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       onHoldDelivery: holdOncePerCall(),
       claimTurnSlot,
       releaseTurnSlot,
+      limitMcpResult: (result) => limitMcpResult?.(result) ?? result,
     }),
+    setMcpResultBudget: (budget) => {
+      limitMcpResult = createMcpTurnResultLimiter(budget);
+    },
     abort: () => controller.abort(),
   };
 }
