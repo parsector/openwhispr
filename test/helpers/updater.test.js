@@ -54,17 +54,6 @@ function createUpdateManager(autoUpdater) {
   return new UpdateManager();
 }
 
-function makeRendererWindow(sent) {
-  return {
-    isDestroyed: () => false,
-    webContents: {
-      send(channel) {
-        sent.push(channel);
-      },
-    },
-  };
-}
-
 function setPlatform(platform) {
   Object.defineProperty(process, "platform", { value: platform, configurable: true });
 }

@@ -18,5 +18,10 @@ test('activation and remote analytics endpoints have no source call sites', () =
     const source = fs.readFileSync(file, 'utf8');
     assert.doesNotMatch(source, /\/api\/activation\//, file);
     assert.doesNotMatch(source, /\/api\/analytics\/(?:events|summary)/, file);
+    const analyticsPaths = source.match(/\/api\/analytics\/[a-z-]+/g) || [];
+    assert.deepEqual(analyticsPaths.filter((endpoint) => endpoint !== '/api/analytics/participation'), [], file);
+    if (file.endsWith('LeaderboardService.ts')) {
+      assert.doesNotMatch(source, /cloudPost(?:ForAuthGeneration)?/, file);
+    }
   }
 });
