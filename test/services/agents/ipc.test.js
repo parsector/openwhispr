@@ -141,7 +141,7 @@ test("discard IPC delegates a validated job id", async () => {
   await assert.rejects(handlers.get("agent-job-discard")(null, "../bad"), /Invalid name/);
 });
 
-test("job IPC hides CLI failure text unless debug is enabled", (t) => {
+test("job IPC keeps the redacted CLI message while gating raw reason", (t) => {
   const original = debugLogger.isDebugEnabled;
   t.after(() => {
     debugLogger.isDebugEnabled = original;
@@ -153,9 +153,9 @@ test("job IPC hides CLI failure text unless debug is enabled", (t) => {
     presetStore: {},
     resolver: {},
     manager: {
-      get: () => ({ jobId: "job-1", reason: "spawn /private/cli failed", lastError: "raw stderr" }),
+      get: () => ({ jobId: "job-1", reason: "spawn /private/cli failed", lastError: "CLI rejected request" }),
       list: () => [
-        { jobId: "job-1", reason: "spawn /private/cli failed", lastError: "raw stderr" },
+        { jobId: "job-1", reason: "spawn /private/cli failed", lastError: "CLI rejected request" },
       ],
     },
   });
@@ -163,15 +163,17 @@ test("job IPC hides CLI failure text unless debug is enabled", (t) => {
   assert.deepEqual(handlers.get("agent-job-get")(null, "job-1"), {
     jobId: "job-1",
     reason: "command_failed",
+    lastError: "CLI rejected request",
   });
   assert.deepEqual(handlers.get("agent-job-list")(), [
-    { jobId: "job-1", reason: "command_failed" },
+    { jobId: "job-1", reason: "command_failed", lastError: "CLI rejected request" },
   ]);
   debugLogger.isDebugEnabled = () => true;
   assert.deepEqual(handlers.get("agent-job-get")(null, "job-1"), {
     jobId: "job-1",
     reason: "command_failed",
-    debug: { reason: "spawn /private/cli failed", lastError: "raw stderr" },
+    lastError: "CLI rejected request",
+    debug: { reason: "spawn /private/cli failed" },
   });
 });
 

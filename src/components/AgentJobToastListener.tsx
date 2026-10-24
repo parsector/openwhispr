@@ -45,7 +45,7 @@ export function AgentJobToastListener() {
                 : t("agentJobs.toast.failed", { project: job.project.name }),
             description: failureDescription(
               job.reason || (job.status === "cancelled" ? "cancelled" : null),
-              job.debug?.lastError,
+              job.lastError,
               t,
               job.harness,
               job.mode === "write" ? job : undefined

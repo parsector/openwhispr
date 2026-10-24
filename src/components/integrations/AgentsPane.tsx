@@ -1029,7 +1029,7 @@ export function AgentsPane({ title }: { title: string }) {
                     <p role="alert" className="text-xs text-destructive whitespace-pre-line">
                       {failureDescription(
                         job.reason,
-                        job.debug?.lastError,
+                        job.lastError,
                         t,
                         job.harness,
                         job.mode === "write" ? job : undefined
@@ -1038,7 +1038,7 @@ export function AgentsPane({ title }: { title: string }) {
                   )}
                   {job.status === "cancelled" && job.mode === "write" && job.worktreeCreated && (
                     <p className="text-xs text-muted-foreground whitespace-pre-line">
-                      {failureDescription("cancelled", job.debug?.lastError, t, job.harness, job)}
+                      {failureDescription("cancelled", job.lastError, t, job.harness, job)}
                     </p>
                   )}
                   {(["pending", "queued", "running"] as const).includes(
