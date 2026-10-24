@@ -27,10 +27,16 @@ export function LocalApprovalCard({ entry }: { entry: LocalApprovalEntry }) {
     >
       <p className="text-sm font-medium">{entry.summary}</p>
       <p className="text-xs text-muted-foreground">
-        {entry.mode && entry.mode !== "write" &&
+        {entry.mode &&
+          entry.mode !== "write" &&
           `${t(entry.mode === "read-only" ? "agentJobs.pane.readOnly" : `agentJobs.mode.${entry.mode}`)} · `}
         {t(guaranteeKey(entry.harness, entry.mode))}
       </p>
+      {entry.authWarning && entry.harness === "claude" && (
+        <p className="text-xs text-warning" role="status">
+          {t("agentJobs.pane.authSoftWarning")}
+        </p>
+      )}
       {entry.mode === "write" && entry.branch && (
         <p className="text-xs text-muted-foreground break-all">
           {t("agentJobs.card.branch")}: {entry.branch}
@@ -67,7 +73,7 @@ export function LocalApprovalCard({ entry }: { entry: LocalApprovalEntry }) {
       )}
       {entry.error && (
         <p role="alert" className="text-xs text-destructive">
-          {entry.error}
+          {t("agentJobs.pane.actionError")}: {entry.error}
         </p>
       )}
     </section>

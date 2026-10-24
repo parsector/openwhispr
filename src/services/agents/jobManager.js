@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { redactOutput } = require("./redactOutput");
+const { safeModel } = require("./modelSafety");
 const { createWorktreeService, location } = require("./worktree");
 
 const EXPIRY_MS = 10 * 60 * 1000;
@@ -61,9 +62,10 @@ function createJobManager({
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  void worktreeService.sweep([...jobs.values()], now()).then(persist).catch((error) =>
-    console.warn("Agent worktree sweep failed", redactOutput(error.message))
-  );
+  void worktreeService
+    .sweep([...jobs.values()], now())
+    .then(persist)
+    .catch((error) => console.warn("Agent worktree sweep failed", redactOutput(error.message)));
   function update(job) {
     persist();
     broadcast("agent-job-updated", { ...job });
@@ -124,8 +126,7 @@ function createJobManager({
       !task.trim() ||
       task.length > 100_000 ||
       (harness !== undefined && !["claude", "cursor-agent"].includes(harness)) ||
-      (model !== undefined &&
-        (typeof model !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(model)))
+      (model !== undefined && !safeModel(model))
     )
       throw new Error("Invalid job request");
     if (!(await policyAllowed())) throw new Error("agent_disallowed");
@@ -145,8 +146,7 @@ function createJobManager({
         : !["plan", "ask"].includes(selectedMode))
     )
       throw new Error("Mode does not match project");
-    if ((await resolver.authStatus(selectedHarness)).state !== "authenticated")
-      throw new Error("not_authenticated");
+    const auth = await resolver.authStatus(selectedHarness).catch(() => ({ state: "unknown" }));
     const resolved = await resolver.resolve(selectedHarness);
     if (!resolved.ok) throw new Error(resolved.error);
     const job = {
@@ -154,7 +154,7 @@ function createJobManager({
       project: { name: selected.name, folder: selected.folder },
       harness: selectedHarness,
       mode: selectedMode,
-      model: model || selected.model || null,
+      model: model?.trim() || selected.model || null,
       prompt: task.trim(),
       status: "pending",
       steps: [],
@@ -170,9 +170,13 @@ function createJobManager({
       finishedAt: null,
       lastEventAt: null,
       stalled: false,
+      authWarning: auth.state !== "authenticated",
       position: null,
     };
-    if (selectedMode === "write") Object.assign(job, location(path.dirname(path.dirname(file)), selected.name, job.jobId), { worktreeCreated: false });
+    if (selectedMode === "write")
+      Object.assign(job, location(path.dirname(path.dirname(file)), selected.name, job.jobId), {
+        worktreeCreated: false,
+      });
     jobs.set(job.jobId, job);
     update(job);
     return {
@@ -182,6 +186,7 @@ function createJobManager({
       mode: job.mode,
       model: job.model,
       prompt: job.prompt,
+      authWarning: job.authWarning,
       branch: job.branch,
     };
   }
@@ -193,11 +198,6 @@ function createJobManager({
     update(job);
     if (!(await policyAllowed()) || !projectStillAllowed(job)) {
       if (job.status === "running") fail(job, "agent_disallowed");
-      drain();
-      return;
-    }
-    if ((await resolver.authStatus(job.harness)).state !== "authenticated") {
-      if (job.status === "running") fail(job, "not_authenticated");
       drain();
       return;
     }
@@ -214,16 +214,24 @@ function createJobManager({
     try {
       if (job.mode === "write") {
         preparingWorktrees.add(job.jobId);
-        try { await worktreeService.create(job); job.worktreeCreated = true; update(job); }
-        catch (error) {
+        try {
+          await worktreeService.create(job);
+          job.worktreeCreated = true;
+          update(job);
+        } catch (error) {
           job.worktreeCreated = fs.existsSync(job.worktreePath);
           job.lastError = redactOutput(error.message).trim().slice(0, 500);
           fail(job, "worktree_failed");
           drain();
           return;
-        } finally { preparingWorktrees.delete(job.jobId); }
+        } finally {
+          preparingWorktrees.delete(job.jobId);
+        }
       }
-      if (job.status === "cancelled") { drain(); return; }
+      if (job.status === "cancelled") {
+        drain();
+        return;
+      }
       const makeRunner =
         runnerFactories?.[job.harness] || (job.harness === "claude" ? runnerFactory : null);
       if (!makeRunner) throw new Error("Harness unavailable");
@@ -258,8 +266,12 @@ function createJobManager({
         pidFile.clear(`agent-job-${job.jobId}`);
         let collectionError = null;
         if (job.mode === "write" && job.worktreePath) {
-          try { Object.assign(job, await worktreeService.collect(job)); }
-          catch (error) { collectionError = error; job.lastError = redactOutput(error.message).trim().slice(0, 500); }
+          try {
+            Object.assign(job, await worktreeService.collect(job));
+          } catch (error) {
+            collectionError = error;
+            job.lastError = redactOutput(error.message).trim().slice(0, 500);
+          }
         }
         if (job.status === "cancelled") {
           job.endedAt = now();
@@ -310,7 +322,14 @@ function createJobManager({
     }
     const content = [
       job.result || "",
-      ...(job.mode === "write" ? ["Changes", `Branch: ${job.branch}`, `Worktree path: ${job.worktreePath}`, job.diffStat || "(no tracked changes)"] : []),
+      ...(job.mode === "write"
+        ? [
+            "Changes",
+            `Branch: ${job.branch}`,
+            `Worktree path: ${job.worktreePath}`,
+            job.diffStat || "(no tracked changes)",
+          ]
+        : []),
       `Project: ${job.project.name}`,
       `Duration: ${job.durationMs ?? "unknown"} ms`,
       `Cost estimate: ${job.costEstimate ?? "unknown"} USD`,
@@ -386,7 +405,12 @@ function createJobManager({
   async function discard(jobId) {
     const job = jobs.get(jobId);
     if (!job || job.mode !== "write") throw new Error("Unknown write job");
-    if (["pending", "queued", "running"].includes(job.status) || running.has(jobId) || preparingWorktrees.has(jobId)) throw new Error("Job is still running");
+    if (
+      ["pending", "queued", "running"].includes(job.status) ||
+      running.has(jobId) ||
+      preparingWorktrees.has(jobId)
+    )
+      throw new Error("Job is still running");
     if (job.discardedAt) return get(jobId);
     await worktreeService.discard(job);
     job.discardedAt = now();
