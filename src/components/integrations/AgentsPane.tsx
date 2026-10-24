@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentJob } from "../../types/electron";
+import { claudeModels, validateModel } from "../../services/agents/modelCatalog";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { SectionLabel, SettingsPanel, SettingsPanelRow } from "../ui/SettingsSection";
@@ -23,7 +24,8 @@ const emptyProject: Project = {
   mode: "read-only",
   model: null,
 };
-const claudeModels = ["sonnet", "opus", "haiku", "fable"];
+const models = claudeModels();
+const listedModels = [...models.aliases, ...models.fullNames];
 
 function errorText(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
@@ -179,6 +181,23 @@ export function AgentsPane({ title }: { title: string }) {
 
   const inputClass =
     "w-full min-w-0 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
+  function modelLabel(model: string | null, harness: Harness) {
+    if (!model) return t("agentJobs.pane.defaultModel");
+    if (harness !== "claude") return model;
+    const alias = models.aliases.find((item) => item.id === model);
+    if (alias)
+      return `${alias.label.split(" (")[0]} (${t("agentJobs.pane.aliasLatest")}) · ${model}`;
+    if (!validateModel(harness, model).ok) return model;
+    const fullName = models.fullNames.find((item) => item.id === model);
+    return fullName
+      ? `${fullName.label} (${t("agentJobs.pane.pinned")}) · ${model}`
+      : `${model} (${t("agentJobs.pane.pinned")})`;
+  }
+  function modelWarning(harness: Harness, model: string | null) {
+    return model && !validateModel(harness, model).ok
+      ? t("agentJobs.pane.invalidClaudeModel")
+      : null;
+  }
   return (
     <IntegrationsPane title={title} description={t("agentJobs.pane.description")}>
       <section className="space-y-2" aria-label={t("agentJobs.pane.projects")}>
@@ -219,8 +238,13 @@ export function AgentsPane({ title }: { title: string }) {
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     {project.defaultHarness} · {t("agentJobs.pane.readOnly")} ·{" "}
-                    {project.model || t("agentJobs.pane.defaultModel")}
+                    {modelLabel(project.model, project.defaultHarness)}
                   </p>
+                  {modelWarning(project.defaultHarness, project.model) && (
+                    <p role="alert" className="mt-1 text-xs text-destructive">
+                      {modelWarning(project.defaultHarness, project.model)}
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-1">
                   <Button
@@ -230,7 +254,9 @@ export function AgentsPane({ title }: { title: string }) {
                       setDraft({ ...project });
                       setEditingName(project.name);
                       setCustomModel(
-                        Boolean(project.model && !claudeModels.includes(project.model))
+                        Boolean(
+                          project.model && !listedModels.some((model) => model.id === project.model)
+                        )
                       );
                       void testHarness(project.defaultHarness);
                     }}
@@ -329,42 +355,75 @@ export function AgentsPane({ title }: { title: string }) {
                     <option value="read-only">{t("agentJobs.pane.readOnly")}</option>
                   </select>
                 </label>
-                <label className="space-y-1 text-xs">
-                  {t("agentJobs.pane.model")}
-                  <select
-                    className={inputClass}
-                    value={customModel ? "custom" : draft.model || ""}
-                    onChange={(e) => {
-                      setCustomModel(e.target.value === "custom");
-                      setDraft({
-                        ...draft,
-                        model: e.target.value === "custom" ? null : e.target.value || null,
-                      });
-                    }}
-                  >
-                    <option value="">{t("agentJobs.pane.defaultModel")}</option>
-                    {draft.defaultHarness === "claude" &&
-                      claudeModels.map((model) => (
-                        <option key={model} value={model}>
-                          {model}
-                        </option>
-                      ))}
-                    <option value="custom">{t("agentJobs.pane.fullModelName")}</option>
-                  </select>
-                </label>
-                <label className="space-y-1 text-xs">
-                  {t("agentJobs.pane.fullModelName")}
-                  <input
-                    className={inputClass}
-                    dir="ltr"
-                    value={draft.model || ""}
-                    placeholder={t("agentJobs.pane.optional")}
-                    onChange={(e) => {
-                      setCustomModel(true);
-                      setDraft({ ...draft, model: e.target.value });
-                    }}
-                  />
-                </label>
+                <div className="space-y-1 text-xs">
+                  <label htmlFor="agent-project-model">{t("agentJobs.pane.model")}</label>
+                  {draft.defaultHarness === "claude" && (
+                    <select
+                      id="agent-project-model"
+                      className={inputClass}
+                      value={customModel ? "__other__" : draft.model || ""}
+                      onChange={(e) => {
+                        setCustomModel(e.target.value === "__other__");
+                        setDraft({
+                          ...draft,
+                          model:
+                            e.target.value === "__other__" ? draft.model : e.target.value || null,
+                        });
+                      }}
+                    >
+                      <option value="">{t("agentJobs.pane.defaultModel")}</option>
+                      <optgroup label={t("agentJobs.pane.aliasesRecommended")}>
+                        {models.aliases.map((model) => (
+                          <option key={model.id} value={model.id}>
+                            {model.label.split(" (")[0]} ({t("agentJobs.pane.aliasLatest")}) ·{" "}
+                            {model.id}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label={t("agentJobs.pane.fullNamesPinned")}>
+                        {models.fullNames.map((model) => (
+                          <option key={model.id} value={model.id}>
+                            {model.label} · {model.id}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <option value="__other__">{t("agentJobs.pane.otherModel")}</option>
+                    </select>
+                  )}
+                  {(customModel || draft.defaultHarness === "cursor-agent") && (
+                    <div className="space-y-1">
+                      {draft.defaultHarness === "claude" && (
+                        <label htmlFor="agent-project-custom-model">
+                          {t("agentJobs.pane.fullModelName")}
+                        </label>
+                      )}
+                      <input
+                        id={
+                          draft.defaultHarness === "cursor-agent"
+                            ? "agent-project-model"
+                            : "agent-project-custom-model"
+                        }
+                        className={inputClass}
+                        dir="ltr"
+                        value={draft.model || ""}
+                        placeholder={t("agentJobs.pane.optional")}
+                        aria-label={t("agentJobs.pane.fullModelName")}
+                        aria-invalid={Boolean(modelWarning(draft.defaultHarness, draft.model))}
+                        aria-describedby={
+                          modelWarning(draft.defaultHarness, draft.model)
+                            ? "agent-model-warning"
+                            : undefined
+                        }
+                        onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                      />
+                    </div>
+                  )}
+                  {modelWarning(draft.defaultHarness, draft.model) && (
+                    <p id="agent-model-warning" role="alert" className="text-xs text-destructive">
+                      {modelWarning(draft.defaultHarness, draft.model)}
+                    </p>
+                  )}
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
