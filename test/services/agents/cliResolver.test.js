@@ -1,6 +1,38 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { parseAuthStatus, createCliResolver } = require("../../../src/services/agents/cliResolver");
+const trustBanner = `➜  openwhispr git:(feat/agent-jobs) cursor-agent -p
+
+⚠ Workspace Trust Required
+
+  Cursor Agent can execute code and access files in this directory.
+  Do you trust the contents of this directory?
+
+    /Users/dimitriskyriazopoulos/Development/openwhispr
+
+  To proceed, you can either:
+    • Run 'agent' interactively to decide
+    • Pass --trust, --yolo, or -f if you trust this directory`;
+
+test("Cursor model probe classifies the owner's trust banner without models", async () => {
+  for (const stream of ["stdout", "stderr"]) {
+    for (const code of [0, 2]) {
+      const resolver = createCliResolver({
+        configuredPaths: { "cursor-agent": process.execPath },
+        run: async (_binary, args) => {
+          if (args[0] === "--version") return { stdout: "cursor 1" };
+          if (code) throw Object.assign(new Error("refused"), { code, [stream]: trustBanner });
+          return { [stream]: trustBanner };
+        },
+      });
+      assert.deepEqual(await resolver.listModels("cursor-agent"), {
+        ok: false,
+        reason: "workspace_untrusted",
+        models: [],
+      });
+    }
+  }
+});
 
 test("Claude auth JSON maps each documented method", () => {
   for (const method of [

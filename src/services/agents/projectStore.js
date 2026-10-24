@@ -4,7 +4,7 @@ const crypto = require("node:crypto");
 const { safeModel } = require("./modelSafety");
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
-const fields = new Set(["name", "folder", "defaultHarness", "mode", "model"]);
+const fields = new Set(["name", "folder", "defaultHarness", "mode", "model", "trustWorkspace"]);
 function validateProject(project, fsImpl = fs) {
   if (!isObject(project) || Object.keys(project).some((key) => !fields.has(key)))
     throw new Error("Invalid project fields");
@@ -22,6 +22,10 @@ function validateProject(project, fsImpl = fs) {
     throw new Error("Project folder must be an existing absolute directory");
   if (!["claude", "cursor-agent"].includes(project.defaultHarness))
     throw new Error("Invalid harness");
+  if (project.trustWorkspace !== undefined && typeof project.trustWorkspace !== "boolean")
+    throw new Error("Trust workspace must be a boolean");
+  if (project.trustWorkspace && project.defaultHarness !== "cursor-agent")
+    throw new Error("Trust workspace is only available for Cursor projects");
   if (project.mode === "agent")
     throw new Error("Cursor agent mode requires --force and is unavailable");
   if (project.defaultHarness === "cursor-agent" && project.mode === "write")
@@ -40,6 +44,7 @@ function validateProject(project, fsImpl = fs) {
     defaultHarness: project.defaultHarness,
     mode: project.mode,
     model: project.model?.trim() || null,
+    trustWorkspace: project.trustWorkspace === true,
   };
 }
 function validateData(value, fsImpl = fs) {

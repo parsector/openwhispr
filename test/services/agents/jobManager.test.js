@@ -143,6 +143,51 @@ test("failed job stores and broadcasts the redacted last stderr line", async (t)
   assert.equal(events.at(-1).channel, "agent-job-updated");
   assert.equal(events.at(-1).job.lastError, manager.get(jobId).lastError);
 });
+
+test("untrusted Cursor refusal fails without a note and keeps the redacted banner line", async (t) => {
+  const { manager, notes, dir } = setup(t, {
+    projectStore: {
+      read: () => ({
+        projects: [
+          {
+            name: "openwhispr",
+            folder: dirPlaceholder(),
+            defaultHarness: "cursor-agent",
+            mode: "plan",
+            model: null,
+            trustWorkspace: false,
+          },
+        ],
+      }),
+    },
+    runnerFactories: {
+      "cursor-agent": () => ({
+        start: (input) => {
+          assert.equal(input.trustWorkspace, false);
+          return {
+            pid: 123,
+            done: Promise.resolve({
+              exitCode: 0,
+              stderr: "",
+              reason: "workspace_untrusted",
+              trustRefusalLine: "Workspace Trust Required Bearer secret",
+            }),
+          };
+        },
+      }),
+    },
+  });
+  function dirPlaceholder() {
+    return dir;
+  }
+  const prepared = await manager.prepare({ project: "openwhispr", task: "hello" });
+  assert.equal(prepared.project.trustWorkspace, false);
+  await manager.approve(prepared.jobId);
+  await until(() => manager.get(prepared.jobId).status === "failed");
+  assert.equal(manager.get(prepared.jobId).reason, "workspace_untrusted");
+  assert.equal(manager.get(prepared.jobId).lastError, "Workspace Trust Required Bearer <REDACTED>");
+  assert.equal(notes.length, 0);
+});
 test("running on disk becomes failed/interrupted", (t) => {
   const { manager, dir } = setup(t);
   manager.stopAll();

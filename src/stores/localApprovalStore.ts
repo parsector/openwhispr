@@ -15,6 +15,7 @@ export interface LocalApprovalEntry {
   state: "pending" | "approving" | "cancelling" | "started" | "failed" | "cancelled";
   error?: string;
   authWarning?: boolean;
+  trustWorkspace?: boolean;
 }
 
 export const useLocalApprovalStore = create<{
@@ -61,6 +62,7 @@ export function addLocalApproval(
     mode?: string;
     branch?: string;
     authWarning?: boolean;
+    project?: { trustWorkspace?: boolean };
   },
   summary: string
 ): void {
@@ -74,6 +76,7 @@ export function addLocalApproval(
     mode: job.mode,
     branch: job.branch,
     authWarning: job.authWarning,
+    trustWorkspace: job.project?.trustWorkspace,
     summary,
     prompt: job.prompt,
     state: "pending",
