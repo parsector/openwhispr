@@ -4906,14 +4906,20 @@
         "cancelled": "Cancelado"
       },
       "auth": {
-        "authenticated": "Autenticado",
-        "not_authenticated": "Sin autenticar",
-        "unknown": "Estado de autenticación no disponible"
+        "authenticated": "Sesión iniciada",
+        "not_authenticated": "Sin iniciar sesión — ejecuta `claude auth login`",
+        "unknown": "No se pudo leer el estado de autenticación",
+        "subscription": "Sesión iniciada · suscripción de Claude",
+        "apiKey": "Sesión iniciada · clave API",
+        "oauthToken": "Sesión iniciada · token OAuth",
+        "otherMethod": "Sesión iniciada · {{method}}",
+        "cursorNotAuthenticated": "Sin iniciar sesión — ejecuta `cursor-agent login`"
       },
       "failure": {
         "notAuthenticated": "Inicia sesión en Claude para ejecutar este trabajo.",
         "interrupted": "El trabajo se interrumpió.",
-        "cancelled": "El trabajo se canceló."
+        "cancelled": "El trabajo se canceló.",
+        "lastError": "Mensaje de la CLI"
       }
     },
     "toast": {

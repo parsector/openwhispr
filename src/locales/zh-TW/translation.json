@@ -4906,14 +4906,20 @@
         "cancelled": "已取消"
       },
       "auth": {
-        "authenticated": "已驗證",
-        "not_authenticated": "未驗證",
-        "unknown": "無法取得驗證狀態"
+        "authenticated": "已登入",
+        "not_authenticated": "尚未登入 — 執行 `claude auth login`",
+        "unknown": "無法讀取登入狀態",
+        "subscription": "已登入 · Claude 訂閱",
+        "apiKey": "已登入 · API 金鑰",
+        "oauthToken": "已登入 · OAuth 權杖",
+        "otherMethod": "已登入 · {{method}}",
+        "cursorNotAuthenticated": "尚未登入 — 執行 `cursor-agent login`"
       },
       "failure": {
         "notAuthenticated": "請登入 Claude 以執行這項工作。",
         "interrupted": "工作已中斷。",
-        "cancelled": "工作已取消。"
+        "cancelled": "工作已取消。",
+        "lastError": "CLI 訊息"
       }
     },
     "toast": {

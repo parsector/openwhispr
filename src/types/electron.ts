@@ -1345,6 +1345,7 @@ export interface AgentJob {
   result: string | null;
   noteId?: number;
   reason: string | null;
+  lastError: string | null;
   costEstimate: number | null;
   sessionId: string | null;
   createdAt: number;
@@ -1380,6 +1381,11 @@ declare global {
         path: string | null;
         version: string | null;
         error: string | null;
+        auth: {
+          state: "authenticated" | "not_authenticated" | "unknown";
+          method: string | null;
+          detail: string | null;
+        };
       }>;
       prepare: (input: {
         project: string;

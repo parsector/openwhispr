@@ -466,7 +466,9 @@ const Toast: React.FC<
                 )}
               >
                 <div className="flex items-start justify-between gap-1.5">
-                  <span className="select-all wrap-break-word min-w-0">{detail}</span>
+                  <span className="select-all wrap-break-word min-w-0 whitespace-pre-line">
+                    {detail}
+                  </span>
                   <button
                     onClick={() => void copy()}
                     className={cn(

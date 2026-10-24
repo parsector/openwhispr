@@ -8,7 +8,7 @@ import { IntegrationsPane } from "./IntegrationsPane";
 import {
   authStateKey,
   elapsedTime,
-  failureMessage,
+  failureDescription,
   jobStatus,
   queuePosition,
   stallTextKey,
@@ -45,6 +45,12 @@ export function AgentsPane({ title }: { title: string }) {
   >({});
   const [probeBusy, setProbeBusy] = useState<Harness | null>(null);
   const [now, setNow] = useState(Date.now());
+  function authLabel(harness: Harness) {
+    const auth = probe[harness]?.auth;
+    if (!auth) return null;
+    const label = t(authStateKey(auth.state, auth.method, harness), { method: auth.method });
+    return auth.state === "unknown" && auth.detail ? `${label} · ${auth.detail}` : label;
+  }
 
   useEffect(() => {
     let live = true;
@@ -105,7 +111,13 @@ export function AgentsPane({ title }: { title: string }) {
     } catch (cause) {
       setProbe((current) => ({
         ...current,
-        [harness]: { ok: false, path: null, version: null, error: errorText(cause) },
+        [harness]: {
+          ok: false,
+          path: null,
+          version: null,
+          error: errorText(cause),
+          auth: { state: "unknown", method: null, detail: "not found" },
+        },
       }));
     } finally {
       setProbeBusy(null);
@@ -248,7 +260,16 @@ export function AgentsPane({ title }: { title: string }) {
                   {probe[project.defaultHarness]?.ok
                     ? `${probe[project.defaultHarness]?.path} · ${probe[project.defaultHarness]?.version}`
                     : probe[project.defaultHarness]?.error}{" "}
-                  · {t(authStateKey("unknown"))}
+                  ·{" "}
+                  <span
+                    className={
+                      probe[project.defaultHarness]?.auth.state === "not_authenticated"
+                        ? "text-destructive"
+                        : ""
+                    }
+                  >
+                    {authLabel(project.defaultHarness)}
+                  </span>
                 </p>
               )}
             </SettingsPanelRow>
@@ -354,7 +375,17 @@ export function AgentsPane({ title }: { title: string }) {
                 >
                   {t("agentJobs.pane.testHarness")}
                 </Button>
-                <span className="text-xs text-muted-foreground">{t(authStateKey("unknown"))}</span>
+                {probe[draft.defaultHarness] && (
+                  <span
+                    className={
+                      probe[draft.defaultHarness]?.auth.state === "not_authenticated"
+                        ? "text-xs text-destructive"
+                        : "text-xs text-muted-foreground"
+                    }
+                  >
+                    {authLabel(draft.defaultHarness)}
+                  </span>
+                )}
               </div>
               {probe[draft.defaultHarness] && (
                 <p role="status" className="break-all text-xs text-muted-foreground">
@@ -405,7 +436,6 @@ export function AgentsPane({ title }: { title: string }) {
               const status = jobStatus(job.status, job.stalled);
               const elapsed = elapsedTime(job.startedAt, job.endedAt, now);
               const position = queuePosition(job.position);
-              const failure = failureMessage(job.reason);
               return (
                 <SettingsPanelRow key={job.jobId} className="space-y-2">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -453,8 +483,8 @@ export function AgentsPane({ title }: { title: string }) {
                     </ol>
                   )}
                   {job.status === "failed" && job.reason && (
-                    <p role="alert" className="text-xs text-destructive">
-                      {"key" in failure ? t(failure.key) : failure.text}
+                    <p role="alert" className="text-xs text-destructive whitespace-pre-line">
+                      {failureDescription(job.reason, job.lastError, t)}
                     </p>
                   )}
                   {(["pending", "queued", "running"] as const).includes(

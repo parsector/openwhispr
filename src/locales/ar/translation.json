@@ -5017,13 +5017,19 @@
       },
       "auth": {
         "authenticated": "تم تسجيل الدخول",
-        "not_authenticated": "لم يتم تسجيل الدخول",
-        "unknown": "حالة تسجيل الدخول غير متاحة"
+        "not_authenticated": "لم يتم تسجيل الدخول — شغّل `claude auth login`",
+        "unknown": "تعذرت قراءة حالة تسجيل الدخول",
+        "subscription": "تم تسجيل الدخول · اشتراك Claude",
+        "apiKey": "تم تسجيل الدخول · مفتاح API",
+        "oauthToken": "تم تسجيل الدخول · رمز OAuth",
+        "otherMethod": "تم تسجيل الدخول · {{method}}",
+        "cursorNotAuthenticated": "لم يتم تسجيل الدخول — شغّل `cursor-agent login`"
       },
       "failure": {
         "notAuthenticated": "سجّل الدخول إلى Claude لتشغيل هذه المهمة.",
         "interrupted": "انقطعت المهمة.",
-        "cancelled": "أُلغيت المهمة."
+        "cancelled": "أُلغيت المهمة.",
+        "lastError": "رسالة سطر الأوامر"
       }
     },
     "toast": {

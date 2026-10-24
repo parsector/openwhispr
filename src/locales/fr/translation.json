@@ -4906,14 +4906,20 @@
         "cancelled": "Annulé"
       },
       "auth": {
-        "authenticated": "Authentifié",
-        "not_authenticated": "Non authentifié",
-        "unknown": "État d’authentification indisponible"
+        "authenticated": "Connecté",
+        "not_authenticated": "Non connecté — exécutez `claude auth login`",
+        "unknown": "Impossible de lire l’état de connexion",
+        "subscription": "Connecté · abonnement Claude",
+        "apiKey": "Connecté · clé API",
+        "oauthToken": "Connecté · jeton OAuth",
+        "otherMethod": "Connecté · {{method}}",
+        "cursorNotAuthenticated": "Non connecté — exécutez `cursor-agent login`"
       },
       "failure": {
         "notAuthenticated": "Connectez-vous à Claude pour lancer cette tâche.",
         "interrupted": "La tâche a été interrompue.",
-        "cancelled": "La tâche a été annulée."
+        "cancelled": "La tâche a été annulée.",
+        "lastError": "Message de la CLI"
       }
     },
     "toast": {

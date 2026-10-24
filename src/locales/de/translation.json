@@ -4907,13 +4907,19 @@
       },
       "auth": {
         "authenticated": "Angemeldet",
-        "not_authenticated": "Nicht angemeldet",
-        "unknown": "Anmeldestatus nicht verfügbar"
+        "not_authenticated": "Nicht angemeldet — `claude auth login` ausführen",
+        "unknown": "Anmeldestatus konnte nicht gelesen werden",
+        "subscription": "Angemeldet · Claude-Abonnement",
+        "apiKey": "Angemeldet · API-Schlüssel",
+        "oauthToken": "Angemeldet · OAuth-Token",
+        "otherMethod": "Angemeldet · {{method}}",
+        "cursorNotAuthenticated": "Nicht angemeldet — `cursor-agent login` ausführen"
       },
       "failure": {
         "notAuthenticated": "Melden Sie sich bei Claude an, um diesen Auftrag auszuführen.",
         "interrupted": "Der Auftrag wurde unterbrochen.",
-        "cancelled": "Der Auftrag wurde abgebrochen."
+        "cancelled": "Der Auftrag wurde abgebrochen.",
+        "lastError": "CLI-Meldung"
       }
     },
     "toast": {

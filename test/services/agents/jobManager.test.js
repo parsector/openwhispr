@@ -35,7 +35,7 @@ function setup(t, overrides = {}) {
       }),
     },
     resolver: {
-      authStatus: async () => "authenticated",
+      authStatus: async () => ({ state: "authenticated", method: "claude.ai", detail: null }),
       resolve: async () => ({ ok: true, path: fakeCli }),
     },
     runnerFactory: (cliPath) => createClaudeRunner({ cliPath }),
@@ -68,7 +68,9 @@ test("approval required and auth failure blocks prepare", async (t) => {
   const prepared = await manager.prepare({ project: "openwhispr", task: "hello" });
   assert.equal(manager.get(prepared.jobId).status, "pending");
   assert.equal(notes.length, 0);
-  const blocked = setup(t, { resolver: { authStatus: async () => "not_authenticated" } });
+  const blocked = setup(t, {
+    resolver: { authStatus: async () => ({ state: "not_authenticated" }) },
+  });
   await assert.rejects(
     blocked.manager.prepare({ project: "openwhispr", task: "hello" }),
     /not_authenticated/
@@ -105,12 +107,35 @@ test("success saves private note and failure saves none", async (t) => {
   await manager.approve(success);
   await until(() => manager.get(success).status === "done");
   assert.equal(manager.get(success).noteId, 1);
+  assert.equal(manager.get(success).lastError, null);
   assert.equal(notes[0][6], 7);
   assert.equal(notes[0][5], 9);
   const failure = (await manager.prepare({ project: "openwhispr", task: "fail" })).jobId;
   await manager.approve(failure);
   await until(() => manager.get(failure).status === "failed");
+  assert.equal(manager.get(failure).lastError, "CLI rejected the request");
   assert.equal(notes.length, 1);
+});
+test("failed job stores and broadcasts the redacted last stderr line", async (t) => {
+  const events = [];
+  const { manager } = setup(t, {
+    broadcast: (channel, job) => events.push({ channel, job }),
+    runnerFactory: () => ({
+      start: () => ({
+        pid: 123,
+        done: Promise.resolve({
+          exitCode: 1,
+          stderr: "first line\n\u001b[31mBearer secret sk-secret owk_secret\u001b[0m\n",
+        }),
+      }),
+    }),
+  });
+  const { jobId } = await manager.prepare({ project: "openwhispr", task: "fail" });
+  await manager.approve(jobId);
+  await until(() => manager.get(jobId).status === "failed");
+  assert.equal(manager.get(jobId).lastError, "Bearer <REDACTED> <REDACTED> <REDACTED>");
+  assert.equal(events.at(-1).channel, "agent-job-updated");
+  assert.equal(events.at(-1).job.lastError, manager.get(jobId).lastError);
 });
 test("running on disk becomes failed/interrupted", (t) => {
   const { manager, dir } = setup(t);

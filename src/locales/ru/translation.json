@@ -4947,13 +4947,19 @@
       },
       "auth": {
         "authenticated": "Вход выполнен",
-        "not_authenticated": "Вход не выполнен",
-        "unknown": "Состояние входа недоступно"
+        "not_authenticated": "Вход не выполнен — запустите `claude auth login`",
+        "unknown": "Не удалось прочитать состояние входа",
+        "subscription": "Вход выполнен · подписка Claude",
+        "apiKey": "Вход выполнен · ключ API",
+        "oauthToken": "Вход выполнен · токен OAuth",
+        "otherMethod": "Вход выполнен · {{method}}",
+        "cursorNotAuthenticated": "Вход не выполнен — запустите `cursor-agent login`"
       },
       "failure": {
         "notAuthenticated": "Войдите в Claude, чтобы запустить задание.",
         "interrupted": "Задание было прервано.",
-        "cancelled": "Задание было отменено."
+        "cancelled": "Задание было отменено.",
+        "lastError": "Сообщение CLI"
       }
     },
     "toast": {

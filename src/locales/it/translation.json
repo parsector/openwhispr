@@ -4906,14 +4906,20 @@
         "cancelled": "Annullato"
       },
       "auth": {
-        "authenticated": "Autenticato",
-        "not_authenticated": "Non autenticato",
-        "unknown": "Stato di accesso non disponibile"
+        "authenticated": "Accesso effettuato",
+        "not_authenticated": "Accesso non effettuato — esegui `claude auth login`",
+        "unknown": "Impossibile leggere lo stato di accesso",
+        "subscription": "Accesso effettuato · abbonamento Claude",
+        "apiKey": "Accesso effettuato · chiave API",
+        "oauthToken": "Accesso effettuato · token OAuth",
+        "otherMethod": "Accesso effettuato · {{method}}",
+        "cursorNotAuthenticated": "Accesso non effettuato — esegui `cursor-agent login`"
       },
       "failure": {
         "notAuthenticated": "Accedi a Claude per eseguire questo lavoro.",
         "interrupted": "Il lavoro è stato interrotto.",
-        "cancelled": "Il lavoro è stato annullato."
+        "cancelled": "Il lavoro è stato annullato.",
+        "lastError": "Messaggio CLI"
       }
     },
     "toast": {

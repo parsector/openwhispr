@@ -4906,14 +4906,20 @@
         "cancelled": "Cancelled"
       },
       "auth": {
-        "authenticated": "Authenticated",
-        "not_authenticated": "Not authenticated",
-        "unknown": "Authentication state unavailable"
+        "authenticated": "Signed in",
+        "not_authenticated": "Not signed in — run `claude auth login`",
+        "unknown": "Couldn't read auth state",
+        "subscription": "Signed in · Claude subscription",
+        "apiKey": "Signed in · API key",
+        "oauthToken": "Signed in · OAuth token",
+        "otherMethod": "Signed in · {{method}}",
+        "cursorNotAuthenticated": "Not signed in — run `cursor-agent login`"
       },
       "failure": {
         "notAuthenticated": "Sign in to Claude to run this job.",
         "interrupted": "The job was interrupted.",
-        "cancelled": "The job was cancelled."
+        "cancelled": "The job was cancelled.",
+        "lastError": "CLI message"
       }
     },
     "toast": {
