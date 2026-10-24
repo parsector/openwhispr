@@ -4860,7 +4860,9 @@
       "results": "Agent job results",
       "presetDescription": "Prepare a saved agent prompt. The user must approve the job before it starts.",
       "presetInstruction": "Use run_preset for a configured preset. Supply values for its placeholders and tell the user the approval card is ready.",
-      "unknownPreset": "Unknown preset."
+      "unknownPreset": "Unknown preset.",
+      "resumeDescription": "Prepare a new local agent job using a finished job session. The user must approve it.",
+      "resumeInstruction": "Use resume_agent_job with a finished job ID and a new task. The user must approve the card before it starts."
     },
     "card": {
       "title": "Agent job approval",
@@ -4947,7 +4949,9 @@
       "worktreeKept": "worktree kept",
       "copyCommands": "Copy commands",
       "discard": "Discard",
-      "cursorWriteUnavailable": "Write mode requires Claude; Cursor supports Plan or Ask only."
+      "cursorWriteUnavailable": "Write mode requires Claude; Cursor supports Plan or Ask only.",
+      "openTerminal": "Open in terminal",
+      "noSession": "No session available"
     },
     "toast": {
       "done": "Agent job finished for {{project}}",

@@ -250,3 +250,24 @@ test("preset IPC lists, saves, and removes through the validated store", () => {
   ]);
   assert.throws(() => handlers.get("agent-presets-remove")(null, "../bad"), /Invalid name/);
 });
+
+test("open-terminal IPC accepts only a job ID and rejects unknown jobs without launch", async () => {
+  const handlers = new Map();
+  let launched = 0;
+  registerAgentIpc({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    projectStore: {},
+    presetStore: {},
+    resolver: {},
+    manager: { get: (id) => (id === "job-1" ? { jobId: id, sessionId: "session:1" } : null) },
+    openTerminalImpl: async () => {
+      launched++;
+    },
+  });
+  const open = handlers.get("agent-job-open-terminal");
+  await assert.rejects(open(null, { jobId: "job-1", folder: "/tmp" }), /invalid_request/);
+  await assert.rejects(open(null, { jobId: "unknown" }), /unknown_job/);
+  assert.equal(launched, 0);
+  assert.deepEqual(await open(null, { jobId: "job-1" }), { ok: true });
+  assert.equal(launched, 1);
+});

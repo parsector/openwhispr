@@ -4860,7 +4860,9 @@
       "results": "エージェントジョブの結果",
       "presetDescription": "保存済みのエージェント作業を準備します。開始にはユーザーの承認が必要です。",
       "presetInstruction": "設定済みプリセットには run_preset を使い、値を渡して承認カードを案内してください。",
-      "unknownPreset": "不明なプリセットです。"
+      "unknownPreset": "不明なプリセットです。",
+      "resumeDescription": "ターミナルで開く",
+      "resumeInstruction": "ターミナルで開く"
     },
     "card": {
       "title": "エージェントジョブの承認",
@@ -4947,7 +4949,9 @@
       "worktreeKept": "worktree を保持",
       "copyCommands": "コマンドをコピー",
       "discard": "破棄",
-      "cursorWriteUnavailable": "書き込みモードには Claude が必要です。Cursor は Plan または Ask のみ対応します。"
+      "cursorWriteUnavailable": "書き込みモードには Claude が必要です。Cursor は Plan または Ask のみ対応します。",
+      "openTerminal": "ターミナルで開く",
+      "noSession": "セッションがありません"
     },
     "toast": {
       "done": "{{project}}のエージェントジョブが完了しました",

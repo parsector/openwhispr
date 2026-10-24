@@ -4860,7 +4860,9 @@
       "results": "代理任务结果",
       "presetDescription": "准备已保存的代理任务。启动前需要用户批准。",
       "presetInstruction": "对已配置的预设使用 run_preset，提供占位符的值并提示用户查看批准卡片。",
-      "unknownPreset": "未知预设。"
+      "unknownPreset": "未知预设。",
+      "resumeDescription": "在终端中打开",
+      "resumeInstruction": "在终端中打开"
     },
     "card": {
       "title": "代理任务批准",
@@ -4947,7 +4949,9 @@
       "worktreeKept": "已保留 worktree",
       "copyCommands": "复制命令",
       "discard": "丢弃",
-      "cursorWriteUnavailable": "写入模式需要 Claude；Cursor 仅支持 Plan 或 Ask。"
+      "cursorWriteUnavailable": "写入模式需要 Claude；Cursor 仅支持 Plan 或 Ask。",
+      "openTerminal": "在终端中打开",
+      "noSession": "没有可用的会话"
     },
     "toast": {
       "done": "{{project}} 的代理任务已完成",

@@ -19,6 +19,7 @@ import type { ContainerScope } from "../../types/chat";
 import { createDelegateTaskTool, type AgentProject } from "./delegateTaskTool";
 import { createRunPresetTool, type AgentPreset } from "./runPresetTool";
 import { agentJobTool } from "./agentJobTool";
+import { resumeAgentJobTool } from "./resumeAgentJobTool";
 
 export { ToolRegistry } from "./ToolRegistry";
 export type { ToolDefinition, ToolResult } from "./ToolRegistry";
@@ -77,6 +78,7 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   if (settings.agentAllowed && settings.agentProjects?.length) {
     registry.register(createDelegateTaskTool(settings.agentProjects));
     registry.register(agentJobTool);
+    registry.register(resumeAgentJobTool);
     if (settings.agentPresets?.length) registry.register(createRunPresetTool(settings.agentPresets));
   }
   for (const tool of settings.mcpTools || []) {

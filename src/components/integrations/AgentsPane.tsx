@@ -312,6 +312,13 @@ export function AgentsPane({ title }: { title: string }) {
       setError(errorText(cause));
     }
   }
+  async function openTerminal(jobId: string) {
+    try {
+      await window.agentJobs.openTerminal({ jobId });
+    } catch (cause) {
+      setError(errorText(cause));
+    }
+  }
   async function discard(jobId: string) {
     try {
       await window.agentJobs.discard(jobId);
@@ -1057,6 +1064,15 @@ export function AgentsPane({ title }: { title: string }) {
                       {t("agentJobs.pane.openNote")}
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!job.sessionId}
+                    title={!job.sessionId ? t("agentJobs.pane.noSession") : undefined}
+                    onClick={() => void openTerminal(job.jobId)}
+                  >
+                    {t("agentJobs.pane.openTerminal")}
+                  </Button>
                   {job.mode === "write" &&
                     job.worktreeCreated &&
                     job.worktreePath &&

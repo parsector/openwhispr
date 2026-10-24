@@ -1348,6 +1348,8 @@ export interface AgentJob {
     surface: "chat" | "assistant";
   };
   originDropped?: boolean;
+  resumedFrom?: string;
+  resumeSessionId?: string;
   status: "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
   steps: Array<{ kind: string; [key: string]: unknown }>;
   result: string | null;
@@ -1447,8 +1449,9 @@ declare global {
       }>;
       listModels: () => Promise<{ ok: boolean; models?: string[]; reason?: string }>;
       prepare: (input: {
-        project: string;
+        project?: string;
         task: string;
+        resumeJobId?: string;
         harness?: "claude" | "cursor-agent";
         mode?: "read-only" | "write" | "plan" | "ask";
         model?: string;
@@ -1468,6 +1471,7 @@ declare global {
       approve: (id: string, input?: { prompt?: string }) => Promise<AgentJob>;
       cancel: (id: string) => Promise<AgentJob>;
       discard: (id: string) => Promise<AgentJob>;
+      openTerminal: (input: { jobId: string }) => Promise<{ ok: true }>;
       list: () => Promise<AgentJob[]>;
       get: (id: string) => Promise<AgentJob | null>;
       onUpdated: (callback: (job: AgentJob) => void) => () => void;

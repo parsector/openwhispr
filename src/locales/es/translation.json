@@ -4860,7 +4860,9 @@
       "results": "Resultados de los trabajos de agente",
       "presetDescription": "Prepara una tarea de agente guardada. El usuario debe aprobarla antes de iniciarla.",
       "presetInstruction": "Usa run_preset para una plantilla configurada. Proporciona los valores y avisa de la tarjeta de aprobación.",
-      "unknownPreset": "Plantilla desconocida."
+      "unknownPreset": "Plantilla desconocida.",
+      "resumeDescription": "Abrir en terminal",
+      "resumeInstruction": "Abrir en terminal"
     },
     "card": {
       "title": "Aprobación del trabajo de agente",
@@ -4947,7 +4949,9 @@
       "worktreeKept": "worktree conservado",
       "copyCommands": "Copiar comandos",
       "discard": "Descartar",
-      "cursorWriteUnavailable": "El modo de escritura requiere Claude; Cursor solo admite Plan o Ask."
+      "cursorWriteUnavailable": "El modo de escritura requiere Claude; Cursor solo admite Plan o Ask.",
+      "openTerminal": "Abrir en terminal",
+      "noSession": "No hay sesión disponible"
     },
     "toast": {
       "done": "Trabajo de agente terminado para {{project}}",

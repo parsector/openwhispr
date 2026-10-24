@@ -4970,7 +4970,9 @@
       "results": "نتائج مهام الوكيل",
       "presetDescription": "يجهّز مهمة وكيل محفوظة. يجب أن يوافق المستخدم قبل البدء.",
       "presetInstruction": "استخدم run_preset لقالب مهيأ. قدّم قيم العناصر النائبة وأخبر المستخدم ببطاقة الموافقة.",
-      "unknownPreset": "قالب غير معروف."
+      "unknownPreset": "قالب غير معروف.",
+      "resumeDescription": "فتح في الطرفية",
+      "resumeInstruction": "فتح في الطرفية"
     },
     "card": {
       "title": "الموافقة على مهمة الوكيل",
@@ -5057,7 +5059,9 @@
       "worktreeKept": "تم الاحتفاظ بـ worktree",
       "copyCommands": "نسخ الأوامر",
       "discard": "تجاهل",
-      "cursorWriteUnavailable": "يتطلب وضع الكتابة Claude؛ يدعم Cursor وضع Plan أو Ask فقط."
+      "cursorWriteUnavailable": "يتطلب وضع الكتابة Claude؛ يدعم Cursor وضع Plan أو Ask فقط.",
+      "openTerminal": "فتح في الطرفية",
+      "noSession": "لا توجد جلسة متاحة"
     },
     "toast": {
       "done": "اكتملت مهمة الوكيل لـ {{project}}",

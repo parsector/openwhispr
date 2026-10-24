@@ -1,6 +1,7 @@
 const { spawn } = require("node:child_process");
 const { createStreamParser } = require("./streamJson");
 const { minimalEnv } = require("./minimalEnv");
+const { validSessionId } = require("./sessionId");
 const { redactOutput } = require("./redactOutput");
 const { isWorkspaceTrustRefusal, trustRefusalLine } = require("./workspaceTrust");
 
@@ -12,11 +13,21 @@ function createCursorRunner({ cliPath, spawnImpl = spawn } = {}) {
       model,
       mode = "plan",
       trustWorkspace = false,
+      resumeSessionId,
       onEvent = () => {},
     } = input;
     if (
       Object.keys(input).some(
-        (key) => !["folder", "prompt", "model", "mode", "trustWorkspace", "onEvent"].includes(key)
+        (key) =>
+          ![
+            "folder",
+            "prompt",
+            "model",
+            "mode",
+            "trustWorkspace",
+            "resumeSessionId",
+            "onEvent",
+          ].includes(key)
       )
     )
       throw new Error("Extra Cursor flags are not allowed");
@@ -39,6 +50,10 @@ function createCursorRunner({ cliPath, spawnImpl = spawn } = {}) {
       "--mode",
       mode,
     ];
+    if (resumeSessionId !== undefined) {
+      if (!validSessionId(resumeSessionId)) throw new Error("no_session");
+      args.push("--resume", resumeSessionId);
+    }
     if (model) args.push("--model", model);
     if (trustWorkspace) args.push("--trust");
     args.push(prompt);

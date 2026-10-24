@@ -4860,7 +4860,9 @@
       "results": "Ergebnisse der Agentenaufträge",
       "presetDescription": "Bereitet eine gespeicherte Agentenaufgabe vor. Der Benutzer muss den Auftrag vor dem Start genehmigen.",
       "presetInstruction": "Verwende run_preset für eine konfigurierte Vorlage. Gib Werte für Platzhalter an und informiere über die Genehmigungskarte.",
-      "unknownPreset": "Unbekannte Vorlage."
+      "unknownPreset": "Unbekannte Vorlage.",
+      "resumeDescription": "Im Terminal öffnen",
+      "resumeInstruction": "Im Terminal öffnen"
     },
     "card": {
       "title": "Agentenauftrag freigeben",
@@ -4947,7 +4949,9 @@
       "worktreeKept": "Worktree behalten",
       "copyCommands": "Befehle kopieren",
       "discard": "Verwerfen",
-      "cursorWriteUnavailable": "Der Schreibmodus erfordert Claude; Cursor unterstützt nur Plan oder Ask."
+      "cursorWriteUnavailable": "Der Schreibmodus erfordert Claude; Cursor unterstützt nur Plan oder Ask.",
+      "openTerminal": "Im Terminal öffnen",
+      "noSession": "Keine Sitzung verfügbar"
     },
     "toast": {
       "done": "Agentenauftrag für {{project}} abgeschlossen",

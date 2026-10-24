@@ -4860,7 +4860,9 @@
       "results": "代理工作結果",
       "presetDescription": "準備已儲存的代理工作。開始前需要使用者核准。",
       "presetInstruction": "對已設定的預設使用 run_preset，提供佔位符的值並提示使用者查看核准卡片。",
-      "unknownPreset": "未知預設。"
+      "unknownPreset": "未知預設。",
+      "resumeDescription": "在終端機中開啟",
+      "resumeInstruction": "在終端機中開啟"
     },
     "card": {
       "title": "代理工作核准",
@@ -4947,7 +4949,9 @@
       "worktreeKept": "已保留 worktree",
       "copyCommands": "複製命令",
       "discard": "捨棄",
-      "cursorWriteUnavailable": "寫入模式需要 Claude；Cursor 僅支援 Plan 或 Ask。"
+      "cursorWriteUnavailable": "寫入模式需要 Claude；Cursor 僅支援 Plan 或 Ask。",
+      "openTerminal": "在終端機中開啟",
+      "noSession": "沒有可用的工作階段"
     },
     "toast": {
       "done": "{{project}} 的代理工作已完成",

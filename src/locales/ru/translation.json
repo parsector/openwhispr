@@ -4900,7 +4900,9 @@
       "results": "Результаты заданий агентов",
       "presetDescription": "Подготавливает сохранённое задание агента. Пользователь должен подтвердить запуск.",
       "presetInstruction": "Используйте run_preset для настроенного шаблона. Передайте значения и сообщите о карточке подтверждения.",
-      "unknownPreset": "Неизвестный шаблон."
+      "unknownPreset": "Неизвестный шаблон.",
+      "resumeDescription": "Открыть в терминале",
+      "resumeInstruction": "Открыть в терминале"
     },
     "card": {
       "title": "Подтверждение задания агента",
@@ -4987,7 +4989,9 @@
       "worktreeKept": "worktree сохранён",
       "copyCommands": "Копировать команды",
       "discard": "Удалить",
-      "cursorWriteUnavailable": "Режим записи требует Claude; Cursor поддерживает только Plan и Ask."
+      "cursorWriteUnavailable": "Режим записи требует Claude; Cursor поддерживает только Plan и Ask.",
+      "openTerminal": "Открыть в терминале",
+      "noSession": "Сеанс недоступен"
     },
     "toast": {
       "done": "Задание агента для {{project}} завершено",

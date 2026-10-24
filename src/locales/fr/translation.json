@@ -4860,7 +4860,9 @@
       "results": "Résultats des tâches d’agent",
       "presetDescription": "Prépare une tâche d’agent enregistrée. L’utilisateur doit l’approuver avant son lancement.",
       "presetInstruction": "Utilisez run_preset pour un préréglage configuré. Fournissez les valeurs et signalez la carte d’approbation.",
-      "unknownPreset": "Préréglage inconnu."
+      "unknownPreset": "Préréglage inconnu.",
+      "resumeDescription": "Ouvrir dans le terminal",
+      "resumeInstruction": "Ouvrir dans le terminal"
     },
     "card": {
       "title": "Approbation de la tâche d’agent",
@@ -4947,7 +4949,9 @@
       "worktreeKept": "worktree conservé",
       "copyCommands": "Copier les commandes",
       "discard": "Supprimer",
-      "cursorWriteUnavailable": "Le mode écriture nécessite Claude ; Cursor ne propose que Plan ou Ask."
+      "cursorWriteUnavailable": "Le mode écriture nécessite Claude ; Cursor ne propose que Plan ou Ask.",
+      "openTerminal": "Ouvrir dans le terminal",
+      "noSession": "Aucune session disponible"
     },
     "toast": {
       "done": "Tâche d’agent terminée pour {{project}}",

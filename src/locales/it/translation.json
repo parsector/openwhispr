@@ -4860,7 +4860,9 @@
       "results": "Risultati dei lavori degli agenti",
       "presetDescription": "Prepara un’attività agente salvata. L’utente deve approvarla prima dell’avvio.",
       "presetInstruction": "Usa run_preset per un modello configurato. Fornisci i valori e segnala la scheda di approvazione.",
-      "unknownPreset": "Modello sconosciuto."
+      "unknownPreset": "Modello sconosciuto.",
+      "resumeDescription": "Apri nel terminale",
+      "resumeInstruction": "Apri nel terminale"
     },
     "card": {
       "title": "Approvazione del lavoro dell’agente",
@@ -4947,7 +4949,9 @@
       "worktreeKept": "worktree conservato",
       "copyCommands": "Copia comandi",
       "discard": "Elimina",
-      "cursorWriteUnavailable": "La modalità scrittura richiede Claude; Cursor supporta solo Plan o Ask."
+      "cursorWriteUnavailable": "La modalità scrittura richiede Claude; Cursor supporta solo Plan o Ask.",
+      "openTerminal": "Apri nel terminale",
+      "noSession": "Nessuna sessione disponibile"
     },
     "toast": {
       "done": "Lavoro dell’agente completato per {{project}}",
