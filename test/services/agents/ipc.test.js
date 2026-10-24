@@ -3,6 +3,45 @@ const assert = require("node:assert/strict");
 const { registerAgentIpc } = require("../../../src/services/agents/ipc");
 const debugLogger = require("../../../src/helpers/debugLogger");
 
+test("prepare accepts origin and logs specific validation failures with debug off", async (t) => {
+  const handlers = new Map();
+  const errors = [];
+  const original = debugLogger.isDebugEnabled;
+  debugLogger.isDebugEnabled = () => false;
+  t.mock.method(debugLogger, "error", (...args) => errors.push(args));
+  t.after(() => {
+    debugLogger.isDebugEnabled = original;
+  });
+  let prepared;
+  registerAgentIpc({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    projectStore: {},
+    presetStore: {},
+    resolver: {},
+    manager: {
+      prepare: async (input) => {
+        prepared = input;
+        const error = new Error("invalid_model (model)");
+        error.field = "model";
+        throw error;
+      },
+    },
+  });
+  await assert.rejects(
+    handlers.get("agent-job-prepare")(null, {
+      project: "p",
+      task: "t",
+      model: "bad-model",
+      origin: { conversationId: 7 },
+    }),
+    (error) => error.message === "invalid_model (model)" && error.field === "model"
+  );
+  assert.deepEqual(prepared.origin, { conversationId: 7 });
+  assert.equal(errors.length, 1);
+  assert.equal(errors[0][1].field, "model");
+  assert.equal(errors[0][1].value, "bad-model");
+});
+
 test("harness IPC gates CLI evidence and drops account metadata", async (t) => {
   const original = debugLogger.isDebugEnabled;
   t.after(() => {
@@ -153,7 +192,11 @@ test("job IPC keeps the redacted CLI message while gating raw reason", (t) => {
     presetStore: {},
     resolver: {},
     manager: {
-      get: () => ({ jobId: "job-1", reason: "spawn /private/cli failed", lastError: "CLI rejected request" }),
+      get: () => ({
+        jobId: "job-1",
+        reason: "spawn /private/cli failed",
+        lastError: "CLI rejected request",
+      }),
       list: () => [
         { jobId: "job-1", reason: "spawn /private/cli failed", lastError: "CLI rejected request" },
       ],
