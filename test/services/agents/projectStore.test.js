@@ -44,3 +44,18 @@ test("recovers malformed file", (t) => {
   assert.deepEqual(createProjectStore(file).read(), { projects: [] });
   assert.ok(fs.readdirSync(path.dirname(file)).some((name) => name.includes("corrupt")));
 });
+
+test("project mode is fixed for Claude and limited to Cursor plan or ask", (t) => {
+  const { file, project } = setup(t);
+  const store = createProjectStore(file);
+  assert.throws(() => store.save({ ...project, mode: "plan" }), /Invalid project mode/);
+  for (const mode of ["plan", "ask"])
+    assert.equal(
+      store.save({ ...project, defaultHarness: "cursor-agent", mode }).projects[0].mode,
+      mode
+    );
+  assert.throws(
+    () => store.save({ ...project, defaultHarness: "cursor-agent", mode: "agent" }),
+    /requires --force/
+  );
+});

@@ -18,7 +18,7 @@ export function createDelegateTaskTool(projects: AgentProject[]): ToolDefinition
       properties: {
         project: { type: "string", enum: projects.map((project) => project.name) },
         task: { type: "string" },
-        harness: { type: "string", enum: ["claude"] },
+        harness: { type: "string", enum: ["claude", "cursor-agent"] },
         model: { type: "string" },
       },
       required: ["project", "task"],
@@ -43,7 +43,9 @@ export function createDelegateTaskTool(projects: AgentProject[]): ToolDefinition
         const job = await window.agentJobs.prepare({
           project: project.name,
           task: args.task,
-          ...(args.harness === undefined ? {} : { harness: args.harness as "claude" }),
+          ...(args.harness === undefined
+            ? {}
+            : { harness: args.harness as "claude" | "cursor-agent" }),
           ...(args.model === undefined ? {} : { model: args.model as string }),
         });
         const action = job.prompt.replace(/\s+/g, " ").slice(0, 120);
@@ -63,7 +65,7 @@ export function createDelegateTaskTool(projects: AgentProject[]): ToolDefinition
           success: false,
           data: null,
           displayText: message.includes("not_authenticated")
-            ? "not_authenticated: Sign in to Claude and try again."
+            ? `not_authenticated: Sign in to ${project.defaultHarness === "claude" ? "Claude" : "Cursor"} and try again.`
             : message,
         };
       }

@@ -15,10 +15,13 @@ function registerAgentIpc({ ipcMain, projectStore, resolver, manager }) {
   ipcMain.handle("agent-projects-test-harness", async (_event, harness) => {
     if (!["claude", "cursor-agent"].includes(harness)) throw new Error("Invalid harness");
     const result = await resolver.test(harness);
-    return { ...result, auth: await resolver.authStatus(harness) };
+    const auth = await resolver.authStatus(harness);
+    return harness === "cursor-agent"
+      ? { ...result, auth, models: await resolver.listModels(harness) }
+      : { ...result, auth };
   });
   ipcMain.handle("agent-job-prepare", (_event, input) => {
-    if (!exact(input, ["project", "task", "harness", "model"]))
+    if (!exact(input, ["project", "task", "harness", "model", "mode"]))
       throw new Error("Invalid job request");
     return manager.prepare(input);
   });

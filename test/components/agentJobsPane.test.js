@@ -11,6 +11,7 @@ const {
   failureMessage,
   failureDescription,
   lastErrorKey,
+  guaranteeKey,
 } = require("../../src/components/integrations/agentJobsPresentation.ts");
 
 test("job status maps to readable label keys and severity, including display-only stall", () => {
@@ -32,6 +33,13 @@ test("queue position and elapsed time handle missing and completed jobs", () => 
   assert.equal(elapsedTime(null, null, 10000), null);
   assert.equal(elapsedTime(1000, null, 66000), "1:05");
   assert.equal(elapsedTime(1000, 3662000, 9000000), "1:01:01");
+});
+
+test("guarantee labels distinguish Claude enforcement from Cursor best effort", () => {
+  assert.equal(guaranteeKey("claude"), "agentJobs.guarantee.enforced");
+  assert.equal(guaranteeKey("cursor-agent"), "agentJobs.guarantee.bestEffort");
+  assert.equal(en.agentJobs.guarantee.enforced, "read-only (enforced)");
+  assert.equal(en.agentJobs.guarantee.bestEffort, "read-only (best effort)");
 });
 
 test("auth and failure reasons map known states without hiding CLI errors", () => {
@@ -61,6 +69,9 @@ test("auth and failure reasons map known states without hiding CLI errors", () =
   assert.equal(failureDescription("exit_1", null, translate), "exit_1");
   assert.deepEqual(failureMessage("not_authenticated"), {
     key: "agentJobs.pane.failure.notAuthenticated",
+  });
+  assert.deepEqual(failureMessage("not_authenticated", "cursor-agent"), {
+    key: "agentJobs.pane.auth.cursorNotAuthenticated",
   });
   assert.deepEqual(failureMessage("interrupted"), { key: "agentJobs.pane.failure.interrupted" });
   assert.deepEqual(failureMessage("cancelled"), { key: "agentJobs.pane.failure.cancelled" });
@@ -123,12 +134,13 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     }),
     list: async () => [],
     onUpdated: () => () => {},
-    testHarness: async () => ({
+    testHarness: async (harness) => ({
       ok: false,
       path: null,
       version: null,
       error: "not found",
       auth: { state: "unknown", method: null, detail: null },
+      ...(harness === "cursor-agent" ? { models: ["auto", "gpt-5"] } : {}),
     }),
   };
   React = require("react");
@@ -178,4 +190,31 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     en.agentJobs.pane.invalidClaudeModel,
     "Not a Claude model name — try `opus` or `claude-opus-5-5`"
   );
+  const harness =
+    host.querySelector('select[value="claude"]') ||
+    [...host.querySelectorAll("select")].find((item) =>
+      item.querySelector('option[value="cursor-agent"]')
+    );
+  const claudeMode = [...host.querySelectorAll("select")].find((item) =>
+    item.querySelector('option[value="read-only"]')
+  );
+  assert.equal(claudeMode.disabled, true);
+  assert.deepEqual(
+    [...claudeMode.options].map((option) => option.value),
+    ["read-only"]
+  );
+  await act(() => {
+    harness.value = "cursor-agent";
+    harness.dispatchEvent(new dom.Event("change", { bubbles: true }));
+  });
+  const mode = [...host.querySelectorAll("select")].find((item) =>
+    item.querySelector('option[value="plan"]')
+  );
+  assert.deepEqual(
+    [...mode.options].map((option) => option.value),
+    ["plan", "ask"]
+  );
+  assert.equal(mode.disabled, false);
+  assert.equal(mode.value, "plan");
+  assert.ok(host.querySelector('option[value="gpt-5"]'));
 });

@@ -4932,6 +4932,14 @@
       "done": "{{project}} 的代理工作已完成",
       "failed": "{{project}} 的代理工作失敗",
       "unknownError": "工作失敗。"
+    },
+    "guarantee": {
+      "enforced": "唯讀（強制）",
+      "bestEffort": "唯讀（盡力而為）"
+    },
+    "mode": {
+      "plan": "規劃",
+      "ask": "提問"
     }
   }
 }

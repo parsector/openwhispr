@@ -23,3 +23,12 @@ test("Claude model validation warns about mistaken aliases but permits future fu
   assert.deepEqual(validateModel("cursor-agent", "custom-model"), { ok: true, reason: null });
   assert.deepEqual(validateModel("other", "opus"), { ok: false, reason: "unsupported" });
 });
+
+test("Cursor catalog merges probed models without restricting free text", () => {
+  const { cursorModels } = require("../../../src/services/agents/modelCatalog");
+  assert.deepEqual(cursorModels(["auto", "auto", "gpt-5"]), [
+    { id: "auto", label: "auto" },
+    { id: "gpt-5", label: "gpt-5" },
+  ]);
+  assert.deepEqual(validateModel("cursor-agent", "future-model"), { ok: true, reason: null });
+});

@@ -21,7 +21,14 @@ function validateProject(project, fsImpl = fs) {
     throw new Error("Project folder must be an existing absolute directory");
   if (!["claude", "cursor-agent"].includes(project.defaultHarness))
     throw new Error("Invalid harness");
-  if (project.mode !== "read-only") throw new Error("Invalid project mode");
+  if (project.mode === "agent")
+    throw new Error("Cursor agent mode requires --force and is unavailable");
+  if (
+    project.defaultHarness === "claude"
+      ? project.mode !== "read-only"
+      : !["plan", "ask"].includes(project.mode)
+  )
+    throw new Error("Invalid project mode");
   if (
     project.model !== null &&
     project.model !== undefined &&

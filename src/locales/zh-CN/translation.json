@@ -4932,6 +4932,14 @@
       "done": "{{project}} 的代理任务已完成",
       "failed": "{{project}} 的代理任务失败",
       "unknownError": "任务失败。"
+    },
+    "guarantee": {
+      "enforced": "只读（强制）",
+      "bestEffort": "只读（尽力而为）"
+    },
+    "mode": {
+      "plan": "规划",
+      "ask": "提问"
     }
   }
 }

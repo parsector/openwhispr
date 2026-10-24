@@ -35,7 +35,7 @@ export function AgentJobToastListener() {
         } else {
           toast({
             title: t("agentJobs.toast.failed", { project: job.project.name }),
-            description: failureDescription(job.reason, job.lastError, t),
+            description: failureDescription(job.reason, job.lastError, t, job.harness),
             variant: "destructive",
             duration: 10000,
           });

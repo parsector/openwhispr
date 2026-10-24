@@ -55,6 +55,48 @@ function parseCursorStatus({ exitCode, stdout = "", stderr = "" }) {
 }
 function createCliResolver({ configuredPaths = {}, run = exec } = {}) {
   const cache = new Map();
+  const modelsCache = new Map();
+  async function listModels(harness) {
+    if (!["claude", "cursor-agent"].includes(harness)) throw new Error("Invalid harness");
+    if (harness === "claude") return [];
+    if (modelsCache.has(harness)) return modelsCache.get(harness);
+    let models = [];
+    try {
+      const resolved = await resolve(harness);
+      if (resolved.ok) {
+        const { stdout } = await run(resolved.path, ["--list-models"], {
+          timeout: 5000,
+          env: minimalEnv(),
+        });
+        const source = redactOutput(stdout).trim();
+        let values;
+        try {
+          const parsed = JSON.parse(source);
+          values = Array.isArray(parsed) ? parsed : parsed.models;
+        } catch {
+          values = source.split(/\r?\n/);
+        }
+        if (Array.isArray(values))
+          models = [
+            ...new Set(
+              values
+                .map((value) => {
+                  if (typeof value !== "string") return value?.id || value?.name;
+                  const line = value.trim().replace(/^[-*•]\s*/, "");
+                  if (!line || /:\s*$/.test(line)) return null;
+                  return line.split(/\s+/)[0];
+                })
+                .filter(
+                  (value) =>
+                    typeof value === "string" && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(value)
+                )
+            ),
+          ];
+      }
+    } catch {}
+    modelsCache.set(harness, models);
+    return models;
+  }
   async function test(harness) {
     if (!["claude", "cursor-agent"].includes(harness)) throw new Error("Invalid harness");
     async function verify(candidate) {
@@ -119,6 +161,6 @@ function createCliResolver({ configuredPaths = {}, run = exec } = {}) {
         : parseCursorStatus({ exitCode: error.code, stdout: error.stdout, stderr: error.stderr });
     }
   }
-  return { resolve, test, authStatus };
+  return { resolve, test, authStatus, listModels };
 }
 module.exports = { createCliResolver, minimalEnv, parseAuthStatus };

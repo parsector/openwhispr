@@ -4932,6 +4932,14 @@
       "done": "Agentenauftrag für {{project}} abgeschlossen",
       "failed": "Agentenauftrag für {{project}} fehlgeschlagen",
       "unknownError": "Der Auftrag ist fehlgeschlagen."
+    },
+    "guarantee": {
+      "enforced": "schreibgeschützt (erzwungen)",
+      "bestEffort": "schreibgeschützt (nach bestem Bemühen)"
+    },
+    "mode": {
+      "plan": "Planen",
+      "ask": "Fragen"
     }
   }
 }

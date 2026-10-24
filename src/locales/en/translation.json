@@ -4932,6 +4932,14 @@
       "done": "Agent job finished for {{project}}",
       "failed": "Agent job failed for {{project}}",
       "unknownError": "The job failed."
+    },
+    "guarantee": {
+      "enforced": "read-only (enforced)",
+      "bestEffort": "read-only (best effort)"
+    },
+    "mode": {
+      "plan": "Plan",
+      "ask": "Ask"
     }
   }
 }

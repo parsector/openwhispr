@@ -4932,6 +4932,14 @@
       "done": "Tâche d’agent terminée pour {{project}}",
       "failed": "Échec de la tâche d’agent pour {{project}}",
       "unknownError": "La tâche a échoué."
+    },
+    "guarantee": {
+      "enforced": "lecture seule (appliquée)",
+      "bestEffort": "lecture seule (au mieux)"
+    },
+    "mode": {
+      "plan": "Planifier",
+      "ask": "Demander"
     }
   }
 }

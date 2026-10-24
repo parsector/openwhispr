@@ -710,6 +710,7 @@ function initializeCoreManagers() {
   const { createProjectStore } = require("./src/services/agents/projectStore");
   const { createCliResolver } = require("./src/services/agents/cliResolver");
   const { createClaudeRunner } = require("./src/services/agents/claudeRunner");
+  const { createCursorRunner } = require("./src/services/agents/cursorRunner");
   const { createJobManager } = require("./src/services/agents/jobManager");
   const { registerAgentIpc } = require("./src/services/agents/ipc");
   const tokenStore = require("./src/helpers/tokenStore");
@@ -737,7 +738,10 @@ function initializeCoreManagers() {
     file: path.join(app.getPath("userData"), "agents", "jobs.json"),
     projectStore,
     resolver,
-    runnerFactory: (cliPath) => createClaudeRunner({ cliPath }),
+    runnerFactories: {
+      claude: (cliPath) => createClaudeRunner({ cliPath }),
+      "cursor-agent": (cliPath) => createCursorRunner({ cliPath }),
+    },
     databaseManager,
     broadcast: broadcastToWindows,
     policyAllowed: async () => {

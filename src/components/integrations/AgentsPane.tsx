@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentJob } from "../../types/electron";
-import { claudeModels, validateModel } from "../../services/agents/modelCatalog";
+import { claudeModels, cursorModels, validateModel } from "../../services/agents/modelCatalog";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { SectionLabel, SettingsPanel, SettingsPanelRow } from "../ui/SettingsSection";
@@ -10,6 +10,7 @@ import {
   authStateKey,
   elapsedTime,
   failureDescription,
+  guaranteeKey,
   jobStatus,
   queuePosition,
   stallTextKey,
@@ -198,6 +199,9 @@ export function AgentsPane({ title }: { title: string }) {
       ? t("agentJobs.pane.invalidClaudeModel")
       : null;
   }
+  function modeLabel(mode: string) {
+    return t(mode === "read-only" ? "agentJobs.pane.readOnly" : `agentJobs.mode.${mode}`);
+  }
   return (
     <IntegrationsPane title={title} description={t("agentJobs.pane.description")}>
       <section className="space-y-2" aria-label={t("agentJobs.pane.projects")}>
@@ -237,7 +241,8 @@ export function AgentsPane({ title }: { title: string }) {
                     {project.folder}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {project.defaultHarness} · {t("agentJobs.pane.readOnly")} ·{" "}
+                    {project.defaultHarness} · {modeLabel(project.mode)} ·{" "}
+                    {t(guaranteeKey(project.defaultHarness))} ·{" "}
                     {modelLabel(project.model, project.defaultHarness)}
                   </p>
                   {modelWarning(project.defaultHarness, project.model) && (
@@ -340,7 +345,12 @@ export function AgentsPane({ title }: { title: string }) {
                     value={draft.defaultHarness}
                     onChange={(e) => {
                       const harness = e.target.value as Harness;
-                      setDraft({ ...draft, defaultHarness: harness, model: null });
+                      setDraft({
+                        ...draft,
+                        defaultHarness: harness,
+                        mode: harness === "claude" ? "read-only" : "plan",
+                        model: null,
+                      });
                       setCustomModel(false);
                       void testHarness(harness);
                     }}
@@ -351,8 +361,22 @@ export function AgentsPane({ title }: { title: string }) {
                 </label>
                 <label className="space-y-1 text-xs">
                   {t("agentJobs.pane.mode")}
-                  <select className={inputClass} value={draft.mode} disabled>
-                    <option value="read-only">{t("agentJobs.pane.readOnly")}</option>
+                  <select
+                    className={inputClass}
+                    value={draft.mode}
+                    disabled={draft.defaultHarness === "claude"}
+                    onChange={(e) =>
+                      setDraft({ ...draft, mode: e.target.value as Project["mode"] })
+                    }
+                  >
+                    {draft.defaultHarness === "claude" ? (
+                      <option value="read-only">{t("agentJobs.pane.readOnly")}</option>
+                    ) : (
+                      <>
+                        <option value="plan">{t("agentJobs.mode.plan")}</option>
+                        <option value="ask">{t("agentJobs.mode.ask")}</option>
+                      </>
+                    )}
                   </select>
                 </label>
                 <div className="space-y-1 text-xs">
@@ -390,6 +414,21 @@ export function AgentsPane({ title }: { title: string }) {
                       <option value="__other__">{t("agentJobs.pane.otherModel")}</option>
                     </select>
                   )}
+                  {draft.defaultHarness === "cursor-agent" &&
+                    cursorModels(probe["cursor-agent"]?.models).length > 0 && (
+                      <select
+                        className={inputClass}
+                        value={draft.model || ""}
+                        onChange={(e) => setDraft({ ...draft, model: e.target.value || null })}
+                      >
+                        <option value="">{t("agentJobs.pane.defaultModel")}</option>
+                        {cursorModels(probe["cursor-agent"]?.models).map((model) => (
+                          <option key={model.id} value={model.id}>
+                            {model.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   {(customModel || draft.defaultHarness === "cursor-agent") && (
                     <div className="space-y-1">
                       {draft.defaultHarness === "claude" && (
@@ -501,7 +540,9 @@ export function AgentsPane({ title }: { title: string }) {
                     <div>
                       <h3 className="text-sm font-medium">{job.project.name}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {job.harness} · {job.model || t("agentJobs.pane.defaultModel")}
+                        {job.harness} · {modeLabel(job.mode || "read-only")} ·{" "}
+                        {t(guaranteeKey(job.harness))} ·{" "}
+                        {job.model || t("agentJobs.pane.defaultModel")}
                         {elapsed && ` · ${elapsed}`}
                       </p>
                     </div>
@@ -543,7 +584,7 @@ export function AgentsPane({ title }: { title: string }) {
                   )}
                   {job.status === "failed" && job.reason && (
                     <p role="alert" className="text-xs text-destructive whitespace-pre-line">
-                      {failureDescription(job.reason, job.lastError, t)}
+                      {failureDescription(job.reason, job.lastError, t, job.harness)}
                     </p>
                   )}
                   {(["pending", "queued", "running"] as const).includes(

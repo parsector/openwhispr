@@ -77,3 +77,25 @@ test("resolver runs Claude auth status on its absolute path without --json", asy
   assert.equal(calls.at(-1).binary, process.execPath);
   assert.equal(calls.at(-1).options.timeout, 5000);
 });
+
+test("Cursor model probe accepts JSON or line lists and caches per process", async () => {
+  for (const output of [
+    '{"models":[{"id":"auto"},{"name":"gpt-5"}]}',
+    "Available models:\n- auto\n- gpt-5 (recommended)",
+  ]) {
+    let probes = 0;
+    const resolver = createCliResolver({
+      configuredPaths: { "cursor-agent": process.execPath },
+      run: async (_binary, args) => {
+        if (args[0] === "--list-models") {
+          probes++;
+          return { stdout: output };
+        }
+        return { stdout: "cursor 1" };
+      },
+    });
+    assert.deepEqual(await resolver.listModels("cursor-agent"), ["auto", "gpt-5"]);
+    assert.deepEqual(await resolver.listModels("cursor-agent"), ["auto", "gpt-5"]);
+    assert.equal(probes, 1);
+  }
+});

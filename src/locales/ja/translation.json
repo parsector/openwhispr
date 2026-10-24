@@ -4932,6 +4932,14 @@
       "done": "{{project}}のエージェントジョブが完了しました",
       "failed": "{{project}}のエージェントジョブが失敗しました",
       "unknownError": "ジョブが失敗しました。"
+    },
+    "guarantee": {
+      "enforced": "読み取り専用（強制）",
+      "bestEffort": "読み取り専用（ベストエフォート）"
+    },
+    "mode": {
+      "plan": "計画",
+      "ask": "質問"
     }
   }
 }

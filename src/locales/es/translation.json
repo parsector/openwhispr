@@ -4932,6 +4932,14 @@
       "done": "Trabajo de agente terminado para {{project}}",
       "failed": "Falló el trabajo de agente para {{project}}",
       "unknownError": "El trabajo falló."
+    },
+    "guarantee": {
+      "enforced": "solo lectura (garantizado)",
+      "bestEffort": "solo lectura (mejor esfuerzo)"
+    },
+    "mode": {
+      "plan": "Planificar",
+      "ask": "Preguntar"
     }
   }
 }

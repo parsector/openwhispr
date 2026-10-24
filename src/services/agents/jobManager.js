@@ -10,6 +10,7 @@ function createJobManager({
   projectStore,
   resolver,
   runnerFactory,
+  runnerFactories,
   databaseManager,
   broadcast = () => {},
   policyAllowed = async () => true,
@@ -43,6 +44,7 @@ function createJobManager({
   }
   try {
     for (const job of JSON.parse(fs.readFileSync(file, "utf8")).jobs || []) {
+      if (!job.mode && job.harness === "claude") job.mode = "read-only";
       if (["running", "queued"].includes(job.status)) {
         job.status = "failed";
         job.reason = "interrupted";
@@ -104,15 +106,15 @@ function createJobManager({
           project.name === job.project.name &&
           project.folder === job.project.folder &&
           project.defaultHarness === job.harness &&
-          project.mode === "read-only"
+          project.mode === job.mode
       );
-  async function prepare({ project, task, harness, model }) {
+  async function prepare({ project, task, harness, model, mode }) {
     if (
       typeof project !== "string" ||
       typeof task !== "string" ||
       !task.trim() ||
       task.length > 100_000 ||
-      (harness !== undefined && harness !== "claude") ||
+      (harness !== undefined && !["claude", "cursor-agent"].includes(harness)) ||
       (model !== undefined &&
         (typeof model !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(model)))
     )
@@ -121,15 +123,28 @@ function createJobManager({
     const selected = projectStore.read().projects.find((item) => item.name === project);
     if (!selected) throw new Error("Unknown project");
     const selectedHarness = harness || selected.defaultHarness;
-    if (selectedHarness !== "claude") throw new Error("Harness unavailable in slice A");
-    if ((await resolver.authStatus("claude")).state !== "authenticated")
+    if (mode === "agent") throw new Error("Cursor agent mode requires --force and is unavailable");
+    if (selectedHarness !== selected.defaultHarness)
+      throw new Error("Harness does not match project");
+    if (selectedHarness === "cursor-agent" && task.trimStart().startsWith("-"))
+      throw new Error("Invalid Cursor prompt");
+    const selectedMode = mode || selected.mode;
+    if (
+      selectedMode !== selected.mode ||
+      (selectedHarness === "claude"
+        ? selectedMode !== "read-only"
+        : !["plan", "ask"].includes(selectedMode))
+    )
+      throw new Error("Mode does not match project");
+    if ((await resolver.authStatus(selectedHarness)).state !== "authenticated")
       throw new Error("not_authenticated");
-    const resolved = await resolver.resolve("claude");
+    const resolved = await resolver.resolve(selectedHarness);
     if (!resolved.ok) throw new Error(resolved.error);
     const job = {
       jobId: crypto.randomUUID(),
       project: { name: selected.name, folder: selected.folder },
       harness: selectedHarness,
+      mode: selectedMode,
       model: model || selected.model || null,
       prompt: task.trim(),
       status: "pending",
@@ -153,6 +168,7 @@ function createJobManager({
       jobId: job.jobId,
       project: job.project,
       harness: job.harness,
+      mode: job.mode,
       model: job.model,
       prompt: job.prompt,
     };
@@ -168,12 +184,12 @@ function createJobManager({
       drain();
       return;
     }
-    if ((await resolver.authStatus("claude")).state !== "authenticated") {
+    if ((await resolver.authStatus(job.harness)).state !== "authenticated") {
       if (job.status === "running") fail(job, "not_authenticated");
       drain();
       return;
     }
-    const resolved = await resolver.resolve("claude");
+    const resolved = await resolver.resolve(job.harness);
     if (job.status === "cancelled") {
       drain();
       return;
@@ -184,10 +200,14 @@ function createJobManager({
       return;
     }
     try {
-      const runner = runnerFactory(resolved.path).start({
+      const makeRunner =
+        runnerFactories?.[job.harness] || (job.harness === "claude" ? runnerFactory : null);
+      if (!makeRunner) throw new Error("Harness unavailable");
+      const runner = makeRunner(resolved.path).start({
         folder: job.project.folder,
         prompt: job.prompt,
         model: job.model,
+        ...(job.harness === "cursor-agent" ? { mode: job.mode } : {}),
         onEvent(event) {
           if (job.status !== "running") return;
           job.lastEventAt = now();
@@ -297,6 +317,8 @@ function createJobManager({
       fail(job, "expired");
       throw new Error("expired");
     }
+    if (job.harness === "cursor-agent" && prompt?.trimStart().startsWith("-"))
+      throw new Error("Invalid Cursor prompt");
     if (prompt !== undefined) job.prompt = prompt.trim();
     if (activeCount() >= 2 || queue.length) {
       job.status = "queued";
