@@ -58,7 +58,7 @@ function registerAgentIpc({
   ipcMain.handle("agent-job-prepare", async (_event, input) => {
     try {
       if (!object(input)) throw invalid("request");
-      if (!exact(input, ["project", "task", "harness", "model", "mode", "origin", "resumeJobId"]))
+      if (!exact(input, ["project", "task", "harness", "model", "mode", "origin", "resumeJobId", "contextNoteId"]))
         throw invalid("request");
       return jobPayload(await manager.prepare(input));
     } catch (error) {
@@ -68,7 +68,7 @@ function registerAgentIpc({
   });
   ipcMain.handle("agent-job-approve", async (_event, id, input = {}) => {
     try {
-      if (!exact(input, ["prompt"])) throw invalid("prompt");
+      if (!exact(input, ["prompt", "contextNoteId"])) throw invalid("prompt");
       return jobPayload(await manager.approve(id, input));
     } catch (error) {
       if (!error.agentJobLogged) logFailure("approve", error, input);

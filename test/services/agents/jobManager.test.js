@@ -49,6 +49,7 @@ function setup(t, overrides = {}) {
   return {
     manager,
     notes,
+    db,
     dir,
     advance: (ms) => {
       clock += ms;
@@ -56,6 +57,51 @@ function setup(t, overrides = {}) {
     },
   };
 }
+test("missing context drops with a specific reason and still prepares", async (t) => {
+  const { manager, db } = setup(t);
+  db.getNote = () => null;
+  const prepared = await manager.prepare({ project: "openwhispr", task: "hello", contextNoteId: 72 });
+  assert.equal(prepared.contextDropped, true);
+  assert.equal(prepared.contextDropReason, "note_missing");
+  assert.equal(manager.get(prepared.jobId).status, "pending");
+  assert.equal(manager.get(prepared.jobId).contextNoteId, undefined);
+});
+
+test("note context persists and a successful result appends once without trimming", async (t) => {
+  const { manager, db, dir, notes } = setup(t);
+  const note = { id: 42, title: "Meeting", content: "Decisions  \n", enhanced_content: "", space_id: 7 };
+  const updates = [];
+  db.getNote = (id) => id === 42 ? { ...note } : null;
+  db.getSpace = () => ({ kind: "private" });
+  db.updateNote = (_id, change) => {
+    updates.push(change.content);
+    note.content = change.content;
+    return { success: true, note: { ...note } };
+  };
+  const prepared = await manager.prepare({ project: "openwhispr", task: "Summarize", contextNoteId: 42 });
+  assert.equal(prepared.contextNoteTitle, "Meeting");
+  assert.equal(prepared.contextChars, Array.from("Decisions  \n").length);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "jobs.json"), "utf8")).jobs[0].contextNoteId, 42);
+  await manager.approve(prepared.jobId);
+  await until(() => manager.get(prepared.jobId).status === "done");
+  assert.equal(notes.length, 0);
+  assert.equal(updates.length, 1);
+  assert.ok(note.content.startsWith("Decisions  \n\n\n## Agent job — claude · "));
+  assert.match(note.content, /## Agent job — claude · /);
+  assert.equal(manager.get(prepared.jobId).noteId, 42);
+});
+
+test("unwritable team note falls back to a private result note", async (t) => {
+  const { manager, db, notes } = setup(t);
+  db.getNote = () => ({ id: 42, title: "Team", content: "Text", space_id: 8 });
+  db.getSpace = () => ({ kind: "team", cloud_space_id: "space", my_role: null });
+  db.updateNote = () => assert.fail("must not write to unwritable note");
+  const prepared = await manager.prepare({ project: "openwhispr", task: "Summarize", contextNoteId: 42 });
+  await manager.approve(prepared.jobId);
+  await until(() => manager.get(prepared.jobId).status === "done");
+  assert.equal(notes.length, 1);
+  assert.equal(manager.get(prepared.jobId).contextAppendFallback, true);
+});
 async function until(check, timeout = 3000) {
   const end = Date.now() + timeout;
   while (Date.now() < end) {

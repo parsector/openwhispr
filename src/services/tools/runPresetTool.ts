@@ -24,6 +24,7 @@ export function createRunPresetTool(presets: AgentPreset[]): ToolDefinition {
       properties: {
         preset: { type: "string", enum: presets.map((item) => item.name) },
         values: { type: "object", additionalProperties: { type: "string" } },
+        noteId: { type: "number", description: "Optional note ID explicitly chosen by the user" },
       },
       required: ["preset"],
       additionalProperties: false,
@@ -51,6 +52,7 @@ export function createRunPresetTool(presets: AgentPreset[]): ToolDefinition {
           harness: preset.harness,
           mode: preset.mode,
           ...(preset.model ? { model: preset.model } : {}),
+          ...(args.noteId === undefined ? {} : { contextNoteId: args.noteId as number }),
         });
         const action = job.prompt.replace(/\s+/g, " ").slice(0, 120);
         const summary = `harness ${job.harness} on repo ${job.project.name} with model ${job.model || "default"} for action ${action}`;
