@@ -738,6 +738,7 @@ function initializeCoreManagers() {
   );
   registerMcpIpc(mcpClientManager);
   const { createProjectStore } = require("./src/services/agents/projectStore");
+  const { createPresetStore } = require("./src/services/agents/presetStore");
   const { createCliResolver } = require("./src/services/agents/cliResolver");
   const { createClaudeRunner } = require("./src/services/agents/claudeRunner");
   const { createCursorRunner } = require("./src/services/agents/cursorRunner");
@@ -747,6 +748,9 @@ function initializeCoreManagers() {
   const { compareAppVersions } = require("./src/helpers/appVersion");
   const projectStore = createProjectStore(
     path.join(app.getPath("userData"), "agents", "projects.json")
+  );
+  const presetStore = createPresetStore(
+    path.join(app.getPath("userData"), "agents", "presets.json"), projectStore
   );
   const repoFolder = app.getAppPath();
   if (
@@ -790,7 +794,7 @@ function initializeCoreManagers() {
       );
     },
   });
-  registerAgentIpc({ ipcMain, projectStore, resolver, manager: agentJobManager });
+  registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manager: agentJobManager });
   void mcpClientManager
     .sync()
     .catch((error) => debugLogger.warn("MCP client startup failed", error));
