@@ -32,3 +32,24 @@ test("test harness IPC returns auth and accepts only a harness id", async () => 
   });
   await assert.rejects(probe(null, { harness: "claude", folder: "/tmp" }), /Invalid harness/);
 });
+
+test("Cursor harness probe includes available models", async () => {
+  const handlers = new Map();
+  registerAgentIpc({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    projectStore: {},
+    manager: {},
+    resolver: {
+      test: async () => ({
+        ok: true,
+        path: "/usr/local/bin/cursor-agent",
+        version: "1",
+        error: null,
+      }),
+      authStatus: async () => ({ state: "authenticated", method: null, detail: null }),
+      listModels: async () => ["auto", "gpt-5"],
+    },
+  });
+  const result = await handlers.get("agent-projects-test-harness")(null, "cursor-agent");
+  assert.deepEqual(result.models, ["auto", "gpt-5"]);
+});

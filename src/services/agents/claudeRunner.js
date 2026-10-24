@@ -1,5 +1,5 @@
 const { spawn } = require("node:child_process");
-const { createStreamJson } = require("./streamJson");
+const { createStreamParser } = require("./streamJson");
 const { minimalEnv } = require("./cliResolver");
 const { redactOutput } = require("./redactOutput");
 
@@ -33,7 +33,7 @@ function createClaudeRunner({ cliPath, spawnImpl = spawn } = {}) {
       if (event.kind === "result") resultEvent = event;
       onEvent(event);
     };
-    const stdout = createStreamJson(forward);
+    const stdout = createStreamParser("claude", forward);
     let stderr = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => stdout.feed(chunk));
