@@ -48,6 +48,17 @@ function registerAgentIpc({
   ipcMain.handle("agent-presets-list", () => presetStore.read());
   ipcMain.handle("agent-presets-save", (_event, preset) => presetStore.save(preset));
   ipcMain.handle("agent-presets-remove", (_event, id) => presetStore.remove(name(id)));
+  ipcMain.handle("agent-preset-fan-out-enumerate", (_event, id, values = {}) => {
+    if (!object(values) || Object.values(values).some((value) => typeof value !== "string"))
+      throw invalid("values");
+    const preset = presetStore.read().presets.find((item) => item.id === name(id));
+    if (!preset) throw new Error("Unknown preset");
+    return manager.enumerateFanOut(preset, values);
+  });
+  ipcMain.handle("agent-preset-fan-out-approve", async (_event, id) =>
+    (await manager.approveFanOut(name(id))).map(jobPayload)
+  );
+  ipcMain.handle("agent-preset-fan-out-cancel", (_event, id) => manager.cancelFanOut(name(id)));
   ipcMain.handle("agent-projects-test-harness", async (_event, harness) => {
     if (!["claude", "cursor-agent"].includes(harness)) throw new Error("Invalid harness");
     const result = await resolver.test(harness);
@@ -58,7 +69,18 @@ function registerAgentIpc({
   ipcMain.handle("agent-job-prepare", async (_event, input) => {
     try {
       if (!object(input)) throw invalid("request");
-      if (!exact(input, ["project", "task", "harness", "model", "mode", "origin", "resumeJobId", "contextNoteId"]))
+      if (
+        !exact(input, [
+          "project",
+          "task",
+          "harness",
+          "model",
+          "mode",
+          "origin",
+          "resumeJobId",
+          "contextNoteId",
+        ])
+      )
         throw invalid("request");
       return jobPayload(await manager.prepare(input));
     } catch (error) {

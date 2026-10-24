@@ -1383,6 +1383,10 @@ export interface AgentJob {
   diffStat?: string;
   changedFileCount?: number;
   discardedAt?: number;
+  fanOutId?: string;
+  fanOutIndex?: number;
+  fanOutTotal?: number;
+  fanOutPresetName?: string;
 }
 
 declare global {
@@ -1398,12 +1402,27 @@ declare global {
           mode: "read-only" | "write" | "plan" | "ask";
           prompt: string;
           description: string;
+          fanOut?: "open-pull-requests";
         }>;
       }>;
       presetsSave: (
         preset: Awaited<ReturnType<Window["agentJobs"]["presetsList"]>>["presets"][number]
       ) => Promise<unknown>;
       presetsRemove: (id: string) => Promise<unknown>;
+      fanOutEnumerate: (
+        id: string,
+        values: Record<string, string>
+      ) => Promise<
+        | { ok: false; reason: "gh_missing" | "parse_failed" }
+        | {
+            ok: true;
+            fanOutId: string;
+            targets: Array<{ number: number; title: string; headRefName: string }>;
+            total: number;
+          }
+      >;
+      fanOutApprove: (id: string) => Promise<AgentJob[]>;
+      fanOutCancel: (id: string) => Promise<{ ok: true }>;
       projectsList: () => Promise<{
         projects: Array<{
           name: string;
@@ -1484,7 +1503,10 @@ declare global {
         contextDropped?: boolean;
         contextDropReason?: string;
       }>;
-      approve: (id: string, input?: { prompt?: string; contextNoteId?: number }) => Promise<AgentJob>;
+      approve: (
+        id: string,
+        input?: { prompt?: string; contextNoteId?: number }
+      ) => Promise<AgentJob>;
       cancel: (id: string) => Promise<AgentJob>;
       discard: (id: string) => Promise<AgentJob>;
       openTerminal: (input: { jobId: string }) => Promise<{ ok: true }>;

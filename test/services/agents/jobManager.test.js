@@ -60,7 +60,11 @@ function setup(t, overrides = {}) {
 test("missing context drops with a specific reason and still prepares", async (t) => {
   const { manager, db } = setup(t);
   db.getNote = () => null;
-  const prepared = await manager.prepare({ project: "openwhispr", task: "hello", contextNoteId: 72 });
+  const prepared = await manager.prepare({
+    project: "openwhispr",
+    task: "hello",
+    contextNoteId: 72,
+  });
   assert.equal(prepared.contextDropped, true);
   assert.equal(prepared.contextDropReason, "note_missing");
   assert.equal(manager.get(prepared.jobId).status, "pending");
@@ -69,19 +73,32 @@ test("missing context drops with a specific reason and still prepares", async (t
 
 test("note context persists and a successful result appends once without trimming", async (t) => {
   const { manager, db, dir, notes } = setup(t);
-  const note = { id: 42, title: "Meeting", content: "Decisions  \n", enhanced_content: "", space_id: 7 };
+  const note = {
+    id: 42,
+    title: "Meeting",
+    content: "Decisions  \n",
+    enhanced_content: "",
+    space_id: 7,
+  };
   const updates = [];
-  db.getNote = (id) => id === 42 ? { ...note } : null;
+  db.getNote = (id) => (id === 42 ? { ...note } : null);
   db.getSpace = () => ({ kind: "private" });
   db.updateNote = (_id, change) => {
     updates.push(change.content);
     note.content = change.content;
     return { success: true, note: { ...note } };
   };
-  const prepared = await manager.prepare({ project: "openwhispr", task: "Summarize", contextNoteId: 42 });
+  const prepared = await manager.prepare({
+    project: "openwhispr",
+    task: "Summarize",
+    contextNoteId: 42,
+  });
   assert.equal(prepared.contextNoteTitle, "Meeting");
   assert.equal(prepared.contextChars, Array.from("Decisions  \n").length);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(dir, "jobs.json"), "utf8")).jobs[0].contextNoteId, 42);
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(dir, "jobs.json"), "utf8")).jobs[0].contextNoteId,
+    42
+  );
   await manager.approve(prepared.jobId);
   await until(() => manager.get(prepared.jobId).status === "done");
   assert.equal(notes.length, 0);
@@ -96,7 +113,11 @@ test("unwritable team note falls back to a private result note", async (t) => {
   db.getNote = () => ({ id: 42, title: "Team", content: "Text", space_id: 8 });
   db.getSpace = () => ({ kind: "team", cloud_space_id: "space", my_role: null });
   db.updateNote = () => assert.fail("must not write to unwritable note");
-  const prepared = await manager.prepare({ project: "openwhispr", task: "Summarize", contextNoteId: 42 });
+  const prepared = await manager.prepare({
+    project: "openwhispr",
+    task: "Summarize",
+    contextNoteId: 42,
+  });
   await manager.approve(prepared.jobId);
   await until(() => manager.get(prepared.jobId).status === "done");
   assert.equal(notes.length, 1);
@@ -251,6 +272,81 @@ test("two run and third queues FIFO then starts", async (t) => {
   assert.equal(manager.get(ids[2]).position, 1);
   await until(() => manager.get(ids[2]).status === "done");
   assert.equal(manager.get(ids[0]).status, "done");
+});
+test("fan-out enumerates before approval, persists five jobs, and shares the FIFO queue", async (t) => {
+  const targets = [8, 3, 12, 5, 9].map((number) => ({
+    number,
+    title: `PR ${number}`,
+    headRefName: `b${number}`,
+  }));
+  const { manager, dir } = setup(t, {
+    enumerateOpenPullRequests: async () => ({
+      ok: true,
+      targets: targets.sort((a, b) => a.number - b.number),
+      total: 6,
+    }),
+  });
+  const preset = {
+    name: "Review PRs",
+    project: "openwhispr",
+    harness: "claude",
+    mode: "read-only",
+    model: "sonnet",
+    prompt: "slow {{pr}}",
+    fanOut: "open-pull-requests",
+  };
+  const preview = await manager.enumerateFanOut(preset);
+  assert.equal(preview.total, 6);
+  assert.deepEqual(
+    preview.targets.map((item) => item.number),
+    [3, 5, 8, 9, 12]
+  );
+  assert.equal(manager.list().length, 0);
+  manager.cancelFanOut(preview.fanOutId);
+  assert.equal(manager.list().length, 0);
+  await assert.rejects(manager.approveFanOut(preview.fanOutId), /expired/);
+  const approved = await manager.enumerateFanOut(preset);
+  const jobs = await manager.approveFanOut(approved.fanOutId);
+  assert.equal(jobs.length, 5);
+  assert.deepEqual(
+    jobs.map((job) => job.prompt),
+    ["slow 3", "slow 5", "slow 8", "slow 9", "slow 12"]
+  );
+  assert.deepEqual(
+    jobs.map((job) => job.fanOutIndex),
+    [1, 2, 3, 4, 5]
+  );
+  assert.ok(jobs.every((job) => job.fanOutId === approved.fanOutId && job.fanOutTotal === 5));
+  assert.deepEqual(
+    jobs.map((job) => job.status),
+    ["running", "running", "queued", "queued", "queued"]
+  );
+  assert.deepEqual(
+    jobs.slice(2).map((job) => job.position),
+    [1, 2, 3]
+  );
+  const persisted = JSON.parse(fs.readFileSync(path.join(dir, "jobs.json"), "utf8")).jobs;
+  assert.equal(persisted.filter((job) => job.fanOutId === approved.fanOutId).length, 5);
+  manager.cancel(jobs[2].jobId);
+  assert.equal(manager.get(jobs[2].jobId).status, "cancelled");
+  assert.equal(manager.get(jobs[3].jobId).status, "queued");
+  assert.equal(manager.get(jobs[3].jobId).position, 1);
+});
+
+test("failed fan-out enumeration prepares no jobs", async (t) => {
+  for (const reason of ["gh_missing", "parse_failed"]) {
+    const { manager } = setup(t, {
+      enumerateOpenPullRequests: async () => ({ ok: false, reason }),
+    });
+    const result = await manager.enumerateFanOut({
+      name: "PRs",
+      project: "openwhispr",
+      prompt: "Review {{pr}}",
+      fanOut: "open-pull-requests",
+    });
+    assert.deepEqual(result, { ok: false, reason });
+    assert.deepEqual(manager.list(), []);
+  }
 });
 test("cancel stops running process group and stall is display only", async (t) => {
   const { manager, advance } = setup(t);
