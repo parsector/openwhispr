@@ -1,3 +1,5 @@
+const { harnessPayload, jobPayload } = require("./debugPayload");
+
 function registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manager }) {
   const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   const exact = (value, keys) =>
@@ -19,22 +21,23 @@ function registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manage
     if (!["claude", "cursor-agent"].includes(harness)) throw new Error("Invalid harness");
     const result = await resolver.test(harness);
     const auth = await resolver.authStatus(harness);
-    return harness === "cursor-agent"
-      ? { ...result, auth, modelProbe: await resolver.listModels(harness) }
-      : { ...result, auth };
+    return harnessPayload(result, auth);
   });
+  ipcMain.handle("agent-projects-list-models", () => resolver.listModels("cursor-agent"));
   ipcMain.handle("agent-job-prepare", (_event, input) => {
     if (!exact(input, ["project", "task", "harness", "model", "mode"]))
       throw new Error("Invalid job request");
-    return manager.prepare(input);
+    return Promise.resolve(manager.prepare(input)).then(jobPayload);
   });
   ipcMain.handle("agent-job-approve", (_event, id, input = {}) => {
     if (!exact(input, ["prompt"])) throw new Error("Invalid approval");
-    return manager.approve(id, input);
+    return Promise.resolve(manager.approve(id, input)).then(jobPayload);
   });
-  ipcMain.handle("agent-job-cancel", (_event, id) => manager.cancel(name(id)));
-  ipcMain.handle("agent-job-discard", (_event, id) => manager.discard(name(id)));
-  ipcMain.handle("agent-job-list", () => manager.list());
-  ipcMain.handle("agent-job-get", (_event, id) => manager.get(name(id)));
+  ipcMain.handle("agent-job-cancel", (_event, id) => jobPayload(manager.cancel(name(id))));
+  ipcMain.handle("agent-job-discard", async (_event, id) =>
+    jobPayload(await manager.discard(name(id)))
+  );
+  ipcMain.handle("agent-job-list", () => manager.list().map(jobPayload));
+  ipcMain.handle("agent-job-get", (_event, id) => jobPayload(manager.get(name(id))));
 }
 module.exports = { registerAgentIpc };

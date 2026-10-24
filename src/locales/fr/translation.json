@@ -4930,6 +4930,7 @@
         "not_authenticated": "Non connecté — exécutez `claude auth login`",
         "unknown": "Impossible de lire l’état de connexion",
         "subscription": "Connecté · abonnement Claude",
+        "claudeMax": "Connecté · Claude Max",
         "apiKey": "Connecté · clé API",
         "oauthToken": "Connecté · jeton OAuth",
         "otherMethod": "Connecté · {{method}}",

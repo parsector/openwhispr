@@ -51,7 +51,7 @@ test("Claude auth JSON maps each documented method", () => {
       {
         state: "authenticated",
         method,
-        detail: "/tmp/claude",
+        detail: null,
       }
     );
   }
@@ -67,7 +67,7 @@ test("Claude auth failures retain stable states without leaking secrets", () => 
   assert.equal(parseAuthStatus({ exitCode: 0, stdout: "garbage" }).detail, "unparseable output");
   assert.equal(parseAuthStatus({ exitCode: 0, stdout: "" }).detail, "empty output");
   assert.equal(parseAuthStatus({ exitCode: "ETIMEDOUT" }).detail, "timeout");
-  assert.equal(parseAuthStatus({ exitCode: "sk-secret" }).detail, "exit <REDACTED>");
+  assert.equal(parseAuthStatus({ exitCode: "sk-secret" }).detail, "command failed");
   const parsed = parseAuthStatus({
     exitCode: 0,
     stdout: JSON.stringify({
@@ -77,6 +77,46 @@ test("Claude auth failures retain stable states without leaking secrets", () => 
     }),
   });
   assert.doesNotMatch(JSON.stringify(parsed), /abc123|sk-secret|owk_secret|plainsecret/);
+});
+
+test("resolver evidence crosses to the renderer only in debug payloads", (t) => {
+  const debugLogger = require("../../../src/helpers/debugLogger");
+  const { harnessPayload } = require("../../../src/services/agents/debugPayload");
+  const original = debugLogger.isDebugEnabled;
+  t.after(() => {
+    debugLogger.isDebugEnabled = original;
+  });
+  const result = {
+    path: "/usr/bin/claude",
+    version: "2",
+    error: null,
+    argv: ["--version"],
+    stdoutSnippet: "2",
+    stderrSnippet: "",
+    exitCode: 0,
+  };
+  const auth = {
+    state: "authenticated",
+    method: "claude.ai",
+    detail: null,
+    configDirectory: "/private/.claude",
+    textProbe: { argv: ["auth", "status", "--text"], stdoutSnippet: "max" },
+    email: "owner@example.com",
+    orgId: "org",
+    orgName: "org",
+    projectsDirectory: "/private/projects",
+  };
+  debugLogger.isDebugEnabled = () => false;
+  assert.doesNotMatch(
+    JSON.stringify(harnessPayload(result, auth)),
+    /argv|stdoutSnippet|stderrSnippet|configDirectory|textProbe|email|orgId|orgName|projectsDirectory/
+  );
+  debugLogger.isDebugEnabled = () => true;
+  const payload = harnessPayload(result, auth);
+  assert.equal(payload.debug.test.stdoutSnippet, "2");
+  assert.equal(payload.debug.auth.configDirectory, "/private/.claude");
+  assert.equal(payload.debug.auth.textProbe.stdoutSnippet, "max");
+  assert.doesNotMatch(JSON.stringify(payload), /owner@example.com|orgId|orgName|projectsDirectory/);
 });
 
 test("Cursor status uses its documented read-only command", async () => {

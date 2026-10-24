@@ -5040,6 +5040,7 @@
         "not_authenticated": "لم يتم تسجيل الدخول — شغّل `claude auth login`",
         "unknown": "تعذرت قراءة حالة تسجيل الدخول",
         "subscription": "تم تسجيل الدخول · اشتراك Claude",
+        "claudeMax": "تم تسجيل الدخول · Claude Max",
         "apiKey": "تم تسجيل الدخول · مفتاح API",
         "oauthToken": "تم تسجيل الدخول · رمز OAuth",
         "otherMethod": "تم تسجيل الدخول · {{method}}",

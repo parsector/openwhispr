@@ -4970,6 +4970,7 @@
         "not_authenticated": "Вход не выполнен — запустите `claude auth login`",
         "unknown": "Не удалось прочитать состояние входа",
         "subscription": "Вход выполнен · подписка Claude",
+        "claudeMax": "Вход выполнен · Claude Max",
         "apiKey": "Вход выполнен · ключ API",
         "oauthToken": "Вход выполнен · токен OAuth",
         "otherMethod": "Вход выполнен · {{method}}",

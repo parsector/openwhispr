@@ -1346,7 +1346,8 @@ export interface AgentJob {
   result: string | null;
   noteId?: number;
   reason: string | null;
-  lastError: string | null;
+  lastError?: string | null;
+  debug?: { lastError?: string | null; reason?: string };
   costEstimate: number | null;
   sessionId: string | null;
   createdAt: number;
@@ -1404,42 +1405,40 @@ declare global {
       }) => Promise<unknown>;
       projectsRemove: (name: string) => Promise<unknown>;
       testHarness: (harness: "claude" | "cursor-agent") => Promise<{
-        ok: boolean;
         path: string | null;
         version: string | null;
         error: string | null;
-        argv: string[];
-        exitCode: number | string;
-        stdoutSnippet: string;
-        stderrSnippet: string;
-        authMethod: string | null;
-        configDirectory: string | null;
-        durationMs: number;
-        modelProbe?: { ok: boolean; models?: string[]; reason?: string };
         auth: {
           state: "authenticated" | "not_authenticated" | "unknown";
           method: string | null;
           detail: string | null;
-          path: string | null;
-          argv: string[];
-          exitCode: number | string;
-          stdoutSnippet: string;
-          stderrSnippet: string;
-          authMethod: string | null;
-          configDirectory: string | null;
-          durationMs: number;
-          textProbe?: {
-            path: string | null;
+        };
+        debug?: {
+          test: {
+            path?: string | null;
+            argv?: string[];
+            exitCode?: number | string;
+            stdoutSnippet?: string;
+            stderrSnippet?: string;
+            authMethod?: string | null;
+            configDirectory?: string | null;
+            durationMs?: number;
+          };
+          auth: {
+            path?: string | null;
             argv: string[];
-            exitCode: number | string;
-            stdoutSnippet: string;
-            stderrSnippet: string;
-            authMethod: string | null;
-            configDirectory: string | null;
-            durationMs: number;
+            exitCode?: number | string;
+            stdoutSnippet?: string;
+            stderrSnippet?: string;
+            authMethod?: string | null;
+            configDirectory?: string | null;
+            durationMs?: number;
+            subscriptionType?: string | null;
+            textProbe?: Record<string, unknown>;
           };
         };
       }>;
+      listModels: () => Promise<{ ok: boolean; models?: string[]; reason?: string }>;
       prepare: (input: {
         project: string;
         task: string;

@@ -4930,6 +4930,7 @@
         "not_authenticated": "Nicht angemeldet — `claude auth login` ausführen",
         "unknown": "Anmeldestatus konnte nicht gelesen werden",
         "subscription": "Angemeldet · Claude-Abonnement",
+        "claudeMax": "Angemeldet · Claude Max",
         "apiKey": "Angemeldet · API-Schlüssel",
         "oauthToken": "Angemeldet · OAuth-Token",
         "otherMethod": "Angemeldet · {{method}}",

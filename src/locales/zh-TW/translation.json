@@ -4930,6 +4930,7 @@
         "not_authenticated": "尚未登入 — 執行 `claude auth login`",
         "unknown": "無法讀取登入狀態",
         "subscription": "已登入 · Claude 訂閱",
+        "claudeMax": "已登入 · Claude Max",
         "apiKey": "已登入 · API 金鑰",
         "oauthToken": "已登入 · OAuth 權杖",
         "otherMethod": "已登入 · {{method}}",

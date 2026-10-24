@@ -1,6 +1,68 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { registerAgentIpc } = require("../../../src/services/agents/ipc");
+const debugLogger = require("../../../src/helpers/debugLogger");
+
+test("harness IPC gates CLI evidence and drops account metadata", async (t) => {
+  const original = debugLogger.isDebugEnabled;
+  t.after(() => {
+    debugLogger.isDebugEnabled = original;
+  });
+  const handlers = new Map();
+  registerAgentIpc({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    projectStore: {},
+    presetStore: {},
+    manager: {},
+    resolver: {
+      test: async () => ({
+        path: "/usr/bin/claude",
+        version: "2",
+        error: null,
+        argv: ["--version"],
+        exitCode: 0,
+        stdoutSnippet: "version",
+        stderrSnippet: "",
+        durationMs: 1,
+        email: "owner@example.com",
+        orgId: "secret",
+        orgName: "secret",
+        projectsDirectory: "/private/projects",
+      }),
+      authStatus: async () => ({
+        state: "authenticated",
+        method: "claude.ai",
+        detail: null,
+        argv: ["auth", "status"],
+        exitCode: 0,
+        stdoutSnippet: "auth",
+        stderrSnippet: "",
+        configDirectory: "/private/.claude",
+        subscriptionType: "max",
+        textProbe: { argv: ["auth", "status", "--text"], stdoutSnippet: "max" },
+        email: "owner@example.com",
+        orgId: "secret",
+        orgName: "secret",
+        projectsDirectory: "/private/projects",
+      }),
+    },
+  });
+  const probe = handlers.get("agent-projects-test-harness");
+  debugLogger.isDebugEnabled = () => false;
+  const normal = await probe(null, "claude");
+  assert.deepEqual(Object.keys(normal).sort(), ["auth", "error", "path", "version"]);
+  assert.deepEqual(normal.auth, { state: "authenticated", method: "claude.ai", detail: null });
+  assert.doesNotMatch(
+    JSON.stringify(normal),
+    /argv|stdoutSnippet|stderrSnippet|configDirectory|textProbe|owner@example.com|orgId|orgName|projectsDirectory/
+  );
+  debugLogger.isDebugEnabled = () => true;
+  const verbose = await probe(null, "claude");
+  assert.deepEqual(verbose.debug.test.argv, ["--version"]);
+  assert.equal(verbose.debug.auth.configDirectory, "/private/.claude");
+  assert.equal(verbose.debug.auth.textProbe.stdoutSnippet, "max");
+  assert.doesNotMatch(JSON.stringify(verbose), /owner@example.com|orgId|orgName|projectsDirectory/);
+});
 
 test("test harness IPC returns auth and accepts only a harness id", async () => {
   const handlers = new Map();
@@ -18,17 +80,16 @@ test("test harness IPC returns auth and accepts only a harness id", async () => 
       authStatus: async () => ({
         state: "authenticated",
         method: "claude.ai",
-        detail: "/tmp/config",
+        detail: null,
       }),
     },
   });
   const probe = handlers.get("agent-projects-test-harness");
   assert.deepEqual(await probe(null, "claude"), {
-    ok: true,
     path: "/usr/local/bin/claude",
     version: "2.1.300",
     error: null,
-    auth: { state: "authenticated", method: "claude.ai", detail: "/tmp/config" },
+    auth: { state: "authenticated", method: "claude.ai", detail: null },
   });
   await assert.rejects(probe(null, { harness: "claude", folder: "/tmp" }), /Invalid harness/);
 });
@@ -51,7 +112,11 @@ test("Cursor harness probe includes available models", async () => {
     },
   });
   const result = await handlers.get("agent-projects-test-harness")(null, "cursor-agent");
-  assert.deepEqual(result.modelProbe, { ok: true, models: ["auto", "gpt-5"] });
+  assert.deepEqual(Object.keys(result).sort(), ["auth", "error", "path", "version"]);
+  assert.deepEqual(await handlers.get("agent-projects-list-models")(), {
+    ok: true,
+    models: ["auto", "gpt-5"],
+  });
 });
 
 test("discard IPC delegates a validated job id", async () => {
@@ -73,7 +138,41 @@ test("discard IPC delegates a validated job id", async () => {
     discardedAt: 123,
   });
   assert.equal(discarded, "job-1");
-  assert.throws(() => handlers.get("agent-job-discard")(null, "../bad"), /Invalid name/);
+  await assert.rejects(handlers.get("agent-job-discard")(null, "../bad"), /Invalid name/);
+});
+
+test("job IPC hides CLI failure text unless debug is enabled", (t) => {
+  const original = debugLogger.isDebugEnabled;
+  t.after(() => {
+    debugLogger.isDebugEnabled = original;
+  });
+  const handlers = new Map();
+  registerAgentIpc({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    projectStore: {},
+    presetStore: {},
+    resolver: {},
+    manager: {
+      get: () => ({ jobId: "job-1", reason: "spawn /private/cli failed", lastError: "raw stderr" }),
+      list: () => [
+        { jobId: "job-1", reason: "spawn /private/cli failed", lastError: "raw stderr" },
+      ],
+    },
+  });
+  debugLogger.isDebugEnabled = () => false;
+  assert.deepEqual(handlers.get("agent-job-get")(null, "job-1"), {
+    jobId: "job-1",
+    reason: "command_failed",
+  });
+  assert.deepEqual(handlers.get("agent-job-list")(), [
+    { jobId: "job-1", reason: "command_failed" },
+  ]);
+  debugLogger.isDebugEnabled = () => true;
+  assert.deepEqual(handlers.get("agent-job-get")(null, "job-1"), {
+    jobId: "job-1",
+    reason: "command_failed",
+    debug: { reason: "spawn /private/cli failed", lastError: "raw stderr" },
+  });
 });
 
 test("preset IPC lists, saves, and removes through the validated store", () => {

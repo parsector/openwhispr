@@ -4930,6 +4930,7 @@
         "not_authenticated": "未サインイン — `claude auth login` を実行してください",
         "unknown": "認証状態を読み取れませんでした",
         "subscription": "サインイン済み · Claude サブスクリプション",
+        "claudeMax": "サインイン済み · Claude Max",
         "apiKey": "サインイン済み · API キー",
         "oauthToken": "サインイン済み · OAuth トークン",
         "otherMethod": "サインイン済み · {{method}}",

@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { redactOutput } = require("./redactOutput");
+const { jobPayload } = require("./debugPayload");
 const { safeModel } = require("./modelSafety");
 const { createWorktreeService, location } = require("./worktree");
 
@@ -68,7 +69,7 @@ function createJobManager({
     .catch((error) => console.warn("Agent worktree sweep failed", redactOutput(error.message)));
   function update(job) {
     persist();
-    broadcast("agent-job-updated", { ...job });
+    broadcast("agent-job-updated", jobPayload(job));
     return { ...job };
   }
   function get(jobId) {

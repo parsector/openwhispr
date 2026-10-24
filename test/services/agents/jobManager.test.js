@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { createJobManager, STALL_MS } = require("../../../src/services/agents/jobManager");
+const debugLogger = require("../../../src/helpers/debugLogger");
 const { createClaudeRunner } = require("../../../src/services/agents/claudeRunner");
 const fakeCli = path.join(__dirname, "../../fixtures/fakeClaude.js");
 function setup(t, overrides = {}) {
@@ -141,7 +142,17 @@ test("failed job stores and broadcasts the redacted last stderr line", async (t)
   await until(() => manager.get(jobId).status === "failed");
   assert.equal(manager.get(jobId).lastError, "Bearer <REDACTED> <REDACTED> <REDACTED>");
   assert.equal(events.at(-1).channel, "agent-job-updated");
-  assert.equal(events.at(-1).job.lastError, manager.get(jobId).lastError);
+  assert.equal(events.at(-1).job.lastError, undefined);
+  assert.equal(events.at(-1).job.debug, undefined);
+  const original = debugLogger.isDebugEnabled;
+  debugLogger.isDebugEnabled = () => true;
+  try {
+    manager.checkStalls();
+    const { jobPayload } = require("../../../src/services/agents/debugPayload");
+    assert.equal(jobPayload(manager.get(jobId)).debug.lastError, manager.get(jobId).lastError);
+  } finally {
+    debugLogger.isDebugEnabled = original;
+  }
 });
 
 test("untrusted Cursor refusal fails without a note and keeps the redacted banner line", async (t) => {

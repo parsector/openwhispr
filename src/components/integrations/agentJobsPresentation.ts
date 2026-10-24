@@ -100,5 +100,6 @@ export function failureMessage(
   if (reason === "interrupted") return { key: "agentJobs.pane.failure.interrupted" };
   if (reason === "workspace_untrusted") return { key: "agentJobs.pane.failure.workspaceUntrusted" };
   if (reason === "cancelled") return { key: "agentJobs.pane.failure.cancelled" };
+  if (reason === "command_failed") return { key: "agentJobs.toast.unknownError" };
   return reason ? { text: reason } : { key: "agentJobs.toast.unknownError" };
 }

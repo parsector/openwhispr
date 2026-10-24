@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld("agentJobs", {
   projectsSave: (project) => ipcRenderer.invoke("agent-projects-save", project),
   projectsRemove: (name) => ipcRenderer.invoke("agent-projects-remove", name),
   testHarness: (harness) => ipcRenderer.invoke("agent-projects-test-harness", harness),
+  listModels: () => ipcRenderer.invoke("agent-projects-list-models"),
   prepare: (input) => ipcRenderer.invoke("agent-job-prepare", input),
   approve: (id, input) => ipcRenderer.invoke("agent-job-approve", id, input),
   cancel: (id) => ipcRenderer.invoke("agent-job-cancel", id),

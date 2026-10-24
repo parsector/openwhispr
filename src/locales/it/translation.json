@@ -4930,6 +4930,7 @@
         "not_authenticated": "Accesso non effettuato — esegui `claude auth login`",
         "unknown": "Impossibile leggere lo stato di accesso",
         "subscription": "Accesso effettuato · abbonamento Claude",
+        "claudeMax": "Accesso effettuato · Claude Max",
         "apiKey": "Accesso effettuato · chiave API",
         "oauthToken": "Accesso effettuato · token OAuth",
         "otherMethod": "Accesso effettuato · {{method}}",

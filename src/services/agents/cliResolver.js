@@ -11,8 +11,7 @@ function parseAuthStatus({ exitCode, stdout = "" }) {
   if (exitCode === "ETIMEDOUT" || exitCode === "TIMEOUT") return unknown("timeout");
   if (exitCode === "ENOENT") return unknown("not found");
   if (exitCode === "EACCES" || exitCode === "EPERM") return unknown("not executable");
-  if (exitCode !== 0 && exitCode !== 1)
-    return unknown(redactOutput(`exit ${exitCode ?? "unknown"}`).slice(0, 500));
+  if (exitCode !== 0 && exitCode !== 1) return unknown("command failed");
   let value;
   if (String(stdout).trim()) {
     try {
@@ -25,11 +24,7 @@ function parseAuthStatus({ exitCode, stdout = "" }) {
   } else if (exitCode === 0) return unknown("empty output");
   const method = typeof value?.authMethod === "string" ? redactOutput(value.authMethod) : null;
   if (exitCode === 1) return { state: "not_authenticated", method, detail: null };
-  const detail =
-    typeof value.configDirectory === "string" && value.configDirectory.trim()
-      ? redactOutput(value.configDirectory).slice(0, 500)
-      : redactOutput(stdout).trim().slice(0, 500);
-  return { state: "authenticated", method, detail: detail || null };
+  return { state: "authenticated", method, detail: null };
 }
 function parseCursorStatus({ exitCode, stdout = "", stderr = "" }) {
   const output = redactOutput(`${stdout}\n${stderr}`).trim();
@@ -44,11 +39,7 @@ function parseCursorStatus({ exitCode, stdout = "", stderr = "" }) {
     /not authenticated|not logged in|unauthenticated/i.test(output)
   )
     return { state: "not_authenticated", method: null, detail: null };
-  return unknown(
-    exitCode === 0
-      ? "unrecognized output"
-      : redactOutput(`exit ${exitCode ?? "unknown"}`).slice(0, 500)
-  );
+  return unknown(exitCode === 0 ? "unrecognized output" : "command failed");
 }
 const snippet = (value, limit) => {
   const bytes = Buffer.from(redactOutput(value || ""));
@@ -135,7 +126,7 @@ function createCliResolver({ configuredPaths = {}, run = exec } = {}) {
     if (result.exitCode !== 0)
       return {
         ok: false,
-        reason: result.exitCode === "ETIMEDOUT" ? "timeout" : `exit ${result.exitCode}`,
+        reason: result.exitCode === "ETIMEDOUT" ? "timeout" : "command failed",
       };
     const models = modelIds(result.stdout);
     if (!models.length) return { ok: false, reason: "no models found" };
@@ -212,11 +203,14 @@ function createCliResolver({ configuredPaths = {}, run = exec } = {}) {
     const result = await probe(resolved.path, argv, 5000);
     const state = harness === "claude" ? parseAuthStatus(result) : parseCursorStatus(result);
     let configDirectory = null;
+    let subscriptionType = null;
     if (harness === "claude") {
       try {
         const data = JSON.parse(result.stdout);
         if (typeof data?.configDirectory === "string")
           configDirectory = snippet(data.configDirectory, 500);
+        if (typeof data?.subscriptionType === "string")
+          subscriptionType = snippet(data.subscriptionType, 100);
       } catch {}
     }
     const details = {
@@ -224,6 +218,7 @@ function createCliResolver({ configuredPaths = {}, run = exec } = {}) {
       ...detailFields(resolved.path, argv, result, result.durationMs),
       authMethod: state.method,
       configDirectory,
+      subscriptionType,
     };
     if (harness === "claude") {
       const textResult = await probe(resolved.path, ["auth", "status", "--text"], 5000);

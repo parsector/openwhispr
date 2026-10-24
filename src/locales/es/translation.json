@@ -4930,6 +4930,7 @@
         "not_authenticated": "Sin iniciar sesión — ejecuta `claude auth login`",
         "unknown": "No se pudo leer el estado de autenticación",
         "subscription": "Sesión iniciada · suscripción de Claude",
+        "claudeMax": "Sesión iniciada · Claude Max",
         "apiKey": "Sesión iniciada · clave API",
         "oauthToken": "Sesión iniciada · token OAuth",
         "otherMethod": "Sesión iniciada · {{method}}",

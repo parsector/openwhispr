@@ -4930,6 +4930,7 @@
         "not_authenticated": "Not signed in — run `claude auth login`",
         "unknown": "Couldn't read auth state",
         "subscription": "Signed in · Claude subscription",
+        "claudeMax": "Signed in · Claude Max",
         "apiKey": "Signed in · API key",
         "oauthToken": "Signed in · OAuth token",
         "otherMethod": "Signed in · {{method}}",
