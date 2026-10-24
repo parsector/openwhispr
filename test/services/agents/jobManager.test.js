@@ -86,29 +86,110 @@ test("approval proceeds with advisory auth warning", async (t) => {
 test("prepare validates and persists a bounded origin", async (t) => {
   const { manager, dir } = setup(t);
   const origin = {
+    conversationId: 7,
+    messageId: "123e4567-e89b-12d3-a456-426614174000",
+    toolCallId: "call-1",
+    surface: "assistant",
+    extra: "never-persist-this",
+  };
+  const { jobId } = await manager.prepare({ project: "openwhispr", task: "hello", origin });
+  const normalized = {
     conversationId: "7",
-    messageId: "m-1",
+    messageId: origin.messageId,
     toolCallId: "call-1",
     surface: "assistant",
   };
-  const { jobId } = await manager.prepare({ project: "openwhispr", task: "hello", origin });
-  assert.deepEqual(manager.get(jobId).origin, origin);
+  assert.deepEqual(manager.get(jobId).origin, normalized);
   assert.deepEqual(
     JSON.parse(fs.readFileSync(path.join(dir, "jobs.json"), "utf8")).jobs[0].origin,
-    origin
+    normalized
   );
-  for (const invalid of [
-    { ...origin, surface: "other" },
-    { ...origin, conversationId: "../jobs.json" },
-    { ...origin, toolCallId: "$(touch bad)" },
-    { ...origin, messageId: "x".repeat(129) },
-    { ...origin, path: "/tmp/file" },
-  ]) {
-    await assert.rejects(
-      manager.prepare({ project: "openwhispr", task: "hello", origin: invalid }),
-      /Invalid job request/
-    );
+  for (const value of ["8", 8]) {
+    const prepared = await manager.prepare({
+      project: "openwhispr",
+      task: "hello",
+      origin: { conversationId: value },
+    });
+    assert.deepEqual(manager.get(prepared.jobId).origin, { conversationId: "8", surface: "chat" });
   }
+  const padded = await manager.prepare({
+    project: "openwhispr",
+    task: "hello",
+    origin: { conversationId: "0008" },
+  });
+  assert.equal(manager.get(padded.jobId).origin.conversationId, "8");
+  const partial = await manager.prepare({
+    project: "openwhispr",
+    task: "hello",
+    origin: {
+      conversationId: "9",
+      messageId: "bad id",
+      toolCallId: "x".repeat(129),
+      surface: "other",
+      surprise: "never-persist-this",
+    },
+  });
+  assert.deepEqual(manager.get(partial.jobId).origin, { conversationId: "9", surface: "chat" });
+  for (const invalid of [0, -1, "1".repeat(21), "../jobs.json", null]) {
+    const prepared = await manager.prepare({
+      project: "openwhispr",
+      task: "hello",
+      origin: { conversationId: invalid },
+    });
+    assert.equal(manager.get(prepared.jobId).origin, undefined);
+    assert.equal(manager.get(prepared.jobId).originDropped, true);
+  }
+  const unusable = await manager.prepare({ project: "openwhispr", task: "hello", origin: "bad" });
+  assert.equal(manager.get(unusable.jobId).originDropped, true);
+  assert.doesNotMatch(fs.readFileSync(path.join(dir, "jobs.json"), "utf8"), /never-persist-this/);
+});
+test("prepare reports a field and logs failure when debug is off", async (t) => {
+  const { manager } = setup(t);
+  const errors = [];
+  const original = debugLogger.isDebugEnabled;
+  debugLogger.isDebugEnabled = () => false;
+  t.mock.method(debugLogger, "error", (...args) => errors.push(args));
+  t.after(() => {
+    debugLogger.isDebugEnabled = original;
+  });
+  await assert.rejects(
+    manager.prepare({ project: "openwhispr", task: "hello", model: "bad;model" }),
+    (error) => error.message === "invalid_model (model)" && error.field === "model"
+  );
+  assert.equal(errors.length, 1);
+  assert.deepEqual(errors[0][1], {
+    field: "model",
+    value: "bad;model",
+    reason: "invalid_model (model)",
+  });
+});
+test("numeric origin delivers completed job to its conversation", async (t) => {
+  const {
+    deliverJobMessage,
+    jobMessageId,
+  } = require("../../../src/services/agents/jobDelivery.ts");
+  const { manager } = setup(t);
+  const prepared = await manager.prepare({
+    project: "openwhispr",
+    task: "hello",
+    origin: { conversationId: 7 },
+  });
+  await manager.approve(prepared.jobId);
+  await until(() => manager.get(prepared.jobId).status === "done");
+  const calls = [];
+  assert.equal(
+    await deliverJobMessage(
+      manager.get(prepared.jobId),
+      (key) => key,
+      async (...args) => {
+        calls.push(args);
+        return { success: true };
+      }
+    ),
+    true
+  );
+  assert.equal(calls[0][0], 7);
+  assert.equal(calls[0][3].messageId, jobMessageId(prepared.jobId));
 });
 test("two run and third queues FIFO then starts", async (t) => {
   const { manager } = setup(t);
@@ -234,7 +315,18 @@ test("running on disk becomes failed/interrupted", (t) => {
   const { manager, dir } = setup(t);
   manager.stopAll();
   const file = path.join(dir, "jobs.json");
-  fs.writeFileSync(file, JSON.stringify({ jobs: [{ jobId: "old", status: "running" }] }));
+  fs.writeFileSync(
+    file,
+    JSON.stringify({
+      jobs: [
+        {
+          jobId: "old",
+          status: "running",
+          origin: { conversationId: 7, privatePath: "never-persist-this" },
+        },
+      ],
+    })
+  );
   const loaded = createJobManager({
     file,
     projectStore: {},
@@ -247,6 +339,8 @@ test("running on disk becomes failed/interrupted", (t) => {
   });
   assert.equal(loaded.get("old").status, "failed");
   assert.equal(loaded.get("old").reason, "interrupted");
+  assert.deepEqual(loaded.get("old").origin, { conversationId: "7", surface: "chat" });
+  assert.doesNotMatch(fs.readFileSync(file, "utf8"), /never-persist-this/);
 });
 test("edited approval expires after ten minutes", async (t) => {
   const { manager, advance } = setup(t);

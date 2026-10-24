@@ -1343,10 +1343,11 @@ export interface AgentJob {
   prompt: string;
   origin?: {
     conversationId: string;
-    messageId: string;
-    toolCallId: string;
+    messageId?: string;
+    toolCallId?: string;
     surface: "chat" | "assistant";
   };
+  originDropped?: boolean;
   status: "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
   steps: Array<{ kind: string; [key: string]: unknown }>;
   result: string | null;
@@ -1451,7 +1452,9 @@ declare global {
         harness?: "claude" | "cursor-agent";
         mode?: "read-only" | "write" | "plan" | "ask";
         model?: string;
-        origin?: AgentJob["origin"];
+        origin?: Omit<NonNullable<AgentJob["origin"]>, "conversationId"> & {
+          conversationId: string | number;
+        };
       }) => Promise<{
         jobId: string;
         project: { name: string; folder: string; trustWorkspace?: boolean };

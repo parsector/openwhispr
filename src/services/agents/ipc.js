@@ -1,4 +1,27 @@
 const { harnessPayload, jobPayload } = require("./debugPayload");
+const { redactOutput } = require("./redactOutput");
+const debugLogger = require("../../helpers/debugLogger");
+
+function logFailure(action, error, input) {
+  const field = error.field || "request";
+  const value =
+    field === "task" ? "[redacted]" : input && typeof input === "object" ? input[field] : undefined;
+  const bounded =
+    typeof value === "string" || typeof value === "number"
+      ? redactOutput(String(value).slice(0, 128)).replace(/[\r\n]/g, " ")
+      : "[unavailable]";
+  debugLogger.error(`Agent job ${action} failed`, {
+    field,
+    value: bounded,
+    reason: redactOutput(String(error.message)).slice(0, 128),
+  });
+}
+
+function invalid(field) {
+  const error = new Error(`invalid_${field} (${field})`);
+  error.field = field;
+  return error;
+}
 
 function registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manager }) {
   const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -24,14 +47,25 @@ function registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manage
     return harnessPayload(result, auth);
   });
   ipcMain.handle("agent-projects-list-models", () => resolver.listModels("cursor-agent"));
-  ipcMain.handle("agent-job-prepare", (_event, input) => {
-    if (!exact(input, ["project", "task", "harness", "model", "mode"]))
-      throw new Error("Invalid job request");
-    return Promise.resolve(manager.prepare(input)).then(jobPayload);
+  ipcMain.handle("agent-job-prepare", async (_event, input) => {
+    try {
+      if (!object(input)) throw invalid("request");
+      if (!exact(input, ["project", "task", "harness", "model", "mode", "origin"]))
+        throw invalid("request");
+      return jobPayload(await manager.prepare(input));
+    } catch (error) {
+      if (!error.agentJobLogged) logFailure("prepare", error, input);
+      throw error;
+    }
   });
-  ipcMain.handle("agent-job-approve", (_event, id, input = {}) => {
-    if (!exact(input, ["prompt"])) throw new Error("Invalid approval");
-    return Promise.resolve(manager.approve(id, input)).then(jobPayload);
+  ipcMain.handle("agent-job-approve", async (_event, id, input = {}) => {
+    try {
+      if (!exact(input, ["prompt"])) throw invalid("prompt");
+      return jobPayload(await manager.approve(id, input));
+    } catch (error) {
+      if (!error.agentJobLogged) logFailure("approve", error, input);
+      throw error;
+    }
   });
   ipcMain.handle("agent-job-cancel", (_event, id) => jobPayload(manager.cancel(name(id))));
   ipcMain.handle("agent-job-discard", async (_event, id) =>
