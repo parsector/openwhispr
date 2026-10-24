@@ -5,27 +5,49 @@ const { redactOutput } = require("./redactOutput");
 const { jobPayload } = require("./debugPayload");
 const { safeModel } = require("./modelSafety");
 const { createWorktreeService, location } = require("./worktree");
+const debugLogger = require("../../helpers/debugLogger");
 
 const EXPIRY_MS = 10 * 60 * 1000;
 const STALL_MS = 20 * 60 * 1000;
-function validOrigin(origin) {
-  if (origin === undefined) return true;
-  if (!origin || typeof origin !== "object" || Array.isArray(origin)) return false;
+function normalizeOrigin(origin) {
+  if (!origin || typeof origin !== "object" || Array.isArray(origin)) return null;
+  const value = origin.conversationId;
+  const raw = typeof value === "number" ? String(value) : value;
   if (
-    Object.keys(origin).some(
-      (key) => !["conversationId", "messageId", "toolCallId", "surface"].includes(key)
-    )
+    (typeof value === "number" && (!Number.isFinite(value) || !Number.isInteger(value))) ||
+    typeof raw !== "string" ||
+    !/^[0-9]+$/.test(raw)
   )
-    return false;
-  return (
-    typeof origin.conversationId === "string" &&
-    /^[1-9][0-9]{0,19}$/.test(origin.conversationId) &&
-    Number.isSafeInteger(Number(origin.conversationId)) &&
-    [origin.messageId, origin.toolCallId].every(
-      (value) => typeof value === "string" && /^[A-Za-z0-9_.:-]{1,128}$/.test(value)
-    ) &&
-    ["chat", "assistant"].includes(origin.surface)
-  );
+    return null;
+  const conversationId = raw.replace(/^0+/, "");
+  if (!conversationId || conversationId.length > 20) return null;
+  const safe = {
+    conversationId,
+    surface: ["chat", "assistant"].includes(origin.surface) ? origin.surface : "chat",
+  };
+  for (const field of ["messageId", "toolCallId"])
+    if (typeof origin[field] === "string" && /^[A-Za-z0-9_.:-]{1,128}$/.test(origin[field]))
+      safe[field] = origin[field];
+  return safe;
+}
+function invalid(field) {
+  const error = new Error(`invalid_${field} (${field})`);
+  error.field = field;
+  return error;
+}
+function logFailure(action, error, input) {
+  const field = error.field || "request";
+  const value = field === "task" ? "[redacted]" : input?.[field];
+  const bounded =
+    typeof value === "string" || typeof value === "number"
+      ? redactOutput(String(value).slice(0, 128)).replace(/[\r\n]/g, " ")
+      : "[unavailable]";
+  debugLogger.error(`Agent job ${action} failed`, {
+    field,
+    value: bounded,
+    reason: redactOutput(String(error.message)).slice(0, 128),
+  });
+  error.agentJobLogged = true;
 }
 function createJobManager({
   file,
@@ -69,6 +91,21 @@ function createJobManager({
   }
   try {
     for (const job of JSON.parse(fs.readFileSync(file, "utf8")).jobs || []) {
+      if (Object.hasOwn(job, "origin")) {
+        let normalized = null;
+        try {
+          normalized = normalizeOrigin(job.origin);
+        } catch {}
+        if (normalized) job.origin = normalized;
+        else {
+          delete job.origin;
+          job.originDropped = true;
+          debugLogger.warn("Agent job origin dropped", {
+            field: "origin.conversationId",
+            value: "[invalid]",
+          });
+        }
+      }
       if (!job.mode && job.harness === "claude") job.mode = "read-only";
       if (["running", "queued"].includes(job.status)) {
         job.status = "failed";
@@ -140,17 +177,33 @@ function createJobManager({
           project.mode === job.mode &&
           Boolean(project.trustWorkspace) === Boolean(job.project.trustWorkspace)
       );
-  async function prepare({ project, task, harness, model, mode, origin }) {
-    if (
-      typeof project !== "string" ||
-      typeof task !== "string" ||
-      !task.trim() ||
-      task.length > 100_000 ||
-      (harness !== undefined && !["claude", "cursor-agent"].includes(harness)) ||
-      (model !== undefined && !safeModel(model)) ||
-      !validOrigin(origin)
-    )
-      throw new Error("Invalid job request");
+  async function prepare(input) {
+    try {
+      return await prepareJob(input);
+    } catch (error) {
+      logFailure("prepare", error, input);
+      throw error;
+    }
+  }
+  async function prepareJob({ project, task, harness, model, mode, origin }) {
+    if (typeof project !== "string" || !project.trim()) throw invalid("project");
+    if (typeof task !== "string" || !task.trim() || task.length > 100_000) throw invalid("task");
+    if (harness !== undefined && !["claude", "cursor-agent"].includes(harness))
+      throw invalid("harness");
+    if (model !== undefined && !safeModel(model)) throw invalid("model");
+    let safeOrigin = null;
+    if (origin !== undefined) {
+      try {
+        safeOrigin = normalizeOrigin(origin);
+      } catch {
+        // Origin is advisory; even a malformed object must not block the job.
+      }
+    }
+    if (origin !== undefined && !safeOrigin)
+      debugLogger.warn("Agent job origin dropped", {
+        field: "origin.conversationId",
+        value: "[invalid]",
+      });
     if (!(await policyAllowed())) throw new Error("agent_disallowed");
     const selected = projectStore.read().projects.find((item) => item.name === project);
     if (!selected) throw new Error("Unknown project");
@@ -182,7 +235,8 @@ function createJobManager({
       mode: selectedMode,
       model: model?.trim() || selected.model || null,
       prompt: task.trim(),
-      ...(origin ? { origin: { ...origin } } : {}),
+      ...(safeOrigin ? { origin: safeOrigin } : {}),
+      ...(origin !== undefined && !safeOrigin ? { originDropped: true } : {}),
       status: "pending",
       steps: [],
       result: null,
@@ -218,27 +272,27 @@ function createJobManager({
     };
   }
   async function launch(job) {
-    job.status = "running";
-    job.position = null;
-    job.startedAt = now();
-    job.lastEventAt = now();
-    update(job);
-    if (!(await policyAllowed()) || !projectStillAllowed(job)) {
-      if (job.status === "running") fail(job, "agent_disallowed");
-      drain();
-      return;
-    }
-    const resolved = await resolver.resolve(job.harness);
-    if (job.status === "cancelled") {
-      drain();
-      return;
-    }
-    if (!resolved.ok) {
-      fail(job, resolved.error);
-      drain();
-      return;
-    }
     try {
+      job.status = "running";
+      job.position = null;
+      job.startedAt = now();
+      job.lastEventAt = now();
+      update(job);
+      if (!(await policyAllowed()) || !projectStillAllowed(job)) {
+        if (job.status === "running") fail(job, "agent_disallowed");
+        drain();
+        return;
+      }
+      const resolved = await resolver.resolve(job.harness);
+      if (job.status === "cancelled") {
+        drain();
+        return;
+      }
+      if (!resolved.ok) {
+        fail(job, resolved.error);
+        drain();
+        return;
+      }
       if (job.mode === "write") {
         preparingWorktrees.add(job.jobId);
         try {
@@ -246,6 +300,11 @@ function createJobManager({
           job.worktreeCreated = true;
           update(job);
         } catch (error) {
+          debugLogger.error("Agent job start failed", {
+            field: "worktree",
+            value: "[unavailable]",
+            reason: redactOutput(error.message).slice(0, 128),
+          });
           job.worktreeCreated = fs.existsSync(job.worktreePath);
           job.lastError = redactOutput(error.message).trim().slice(0, 500);
           fail(job, "worktree_failed");
@@ -324,6 +383,11 @@ function createJobManager({
             job.finishedAt = job.endedAt;
             update(job);
           } catch (error) {
+            debugLogger.error("Agent job completion failed", {
+              field: "note",
+              value: "[unavailable]",
+              reason: redactOutput(error.message).slice(0, 128),
+            });
             fail(job, error.message);
           }
         } else {
@@ -339,6 +403,11 @@ function createJobManager({
         drain();
       });
     } catch (error) {
+      debugLogger.error("Agent job start failed", {
+        field: "start",
+        value: "[unavailable]",
+        reason: redactOutput(error.message).slice(0, 128),
+      });
       fail(job, error.message);
       drain();
     }
@@ -390,7 +459,15 @@ function createJobManager({
       void launch(jobs.get(id));
     }
   }
-  async function approve(jobId, { prompt } = {}) {
+  async function approve(jobId, input = {}) {
+    try {
+      return await approveJob(jobId, input);
+    } catch (error) {
+      logFailure("approve", error, input);
+      throw error;
+    }
+  }
+  async function approveJob(jobId, { prompt } = {}) {
     if (
       typeof jobId !== "string" ||
       (prompt !== undefined &&
