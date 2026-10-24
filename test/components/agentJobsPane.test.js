@@ -12,6 +12,7 @@ const {
   failureDescription,
   lastErrorKey,
   guaranteeKey,
+  cursorTrustKey,
 } = require("../../src/components/integrations/agentJobsPresentation.ts");
 
 test("job status maps to readable label keys and severity, including display-only stall", () => {
@@ -76,6 +77,15 @@ test("auth and failure reasons map known states without hiding CLI errors", () =
     key: "agentJobs.pane.auth.cursorNotAuthenticated",
   });
   assert.deepEqual(failureMessage("interrupted"), { key: "agentJobs.pane.failure.interrupted" });
+  assert.deepEqual(failureMessage("workspace_untrusted", "cursor-agent"), {
+    key: "agentJobs.pane.failure.workspaceUntrusted",
+  });
+  assert.match(
+    failureDescription("workspace_untrusted", "Workspace Trust Required", translate, "cursor-agent"),
+    /Cursor refused this workspace.*CLI message: Workspace Trust Required/s
+  );
+  assert.equal(cursorTrustKey(true), "agentJobs.card.workspaceTrusted");
+  assert.equal(cursorTrustKey(false), "agentJobs.card.workspaceUntrusted");
   assert.deepEqual(failureMessage("cancelled"), { key: "agentJobs.pane.failure.cancelled" });
   assert.deepEqual(failureMessage("CLI error"), { text: "CLI error" });
 });
@@ -210,6 +220,7 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
   await act(() => root.render(React.createElement(AgentsPane, { title: "Agents" })));
+  assert.equal(host.querySelector('input[type="checkbox"]'), null);
   assert.equal(
     host.querySelector('[role="alert"]')?.textContent,
     "agentJobs.pane.invalidClaudeModel"
@@ -278,6 +289,11 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
   assert.equal(mode.disabled, false);
   assert.equal(mode.value, "plan");
   assert.ok(host.querySelector('option[value="gpt-5"]'));
+  const trustToggle = host.querySelector('input[type="checkbox"]');
+  assert.ok(trustToggle);
+  assert.ok(host.textContent.includes("agentJobs.pane.trustWorkspaceDescription"));
+  await act(() => trustToggle.click());
+  assert.equal(host.querySelector('input[type="checkbox"]').checked, true);
   dom.agentJobs.testHarness = async () => ({
     ok: true,
     path: "/usr/bin/cursor-agent",
@@ -291,7 +307,7 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     configDirectory: null,
     durationMs: 1,
     auth: { state: "unknown", method: null, detail: null },
-    modelProbe: { ok: false, reason: "no models found" },
+    modelProbe: { ok: false, reason: "workspace_untrusted" },
   });
   await act(() =>
     [...host.querySelectorAll("button")]
@@ -299,7 +315,7 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
       .at(-1)
       .click()
   );
-  assert.ok(host.textContent.includes("agentJobs.pane.cursorModelFallback"));
+  assert.ok(host.textContent.includes("agentJobs.pane.cursorWorkspaceUntrusted"));
   assert.equal(host.querySelector('option[value="gpt-5"]'), null);
   const reviewRow = [...host.querySelectorAll("h3")]
     .find((item) => item.textContent === "Review PR")
@@ -393,4 +409,26 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
       .click()
   );
   assert.ok(host.textContent.includes("agentJobs.pane.actionError: probe IPC failed"));
+  const { LocalApprovalCard } = await vite.ssrLoadModule("/components/chat/LocalApprovalCard.tsx");
+  const approval = {
+    key: "approval",
+    jobId: "job",
+    harness: "cursor-agent",
+    mode: "plan",
+    summary: "Review",
+    prompt: "Review",
+    state: "pending",
+    messageId: "message",
+    toolCallId: "call",
+  };
+  await act(() => root.render(React.createElement(LocalApprovalCard, { entry: approval })));
+  assert.ok(host.textContent.includes("agentJobs.card.workspaceUntrusted"));
+  await act(() =>
+    root.render(
+      React.createElement(LocalApprovalCard, {
+        entry: { ...approval, trustWorkspace: true },
+      })
+    )
+  );
+  assert.ok(host.textContent.includes("agentJobs.card.workspaceTrusted"));
 });

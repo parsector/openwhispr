@@ -85,3 +85,16 @@ test("safe model strings save unchanged except surrounding whitespace", (t) => {
   ])
     assert.throws(() => store.save({ ...project, model }), /Invalid model/);
 });
+
+test("workspace trust defaults off and persists only for Cursor", (t) => {
+  const { file, project } = setup(t);
+  const store = createProjectStore(file);
+  assert.equal(store.save(project).projects[0].trustWorkspace, false);
+  assert.throws(
+    () => store.save({ ...project, trustWorkspace: true }),
+    /only available for Cursor/
+  );
+  const cursor = { ...project, defaultHarness: "cursor-agent", mode: "plan", trustWorkspace: true };
+  assert.equal(store.save(cursor).projects[0].trustWorkspace, true);
+  assert.equal(createProjectStore(file).read().projects[0].trustWorkspace, true);
+});

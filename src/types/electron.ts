@@ -1340,7 +1340,7 @@ export interface ReferralItem {
 
 export interface AgentJob {
   jobId: string;
-  project: { name: string; folder: string };
+  project: { name: string; folder: string; trustWorkspace?: boolean };
   harness: string;
   mode: "read-only" | "write" | "plan" | "ask";
   model: string | null;
@@ -1395,6 +1395,7 @@ declare global {
           defaultHarness: "claude" | "cursor-agent";
           mode: "read-only" | "write" | "plan" | "ask";
           model: string | null;
+          trustWorkspace?: boolean;
         }>;
       }>;
       projectsSave: (project: {
@@ -1403,6 +1404,7 @@ declare global {
         defaultHarness: "claude" | "cursor-agent";
         mode: "read-only" | "write" | "plan" | "ask";
         model: string | null;
+        trustWorkspace?: boolean;
       }) => Promise<unknown>;
       projectsRemove: (name: string) => Promise<unknown>;
       testHarness: (harness: "claude" | "cursor-agent") => Promise<{
@@ -1450,7 +1452,7 @@ declare global {
         model?: string;
       }) => Promise<{
         jobId: string;
-        project: { name: string; folder: string };
+        project: { name: string; folder: string; trustWorkspace?: boolean };
         harness: string;
         mode: "read-only" | "write" | "plan" | "ask";
         model: string | null;
