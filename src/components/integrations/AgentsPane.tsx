@@ -52,6 +52,7 @@ export function AgentsPane({ title }: { title: string }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [resolvedPrompt, setResolvedPrompt] = useState("");
   const [presetBusy, setPresetBusy] = useState(false);
+  const [confirmScheduleId, setConfirmScheduleId] = useState<string | null>(null);
   const [fanOutApproval, setFanOutApproval] = useState<{
     id: string;
     presetName: string;
@@ -148,6 +149,10 @@ export function AgentsPane({ title }: { title: string }) {
         next[index] = job;
         return next;
       });
+      if (job.scheduledFrom)
+        void window.agentJobs.presetsList().then((value) => {
+          if (live) setPresets(value.presets);
+        });
     });
     void window.agentJobs
       .list()
@@ -168,10 +173,19 @@ export function AgentsPane({ title }: { title: string }) {
         }
       });
     const interval = setInterval(() => setNow(Date.now()), 1000);
+    const presetRefresh = setInterval(() => {
+      void window.agentJobs
+        .presetsList()
+        .then((value) => {
+          if (live) setPresets(value.presets);
+        })
+        .catch(() => {});
+    }, 60_000);
     return () => {
       live = false;
       off();
       clearInterval(interval);
+      clearInterval(presetRefresh);
     };
   }, []);
 
@@ -257,6 +271,22 @@ export function AgentsPane({ title }: { title: string }) {
     try {
       await window.agentJobs.presetsRemove(id);
       setPresets((await window.agentJobs.presetsList()).presets);
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setPresetBusy(false);
+    }
+  }
+  async function updateSchedule(preset: Preset, intervalMinutes: number, enabled: boolean) {
+    setPresetBusy(true);
+    setError("");
+    try {
+      await window.agentJobs.presetsSave({
+        ...preset,
+        schedule: { intervalMinutes, enabled },
+      });
+      setPresets((await window.agentJobs.presetsList()).presets);
+      setConfirmScheduleId(null);
     } catch (cause) {
       setError(errorText(cause));
     } finally {
@@ -804,6 +834,102 @@ export function AgentsPane({ title }: { title: string }) {
                       {t("agentJobs.presets.openPullRequests")}
                     </p>
                   )}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        aria-label={t("agentJobs.presets.schedule")}
+                        checked={preset.schedule?.enabled ?? false}
+                        disabled={
+                          presetBusy ||
+                          preset.mode === "write" ||
+                          Boolean(preset.fanOut) ||
+                          extractPlaceholders(preset.prompt).length > 0
+                        }
+                        onChange={(event) => {
+                          if (event.target.checked) setConfirmScheduleId(preset.id);
+                          else
+                            void updateSchedule(
+                              preset,
+                              preset.schedule?.intervalMinutes ?? 60,
+                              false
+                            );
+                        }}
+                      />
+                      {t("agentJobs.presets.schedule")}
+                    </label>
+                    <select
+                      aria-label={t("agentJobs.presets.interval")}
+                      className={inputClass}
+                      value={preset.schedule?.intervalMinutes ?? 60}
+                      disabled={presetBusy || preset.mode === "write"}
+                      onChange={(event) =>
+                        void updateSchedule(
+                          preset,
+                          Number(event.target.value),
+                          preset.schedule?.enabled ?? false
+                        )
+                      }
+                    >
+                      {[15, 30, 60, 180, 360, 720, 1440, 10080].map((minutes) => (
+                        <option key={minutes} value={minutes}>
+                          {t("agentJobs.presets.everyMinutes", { count: minutes })}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {preset.mode === "write" && (
+                    <p className="text-xs text-muted-foreground">
+                      {t("agentJobs.presets.scheduleRequiresReadOnly")}
+                    </p>
+                  )}
+                  {preset.mode !== "write" &&
+                    (preset.fanOut || extractPlaceholders(preset.prompt).length > 0) && (
+                      <p className="text-xs text-muted-foreground">
+                        {t("agentJobs.presets.scheduleRequiresStaticPrompt")}
+                      </p>
+                    )}
+                  {preset.schedule?.enabled && preset.nextRunAt != null && (
+                    <p className="text-xs text-muted-foreground">
+                      {t("agentJobs.presets.nextRun")}{" "}
+                      <time dateTime={new Date(preset.nextRunAt).toISOString()}>
+                        {new Date(preset.nextRunAt).toLocaleString()}
+                      </time>
+                    </p>
+                  )}
+                  {confirmScheduleId === preset.id && (
+                    <div className="mt-2 space-y-2 text-xs">
+                      <p>
+                        {t("agentJobs.presets.scheduleConsequence", {
+                          interval: t("agentJobs.presets.everyMinutes", {
+                            count: preset.schedule?.intervalMinutes ?? 60,
+                          }),
+                        })}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          disabled={presetBusy}
+                          onClick={() =>
+                            void updateSchedule(
+                              preset,
+                              preset.schedule?.intervalMinutes ?? 60,
+                              true
+                            )
+                          }
+                        >
+                          {t("agentJobs.presets.enableSchedule")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setConfirmScheduleId(null)}
+                        >
+                          {t("agentJobs.card.cancel")}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-1">
                   <Button size="sm" disabled={presetBusy} onClick={() => startPreset(preset)}>
@@ -1103,6 +1229,15 @@ export function AgentsPane({ title }: { title: string }) {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-medium">{job.project.name}</h3>
+                    {job.scheduledFrom && (
+                      <p className="text-xs text-muted-foreground">
+                        {t("agentJobs.presets.scheduledFrom", {
+                          name:
+                            presets.find((preset) => preset.id === job.scheduledFrom)?.name ??
+                            job.scheduledFrom,
+                        })}
+                      </p>
+                    )}
                     <p className="text-xs text-muted-foreground">
                       {job.harness} ·{" "}
                       {job.mode !== "write" && `${modeLabel(job.mode || "read-only")} · `}
