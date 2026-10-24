@@ -4857,7 +4857,10 @@
       "unavailable": "I lavori degli agenti non sono disponibili in questa chat.",
       "limit": "Si possono preparare solo due lavori per agente per turno. Chiedi all’utente di richiederne altri in un nuovo turno.",
       "unknownJob": "Lavoro dell’agente non trovato.",
-      "results": "Risultati dei lavori degli agenti"
+      "results": "Risultati dei lavori degli agenti",
+      "presetDescription": "Prepara un’attività agente salvata. L’utente deve approvarla prima dell’avvio.",
+      "presetInstruction": "Usa run_preset per un modello configurato. Fornisci i valori e segnala la scheda di approvazione.",
+      "unknownPreset": "Modello sconosciuto."
     },
     "card": {
       "title": "Approvazione del lavoro dell’agente",
@@ -4947,6 +4950,24 @@
     "mode": {
       "plan": "Pianifica",
       "ask": "Chiedi"
+    },
+    "presets": {
+      "title": "Modelli",
+      "add": "Aggiungi modello",
+      "empty": "Nessun modello.",
+      "edit": "Modifica modello",
+      "description": "Descrizione",
+      "placeholderHint": "Usa {{name}} per un valore da inserire all’avvio.",
+      "suggestions": "Aggiungi da un suggerimento",
+      "reviewPr": "Esamina una pull request",
+      "triageBug": "Analizza una segnalazione di bug",
+      "designDoc": "Redigi un documento di progettazione",
+      "run": "Esegui",
+      "fillValues": "Compila tutti i segnaposto prima di eseguire.",
+      "missingValue": "Inserisci un valore per {{name}}.",
+      "reviewPrPrompt": "Esamina la pull request {{pr}}. Riassumi risultati e rischi.",
+      "triageBugPrompt": "Analizza la segnalazione di bug {{issue}}. Individua la causa probabile e i prossimi passi.",
+      "designDocPrompt": "Redigi un documento di progettazione per {{topic}}."
     }
   }
 }

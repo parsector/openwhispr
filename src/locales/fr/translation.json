@@ -4857,7 +4857,10 @@
       "unavailable": "Les tâches d’agent ne sont pas disponibles dans cette conversation.",
       "limit": "Deux tâches d’agent au maximum peuvent être préparées par tour. Demandez à l’utilisateur d’en solliciter d’autres dans un nouveau tour.",
       "unknownJob": "Tâche d’agent introuvable.",
-      "results": "Résultats des tâches d’agent"
+      "results": "Résultats des tâches d’agent",
+      "presetDescription": "Prépare une tâche d’agent enregistrée. L’utilisateur doit l’approuver avant son lancement.",
+      "presetInstruction": "Utilisez run_preset pour un préréglage configuré. Fournissez les valeurs et signalez la carte d’approbation.",
+      "unknownPreset": "Préréglage inconnu."
     },
     "card": {
       "title": "Approbation de la tâche d’agent",
@@ -4947,6 +4950,24 @@
     "mode": {
       "plan": "Planifier",
       "ask": "Demander"
+    },
+    "presets": {
+      "title": "Préréglages",
+      "add": "Ajouter un préréglage",
+      "empty": "Aucun préréglage.",
+      "edit": "Modifier le préréglage",
+      "description": "Description",
+      "placeholderHint": "Utilisez {{name}} pour une valeur à renseigner lors de l’exécution.",
+      "suggestions": "Ajouter depuis une suggestion",
+      "reviewPr": "Examiner une pull request",
+      "triageBug": "Analyser un rapport de bogue",
+      "designDoc": "Rédiger un document de conception",
+      "run": "Exécuter",
+      "fillValues": "Renseignez tous les paramètres avant de lancer.",
+      "missingValue": "Saisissez une valeur pour {{name}}.",
+      "reviewPrPrompt": "Examinez la pull request {{pr}}. Résumez les constats et les risques.",
+      "triageBugPrompt": "Analysez le rapport de bogue {{issue}}. Identifiez la cause probable et les prochaines étapes.",
+      "designDocPrompt": "Rédigez un document de conception pour {{topic}}."
     }
   }
 }

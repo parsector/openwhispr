@@ -4857,7 +4857,10 @@
       "unavailable": "Los trabajos de agente no están disponibles en este chat.",
       "limit": "Solo se pueden preparar dos trabajos de agente por turno. Pide al usuario que solicite más en un turno nuevo.",
       "unknownJob": "No se encontró el trabajo de agente.",
-      "results": "Resultados de los trabajos de agente"
+      "results": "Resultados de los trabajos de agente",
+      "presetDescription": "Prepara una tarea de agente guardada. El usuario debe aprobarla antes de iniciarla.",
+      "presetInstruction": "Usa run_preset para una plantilla configurada. Proporciona los valores y avisa de la tarjeta de aprobación.",
+      "unknownPreset": "Plantilla desconocida."
     },
     "card": {
       "title": "Aprobación del trabajo de agente",
@@ -4947,6 +4950,24 @@
     "mode": {
       "plan": "Planificar",
       "ask": "Preguntar"
+    },
+    "presets": {
+      "title": "Plantillas",
+      "add": "Añadir plantilla",
+      "empty": "Aún no hay plantillas.",
+      "edit": "Editar plantilla",
+      "description": "Descripción",
+      "placeholderHint": "Usa {{name}} para un valor que se completa al ejecutar.",
+      "suggestions": "Añadir desde una sugerencia",
+      "reviewPr": "Revisar una solicitud de extracción",
+      "triageBug": "Clasificar un informe de error",
+      "designDoc": "Redactar un documento de diseño",
+      "run": "Ejecutar",
+      "fillValues": "Completa todos los marcadores antes de ejecutar.",
+      "missingValue": "Introduce un valor para {{name}}.",
+      "reviewPrPrompt": "Revisa la solicitud de extracción {{pr}}. Resume los hallazgos y riesgos.",
+      "triageBugPrompt": "Clasifica el informe de error {{issue}}. Identifica la causa probable y los siguientes pasos.",
+      "designDocPrompt": "Redacta un documento de diseño para {{topic}}."
     }
   }
 }

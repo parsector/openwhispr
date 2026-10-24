@@ -97,8 +97,18 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   // Title and description, or a comment: prose in any script.
   "src/components/chat/IssueApprovalFields.tsx": ["auto", "auto"],
   "src/components/chat/LocalApprovalCard.tsx": ["inherit"],
-  // Project identifiers, absolute paths, and CLI model names are ASCII tokens.
-  "src/components/integrations/AgentsPane.tsx": ["ltr", "ltr", "ltr"],
+  // Project tokens are LTR; preset names, descriptions, and prompts accept any script.
+  "src/components/integrations/AgentsPane.tsx": [
+    "ltr",
+    "ltr",
+    "ltr",
+    "auto",
+    "auto",
+    "ltr",
+    "auto",
+    "auto",
+    "auto",
+  ],
   "src/components/integrations/LocalMcpBlock.tsx": ["inherit", "inherit"],
   "src/components/integrations/McpServers.tsx": Array(11).fill("inherit"),
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto"],

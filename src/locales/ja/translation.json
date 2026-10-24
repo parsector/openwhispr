@@ -4857,7 +4857,10 @@
       "unavailable": "このチャットではエージェントジョブを使用できません。",
       "limit": "1ターンで準備できるエージェントジョブは2件までです。追加分は新しいターンで依頼してください。",
       "unknownJob": "エージェントジョブが見つかりません。",
-      "results": "エージェントジョブの結果"
+      "results": "エージェントジョブの結果",
+      "presetDescription": "保存済みのエージェント作業を準備します。開始にはユーザーの承認が必要です。",
+      "presetInstruction": "設定済みプリセットには run_preset を使い、値を渡して承認カードを案内してください。",
+      "unknownPreset": "不明なプリセットです。"
     },
     "card": {
       "title": "エージェントジョブの承認",
@@ -4947,6 +4950,24 @@
     "mode": {
       "plan": "計画",
       "ask": "質問"
+    },
+    "presets": {
+      "title": "プリセット",
+      "add": "プリセットを追加",
+      "empty": "プリセットはまだありません。",
+      "edit": "プリセットを編集",
+      "description": "説明",
+      "placeholderHint": "実行時に入力する値には {{name}} を使います。",
+      "suggestions": "候補から追加",
+      "reviewPr": "プルリクエストをレビュー",
+      "triageBug": "バグ報告を調査",
+      "designDoc": "設計書を作成",
+      "run": "実行",
+      "fillValues": "実行前にすべての項目を入力してください。",
+      "missingValue": "{{name}} の値を入力してください。",
+      "reviewPrPrompt": "プルリクエスト {{pr}} をレビューし、発見事項とリスクをまとめてください。",
+      "triageBugPrompt": "バグ報告 {{issue}} を調査し、考えられる原因と次の手順を示してください。",
+      "designDocPrompt": "{{topic}} の設計書を作成してください。"
     }
   }
 }

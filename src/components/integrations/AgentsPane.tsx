@@ -6,6 +6,9 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { SectionLabel, SettingsPanel, SettingsPanelRow } from "../ui/SettingsSection";
 import { IntegrationsPane } from "./IntegrationsPane";
+import { extractPlaceholders } from "../../services/agents/presetPlaceholders.mjs";
+import { addLocalApproval, useLocalApprovalStore } from "../../stores/localApprovalStore";
+import { LocalApprovalCard } from "../chat/LocalApprovalCard";
 import {
   authStateKey,
   elapsedTime,
@@ -18,6 +21,12 @@ import {
 
 type Project = Awaited<ReturnType<typeof window.agentJobs.projectsList>>["projects"][number];
 type Harness = Project["defaultHarness"];
+type Preset = Awaited<ReturnType<typeof window.agentJobs.presetsList>>["presets"][number];
+const suggestions = [
+  { key: "reviewPr", writeOnly: false },
+  { key: "triageBug", writeOnly: false },
+  { key: "designDoc", writeOnly: true },
+] as const;
 const emptyProject: Project = {
   name: "",
   folder: "",
@@ -36,6 +45,13 @@ export function AgentsPane({ title }: { title: string }) {
   const { t } = useTranslation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [jobs, setJobs] = useState<AgentJob[]>([]);
+  const [presets, setPresets] = useState<Preset[]>([]);
+  const [presetDraft, setPresetDraft] = useState<Preset | null>(null);
+  const [runningPreset, setRunningPreset] = useState<Preset | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [resolvedPrompt, setResolvedPrompt] = useState("");
+  const [presetBusy, setPresetBusy] = useState(false);
+  const approvalEntries = useLocalApprovalStore((state) => state.entries);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [jobsLoaded, setJobsLoaded] = useState(false);
   const [draft, setDraft] = useState<Project | null>(null);
@@ -70,6 +86,14 @@ export function AgentsPane({ title }: { title: string }) {
           setError(errorText(cause));
           setProjectsLoaded(true);
         }
+      });
+    void window.agentJobs
+      .presetsList()
+      .then((value) => {
+        if (live) setPresets(value.presets);
+      })
+      .catch((cause) => {
+        if (live) setError(errorText(cause));
       });
     const off = window.agentJobs.onUpdated((job) => {
       setJobs((current) => {
@@ -162,6 +186,76 @@ export function AgentsPane({ title }: { title: string }) {
     }
   }
 
+  function startPreset(preset: Preset) {
+    setRunningPreset(preset);
+    setValues({});
+    setResolvedPrompt(preset.prompt);
+    setError("");
+  }
+  async function savePreset() {
+    if (!presetDraft) return;
+    setPresetBusy(true);
+    setError("");
+    try {
+      await window.agentJobs.presetsSave({ ...presetDraft, name: presetDraft.name.trim() });
+      setPresets((await window.agentJobs.presetsList()).presets);
+      setPresetDraft(null);
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setPresetBusy(false);
+    }
+  }
+  async function removePreset(id: string) {
+    setPresetBusy(true);
+    setError("");
+    try {
+      await window.agentJobs.presetsRemove(id);
+      setPresets((await window.agentJobs.presetsList()).presets);
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setPresetBusy(false);
+    }
+  }
+  async function runPreset() {
+    if (!runningPreset) return;
+    setPresetBusy(true);
+    setError("");
+    try {
+      const names = extractPlaceholders(runningPreset.prompt);
+      for (const name of names)
+        if (!values[name]?.trim()) throw new Error(t("agentJobs.presets.missingValue", { name }));
+      const job = await window.agentJobs.prepare({
+        project: runningPreset.project,
+        task: resolvedPrompt,
+        harness: runningPreset.harness,
+        mode: runningPreset.mode,
+        ...(runningPreset.model ? { model: runningPreset.model } : {}),
+      });
+      const context = {
+        messageId: `preset-${job.jobId}`,
+        toolCallId: "pane",
+        signal: new AbortController().signal,
+        onApprovalRequested: () => {},
+        onHoldDelivery: () => {},
+        claimTurnSlot: () => true,
+        releaseTurnSlot: () => {},
+      };
+      const action = job.prompt.replace(/\s+/g, " ").slice(0, 120);
+      addLocalApproval(
+        context,
+        job,
+        `harness ${job.harness} on repo ${job.project.name} with model ${job.model || "default"} for action ${action}`
+      );
+      setRunningPreset(null);
+    } catch (cause) {
+      setError(errorText(cause));
+    } finally {
+      setPresetBusy(false);
+    }
+  }
+
   async function pickFolder() {
     try {
       const value = await window.electronAPI.noteFilesPickFolder?.();
@@ -180,17 +274,20 @@ export function AgentsPane({ title }: { title: string }) {
     }
   }
   async function discard(jobId: string) {
-    try { await window.agentJobs.discard(jobId); }
-    catch (cause) { setError(errorText(cause)); }
+    try {
+      await window.agentJobs.discard(jobId);
+    } catch (cause) {
+      setError(errorText(cause));
+    }
   }
   function copyCommands(job: AgentJob) {
     if (!job.branch || !job.worktreePath) return;
     const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
     void navigator.clipboard.writeText(
       `git -C ${quote(job.worktreePath)} checkout ${quote(job.branch)}\n` +
-      `git -C ${quote(job.worktreePath)} status\n` +
-      `# After reviewing and committing in the worktree, apply the commit to your main checkout:\n` +
-      `git -C ${quote(job.project.folder)} cherry-pick ${quote(job.branch)}`
+        `git -C ${quote(job.worktreePath)} status\n` +
+        `# After reviewing and committing in the worktree, apply the commit to your main checkout:\n` +
+        `git -C ${quote(job.project.folder)} cherry-pick ${quote(job.branch)}`
     );
   }
 
@@ -216,6 +313,8 @@ export function AgentsPane({ title }: { title: string }) {
   function modeLabel(mode: string) {
     return t(mode === "read-only" ? "agentJobs.pane.readOnly" : `agentJobs.mode.${mode}`);
   }
+  const runningPlaceholders = runningPreset ? extractPlaceholders(runningPreset.prompt) : [];
+  const missingPlaceholder = runningPlaceholders.find((name) => !values[name]?.trim());
   return (
     <IntegrationsPane title={title} description={t("agentJobs.pane.description")}>
       <section className="space-y-2" aria-label={t("agentJobs.pane.projects")}>
@@ -255,7 +354,8 @@ export function AgentsPane({ title }: { title: string }) {
                     {project.folder}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {project.defaultHarness} · {project.mode !== "write" && `${modeLabel(project.mode)} · `}
+                    {project.defaultHarness} ·{" "}
+                    {project.mode !== "write" && `${modeLabel(project.mode)} · `}
                     {t(guaranteeKey(project.defaultHarness, project.mode))} ·{" "}
                     {modelLabel(project.model, project.defaultHarness)}
                   </p>
@@ -373,7 +473,9 @@ export function AgentsPane({ title }: { title: string }) {
                     <option value="cursor-agent">Cursor</option>
                   </select>
                   {draft.defaultHarness === "cursor-agent" && (
-                    <span className="block text-muted-foreground">{t("agentJobs.pane.cursorWriteUnavailable")}</span>
+                    <span className="block text-muted-foreground">
+                      {t("agentJobs.pane.cursorWriteUnavailable")}
+                    </span>
                   )}
                 </label>
                 <label className="space-y-1 text-xs">
@@ -534,6 +636,243 @@ export function AgentsPane({ title }: { title: string }) {
           </SettingsPanel>
         )}
       </section>
+      <section className="space-y-2" aria-label={t("agentJobs.presets.title")}>
+        <div className="flex items-center justify-between gap-3">
+          <SectionLabel>{t("agentJobs.presets.title")}</SectionLabel>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!projects.length || presetBusy}
+            onClick={() => {
+              const project = projects[0];
+              setPresetDraft({
+                id: crypto.randomUUID(),
+                name: "",
+                project: project.name,
+                harness: project.defaultHarness,
+                model: project.model,
+                mode: project.mode,
+                prompt: "",
+                description: "",
+              });
+            }}
+          >
+            {t("agentJobs.presets.add")}
+          </Button>
+        </div>
+        <SettingsPanel>
+          {presets.length === 0 && (
+            <SettingsPanelRow>
+              <p className="text-xs text-muted-foreground">{t("agentJobs.presets.empty")}</p>
+            </SettingsPanelRow>
+          )}
+          {presets.map((preset) => (
+            <SettingsPanelRow key={preset.id}>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-medium">{preset.name}</h3>
+                  {preset.description && (
+                    <p className="text-xs text-muted-foreground">{preset.description}</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {preset.project} · {preset.harness} ·{" "}
+                    {t(guaranteeKey(preset.harness, preset.mode))}
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  <Button size="sm" disabled={presetBusy} onClick={() => startPreset(preset)}>
+                    {t("agentJobs.presets.run")}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setPresetDraft({ ...preset })}>
+                    {t("agentJobs.pane.edit")}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={presetBusy}
+                    onClick={() => void removePreset(preset.id)}
+                  >
+                    {t("agentJobs.pane.remove")}
+                  </Button>
+                </div>
+              </div>
+            </SettingsPanelRow>
+          ))}
+        </SettingsPanel>
+        {presetDraft && (
+          <SettingsPanel>
+            <SettingsPanelRow className="space-y-3">
+              <h3 className="text-xs font-semibold">{t("agentJobs.presets.edit")}</h3>
+              <label className="block space-y-1 text-xs">
+                {t("agentJobs.pane.name")}
+                <input
+                  dir="auto"
+                  className={inputClass}
+                  value={presetDraft.name}
+                  maxLength={80}
+                  onChange={(e) => setPresetDraft({ ...presetDraft, name: e.target.value })}
+                />
+              </label>
+              <label className="block space-y-1 text-xs">
+                {t("agentJobs.presets.description")}
+                <input
+                  dir="auto"
+                  className={inputClass}
+                  value={presetDraft.description}
+                  maxLength={500}
+                  onChange={(e) => setPresetDraft({ ...presetDraft, description: e.target.value })}
+                />
+              </label>
+              <label className="block space-y-1 text-xs">
+                {t("agentJobs.pane.projects")}
+                <select
+                  className={inputClass}
+                  value={presetDraft.project}
+                  onChange={(e) => {
+                    const project = projects.find((item) => item.name === e.target.value)!;
+                    setPresetDraft({
+                      ...presetDraft,
+                      project: project.name,
+                      harness: project.defaultHarness,
+                      mode: project.mode,
+                      model: project.model,
+                    });
+                  }}
+                >
+                  {projects.map((project) => (
+                    <option key={project.name} value={project.name}>
+                      {project.name} · {t(guaranteeKey(project.defaultHarness, project.mode))}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block space-y-1 text-xs">
+                {t("agentJobs.pane.model")}
+                <input
+                  dir="ltr"
+                  className={inputClass}
+                  value={presetDraft.model || ""}
+                  placeholder={t("agentJobs.pane.defaultModel")}
+                  onChange={(e) =>
+                    setPresetDraft({ ...presetDraft, model: e.target.value || null })
+                  }
+                />
+              </label>
+              <label className="block space-y-1 text-xs">
+                {t("agentJobs.card.prompt")}
+                <textarea
+                  dir="auto"
+                  className={`${inputClass} min-h-28`}
+                  value={presetDraft.prompt}
+                  onChange={(e) => setPresetDraft({ ...presetDraft, prompt: e.target.value })}
+                />
+              </label>
+              <p className="text-xs text-muted-foreground">
+                {t("agentJobs.presets.placeholderHint")}
+              </p>
+              <div className="space-y-1">
+                <p className="text-xs font-medium">{t("agentJobs.presets.suggestions")}</p>
+                {suggestions
+                  .filter((item) =>
+                    item.writeOnly ? presetDraft.mode === "write" : presetDraft.mode !== "write"
+                  )
+                  .map((item) => (
+                    <Button
+                      key={item.key}
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setPresetDraft({
+                          ...presetDraft,
+                          name: t(`agentJobs.presets.${item.key}`),
+                          description: "",
+                          prompt: t(`agentJobs.presets.${item.key}Prompt`),
+                        })
+                      }
+                    >
+                      {t(`agentJobs.presets.${item.key}`)}
+                    </Button>
+                  ))}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={presetBusy || !presetDraft.name.trim() || !presetDraft.prompt.trim()}
+                  onClick={() => void savePreset()}
+                >
+                  {t("agentJobs.pane.save")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setPresetDraft(null)}>
+                  {t("agentJobs.card.cancel")}
+                </Button>
+              </div>
+            </SettingsPanelRow>
+          </SettingsPanel>
+        )}
+        {runningPreset && (
+          <SettingsPanel>
+            <SettingsPanelRow className="space-y-3">
+              <h3 className="text-sm font-medium">{runningPreset.name}</h3>
+              <p className="text-xs text-muted-foreground">
+                {runningPreset.project} ·{" "}
+                {t(guaranteeKey(runningPreset.harness, runningPreset.mode))}
+              </p>
+              {runningPlaceholders.map((name) => (
+                <label key={name} className="block space-y-1 text-xs">
+                  {name}
+                  <input
+                    dir="auto"
+                    className={inputClass}
+                    aria-label={name}
+                    value={values[name] || ""}
+                    onChange={(e) => {
+                      const next = { ...values, [name]: e.target.value };
+                      setValues(next);
+                      setResolvedPrompt(
+                        runningPreset.prompt.replace(
+                          /{{([a-zA-Z][a-zA-Z0-9_]*)}}/g,
+                          (match, key) => next[key]?.trim() || match
+                        )
+                      );
+                    }}
+                  />
+                </label>
+              ))}
+              <label className="block space-y-1 text-xs">
+                {t("agentJobs.card.prompt")}
+                <textarea
+                  dir="auto"
+                  className={`${inputClass} min-h-28`}
+                  value={resolvedPrompt}
+                  onChange={(e) => setResolvedPrompt(e.target.value)}
+                />
+              </label>
+              {missingPlaceholder && (
+                <p role="status" className="text-xs text-muted-foreground">
+                  {t("agentJobs.presets.missingValue", { name: missingPlaceholder })}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={presetBusy || !resolvedPrompt.trim() || Boolean(missingPlaceholder)}
+                  onClick={() => void runPreset()}
+                >
+                  {t("agentJobs.presets.run")}
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setRunningPreset(null)}>
+                  {t("agentJobs.card.cancel")}
+                </Button>
+              </div>
+            </SettingsPanelRow>
+          </SettingsPanel>
+        )}
+        {Object.values(approvalEntries)
+          .filter((entry) => entry.messageId.startsWith("preset-"))
+          .map((entry) => (
+            <LocalApprovalCard key={entry.key} entry={entry} />
+          ))}
+      </section>
       <section className="space-y-2" aria-label={t("agentJobs.pane.jobs")}>
         <SectionLabel>{t("agentJobs.pane.jobs")}</SectionLabel>
         <SettingsPanel>
@@ -559,7 +898,8 @@ export function AgentsPane({ title }: { title: string }) {
                     <div>
                       <h3 className="text-sm font-medium">{job.project.name}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {job.harness} · {job.mode !== "write" && `${modeLabel(job.mode || "read-only")} · `}
+                        {job.harness} ·{" "}
+                        {job.mode !== "write" && `${modeLabel(job.mode || "read-only")} · `}
                         {t(guaranteeKey(job.harness, job.mode))} ·{" "}
                         {job.model || t("agentJobs.pane.defaultModel")}
                         {elapsed && ` · ${elapsed}`}
@@ -603,7 +943,13 @@ export function AgentsPane({ title }: { title: string }) {
                   )}
                   {job.status === "failed" && job.reason && (
                     <p role="alert" className="text-xs text-destructive whitespace-pre-line">
-                      {failureDescription(job.reason, job.lastError, t, job.harness, job.mode === "write" ? job : undefined)}
+                      {failureDescription(
+                        job.reason,
+                        job.lastError,
+                        t,
+                        job.harness,
+                        job.mode === "write" ? job : undefined
+                      )}
                     </p>
                   )}
                   {job.status === "cancelled" && job.mode === "write" && job.worktreeCreated && (
@@ -627,19 +973,36 @@ export function AgentsPane({ title }: { title: string }) {
                       {t("agentJobs.pane.openNote")}
                     </Button>
                   )}
-                  {job.mode === "write" && job.worktreeCreated && job.worktreePath && !job.discardedAt && (
-                    <div className="space-y-1 text-xs break-all">
-                      <p>{t("agentJobs.card.branch")}: {job.branch}</p>
-                      <p>{t("agentJobs.pane.worktreePath")}: {job.worktreePath}</p>
-                      {job.status === "done" && <pre className="whitespace-pre-wrap">{job.diffStat}</pre>}
-                      {!(["pending", "queued", "running"] as string[]).includes(job.status) && (
-                        <div className="flex gap-2">
-                          <Button size="sm" variant="outline" onClick={() => copyCommands(job)}>{t("agentJobs.pane.copyCommands")}</Button>
-                          <Button size="sm" variant="outline" onClick={() => void discard(job.jobId)}>{t("agentJobs.pane.discard")}</Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  {job.mode === "write" &&
+                    job.worktreeCreated &&
+                    job.worktreePath &&
+                    !job.discardedAt && (
+                      <div className="space-y-1 text-xs break-all">
+                        <p>
+                          {t("agentJobs.card.branch")}: {job.branch}
+                        </p>
+                        <p>
+                          {t("agentJobs.pane.worktreePath")}: {job.worktreePath}
+                        </p>
+                        {job.status === "done" && (
+                          <pre className="whitespace-pre-wrap">{job.diffStat}</pre>
+                        )}
+                        {!(["pending", "queued", "running"] as string[]).includes(job.status) && (
+                          <div className="flex gap-2">
+                            <Button size="sm" variant="outline" onClick={() => copyCommands(job)}>
+                              {t("agentJobs.pane.copyCommands")}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void discard(job.jobId)}
+                            >
+                              {t("agentJobs.pane.discard")}
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                 </SettingsPanelRow>
               );
             })}

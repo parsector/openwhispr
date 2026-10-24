@@ -132,6 +132,27 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
           mode: "read-only",
           model: "opus-5-5",
         },
+        {
+          name: "Write project",
+          folder: "/tmp/write",
+          defaultHarness: "claude",
+          mode: "write",
+          model: "sonnet",
+        },
+      ],
+    }),
+    presetsList: async () => ({
+      presets: [
+        {
+          id: "review",
+          name: "Review PR",
+          project: "Existing project",
+          harness: "claude",
+          mode: "read-only",
+          model: "sonnet",
+          prompt: "Review {{pr}}",
+          description: "",
+        },
       ],
     }),
     list: async () => [],
@@ -219,4 +240,58 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
   assert.equal(mode.disabled, false);
   assert.equal(mode.value, "plan");
   assert.ok(host.querySelector('option[value="gpt-5"]'));
+  const reviewRow = [...host.querySelectorAll("h3")]
+    .find((item) => item.textContent === "Review PR")
+    ?.closest("div.flex.flex-wrap");
+  assert.ok(reviewRow);
+  await act(() =>
+    [...reviewRow.querySelectorAll("button")]
+      .find((item) => item.textContent === "agentJobs.presets.run")
+      .click()
+  );
+  const placeholder = host.querySelector('input[aria-label="pr"]');
+  assert.ok(placeholder);
+  assert.equal(placeholder.closest("label").textContent, "pr");
+  assert.ok(host.textContent.includes("agentJobs.presets.missingValue"));
+  const runButton = [...host.querySelectorAll("button")].find(
+    (item) => item.textContent === "agentJobs.presets.run" && item.disabled
+  );
+  assert.ok(runButton);
+  await act(() => {
+    Object.getOwnPropertyDescriptor(dom.HTMLInputElement.prototype, "value").set.call(
+      placeholder,
+      "42"
+    );
+    placeholder.dispatchEvent(new dom.Event("input", { bubbles: true }));
+  });
+  assert.ok([...host.querySelectorAll("textarea")].some((item) => item.value === "Review 42"));
+  await act(() =>
+    [...host.querySelectorAll("button")]
+      .find((item) => item.textContent === "agentJobs.presets.add")
+      .click()
+  );
+  assert.equal(
+    [...host.querySelectorAll("button")].filter(
+      (item) => item.textContent === "agentJobs.presets.designDoc"
+    ).length,
+    0
+  );
+  const presetProject = [...host.querySelectorAll("select")].find((item) =>
+    item.querySelector('option[value="Write project"]')
+  );
+  await act(() => {
+    presetProject.value = "Write project";
+    presetProject.dispatchEvent(new dom.Event("change", { bubbles: true }));
+  });
+  assert.ok(
+    [...host.querySelectorAll("button")].some(
+      (item) => item.textContent === "agentJobs.presets.designDoc"
+    )
+  );
+  assert.equal(
+    [...host.querySelectorAll("button")].some(
+      (item) => item.textContent === "agentJobs.presets.reviewPr"
+    ),
+    false
+  );
 });

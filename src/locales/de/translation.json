@@ -4857,7 +4857,10 @@
       "unavailable": "Agentenaufträge sind in diesem Chat nicht verfügbar.",
       "limit": "Pro Runde können höchstens zwei Agentenaufträge vorbereitet werden. Bitten Sie den Nutzer, weitere in einer neuen Runde anzufordern.",
       "unknownJob": "Agentenauftrag nicht gefunden.",
-      "results": "Ergebnisse der Agentenaufträge"
+      "results": "Ergebnisse der Agentenaufträge",
+      "presetDescription": "Bereitet eine gespeicherte Agentenaufgabe vor. Der Benutzer muss den Auftrag vor dem Start genehmigen.",
+      "presetInstruction": "Verwende run_preset für eine konfigurierte Vorlage. Gib Werte für Platzhalter an und informiere über die Genehmigungskarte.",
+      "unknownPreset": "Unbekannte Vorlage."
     },
     "card": {
       "title": "Agentenauftrag freigeben",
@@ -4947,6 +4950,24 @@
     "mode": {
       "plan": "Planen",
       "ask": "Fragen"
+    },
+    "presets": {
+      "title": "Vorlagen",
+      "add": "Vorlage hinzufügen",
+      "empty": "Noch keine Vorlagen.",
+      "edit": "Vorlage bearbeiten",
+      "description": "Beschreibung",
+      "placeholderHint": "Verwende {{name}} für einen Wert, der beim Ausführen eingegeben wird.",
+      "suggestions": "Aus Vorschlag hinzufügen",
+      "reviewPr": "Pull-Request prüfen",
+      "triageBug": "Fehlerbericht einordnen",
+      "designDoc": "Designdokument entwerfen",
+      "run": "Ausführen",
+      "fillValues": "Vor dem Ausführen alle Platzhalter ausfüllen.",
+      "missingValue": "Wert für {{name}} eingeben.",
+      "reviewPrPrompt": "Prüfe Pull-Request {{pr}}. Fasse Befunde und Risiken zusammen.",
+      "triageBugPrompt": "Ordne Fehlerbericht {{issue}} ein. Ermittle die wahrscheinliche Ursache und nächste Schritte.",
+      "designDocPrompt": "Entwirf ein Designdokument für {{topic}}."
     }
   }
 }

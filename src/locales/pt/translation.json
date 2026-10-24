@@ -4857,7 +4857,10 @@
       "unavailable": "Os trabalhos de agentes não estão disponíveis nesta conversa.",
       "limit": "Só é possível preparar dois trabalhos de agentes por turno. Pede ao utilizador para solicitar mais num novo turno.",
       "unknownJob": "Trabalho de agente não encontrado.",
-      "results": "Resultados dos trabalhos de agentes"
+      "results": "Resultados dos trabalhos de agentes",
+      "presetDescription": "Prepara uma tarefa salva do agente. O usuário deve aprová-la antes de iniciar.",
+      "presetInstruction": "Use run_preset para um modelo configurado. Forneça os valores e informe sobre o cartão de aprovação.",
+      "unknownPreset": "Modelo desconhecido."
     },
     "card": {
       "title": "Aprovação do trabalho de agente",
@@ -4947,6 +4950,24 @@
     "mode": {
       "plan": "Planear",
       "ask": "Perguntar"
+    },
+    "presets": {
+      "title": "Modelos",
+      "add": "Adicionar modelo",
+      "empty": "Ainda não há modelos.",
+      "edit": "Editar modelo",
+      "description": "Descrição",
+      "placeholderHint": "Use {{name}} para um valor preenchido ao executar.",
+      "suggestions": "Adicionar de uma sugestão",
+      "reviewPr": "Revisar uma solicitação de pull",
+      "triageBug": "Analisar um relatório de erro",
+      "designDoc": "Redigir um documento de design",
+      "run": "Executar",
+      "fillValues": "Preencha todos os campos antes de executar.",
+      "missingValue": "Digite um valor para {{name}}.",
+      "reviewPrPrompt": "Revise a solicitação de pull {{pr}}. Resuma as descobertas e os riscos.",
+      "triageBugPrompt": "Analise o relatório de erro {{issue}}. Identifique a causa provável e os próximos passos.",
+      "designDocPrompt": "Redija um documento de design para {{topic}}."
     }
   }
 }

@@ -4857,7 +4857,10 @@
       "unavailable": "此聊天中無法使用代理工作。",
       "limit": "每回合最多可準備兩項代理工作。請使用者在下一回合提出更多工作。",
       "unknownJob": "找不到代理工作。",
-      "results": "代理工作結果"
+      "results": "代理工作結果",
+      "presetDescription": "準備已儲存的代理工作。開始前需要使用者核准。",
+      "presetInstruction": "對已設定的預設使用 run_preset，提供佔位符的值並提示使用者查看核准卡片。",
+      "unknownPreset": "未知預設。"
     },
     "card": {
       "title": "代理工作核准",
@@ -4947,6 +4950,24 @@
     "mode": {
       "plan": "規劃",
       "ask": "提問"
+    },
+    "presets": {
+      "title": "預設",
+      "add": "新增預設",
+      "empty": "目前沒有預設。",
+      "edit": "編輯預設",
+      "description": "說明",
+      "placeholderHint": "使用 {{name}} 表示執行時填寫的值。",
+      "suggestions": "從建議新增",
+      "reviewPr": "審查提取要求",
+      "triageBug": "分析錯誤報告",
+      "designDoc": "草擬設計文件",
+      "run": "執行",
+      "fillValues": "執行前請填寫所有佔位符。",
+      "missingValue": "請輸入 {{name}} 的值。",
+      "reviewPrPrompt": "審查提取要求 {{pr}}，總結發現和風險。",
+      "triageBugPrompt": "分析錯誤報告 {{issue}}，找出可能的原因與後續步驟。",
+      "designDocPrompt": "為 {{topic}} 草擬設計文件。"
     }
   }
 }

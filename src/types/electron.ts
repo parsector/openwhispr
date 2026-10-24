@@ -1367,6 +1367,22 @@ export interface AgentJob {
 declare global {
   interface Window {
     agentJobs: {
+      presetsList: () => Promise<{
+        presets: Array<{
+          id: string;
+          name: string;
+          project: string;
+          harness: "claude" | "cursor-agent";
+          model: string | null;
+          mode: "read-only" | "write" | "plan" | "ask";
+          prompt: string;
+          description: string;
+        }>;
+      }>;
+      presetsSave: (
+        preset: Awaited<ReturnType<Window["agentJobs"]["presetsList"]>>["presets"][number]
+      ) => Promise<unknown>;
+      presetsRemove: (id: string) => Promise<unknown>;
       projectsList: () => Promise<{
         projects: Array<{
           name: string;

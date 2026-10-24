@@ -4857,7 +4857,10 @@
       "unavailable": "此聊天中无法使用代理任务。",
       "limit": "每轮最多准备两个代理任务。请用户在新一轮中请求更多任务。",
       "unknownJob": "找不到代理任务。",
-      "results": "代理任务结果"
+      "results": "代理任务结果",
+      "presetDescription": "准备已保存的代理任务。启动前需要用户批准。",
+      "presetInstruction": "对已配置的预设使用 run_preset，提供占位符的值并提示用户查看批准卡片。",
+      "unknownPreset": "未知预设。"
     },
     "card": {
       "title": "代理任务批准",
@@ -4947,6 +4950,24 @@
     "mode": {
       "plan": "规划",
       "ask": "提问"
+    },
+    "presets": {
+      "title": "预设",
+      "add": "添加预设",
+      "empty": "暂无预设。",
+      "edit": "编辑预设",
+      "description": "说明",
+      "placeholderHint": "使用 {{name}} 表示运行时填写的值。",
+      "suggestions": "从建议添加",
+      "reviewPr": "审查拉取请求",
+      "triageBug": "排查错误报告",
+      "designDoc": "起草设计文档",
+      "run": "运行",
+      "fillValues": "运行前请填写所有占位符。",
+      "missingValue": "请输入 {{name}} 的值。",
+      "reviewPrPrompt": "审查拉取请求 {{pr}}，总结发现和风险。",
+      "triageBugPrompt": "排查错误报告 {{issue}}，找出可能的原因和后续步骤。",
+      "designDocPrompt": "为 {{topic}} 起草设计文档。"
     }
   }
 }

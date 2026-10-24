@@ -37,7 +37,7 @@ export function createDelegateTaskTool(projects: AgentProject[]): ToolDefinition
         return { success: false, data: null, displayText: i18n.t("agentJobs.tools.invalidTask") };
       if (!context)
         return { success: false, data: null, displayText: i18n.t("agentJobs.tools.unavailable") };
-      if (!context.claimTurnSlot("delegate_task", 2))
+      if (!context.claimTurnSlot("agent_job", 2))
         return { success: false, data: null, displayText: i18n.t("agentJobs.tools.limit") };
       try {
         const job = await window.agentJobs.prepare({
@@ -59,7 +59,7 @@ export function createDelegateTaskTool(projects: AgentProject[]): ToolDefinition
           displayText: summary,
         };
       } catch (error) {
-        context.releaseTurnSlot("delegate_task");
+        context.releaseTurnSlot("agent_job");
         const message = (error as Error).message;
         return {
           success: false,

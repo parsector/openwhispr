@@ -4857,7 +4857,10 @@
       "unavailable": "Agent jobs are unavailable in this chat.",
       "limit": "Only two agent jobs can be prepared per turn. Ask the user to request more in a new turn.",
       "unknownJob": "Agent job not found.",
-      "results": "Agent job results"
+      "results": "Agent job results",
+      "presetDescription": "Prepare a saved agent prompt. The user must approve the job before it starts.",
+      "presetInstruction": "Use run_preset for a configured preset. Supply values for its placeholders and tell the user the approval card is ready.",
+      "unknownPreset": "Unknown preset."
     },
     "card": {
       "title": "Agent job approval",
@@ -4947,6 +4950,24 @@
     "mode": {
       "plan": "Plan",
       "ask": "Ask"
+    },
+    "presets": {
+      "title": "Presets",
+      "add": "Add preset",
+      "empty": "No presets yet.",
+      "edit": "Edit preset",
+      "description": "Description",
+      "placeholderHint": "Use {{name}} for a value you fill in when running.",
+      "suggestions": "Add from a suggestion",
+      "reviewPr": "Review a pull request",
+      "triageBug": "Triage a bug report",
+      "designDoc": "Draft a design doc",
+      "run": "Run",
+      "fillValues": "Fill in every placeholder before running.",
+      "missingValue": "Enter a value for {{name}}.",
+      "reviewPrPrompt": "Review pull request {{pr}}. Summarize findings and risks.",
+      "triageBugPrompt": "Triage bug report {{issue}}. Identify the likely cause and next steps.",
+      "designDocPrompt": "Draft a design doc for {{topic}}."
     }
   }
 }
