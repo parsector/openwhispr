@@ -12,9 +12,10 @@ function registerAgentIpc({ ipcMain, projectStore, resolver, manager }) {
   ipcMain.handle("agent-projects-remove", (_event, projectName) =>
     projectStore.remove(name(projectName))
   );
-  ipcMain.handle("agent-projects-test-harness", (_event, harness) => {
+  ipcMain.handle("agent-projects-test-harness", async (_event, harness) => {
     if (!["claude", "cursor-agent"].includes(harness)) throw new Error("Invalid harness");
-    return resolver.test(harness);
+    const result = await resolver.test(harness);
+    return { ...result, auth: await resolver.authStatus(harness) };
   });
   ipcMain.handle("agent-job-prepare", (_event, input) => {
     if (!exact(input, ["project", "task", "harness", "model"]))
