@@ -4941,6 +4941,14 @@
       "done": "Lavoro dell’agente completato per {{project}}",
       "failed": "Lavoro dell’agente non riuscito per {{project}}",
       "unknownError": "Il lavoro non è riuscito."
+    },
+    "guarantee": {
+      "enforced": "sola lettura (applicata)",
+      "bestEffort": "sola lettura (al meglio)"
+    },
+    "mode": {
+      "plan": "Pianifica",
+      "ask": "Chiedi"
     }
   }
 }

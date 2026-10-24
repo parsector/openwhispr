@@ -1342,6 +1342,7 @@ export interface AgentJob {
   jobId: string;
   project: { name: string; folder: string };
   harness: string;
+  mode: "read-only" | "plan" | "ask";
   model: string | null;
   prompt: string;
   status: "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
@@ -1368,7 +1369,7 @@ declare global {
           name: string;
           folder: string;
           defaultHarness: "claude" | "cursor-agent";
-          mode: "read-only";
+          mode: "read-only" | "plan" | "ask";
           model: string | null;
         }>;
       }>;
@@ -1376,7 +1377,7 @@ declare global {
         name: string;
         folder: string;
         defaultHarness: "claude" | "cursor-agent";
-        mode: "read-only";
+        mode: "read-only" | "plan" | "ask";
         model: string | null;
       }) => Promise<unknown>;
       projectsRemove: (name: string) => Promise<unknown>;
@@ -1385,6 +1386,7 @@ declare global {
         path: string | null;
         version: string | null;
         error: string | null;
+        models?: string[];
         auth: {
           state: "authenticated" | "not_authenticated" | "unknown";
           method: string | null;
@@ -1394,12 +1396,14 @@ declare global {
       prepare: (input: {
         project: string;
         task: string;
-        harness?: "claude";
+        harness?: "claude" | "cursor-agent";
+        mode?: "read-only" | "plan" | "ask";
         model?: string;
       }) => Promise<{
         jobId: string;
         project: { name: string; folder: string };
         harness: string;
+        mode: "read-only" | "plan" | "ask";
         model: string | null;
         prompt: string;
       }>;
