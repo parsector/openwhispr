@@ -37,6 +37,12 @@ export function elapsedTime(
 
 export const stallTextKey = "agentJobs.pane.stallWarning";
 
+export function guaranteeKey(harness: string): string {
+  return harness === "cursor-agent"
+    ? "agentJobs.guarantee.bestEffort"
+    : "agentJobs.guarantee.enforced";
+}
+
 export function authStateKey(
   state: "authenticated" | "not_authenticated" | "unknown",
   method: string | null = null,
@@ -58,15 +64,25 @@ export const lastErrorKey = "agentJobs.pane.failure.lastError";
 export function failureDescription(
   reason: string | null,
   lastError: string | null | undefined,
-  translate: (key: string) => string
+  translate: (key: string) => string,
+  harness: string = "claude"
 ): string {
-  const message = failureMessage(reason);
+  const message = failureMessage(reason, harness);
   const reasonText = "key" in message ? translate(message.key) : message.text;
   return lastError ? `${reasonText}\n${translate(lastErrorKey)}: ${lastError}` : reasonText;
 }
 
-export function failureMessage(reason: string | null): { key: string } | { text: string } {
-  if (reason === "not_authenticated") return { key: "agentJobs.pane.failure.notAuthenticated" };
+export function failureMessage(
+  reason: string | null,
+  harness: string = "claude"
+): { key: string } | { text: string } {
+  if (reason === "not_authenticated")
+    return {
+      key:
+        harness === "cursor-agent"
+          ? "agentJobs.pane.auth.cursorNotAuthenticated"
+          : "agentJobs.pane.failure.notAuthenticated",
+    };
   if (reason === "interrupted") return { key: "agentJobs.pane.failure.interrupted" };
   if (reason === "cancelled") return { key: "agentJobs.pane.failure.cancelled" };
   return reason ? { text: reason } : { key: "agentJobs.toast.unknownError" };

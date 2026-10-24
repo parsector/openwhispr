@@ -172,3 +172,75 @@ test("policy denial blocks prepare", async (t) => {
     /agent_disallowed/
   );
 });
+
+test("Cursor routes to its runner with configured mode and keeps queue, stall and note behavior", async (t) => {
+  const cursorCli = path.join(__dirname, "../../fixtures/fakeCursor.js");
+  const { createCursorRunner } = require("../../../src/services/agents/cursorRunner");
+  let cursorStarts = 0;
+  const { manager, notes, dir, advance } = setup(t, {
+    projectStore: {
+      read: () => ({
+        projects: [
+          {
+            name: "openwhispr",
+            folder: dirPlaceholder(),
+            defaultHarness: "cursor-agent",
+            mode: "plan",
+            model: "auto",
+          },
+        ],
+      }),
+    },
+    resolver: {
+      authStatus: async () => ({ state: "authenticated" }),
+      resolve: async () => ({ ok: true, path: cursorCli }),
+    },
+    runnerFactories: {
+      "cursor-agent": (cliPath) => {
+        const actual = createCursorRunner({ cliPath });
+        return {
+          start: (input) => {
+            cursorStarts++;
+            assert.equal(input.mode, "plan");
+            return actual.start(input);
+          },
+        };
+      },
+    },
+  });
+  function dirPlaceholder() {
+    return dir;
+  }
+  await assert.rejects(
+    manager.prepare({ project: "openwhispr", task: "x", mode: "agent" }),
+    /requires --force/
+  );
+  await assert.rejects(
+    manager.prepare({ project: "openwhispr", task: "x", mode: "ask" }),
+    /Mode does not match/
+  );
+  await assert.rejects(
+    manager.prepare({ project: "openwhispr", task: "x", harness: "claude" }),
+    /Harness does not match/
+  );
+  const ids = await Promise.all(
+    ["slow one", "slow two", "third"].map(
+      async (task) => (await manager.prepare({ project: "openwhispr", task })).jobId
+    )
+  );
+  assert.equal(manager.get(ids[0]).mode, "plan");
+  await manager.approve(ids[0]);
+  await manager.approve(ids[1]);
+  await manager.approve(ids[2]);
+  assert.equal(manager.get(ids[2]).status, "queued");
+  advance(STALL_MS + 1);
+  assert.equal(manager.get(ids[0]).stalled, true);
+  await until(() => manager.get(ids[2]).status === "done");
+  assert.equal(cursorStarts, 3);
+  assert.equal(notes.length, 3);
+  const failId = (await manager.prepare({ project: "openwhispr", task: "fail" })).jobId;
+  await manager.approve(failId);
+  await until(() => manager.get(failId).status === "failed");
+  assert.equal(manager.get(failId).lastError, "Bearer <REDACTED> <REDACTED> <REDACTED>");
+  assert.equal(notes.length, 3);
+});

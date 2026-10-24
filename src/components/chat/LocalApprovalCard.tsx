@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { guaranteeKey } from "../integrations/agentJobsPresentation";
 import {
   approveLocal,
   cancelLocal,
@@ -25,6 +26,11 @@ export function LocalApprovalCard({ entry }: { entry: LocalApprovalEntry }) {
       aria-label={t("agentJobs.card.title")}
     >
       <p className="text-sm font-medium">{entry.summary}</p>
+      <p className="text-xs text-muted-foreground">
+        {entry.mode &&
+          `${t(entry.mode === "read-only" ? "agentJobs.pane.readOnly" : `agentJobs.mode.${entry.mode}`)} · `}
+        {t(guaranteeKey(entry.harness))}
+      </p>
       <p className="text-xs text-muted-foreground" role="status">
         {t(`agentJobs.card.${entry.state}`)}
       </p>
