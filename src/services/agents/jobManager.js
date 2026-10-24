@@ -117,7 +117,8 @@ function createJobManager({
           project.name === job.project.name &&
           project.folder === job.project.folder &&
           project.defaultHarness === job.harness &&
-          project.mode === job.mode
+          project.mode === job.mode &&
+          Boolean(project.trustWorkspace) === Boolean(job.project.trustWorkspace)
       );
   async function prepare({ project, task, harness, model, mode }) {
     if (
@@ -151,7 +152,11 @@ function createJobManager({
     if (!resolved.ok) throw new Error(resolved.error);
     const job = {
       jobId: crypto.randomUUID(),
-      project: { name: selected.name, folder: selected.folder },
+      project: {
+        name: selected.name,
+        folder: selected.folder,
+        trustWorkspace: selected.trustWorkspace === true,
+      },
       harness: selectedHarness,
       mode: selectedMode,
       model: model?.trim() || selected.model || null,
@@ -241,6 +246,7 @@ function createJobManager({
         model: job.model,
         ...(job.mode === "write" ? { mode: "write", branch: job.branch } : {}),
         ...(job.harness === "cursor-agent" ? { mode: job.mode } : {}),
+        ...(job.harness === "cursor-agent" ? { trustWorkspace: job.project.trustWorkspace } : {}),
         onEvent(event) {
           if (job.status !== "running") return;
           job.lastEventAt = now();
@@ -280,7 +286,13 @@ function createJobManager({
           drain();
           return;
         }
-        if (collectionError) {
+        if (outcome.reason === "workspace_untrusted") {
+          job.lastError =
+            redactOutput(outcome.trustRefusalLine || lastError(outcome.stderr) || "")
+              .trim()
+              .slice(0, 500) || null;
+          fail(job, "workspace_untrusted");
+        } else if (collectionError) {
           fail(job, "worktree_failed");
         } else if (outcome.exitCode === 0 && outcome.resultEvent && !outcome.resultEvent.is_error) {
           try {

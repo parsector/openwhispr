@@ -4873,7 +4873,9 @@
       "started": "Avviato",
       "failed": "Non riuscito",
       "cancelled": "Annullato",
-      "branch": "Branch"
+      "branch": "Branch",
+      "workspaceTrusted": "cartella di lavoro attendibile (--trust)",
+      "workspaceUntrusted": "cartella di lavoro non attendibile — Cursor rifiuterà finché non consideri attendibile la cartella"
     },
     "pane": {
       "description": "Gestisci agenti di programmazione locali per i progetti configurati. I lavori iniziano dopo la tua approvazione.",
@@ -4902,6 +4904,9 @@
       "details": "Dettagli",
       "copyDetails": "Copia dettagli",
       "cursorModelFallback": "Impossibile elencare i modelli Cursor — digitane uno",
+      "cursorWorkspaceUntrusted": "Cartella di lavoro non attendibile — esegui `cursor-agent` una volta in `{{folder}}` oppure abilita Considera attendibile la cartella di lavoro",
+      "trustWorkspace": "Considera attendibile la cartella di lavoro (passa --trust)",
+      "trustWorkspaceDescription": "Consente a Cursor di operare in questa cartella ed eseguire i propri hook e la configurazione MCP. Disattivato per impostazione predefinita; abilitalo solo per cartelle attendibili.",
       "authSoftWarning": "Accesso a Claude non confermato",
       "actionError": "Azione non riuscita",
       "testHarness": "Verifica agente",
@@ -4934,7 +4939,8 @@
         "notAuthenticated": "Accedi a Claude per eseguire questo lavoro.",
         "interrupted": "Il lavoro è stato interrotto.",
         "cancelled": "Il lavoro è stato annullato.",
-        "lastError": "Messaggio CLI"
+        "lastError": "Messaggio CLI",
+        "workspaceUntrusted": "Cursor ha rifiutato questa cartella di lavoro. Esegui `cursor-agent` una volta nella cartella del progetto oppure abilita l'opzione nelle impostazioni del progetto."
       },
       "worktreePath": "Percorso worktree",
       "worktreeKept": "worktree conservato",

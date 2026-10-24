@@ -4873,7 +4873,9 @@
       "started": "開始済み",
       "failed": "失敗",
       "cancelled": "キャンセル済み",
-      "branch": "ブランチ"
+      "branch": "ブランチ",
+      "workspaceTrusted": "ワークスペースを信頼済み（--trust）",
+      "workspaceUntrusted": "ワークスペースが信頼されていません — フォルダーを信頼するまで Cursor は実行を拒否します"
     },
     "pane": {
       "description": "設定済みプロジェクトのローカルコーディングエージェントを管理します。ジョブは承認後に開始します。",
@@ -4902,6 +4904,9 @@
       "details": "詳細",
       "copyDetails": "詳細をコピー",
       "cursorModelFallback": "Cursor のモデルを一覧表示できません — 入力してください",
+      "cursorWorkspaceUntrusted": "ワークスペースが信頼されていません — `{{folder}}` で `cursor-agent` を一度実行するか、「ワークスペースを信頼する」を有効にしてください",
+      "trustWorkspace": "ワークスペースを信頼する（--trust を渡す）",
+      "trustWorkspaceDescription": "Cursor がこのフォルダーで動作し、独自のフックと MCP 設定を実行できるようにします。初期設定ではオフです。信頼できるフォルダーでのみ有効にしてください。",
       "authSoftWarning": "Claude のサインインを確認できませんでした",
       "actionError": "操作に失敗しました",
       "testHarness": "エージェントをテスト",
@@ -4934,7 +4939,8 @@
         "notAuthenticated": "このジョブを実行するにはClaudeにサインインしてください。",
         "interrupted": "ジョブが中断されました。",
         "cancelled": "ジョブがキャンセルされました。",
-        "lastError": "CLI のメッセージ"
+        "lastError": "CLI のメッセージ",
+        "workspaceUntrusted": "Cursor がこのワークスペースを拒否しました。プロジェクトフォルダーで `cursor-agent` を一度実行するか、プロジェクト設定で「ワークスペースを信頼する」を有効にしてください。"
       },
       "worktreePath": "worktree のパス",
       "worktreeKept": "worktree を保持",

@@ -4873,7 +4873,9 @@
       "started": "Démarré",
       "failed": "Échec",
       "cancelled": "Annulé",
-      "branch": "Branche"
+      "branch": "Branche",
+      "workspaceTrusted": "dossier de travail approuvé (--trust)",
+      "workspaceUntrusted": "dossier de travail non approuvé — Cursor refusera tant que vous n'aurez pas approuvé le dossier"
     },
     "pane": {
       "description": "Gérez les agents de code locaux pour vos projets configurés. Les tâches démarrent après votre approbation.",
@@ -4902,6 +4904,9 @@
       "details": "Détails",
       "copyDetails": "Copier les détails",
       "cursorModelFallback": "Impossible de lister les modèles Cursor — saisissez-en un",
+      "cursorWorkspaceUntrusted": "Dossier de travail non approuvé — lancez `cursor-agent` une fois dans `{{folder}}` ou activez Faire confiance au dossier de travail",
+      "trustWorkspace": "Faire confiance au dossier de travail (passe --trust)",
+      "trustWorkspaceDescription": "Autorise Cursor à s'exécuter dans ce dossier et à exécuter ses propres hooks et sa configuration MCP. Désactivé par défaut ; n'activez cette option que pour les dossiers fiables.",
       "authSoftWarning": "Connexion à Claude non confirmée",
       "actionError": "Échec de l’action",
       "testHarness": "Tester l’agent",
@@ -4934,7 +4939,8 @@
         "notAuthenticated": "Connectez-vous à Claude pour lancer cette tâche.",
         "interrupted": "La tâche a été interrompue.",
         "cancelled": "La tâche a été annulée.",
-        "lastError": "Message de la CLI"
+        "lastError": "Message de la CLI",
+        "workspaceUntrusted": "Cursor a refusé ce dossier de travail. Lancez `cursor-agent` une fois dans le dossier du projet ou activez Faire confiance au dossier de travail dans les paramètres."
       },
       "worktreePath": "Chemin du worktree",
       "worktreeKept": "worktree conservé",

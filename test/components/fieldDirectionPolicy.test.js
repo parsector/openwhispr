@@ -97,10 +97,11 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   // Title and description, or a comment: prose in any script.
   "src/components/chat/IssueApprovalFields.tsx": ["auto", "auto"],
   "src/components/chat/LocalApprovalCard.tsx": ["inherit"],
-  // Project tokens are LTR; preset names, descriptions, and prompts accept any script.
+  // Project tokens are LTR; the trust checkbox inherits direction; preset names, descriptions, and prompts accept any script.
   "src/components/integrations/AgentsPane.tsx": [
     "ltr",
     "ltr",
+    "inherit",
     "ltr",
     "auto",
     "auto",

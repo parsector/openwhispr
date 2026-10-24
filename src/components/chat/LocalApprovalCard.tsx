@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { guaranteeKey } from "../integrations/agentJobsPresentation";
+import { cursorTrustKey, guaranteeKey } from "../integrations/agentJobsPresentation";
 import {
   approveLocal,
   cancelLocal,
@@ -32,6 +32,11 @@ export function LocalApprovalCard({ entry }: { entry: LocalApprovalEntry }) {
           `${t(entry.mode === "read-only" ? "agentJobs.pane.readOnly" : `agentJobs.mode.${entry.mode}`)} · `}
         {t(guaranteeKey(entry.harness, entry.mode))}
       </p>
+      {entry.harness === "cursor-agent" && (
+        <p className="text-xs text-muted-foreground">
+          {t(cursorTrustKey(Boolean(entry.trustWorkspace)))}
+        </p>
+      )}
       {entry.authWarning && entry.harness === "claude" && (
         <p className="text-xs text-warning" role="status">
           {t("agentJobs.pane.authSoftWarning")}

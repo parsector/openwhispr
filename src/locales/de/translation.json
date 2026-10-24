@@ -4873,7 +4873,9 @@
       "started": "Gestartet",
       "failed": "Fehlgeschlagen",
       "cancelled": "Abgebrochen",
-      "branch": "Branch"
+      "branch": "Branch",
+      "workspaceTrusted": "Arbeitsverzeichnis vertrauenswürdig (--trust)",
+      "workspaceUntrusted": "Arbeitsverzeichnis nicht vertrauenswürdig — Cursor verweigert den Start, bis Sie dem Ordner vertrauen"
     },
     "pane": {
       "description": "Lokale Coding-Agenten für eingerichtete Projekte verwalten. Aufträge starten erst nach Ihrer Freigabe.",
@@ -4902,6 +4904,9 @@
       "details": "Details",
       "copyDetails": "Details kopieren",
       "cursorModelFallback": "Cursor-Modelle konnten nicht geladen werden — Modell eingeben",
+      "cursorWorkspaceUntrusted": "Arbeitsverzeichnis nicht vertrauenswürdig — `cursor-agent` einmal in `{{folder}}` ausführen oder „Arbeitsverzeichnis vertrauen“ aktivieren",
+      "trustWorkspace": "Arbeitsverzeichnis vertrauen (--trust übergeben)",
+      "trustWorkspaceDescription": "Erlaubt Cursor, in diesem Ordner zu laufen und eigene Hooks und die MCP-Konfiguration auszuführen. Standardmäßig aus; nur für vertrauenswürdige Ordner aktivieren.",
       "authSoftWarning": "Claude-Anmeldung konnte nicht bestätigt werden",
       "actionError": "Aktion fehlgeschlagen",
       "testHarness": "Agent testen",
@@ -4934,7 +4939,8 @@
         "notAuthenticated": "Melden Sie sich bei Claude an, um diesen Auftrag auszuführen.",
         "interrupted": "Der Auftrag wurde unterbrochen.",
         "cancelled": "Der Auftrag wurde abgebrochen.",
-        "lastError": "CLI-Meldung"
+        "lastError": "CLI-Meldung",
+        "workspaceUntrusted": "Cursor hat dieses Arbeitsverzeichnis abgelehnt. Führen Sie `cursor-agent` einmal im Projektordner aus oder aktivieren Sie „Arbeitsverzeichnis vertrauen“ in den Projekteinstellungen."
       },
       "worktreePath": "Worktree-Pfad",
       "worktreeKept": "Worktree behalten",

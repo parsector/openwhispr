@@ -4873,7 +4873,9 @@
       "started": "Started",
       "failed": "Failed",
       "cancelled": "Cancelled",
-      "branch": "Branch"
+      "branch": "Branch",
+      "workspaceTrusted": "workspace trusted (--trust)",
+      "workspaceUntrusted": "workspace not trusted — Cursor will refuse unless you trust the folder"
     },
     "pane": {
       "description": "Manage local coding agents for configured projects. Jobs run only after you approve them.",
@@ -4902,6 +4904,9 @@
       "details": "Details",
       "copyDetails": "Copy details",
       "cursorModelFallback": "couldn't list Cursor models — type one",
+      "cursorWorkspaceUntrusted": "workspace not trusted — run `cursor-agent` once in `{{folder}}`, or enable Trust workspace",
+      "trustWorkspace": "Trust workspace (passes --trust)",
+      "trustWorkspaceDescription": "Lets Cursor run in this folder and execute its own hooks and MCP config. Off by default; enable it only for folders you trust.",
       "authSoftWarning": "couldn't confirm Claude sign-in",
       "actionError": "Action failed",
       "testHarness": "Test harness",
@@ -4934,7 +4939,8 @@
         "notAuthenticated": "Sign in to Claude to run this job.",
         "interrupted": "The job was interrupted.",
         "cancelled": "The job was cancelled.",
-        "lastError": "CLI message"
+        "lastError": "CLI message",
+        "workspaceUntrusted": "Cursor refused this workspace. Run `cursor-agent` once in the project folder to trust it, or enable Trust workspace in the project settings."
       },
       "worktreePath": "Worktree path",
       "worktreeKept": "worktree kept",

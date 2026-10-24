@@ -4983,7 +4983,9 @@
       "started": "بدأت",
       "failed": "فشلت",
       "cancelled": "أُلغيت",
-      "branch": "الفرع"
+      "branch": "الفرع",
+      "workspaceTrusted": "مساحة العمل موثوقة (--trust)",
+      "workspaceUntrusted": "مساحة العمل غير موثوقة — سيرفض Cursor التشغيل حتى تثق بالمجلد"
     },
     "pane": {
       "description": "أدر وكلاء البرمجة المحليين للمشاريع التي أعددتها. تبدأ المهام بعد موافقتك.",
@@ -5012,6 +5014,9 @@
       "details": "التفاصيل",
       "copyDetails": "نسخ التفاصيل",
       "cursorModelFallback": "تعذّر عرض نماذج Cursor — اكتب نموذجًا",
+      "cursorWorkspaceUntrusted": "مساحة العمل غير موثوقة — شغّل `cursor-agent` مرة واحدة داخل `{{folder}}`، أو فعّل الوثوق بمساحة العمل",
+      "trustWorkspace": "الوثوق بمساحة العمل (تمرير --trust)",
+      "trustWorkspaceDescription": "يسمح لـ Cursor بالعمل في هذا المجلد وتنفيذ الخطافات وإعدادات MCP الخاصة به. معطّل افتراضيًا؛ فعّله فقط للمجلدات التي تثق بها.",
       "authSoftWarning": "تعذّر تأكيد تسجيل الدخول إلى Claude",
       "actionError": "فشل الإجراء",
       "testHarness": "اختبار الوكيل",
@@ -5044,7 +5049,8 @@
         "notAuthenticated": "سجّل الدخول إلى Claude لتشغيل هذه المهمة.",
         "interrupted": "انقطعت المهمة.",
         "cancelled": "أُلغيت المهمة.",
-        "lastError": "رسالة سطر الأوامر"
+        "lastError": "رسالة سطر الأوامر",
+        "workspaceUntrusted": "رفض Cursor مساحة العمل هذه. شغّل `cursor-agent` مرة واحدة داخل مجلد المشروع، أو فعّل الوثوق بمساحة العمل في إعدادات المشروع."
       },
       "worktreePath": "مسار worktree",
       "worktreeKept": "تم الاحتفاظ بـ worktree",

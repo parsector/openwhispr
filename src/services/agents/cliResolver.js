@@ -5,6 +5,7 @@ const { promisify } = require("node:util");
 const exec = promisify(execFile);
 const { redactOutput } = require("./redactOutput");
 const { minimalEnv } = require("./minimalEnv");
+const { isWorkspaceTrustRefusal } = require("./workspaceTrust");
 const unknown = (detail) => ({ state: "unknown", method: null, detail });
 function parseAuthStatus({ exitCode, stdout = "" }) {
   if (exitCode === "ETIMEDOUT" || exitCode === "TIMEOUT") return unknown("timeout");
@@ -129,6 +130,8 @@ function createCliResolver({ configuredPaths = {}, run = exec } = {}) {
     const resolved = await resolve(harness);
     if (!resolved.ok) return { ok: false, reason: resolved.error };
     const result = await probe(resolved.path, ["--list-models"], 8000);
+    if (isWorkspaceTrustRefusal(result.stdout, result.stderr))
+      return { ok: false, reason: "workspace_untrusted", models: [] };
     if (result.exitCode !== 0)
       return {
         ok: false,

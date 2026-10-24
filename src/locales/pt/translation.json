@@ -4873,7 +4873,9 @@
       "started": "Iniciado",
       "failed": "Falhou",
       "cancelled": "Cancelado",
-      "branch": "Ramo"
+      "branch": "Ramo",
+      "workspaceTrusted": "pasta de trabalho confiável (--trust)",
+      "workspaceUntrusted": "pasta de trabalho não confiável — o Cursor recusará até você confiar na pasta"
     },
     "pane": {
       "description": "Gira agentes de programação locais para projetos configurados. Os trabalhos começam após a tua aprovação.",
@@ -4902,6 +4904,9 @@
       "details": "Detalhes",
       "copyDetails": "Copiar detalhes",
       "cursorModelFallback": "Não foi possível listar os modelos do Cursor — digite um",
+      "cursorWorkspaceUntrusted": "Pasta de trabalho não confiável — execute `cursor-agent` uma vez em `{{folder}}` ou ative Confiar na pasta de trabalho",
+      "trustWorkspace": "Confiar na pasta de trabalho (passa --trust)",
+      "trustWorkspaceDescription": "Permite que o Cursor seja executado nesta pasta e execute seus próprios hooks e configuração MCP. Desativado por padrão; ative apenas para pastas confiáveis.",
       "authSoftWarning": "Não foi possível confirmar o login no Claude",
       "actionError": "Ação falhou",
       "testHarness": "Testar agente",
@@ -4934,7 +4939,8 @@
         "notAuthenticated": "Inicia sessão no Claude para executar este trabalho.",
         "interrupted": "O trabalho foi interrompido.",
         "cancelled": "O trabalho foi cancelado.",
-        "lastError": "Mensagem da CLI"
+        "lastError": "Mensagem da CLI",
+        "workspaceUntrusted": "O Cursor recusou esta pasta de trabalho. Execute `cursor-agent` uma vez na pasta do projeto ou ative Confiar na pasta de trabalho nas configurações."
       },
       "worktreePath": "Caminho do worktree",
       "worktreeKept": "worktree mantido",

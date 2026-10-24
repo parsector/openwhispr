@@ -33,6 +33,7 @@ const emptyProject: Project = {
   defaultHarness: "claude",
   mode: "read-only",
   model: null,
+  trustWorkspace: false,
 };
 const models = claudeModels();
 const listedModels = [...models.aliases, ...models.fullNames];
@@ -453,6 +454,12 @@ export function AgentsPane({ title }: { title: string }) {
                   </span>
                 </p>
               )}
+              {project.defaultHarness === "cursor-agent" &&
+                probe["cursor-agent"]?.modelProbe?.reason === "workspace_untrusted" && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t("agentJobs.pane.cursorWorkspaceUntrusted", { folder: project.folder })}
+                  </p>
+                )}
               {probeDetails(project.defaultHarness)}
             </SettingsPanelRow>
           ))}
@@ -501,6 +508,7 @@ export function AgentsPane({ title }: { title: string }) {
                         defaultHarness: harness,
                         mode: harness === "claude" ? "read-only" : "plan",
                         model: null,
+                        trustWorkspace: harness === "cursor-agent" ? draft.trustWorkspace : false,
                       });
                       setCustomModel(false);
                       void testHarness(harness);
@@ -515,6 +523,21 @@ export function AgentsPane({ title }: { title: string }) {
                     </span>
                   )}
                 </label>
+                {draft.defaultHarness === "cursor-agent" && (
+                  <label className="space-y-1 text-xs">
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(draft.trustWorkspace)}
+                        onChange={(e) => setDraft({ ...draft, trustWorkspace: e.target.checked })}
+                      />
+                      {t("agentJobs.pane.trustWorkspace")}
+                    </span>
+                    <span className="block text-muted-foreground">
+                      {t("agentJobs.pane.trustWorkspaceDescription")}
+                    </span>
+                  </label>
+                )}
                 <label className="space-y-1 text-xs">
                   {t("agentJobs.pane.mode")}
                   <select
@@ -590,7 +613,9 @@ export function AgentsPane({ title }: { title: string }) {
                   {draft.defaultHarness === "cursor-agent" &&
                     probe["cursor-agent"]?.modelProbe?.ok === false && (
                       <p className="text-xs text-muted-foreground">
-                        {t("agentJobs.pane.cursorModelFallback")}
+                        {probe["cursor-agent"]?.modelProbe?.reason === "workspace_untrusted"
+                          ? t("agentJobs.pane.cursorWorkspaceUntrusted", { folder: draft.folder })
+                          : t("agentJobs.pane.cursorModelFallback")}
                       </p>
                     )}
                   {(customModel || draft.defaultHarness === "cursor-agent") && (

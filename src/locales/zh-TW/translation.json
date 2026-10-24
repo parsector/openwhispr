@@ -4873,7 +4873,9 @@
       "started": "已啟動",
       "failed": "失敗",
       "cancelled": "已取消",
-      "branch": "分支"
+      "branch": "分支",
+      "workspaceTrusted": "工作區已受信任（--trust）",
+      "workspaceUntrusted": "工作區尚未受信任 — 在您信任此資料夾之前，Cursor 將拒絕執行"
     },
     "pane": {
       "description": "管理已設定專案的本機程式代理。工作會在您核准後開始。",
@@ -4902,6 +4904,9 @@
       "details": "詳細資訊",
       "copyDetails": "複製詳細資訊",
       "cursorModelFallback": "無法列出 Cursor 模型 — 請手動輸入",
+      "cursorWorkspaceUntrusted": "工作區尚未受信任 — 在 `{{folder}}` 中執行一次 `cursor-agent`，或啟用「信任工作區」",
+      "trustWorkspace": "信任工作區（傳遞 --trust）",
+      "trustWorkspaceDescription": "允許 Cursor 在此資料夾中執行，並執行其自身的勾點和 MCP 設定。預設關閉；僅對您信任的資料夾啟用。",
       "authSoftWarning": "無法確認 Claude 登入狀態",
       "actionError": "操作失敗",
       "testHarness": "測試代理",
@@ -4934,7 +4939,8 @@
         "notAuthenticated": "請登入 Claude 以執行這項工作。",
         "interrupted": "工作已中斷。",
         "cancelled": "工作已取消。",
-        "lastError": "CLI 訊息"
+        "lastError": "CLI 訊息",
+        "workspaceUntrusted": "Cursor 拒絕此工作區。請在專案資料夾中執行一次 `cursor-agent`，或在專案設定中啟用「信任工作區」。"
       },
       "worktreePath": "worktree 路徑",
       "worktreeKept": "已保留 worktree",
