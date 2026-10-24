@@ -15,10 +15,15 @@ const fields = new Set([
   "prompt",
   "description",
   "fanOut",
+  "schedule",
+  "lastRunAt",
+  "nextRunAt",
 ]);
-const requiredFields = [...fields].filter((key) => key !== "fanOut");
+const requiredFields = [...fields].filter(
+  (key) => !["fanOut", "schedule", "lastRunAt", "nextRunAt"].includes(key)
+);
 
-function validatePreset(preset, projects) {
+function validatePreset(preset, projects, { allowMissingProject = false } = {}) {
   if (
     !isObject(preset) ||
     Object.keys(preset).some((key) => !fields.has(key)) ||
@@ -36,8 +41,14 @@ function validatePreset(preset, projects) {
   if (typeof preset.description !== "string" || preset.description.length > 500)
     throw new Error("Invalid preset description");
   const project = projects.find((item) => item.name === preset.project);
-  if (!project) throw new Error("Unknown preset project");
-  if (preset.harness !== project.defaultHarness || preset.mode !== project.mode)
+  if (!project && !allowMissingProject) throw new Error("Unknown preset project");
+  if (preset.schedule?.enabled && project?.mode === "write" && !allowMissingProject)
+    throw new Error("schedule_requires_read_only");
+  if (
+    !allowMissingProject &&
+    project &&
+    (preset.harness !== project.defaultHarness || preset.mode !== project.mode)
+  )
     throw new Error("Preset harness or mode does not match project");
   if (preset.model !== null && !safeModel(preset.model)) throw new Error("Invalid preset model");
   const placeholders = extractPlaceholders(preset.prompt);
@@ -46,6 +57,31 @@ function validatePreset(preset, projects) {
     (preset.fanOut !== "open-pull-requests" || !placeholders.includes("pr"))
   )
     throw new Error("Invalid preset fanOut");
+  if (preset.schedule !== undefined) {
+    if (
+      !isObject(preset.schedule) ||
+      Object.keys(preset.schedule).some((key) => !["intervalMinutes", "enabled"].includes(key)) ||
+      !Number.isInteger(preset.schedule.intervalMinutes) ||
+      preset.schedule.intervalMinutes < 15 ||
+      preset.schedule.intervalMinutes > 10080 ||
+      typeof preset.schedule.enabled !== "boolean"
+    )
+      throw new Error("Invalid preset schedule");
+    if (
+      preset.schedule.enabled &&
+      (preset.mode === "write" || (!allowMissingProject && project?.mode === "write"))
+    )
+      throw new Error("schedule_requires_read_only");
+    if (preset.schedule.enabled && (preset.fanOut || placeholders.length))
+      throw new Error("schedule_requires_static_prompt");
+  }
+  for (const key of ["lastRunAt", "nextRunAt"])
+    if (
+      preset[key] !== undefined &&
+      preset[key] !== null &&
+      (!Number.isSafeInteger(preset[key]) || preset[key] < 0 || preset[key] > 8.64e15)
+    )
+      throw new Error(`Invalid preset ${key}`);
   return {
     id: preset.id,
     name: preset.name,
@@ -56,10 +92,13 @@ function validatePreset(preset, projects) {
     prompt: preset.prompt,
     description: preset.description,
     ...(preset.fanOut ? { fanOut: preset.fanOut } : {}),
+    ...(preset.schedule ? { schedule: { ...preset.schedule } } : {}),
+    ...(preset.lastRunAt !== undefined ? { lastRunAt: preset.lastRunAt } : {}),
+    ...(preset.nextRunAt !== undefined ? { nextRunAt: preset.nextRunAt } : {}),
   };
 }
 
-function createPresetStore(file, projectStore, fsImpl = fs) {
+function createPresetStore(file, projectStore, fsImpl = fs, now = Date.now) {
   const validateData = (value) => {
     if (
       !isObject(value) ||
@@ -68,7 +107,9 @@ function createPresetStore(file, projectStore, fsImpl = fs) {
     )
       throw new Error("Invalid presets file");
     const projects = projectStore.read().projects;
-    const presets = value.presets.map((preset) => validatePreset(preset, projects));
+    const presets = value.presets.map((preset) =>
+      validatePreset(preset, projects, { allowMissingProject: true })
+    );
     if (
       new Set(presets.map((item) => item.id)).size !== presets.length ||
       new Set(presets.map((item) => item.name.toLowerCase())).size !== presets.length
@@ -111,6 +152,17 @@ function createPresetStore(file, projectStore, fsImpl = fs) {
     save(preset) {
       const valid = validatePreset(preset, projectStore.read().projects);
       const data = read();
+      const previous = data.presets.find((item) => item.id === valid.id);
+      const changed =
+        valid.schedule?.enabled &&
+        (!previous?.schedule?.enabled ||
+          previous.schedule.intervalMinutes !== valid.schedule.intervalMinutes);
+      valid.lastRunAt = previous?.lastRunAt ?? null;
+      valid.nextRunAt = valid.schedule?.enabled
+        ? changed
+          ? now() + valid.schedule.intervalMinutes * 60_000
+          : (previous?.nextRunAt ?? now() + valid.schedule.intervalMinutes * 60_000)
+        : null;
       data.presets = data.presets.filter((item) => item.id !== valid.id);
       data.presets.push(valid);
       return write(data);
@@ -119,6 +171,15 @@ function createPresetStore(file, projectStore, fsImpl = fs) {
       const data = read();
       data.presets = data.presets.filter((item) => item.id !== id);
       return write(data);
+    },
+    recordRun(id, runAt) {
+      const data = read();
+      const preset = data.presets.find((item) => item.id === id);
+      if (!preset?.schedule?.enabled) return false;
+      preset.lastRunAt = runAt;
+      preset.nextRunAt = runAt + preset.schedule.intervalMinutes * 60_000;
+      write(data);
+      return true;
     },
   };
 }

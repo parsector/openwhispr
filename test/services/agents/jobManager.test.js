@@ -70,6 +70,24 @@ test("missing context drops with a specific reason and still prepares", async (t
   assert.equal(manager.get(prepared.jobId).status, "pending");
   assert.equal(manager.get(prepared.jobId).contextNoteId, undefined);
 });
+test("scheduled source is persisted and included in the saved note", async (t) => {
+  const { manager, dir, notes } = setup(t);
+  const started = await manager.startScheduled({
+    id: "nightly",
+    project: "openwhispr",
+    harness: "claude",
+    mode: "read-only",
+    prompt: "Review repository",
+    model: "sonnet",
+  });
+  assert.equal(manager.get(started.jobId).scheduledFrom, "nightly");
+  assert.equal(
+    JSON.parse(fs.readFileSync(path.join(dir, "jobs.json"), "utf8")).jobs[0].scheduledFrom,
+    "nightly"
+  );
+  await until(() => manager.get(started.jobId).status === "done");
+  assert.match(notes[0][1], /Scheduled from preset: nightly/);
+});
 
 test("note context persists and a successful result appends once without trimming", async (t) => {
   const { manager, db, dir, notes } = setup(t);

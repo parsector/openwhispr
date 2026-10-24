@@ -1387,6 +1387,7 @@ export interface AgentJob {
   fanOutIndex?: number;
   fanOutTotal?: number;
   fanOutPresetName?: string;
+  scheduledFrom?: string;
 }
 
 declare global {
@@ -1403,6 +1404,9 @@ declare global {
           prompt: string;
           description: string;
           fanOut?: "open-pull-requests";
+          schedule?: { intervalMinutes: number; enabled: boolean };
+          lastRunAt?: number | null;
+          nextRunAt?: number | null;
         }>;
       }>;
       presetsSave: (
