@@ -20,6 +20,12 @@ export interface ToolExecutionContext {
   /** The assistant message the call belongs to; approval cards key on it. */
   messageId: string;
   toolCallId: string;
+  origin?: {
+    conversationId: string;
+    messageId: string;
+    toolCallId: string;
+    surface: "chat" | "assistant";
+  };
   /** Aborts when the turn is cancelled or its conversation ends. */
   signal: AbortSignal;
   /** Tells the chat surface an approval card needs the user's attention. */

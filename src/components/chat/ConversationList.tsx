@@ -121,6 +121,12 @@ export default function ConversationList({
     };
   }, [loadConversations, refreshKey]);
 
+  useEffect(() => {
+    return window.electronAPI?.onAgentJobMessageAdded?.(() => {
+      void loadConversations();
+    });
+  }, [loadConversations]);
+
   const filtered = useMemo(() => {
     return showArchived
       ? conversations.filter((c) => c.is_archived)

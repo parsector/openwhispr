@@ -8,6 +8,25 @@ const { createWorktreeService, location } = require("./worktree");
 
 const EXPIRY_MS = 10 * 60 * 1000;
 const STALL_MS = 20 * 60 * 1000;
+function validOrigin(origin) {
+  if (origin === undefined) return true;
+  if (!origin || typeof origin !== "object" || Array.isArray(origin)) return false;
+  if (
+    Object.keys(origin).some(
+      (key) => !["conversationId", "messageId", "toolCallId", "surface"].includes(key)
+    )
+  )
+    return false;
+  return (
+    typeof origin.conversationId === "string" &&
+    /^[1-9][0-9]{0,19}$/.test(origin.conversationId) &&
+    Number.isSafeInteger(Number(origin.conversationId)) &&
+    [origin.messageId, origin.toolCallId].every(
+      (value) => typeof value === "string" && /^[A-Za-z0-9_.:-]{1,128}$/.test(value)
+    ) &&
+    ["chat", "assistant"].includes(origin.surface)
+  );
+}
 function createJobManager({
   file,
   projectStore,
@@ -121,14 +140,15 @@ function createJobManager({
           project.mode === job.mode &&
           Boolean(project.trustWorkspace) === Boolean(job.project.trustWorkspace)
       );
-  async function prepare({ project, task, harness, model, mode }) {
+  async function prepare({ project, task, harness, model, mode, origin }) {
     if (
       typeof project !== "string" ||
       typeof task !== "string" ||
       !task.trim() ||
       task.length > 100_000 ||
       (harness !== undefined && !["claude", "cursor-agent"].includes(harness)) ||
-      (model !== undefined && !safeModel(model))
+      (model !== undefined && !safeModel(model)) ||
+      !validOrigin(origin)
     )
       throw new Error("Invalid job request");
     if (!(await policyAllowed())) throw new Error("agent_disallowed");
@@ -162,6 +182,7 @@ function createJobManager({
       mode: selectedMode,
       model: model?.trim() || selected.model || null,
       prompt: task.trim(),
+      ...(origin ? { origin: { ...origin } } : {}),
       status: "pending",
       steps: [],
       result: null,
