@@ -41,6 +41,10 @@ test("Cursor argv uses only the fixed read-only template", async () => {
     /requires --force|unavailable/
   );
   assert.throws(
+    () => runner.start({ folder: process.cwd(), prompt: "x", mode: "write" }),
+    /requires Claude/
+  );
+  assert.throws(
     () => runner.start({ folder: process.cwd(), prompt: "x", flags: ["--force"] }),
     /Extra Cursor flags/
   );

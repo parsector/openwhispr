@@ -23,9 +23,11 @@ function validateProject(project, fsImpl = fs) {
     throw new Error("Invalid harness");
   if (project.mode === "agent")
     throw new Error("Cursor agent mode requires --force and is unavailable");
+  if (project.defaultHarness === "cursor-agent" && project.mode === "write")
+    throw new Error("Write mode requires Claude; Cursor supports plan or ask only");
   if (
     project.defaultHarness === "claude"
-      ? project.mode !== "read-only"
+      ? !["read-only", "write"].includes(project.mode)
       : !["plan", "ask"].includes(project.mode)
   )
     throw new Error("Invalid project mode");

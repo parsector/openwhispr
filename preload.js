@@ -85,6 +85,7 @@ contextBridge.exposeInMainWorld("agentJobs", {
   prepare: (input) => ipcRenderer.invoke("agent-job-prepare", input),
   approve: (id, input) => ipcRenderer.invoke("agent-job-approve", id, input),
   cancel: (id) => ipcRenderer.invoke("agent-job-cancel", id),
+  discard: (id) => ipcRenderer.invoke("agent-job-discard", id),
   list: () => ipcRenderer.invoke("agent-job-list"),
   get: (id) => ipcRenderer.invoke("agent-job-get", id),
   onUpdated: registerListener("agent-job-updated", (callback) => (_event, job) => callback(job)),

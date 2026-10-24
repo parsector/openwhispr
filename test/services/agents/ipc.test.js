@@ -53,3 +53,16 @@ test("Cursor harness probe includes available models", async () => {
   const result = await handlers.get("agent-projects-test-harness")(null, "cursor-agent");
   assert.deepEqual(result.models, ["auto", "gpt-5"]);
 });
+
+test("discard IPC delegates a validated job id", async () => {
+  const handlers = new Map();
+  let discarded;
+  registerAgentIpc({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    projectStore: {}, resolver: {},
+    manager: { discard: async (id) => { discarded = id; return { jobId: id, discardedAt: 123 }; } },
+  });
+  assert.deepEqual(await handlers.get("agent-job-discard")(null, "job-1"), { jobId: "job-1", discardedAt: 123 });
+  assert.equal(discarded, "job-1");
+  assert.throws(() => handlers.get("agent-job-discard")(null, "../bad"), /Invalid name/);
+});
