@@ -81,7 +81,12 @@ test("auth and failure reasons map known states without hiding CLI errors", () =
     key: "agentJobs.pane.failure.workspaceUntrusted",
   });
   assert.match(
-    failureDescription("workspace_untrusted", "Workspace Trust Required", translate, "cursor-agent"),
+    failureDescription(
+      "workspace_untrusted",
+      "Workspace Trust Required",
+      translate,
+      "cursor-agent"
+    ),
     /Cursor refused this workspace.*CLI message: Workspace Trust Required/s
   );
   assert.equal(cursorTrustKey(true), "agentJobs.card.workspaceTrusted");
@@ -132,6 +137,8 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
       else delete globalThis[name];
     }
   });
+  let debugEnabled = false;
+  dom.electronAPI = { getDebugState: async () => ({ enabled: debugEnabled, logPath: null }) };
   dom.agentJobs = {
     projectsList: async () => ({
       projects: [
@@ -167,45 +174,26 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     }),
     list: async () => [],
     onUpdated: () => () => {},
-    testHarness: async (harness) => ({
-      argv: ["--version"],
-      exitCode: 0,
-      stdoutSnippet: "v1",
-      stderrSnippet: "",
-      authMethod: null,
-      configDirectory: null,
-      durationMs: 1,
-      ok: false,
-      path: null,
-      version: null,
-      error: "not found",
+    testHarness: async () => ({
+      path: "/usr/bin/claude",
+      version: "v1",
+      error: null,
       auth: {
-        state: "unknown",
-        method: null,
+        state: "authenticated",
+        method: "claude.ai",
         detail: null,
-        path: "/usr/bin/claude",
-        argv: ["auth", "status"],
-        exitCode: 1,
-        stdoutSnippet: "{}",
-        stderrSnippet: "",
-        authMethod: null,
-        configDirectory: "/tmp/config",
-        durationMs: 2,
-        textProbe: {
-          path: "/usr/bin/claude",
-          argv: ["auth", "status", "--text"],
-          exitCode: 0,
-          stdoutSnippet: "Login method: Claude Max",
-          stderrSnippet: "",
-          authMethod: null,
-          configDirectory: null,
-          durationMs: 2,
+      },
+      debug: {
+        test: { argv: ["--version"], exitCode: 0, stdoutSnippet: "v1" },
+        auth: {
+          argv: ["auth", "status"],
+          configDirectory: "/tmp/config",
+          subscriptionType: "max",
+          textProbe: { stdoutSnippet: "Login method: Claude Max" },
         },
       },
-      ...(harness === "cursor-agent"
-        ? { modelProbe: { ok: true, models: ["auto", "gpt-5"] } }
-        : {}),
     }),
+    listModels: async () => ({ ok: true, models: ["auto", "gpt-5"] }),
   };
   React = require("react");
   const { createRoot } = require("react-dom/client");
@@ -226,7 +214,15 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     "agentJobs.pane.invalidClaudeModel"
   );
   await act(() => host.querySelector("button").click());
+  assert.equal(host.querySelector("details summary"), null);
+  assert.equal(host.textContent.includes("agentJobs.pane.copyDetails"), false);
+  assert.ok(host.textContent.includes("/usr/bin/claude · v1"));
+  assert.ok(host.textContent.includes("agentJobs.pane.auth.subscription"));
+  assert.equal(host.textContent.includes("/tmp/config"), false);
+  debugEnabled = true;
+  await act(() => host.querySelector("button").click());
   assert.ok(host.querySelector("details summary")?.textContent.includes("agentJobs.pane.details"));
+  assert.ok(host.textContent.includes("agentJobs.pane.auth.claudeMax"));
   assert.ok(host.querySelector("details pre")?.textContent.includes("Login method: Claude Max"));
   assert.ok(
     [...host.querySelectorAll("button")].some(
@@ -307,8 +303,8 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     configDirectory: null,
     durationMs: 1,
     auth: { state: "unknown", method: null, detail: null },
-    modelProbe: { ok: false, reason: "workspace_untrusted" },
   });
+  dom.agentJobs.listModels = async () => ({ ok: false, reason: "workspace_untrusted" });
   await act(() =>
     [...host.querySelectorAll("button")]
       .filter((button) => button.textContent === "agentJobs.pane.testHarness")
@@ -371,7 +367,7 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     ),
     false
   );
-  dom.electronAPI = { noteFilesPickFolder: async () => ({ path: "/tmp" }) };
+  dom.electronAPI.noteFilesPickFolder = async () => ({ path: "/tmp" });
   dom.agentJobs.projectsSave = async () => {
     throw new Error("Invalid model");
   };

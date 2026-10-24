@@ -64,24 +64,19 @@ export function AgentsPane({ title }: { title: string }) {
     Partial<Record<Harness, Awaited<ReturnType<typeof window.agentJobs.testHarness>>>>
   >({});
   const [probeBusy, setProbeBusy] = useState<Harness | null>(null);
+  const [modelProbe, setModelProbe] = useState<Awaited<
+    ReturnType<typeof window.agentJobs.listModels>
+  > | null>(null);
+  const [debugEnabled, setDebugEnabled] = useState(false);
   const [now, setNow] = useState(Date.now());
   function probeDetails(harness: Harness) {
     const result = probe[harness];
-    if (!result) return null;
+    if (!debugEnabled || !result?.debug) return null;
     const details = JSON.stringify(
       {
-        test: {
-          path: result.path,
-          argv: result.argv,
-          exitCode: result.exitCode,
-          stdoutSnippet: result.stdoutSnippet,
-          stderrSnippet: result.stderrSnippet,
-          authMethod: result.authMethod,
-          configDirectory: result.configDirectory,
-          durationMs: result.durationMs,
-        },
-        auth: result.auth,
-        modelProbe: result.modelProbe,
+        test: result.debug.test,
+        auth: result.debug.auth,
+        ...(harness === "cursor-agent" ? { modelProbe } : {}),
       },
       null,
       2
@@ -90,11 +85,7 @@ export function AgentsPane({ title }: { title: string }) {
       <details className="mt-1 text-xs text-muted-foreground">
         <summary>{t("agentJobs.pane.details")}</summary>
         <pre className="whitespace-pre-wrap break-all">{details}</pre>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => void navigator.clipboard.writeText(details)}
-        >
+        <Button size="sm" variant="ghost" onClick={() => copyText(details)}>
           {t("agentJobs.pane.copyDetails")}
         </Button>
       </details>
@@ -103,12 +94,24 @@ export function AgentsPane({ title }: { title: string }) {
   function authLabel(harness: Harness) {
     const auth = probe[harness]?.auth;
     if (!auth) return null;
-    const label = t(authStateKey(auth.state, auth.method, harness), { method: auth.method });
+    const subscription = debugEnabled ? probe[harness]?.debug?.auth?.subscriptionType : null;
+    const label =
+      auth.state === "authenticated" && auth.method === "claude.ai" && subscription === "max"
+        ? t("agentJobs.pane.auth.claudeMax")
+        : t(authStateKey(auth.state, auth.method, harness), { method: auth.method });
     return auth.state === "unknown" && auth.detail ? `${label} · ${auth.detail}` : label;
   }
 
   useEffect(() => {
     let live = true;
+    void window.electronAPI
+      .getDebugState()
+      .then((state) => {
+        if (live) setDebugEnabled(state.enabled);
+      })
+      .catch(() => {
+        if (live) setDebugEnabled(false);
+      });
     void window.agentJobs
       .projectsList()
       .then((value) => {
@@ -170,8 +173,15 @@ export function AgentsPane({ title }: { title: string }) {
     setProbeBusy(harness);
     setError("");
     try {
+      const debugState = await window.electronAPI.getDebugState().catch(() => ({ enabled: false }));
+      setDebugEnabled(debugState.enabled);
       const result = await window.agentJobs.testHarness(harness);
       setProbe((current) => ({ ...current, [harness]: result }));
+      if (harness === "cursor-agent") {
+        setModelProbe(
+          await window.agentJobs.listModels().catch(() => ({ ok: false, reason: "command failed" }))
+        );
+      }
     } catch (cause) {
       setProbe((current) => ({ ...current, [harness]: undefined }));
       setError(errorText(cause));
@@ -312,12 +322,15 @@ export function AgentsPane({ title }: { title: string }) {
   function copyCommands(job: AgentJob) {
     if (!job.branch || !job.worktreePath) return;
     const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
-    void navigator.clipboard.writeText(
+    copyText(
       `git -C ${quote(job.worktreePath)} checkout ${quote(job.branch)}\n` +
         `git -C ${quote(job.worktreePath)} status\n` +
         `# After reviewing and committing in the worktree, apply the commit to your main checkout:\n` +
         `git -C ${quote(job.project.folder)} cherry-pick ${quote(job.branch)}`
     );
+  }
+  function copyText(value: string) {
+    void navigator.clipboard.writeText(value);
   }
 
   const inputClass =
@@ -439,7 +452,7 @@ export function AgentsPane({ title }: { title: string }) {
               </div>
               {probe[project.defaultHarness] && (
                 <p role="status" className="mt-1 break-all text-xs text-muted-foreground">
-                  {probe[project.defaultHarness]?.ok
+                  {probe[project.defaultHarness]?.error === null
                     ? `${probe[project.defaultHarness]?.path} · ${probe[project.defaultHarness]?.version}`
                     : probe[project.defaultHarness]?.error}{" "}
                   ·{" "}
@@ -455,7 +468,7 @@ export function AgentsPane({ title }: { title: string }) {
                 </p>
               )}
               {project.defaultHarness === "cursor-agent" &&
-                probe["cursor-agent"]?.modelProbe?.reason === "workspace_untrusted" && (
+                modelProbe?.reason === "workspace_untrusted" && (
                   <p className="mt-1 text-xs text-muted-foreground">
                     {t("agentJobs.pane.cursorWorkspaceUntrusted", { folder: project.folder })}
                   </p>
@@ -596,28 +609,27 @@ export function AgentsPane({ title }: { title: string }) {
                     </select>
                   )}
                   {draft.defaultHarness === "cursor-agent" &&
-                    cursorModels(probe["cursor-agent"]?.modelProbe?.models).length > 0 && (
+                    cursorModels(modelProbe?.models).length > 0 && (
                       <select
                         className={inputClass}
                         value={draft.model || ""}
                         onChange={(e) => setDraft({ ...draft, model: e.target.value || null })}
                       >
                         <option value="">{t("agentJobs.pane.defaultModel")}</option>
-                        {cursorModels(probe["cursor-agent"]?.modelProbe?.models).map((model) => (
+                        {cursorModels(modelProbe?.models).map((model) => (
                           <option key={model.id} value={model.id}>
                             {model.label}
                           </option>
                         ))}
                       </select>
                     )}
-                  {draft.defaultHarness === "cursor-agent" &&
-                    probe["cursor-agent"]?.modelProbe?.ok === false && (
-                      <p className="text-xs text-muted-foreground">
-                        {probe["cursor-agent"]?.modelProbe?.reason === "workspace_untrusted"
-                          ? t("agentJobs.pane.cursorWorkspaceUntrusted", { folder: draft.folder })
-                          : t("agentJobs.pane.cursorModelFallback")}
-                      </p>
-                    )}
+                  {draft.defaultHarness === "cursor-agent" && modelProbe?.ok === false && (
+                    <p className="text-xs text-muted-foreground">
+                      {modelProbe?.reason === "workspace_untrusted"
+                        ? t("agentJobs.pane.cursorWorkspaceUntrusted", { folder: draft.folder })
+                        : t("agentJobs.pane.cursorModelFallback")}
+                    </p>
+                  )}
                   {(customModel || draft.defaultHarness === "cursor-agent") && (
                     <div className="space-y-1">
                       {draft.defaultHarness === "claude" && (
@@ -676,7 +688,7 @@ export function AgentsPane({ title }: { title: string }) {
               </div>
               {probe[draft.defaultHarness] && (
                 <p role="status" className="break-all text-xs text-muted-foreground">
-                  {probe[draft.defaultHarness]?.ok
+                  {probe[draft.defaultHarness]?.error === null
                     ? `${probe[draft.defaultHarness]?.path} · ${probe[draft.defaultHarness]?.version}`
                     : probe[draft.defaultHarness]?.error}
                 </p>
@@ -1017,7 +1029,7 @@ export function AgentsPane({ title }: { title: string }) {
                     <p role="alert" className="text-xs text-destructive whitespace-pre-line">
                       {failureDescription(
                         job.reason,
-                        job.lastError,
+                        job.debug?.lastError,
                         t,
                         job.harness,
                         job.mode === "write" ? job : undefined
@@ -1026,7 +1038,7 @@ export function AgentsPane({ title }: { title: string }) {
                   )}
                   {job.status === "cancelled" && job.mode === "write" && job.worktreeCreated && (
                     <p className="text-xs text-muted-foreground whitespace-pre-line">
-                      {failureDescription("cancelled", job.lastError, t, job.harness, job)}
+                      {failureDescription("cancelled", job.debug?.lastError, t, job.harness, job)}
                     </p>
                   )}
                   {(["pending", "queued", "running"] as const).includes(
