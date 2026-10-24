@@ -137,6 +137,22 @@ test("override is respected and clamped by model budget; cache tracks budget", a
   assert.equal(TOOL_NAME.test("server.tool"), false);
 });
 
+test("MCP readOnly annotation is carried per tool", async () => {
+  const api = {
+    list: async () => ({
+      revision: 1,
+      servers: [{ name: "a", enabled: true, status: "connected" }],
+    }),
+    tools: async () => [
+      { name: "read", annotations: { readOnlyHint: true } },
+      { name: "write", annotations: { readOnlyHint: false } },
+      { name: "unknown" },
+    ],
+  };
+  const { tools } = await loadMcpTools(api, 12_000);
+  assert.deepEqual(tools.map((tool) => tool.readOnly), [true, false, false]);
+});
+
 test("MCP result bytes share a three-result turn allowance that resets for the next turn", async () => {
   const { createToolExecutionScope } =
     await import("../../../../src/components/chat/toolExecutionScope.ts");
