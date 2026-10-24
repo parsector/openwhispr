@@ -1,4 +1,4 @@
-function registerAgentIpc({ ipcMain, projectStore, resolver, manager }) {
+function registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manager }) {
   const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   const exact = (value, keys) =>
     object(value) && Object.keys(value).every((key) => keys.includes(key));
@@ -12,6 +12,9 @@ function registerAgentIpc({ ipcMain, projectStore, resolver, manager }) {
   ipcMain.handle("agent-projects-remove", (_event, projectName) =>
     projectStore.remove(name(projectName))
   );
+  ipcMain.handle("agent-presets-list", () => presetStore.read());
+  ipcMain.handle("agent-presets-save", (_event, preset) => presetStore.save(preset));
+  ipcMain.handle("agent-presets-remove", (_event, id) => presetStore.remove(name(id)));
   ipcMain.handle("agent-projects-test-harness", async (_event, harness) => {
     if (!["claude", "cursor-agent"].includes(harness)) throw new Error("Invalid harness");
     const result = await resolver.test(harness);
