@@ -19,6 +19,7 @@ if (prompt.includes("hang")) {
 } else {
   setTimeout(
     () => {
+      if (prompt.includes("fail")) process.stderr.write("CLI rejected the request\n");
       output({
         type: "result",
         result: "Fake answer",
