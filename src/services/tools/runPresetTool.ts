@@ -47,6 +47,7 @@ export function createRunPresetTool(presets: AgentPreset[]): ToolDefinition {
         const job = await window.agentJobs.prepare({
           project: preset.project,
           task: prompt,
+          ...(context.origin ? { origin: context.origin } : {}),
           harness: preset.harness,
           mode: preset.mode,
           ...(preset.model ? { model: preset.model } : {}),

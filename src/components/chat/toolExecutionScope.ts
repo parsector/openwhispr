@@ -16,6 +16,7 @@ export interface ToolExecutionScope {
 }
 
 interface ToolExecutionHandlers {
+  origin?: { conversationId: string; surface: "chat" | "assistant" };
   onApprovalRequested?: () => void;
   onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
 }
@@ -65,6 +66,7 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
     createContext: ({ messageId, toolCallId, signal }) => ({
       messageId,
       toolCallId,
+      ...(handlers.origin ? { origin: { ...handlers.origin, messageId, toolCallId } } : {}),
       // Either the turn ending or the SDK abandoning this one call releases
       // whatever the tool is waiting on.
       signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,

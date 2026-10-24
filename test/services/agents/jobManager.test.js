@@ -83,6 +83,33 @@ test("approval proceeds with advisory auth warning", async (t) => {
     await until(() => warned.get(job.jobId).status === "done");
   }
 });
+test("prepare validates and persists a bounded origin", async (t) => {
+  const { manager, dir } = setup(t);
+  const origin = {
+    conversationId: "7",
+    messageId: "m-1",
+    toolCallId: "call-1",
+    surface: "assistant",
+  };
+  const { jobId } = await manager.prepare({ project: "openwhispr", task: "hello", origin });
+  assert.deepEqual(manager.get(jobId).origin, origin);
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(path.join(dir, "jobs.json"), "utf8")).jobs[0].origin,
+    origin
+  );
+  for (const invalid of [
+    { ...origin, surface: "other" },
+    { ...origin, conversationId: "../jobs.json" },
+    { ...origin, toolCallId: "$(touch bad)" },
+    { ...origin, messageId: "x".repeat(129) },
+    { ...origin, path: "/tmp/file" },
+  ]) {
+    await assert.rejects(
+      manager.prepare({ project: "openwhispr", task: "hello", origin: invalid }),
+      /Invalid job request/
+    );
+  }
+});
 test("two run and third queues FIFO then starts", async (t) => {
   const { manager } = setup(t);
   const ids = await Promise.all(

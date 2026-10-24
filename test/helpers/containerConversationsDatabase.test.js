@@ -63,6 +63,17 @@ function createDb(t) {
 
 let nextTestTeamSpaceId = 0;
 
+test("appending the same job message twice yields one conversation message", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const conversation = db.createAgentConversation("Delegated job");
+  const metadata = { messageId: "job-123e4567-e89b-12d3-a456-426614174000" };
+  const first = db.addAgentMessage(conversation.id, "assistant", "answer", metadata);
+  const second = db.addAgentMessage(conversation.id, "assistant", "answer", metadata);
+  assert.equal(second.id, first.id);
+  assert.equal(db.getAgentMessages(conversation.id).length, 1);
+});
+
 function createTestTeamSpace(db, { name, emoji = null } = {}) {
   const maxOrder = db.db.prepare("SELECT MAX(sort_order) AS max_order FROM spaces").get();
   const result = db.db
