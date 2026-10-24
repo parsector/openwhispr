@@ -4869,7 +4869,8 @@
       "cancelling": "Annulation…",
       "started": "Démarré",
       "failed": "Échec",
-      "cancelled": "Annulé"
+      "cancelled": "Annulé",
+      "branch": "Branche"
     },
     "pane": {
       "description": "Gérez les agents de code locaux pour vos projets configurés. Les tâches démarrent après votre approbation.",
@@ -4926,7 +4927,12 @@
         "interrupted": "La tâche a été interrompue.",
         "cancelled": "La tâche a été annulée.",
         "lastError": "Message de la CLI"
-      }
+      },
+      "worktreePath": "Chemin du worktree",
+      "worktreeKept": "worktree conservé",
+      "copyCommands": "Copier les commandes",
+      "discard": "Supprimer",
+      "cursorWriteUnavailable": "Le mode écriture nécessite Claude ; Cursor ne propose que Plan ou Ask."
     },
     "toast": {
       "done": "Tâche d’agent terminée pour {{project}}",
@@ -4935,7 +4941,8 @@
     },
     "guarantee": {
       "enforced": "lecture seule (appliquée)",
-      "bestEffort": "lecture seule (au mieux)"
+      "bestEffort": "lecture seule (au mieux)",
+      "write": "écriture (worktree)"
     },
     "mode": {
       "plan": "Planifier",

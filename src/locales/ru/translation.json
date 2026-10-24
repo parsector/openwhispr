@@ -4909,7 +4909,8 @@
       "cancelling": "Отмена…",
       "started": "Запущено",
       "failed": "Ошибка",
-      "cancelled": "Отменено"
+      "cancelled": "Отменено",
+      "branch": "Ветка"
     },
     "pane": {
       "description": "Управляйте локальными агентами программирования для настроенных проектов. Задания запускаются после вашего подтверждения.",
@@ -4966,7 +4967,12 @@
         "interrupted": "Задание было прервано.",
         "cancelled": "Задание было отменено.",
         "lastError": "Сообщение CLI"
-      }
+      },
+      "worktreePath": "Путь worktree",
+      "worktreeKept": "worktree сохранён",
+      "copyCommands": "Копировать команды",
+      "discard": "Удалить",
+      "cursorWriteUnavailable": "Режим записи требует Claude; Cursor поддерживает только Plan и Ask."
     },
     "toast": {
       "done": "Задание агента для {{project}} завершено",
@@ -4975,7 +4981,8 @@
     },
     "guarantee": {
       "enforced": "только чтение (принудительно)",
-      "bestEffort": "только чтение (по возможности)"
+      "bestEffort": "только чтение (по возможности)",
+      "write": "запись (worktree)"
     },
     "mode": {
       "plan": "План",

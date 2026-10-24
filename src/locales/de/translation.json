@@ -4869,7 +4869,8 @@
       "cancelling": "Wird abgebrochen…",
       "started": "Gestartet",
       "failed": "Fehlgeschlagen",
-      "cancelled": "Abgebrochen"
+      "cancelled": "Abgebrochen",
+      "branch": "Branch"
     },
     "pane": {
       "description": "Lokale Coding-Agenten für eingerichtete Projekte verwalten. Aufträge starten erst nach Ihrer Freigabe.",
@@ -4926,7 +4927,12 @@
         "interrupted": "Der Auftrag wurde unterbrochen.",
         "cancelled": "Der Auftrag wurde abgebrochen.",
         "lastError": "CLI-Meldung"
-      }
+      },
+      "worktreePath": "Worktree-Pfad",
+      "worktreeKept": "Worktree behalten",
+      "copyCommands": "Befehle kopieren",
+      "discard": "Verwerfen",
+      "cursorWriteUnavailable": "Der Schreibmodus erfordert Claude; Cursor unterstützt nur Plan oder Ask."
     },
     "toast": {
       "done": "Agentenauftrag für {{project}} abgeschlossen",
@@ -4935,7 +4941,8 @@
     },
     "guarantee": {
       "enforced": "schreibgeschützt (erzwungen)",
-      "bestEffort": "schreibgeschützt (nach bestem Bemühen)"
+      "bestEffort": "schreibgeschützt (nach bestem Bemühen)",
+      "write": "Schreiben (Worktree)"
     },
     "mode": {
       "plan": "Planen",

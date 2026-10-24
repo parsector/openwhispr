@@ -4869,7 +4869,8 @@
       "cancelling": "Cancelling…",
       "started": "Started",
       "failed": "Failed",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "branch": "Branch"
     },
     "pane": {
       "description": "Manage local coding agents for configured projects. Jobs run only after you approve them.",
@@ -4926,7 +4927,12 @@
         "interrupted": "The job was interrupted.",
         "cancelled": "The job was cancelled.",
         "lastError": "CLI message"
-      }
+      },
+      "worktreePath": "Worktree path",
+      "worktreeKept": "worktree kept",
+      "copyCommands": "Copy commands",
+      "discard": "Discard",
+      "cursorWriteUnavailable": "Write mode requires Claude; Cursor supports Plan or Ask only."
     },
     "toast": {
       "done": "Agent job finished for {{project}}",
@@ -4935,7 +4941,8 @@
     },
     "guarantee": {
       "enforced": "read-only (enforced)",
-      "bestEffort": "read-only (best effort)"
+      "bestEffort": "read-only (best effort)",
+      "write": "write (worktree)"
     },
     "mode": {
       "plan": "Plan",

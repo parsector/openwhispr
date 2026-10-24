@@ -4869,7 +4869,8 @@
       "cancelling": "Annullamento…",
       "started": "Avviato",
       "failed": "Non riuscito",
-      "cancelled": "Annullato"
+      "cancelled": "Annullato",
+      "branch": "Branch"
     },
     "pane": {
       "description": "Gestisci agenti di programmazione locali per i progetti configurati. I lavori iniziano dopo la tua approvazione.",
@@ -4926,7 +4927,12 @@
         "interrupted": "Il lavoro è stato interrotto.",
         "cancelled": "Il lavoro è stato annullato.",
         "lastError": "Messaggio CLI"
-      }
+      },
+      "worktreePath": "Percorso worktree",
+      "worktreeKept": "worktree conservato",
+      "copyCommands": "Copia comandi",
+      "discard": "Elimina",
+      "cursorWriteUnavailable": "La modalità scrittura richiede Claude; Cursor supporta solo Plan o Ask."
     },
     "toast": {
       "done": "Lavoro dell’agente completato per {{project}}",
@@ -4935,7 +4941,8 @@
     },
     "guarantee": {
       "enforced": "sola lettura (applicata)",
-      "bestEffort": "sola lettura (al meglio)"
+      "bestEffort": "sola lettura (al meglio)",
+      "write": "scrittura (worktree)"
     },
     "mode": {
       "plan": "Pianifica",

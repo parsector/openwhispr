@@ -217,7 +217,7 @@ test("Note Recording modes survive the follow-flag migration", async (t) => {
   await t.test(
     "a latched profile still holding meetingReasoning* keys is moved, then healed",
     async () => {
-      const { _llmScopeKeysMigrated, noteFormattingCloudMode, noteFormattingProvider, ...pre170 } =
+      const { _llmScopeKeysMigrated, noteFormattingCloudMode: _noteFormattingCloudMode, noteFormattingProvider: _noteFormattingProvider, ...pre170 } =
         LATCHED_LOCAL;
       const { state } = await load({
         ...pre170,
@@ -351,7 +351,7 @@ test("Note Recording modes survive the follow-flag migration", async (t) => {
   // The scope editor can set a provider alone; only cloudMode proves a copy.
   // (Also the signed-out-at-1.6.7 cohort: no cloudReasoningMode ever persisted.)
   await t.test("a note-formatting provider on its own is not a copy", async () => {
-    const { noteFormattingCloudMode, meetingUseLocalWhisper, ...seed } = LATCHED_LOCAL;
+    const { noteFormattingCloudMode: _noteFormattingCloudMode, meetingUseLocalWhisper: _meetingUseLocalWhisper, ...seed } = LATCHED_LOCAL;
     const { state } = await load({ ...seed, noteFormattingProvider: "anthropic" });
     assert.equal(storage.getItem("noteFormattingMode"), null);
     assert.equal(state.noteFormattingMode, "openwhispr", "store default, not derived");

@@ -4869,7 +4869,8 @@
       "cancelling": "正在取消…",
       "started": "已啟動",
       "failed": "失敗",
-      "cancelled": "已取消"
+      "cancelled": "已取消",
+      "branch": "分支"
     },
     "pane": {
       "description": "管理已設定專案的本機程式代理。工作會在您核准後開始。",
@@ -4926,7 +4927,12 @@
         "interrupted": "工作已中斷。",
         "cancelled": "工作已取消。",
         "lastError": "CLI 訊息"
-      }
+      },
+      "worktreePath": "worktree 路徑",
+      "worktreeKept": "已保留 worktree",
+      "copyCommands": "複製命令",
+      "discard": "捨棄",
+      "cursorWriteUnavailable": "寫入模式需要 Claude；Cursor 僅支援 Plan 或 Ask。"
     },
     "toast": {
       "done": "{{project}} 的代理工作已完成",
@@ -4935,7 +4941,8 @@
     },
     "guarantee": {
       "enforced": "唯讀（強制）",
-      "bestEffort": "唯讀（盡力而為）"
+      "bestEffort": "唯讀（盡力而為）",
+      "write": "寫入 (worktree)"
     },
     "mode": {
       "plan": "規劃",

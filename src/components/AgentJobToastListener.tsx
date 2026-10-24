@@ -12,7 +12,7 @@ export function AgentJobToastListener() {
   useEffect(
     () =>
       window.agentJobs?.onUpdated((job) => {
-        if (job.status !== "done" && job.status !== "failed") return;
+        if (job.status !== "done" && job.status !== "failed" && !(job.status === "cancelled" && job.mode === "write" && job.worktreePath)) return;
         const key = `${job.jobId}:${job.status}`;
         if (notified.current.has(key)) return;
         notified.current.add(key);
@@ -34,8 +34,10 @@ export function AgentJobToastListener() {
           });
         } else {
           toast({
-            title: t("agentJobs.toast.failed", { project: job.project.name }),
-            description: failureDescription(job.reason, job.lastError, t, job.harness),
+            title: job.status === "cancelled"
+              ? t("agentJobs.pane.failure.cancelled")
+              : t("agentJobs.toast.failed", { project: job.project.name }),
+            description: failureDescription(job.reason || (job.status === "cancelled" ? "cancelled" : null), job.lastError, t, job.harness, job.mode === "write" ? job : undefined),
             variant: "destructive",
             duration: 10000,
           });

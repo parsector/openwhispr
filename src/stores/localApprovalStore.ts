@@ -9,6 +9,7 @@ export interface LocalApprovalEntry {
   jobId: string;
   harness: string;
   mode?: string;
+  branch?: string;
   summary: string;
   prompt: string;
   state: "pending" | "approving" | "cancelling" | "started" | "failed" | "cancelled";
@@ -52,7 +53,7 @@ function finish(key: string, changes: Partial<LocalApprovalEntry>): void {
 
 export function addLocalApproval(
   context: ToolExecutionContext,
-  job: { jobId: string; prompt: string; harness: string; mode?: string },
+  job: { jobId: string; prompt: string; harness: string; mode?: string; branch?: string },
   summary: string
 ): void {
   const key = approvalKey(context.messageId, context.toolCallId);
@@ -63,6 +64,7 @@ export function addLocalApproval(
     jobId: job.jobId,
     harness: job.harness,
     mode: job.mode,
+    branch: job.branch,
     summary,
     prompt: job.prompt,
     state: "pending",

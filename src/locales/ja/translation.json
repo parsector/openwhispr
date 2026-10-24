@@ -4869,7 +4869,8 @@
       "cancelling": "キャンセル中…",
       "started": "開始済み",
       "failed": "失敗",
-      "cancelled": "キャンセル済み"
+      "cancelled": "キャンセル済み",
+      "branch": "ブランチ"
     },
     "pane": {
       "description": "設定済みプロジェクトのローカルコーディングエージェントを管理します。ジョブは承認後に開始します。",
@@ -4926,7 +4927,12 @@
         "interrupted": "ジョブが中断されました。",
         "cancelled": "ジョブがキャンセルされました。",
         "lastError": "CLI のメッセージ"
-      }
+      },
+      "worktreePath": "worktree のパス",
+      "worktreeKept": "worktree を保持",
+      "copyCommands": "コマンドをコピー",
+      "discard": "破棄",
+      "cursorWriteUnavailable": "書き込みモードには Claude が必要です。Cursor は Plan または Ask のみ対応します。"
     },
     "toast": {
       "done": "{{project}}のエージェントジョブが完了しました",
@@ -4935,7 +4941,8 @@
     },
     "guarantee": {
       "enforced": "読み取り専用（強制）",
-      "bestEffort": "読み取り専用（ベストエフォート）"
+      "bestEffort": "読み取り専用（ベストエフォート）",
+      "write": "書き込み (worktree)"
     },
     "mode": {
       "plan": "計画",

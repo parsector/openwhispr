@@ -5,6 +5,7 @@ type MarkProps = SVGProps<SVGSVGElement> & { strokeWidth?: number | string };
 
 // Plain geometric marks used as status dots and stop indicators. Nucleo has no
 // bare circle or square, and these are simpler drawn by hand than mapped.
+// eslint-disable-next-line react-refresh/only-export-components
 function CircleMark({ strokeWidth = 2, ...props }: MarkProps) {
   return (
     <svg
@@ -22,6 +23,7 @@ function CircleMark({ strokeWidth = 2, ...props }: MarkProps) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 function SquareMark({ strokeWidth = 2, ...props }: MarkProps) {
   return (
     <svg

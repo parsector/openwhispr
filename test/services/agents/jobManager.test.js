@@ -244,3 +244,58 @@ test("Cursor routes to its runner with configured mode and keeps queue, stall an
   assert.equal(manager.get(failId).lastError, "Bearer <REDACTED> <REDACTED> <REDACTED>");
   assert.equal(notes.length, 3);
 });
+
+test("write job edits only its worktree and note records the branch and diff", async (t) => {
+  const { execFileSync } = require("node:child_process");
+  const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-write-manager-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const repo = path.join(root, "repo");
+  fs.mkdirSync(repo);
+  git(repo, "init", "-q");
+  git(repo, "config", "user.email", "test@example.com");
+  git(repo, "config", "user.name", "Test");
+  fs.writeFileSync(path.join(repo, "source.txt"), "before\n");
+  git(repo, "add", "source.txt");
+  git(repo, "commit", "-qm", "initial");
+  const notes = [];
+  const manager = createJobManager({
+    file: path.join(root, "userData", "agents", "jobs.json"),
+    projectStore: { read: () => ({ projects: [{ name: "project", folder: repo, defaultHarness: "claude", mode: "write", model: null }] }) },
+    resolver: { authStatus: async () => ({ state: "authenticated" }), resolve: async () => ({ ok: true, path: process.execPath }) },
+    runnerFactory: () => ({ start: ({ folder, mode, branch, onEvent, prompt }) => {
+      assert.equal(mode, "write");
+      assert.equal(git(folder, "branch", "--show-current"), branch);
+      fs.writeFileSync(path.join(folder, "source.txt"), "after\n");
+      if (prompt === "fail") return { pid: 123, done: Promise.resolve({ exitCode: 1, stderr: "edit failed" }) };
+      const resultEvent = { kind: "result", answer: "Edited source", is_error: false };
+      onEvent(resultEvent);
+      return { pid: 123, done: Promise.resolve({ exitCode: 0, resultEvent }) };
+    } }),
+    databaseManager: {
+      getPrivateSpaceId: () => 7, getFolders: () => [{ id: 9, name: "Agent jobs" }],
+      saveNote: (...args) => { notes.push(args); return { success: true, note: { id: notes.length } }; },
+    },
+    pidFile: { write() {}, clear() {} },
+  });
+  t.after(() => manager.stopAll());
+  const job = await manager.prepare({ project: "project", task: "edit" });
+  assert.match(job.branch, /^agent\/project-/);
+  await manager.approve(job.jobId);
+  await until(() => manager.get(job.jobId).status === "done");
+  const done = manager.get(job.jobId);
+  assert.match(done.diffStat, /source.txt/);
+  assert.equal(done.changedFileCount, 1);
+  assert.ok(notes[0][1].includes(done.branch));
+  assert.ok(notes[0][1].includes(done.diffStat));
+  assert.equal(git(repo, "status", "--porcelain"), "");
+  const failed = await manager.prepare({ project: "project", task: "fail" });
+  await manager.approve(failed.jobId);
+  await until(() => manager.get(failed.jobId).status === "failed");
+  assert.equal(notes.length, 1);
+  assert.equal(fs.existsSync(manager.get(failed.jobId).worktreePath), true);
+  assert.equal(git(repo, "status", "--porcelain"), "");
+  await manager.discard(failed.jobId);
+  assert.equal(fs.existsSync(manager.get(failed.jobId).worktreePath), false);
+  assert.ok(manager.get(failed.jobId).discardedAt);
+});

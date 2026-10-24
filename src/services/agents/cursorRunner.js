@@ -12,6 +12,7 @@ function createCursorRunner({ cliPath, spawnImpl = spawn } = {}) {
       )
     )
       throw new Error("Extra Cursor flags are not allowed");
+    if (mode === "write") throw new Error("Write mode requires Claude; Cursor supports plan or ask only");
     if (!["plan", "ask"].includes(mode))
       throw new Error("Cursor agent mode is unavailable: use plan or ask");
     if (typeof prompt !== "string" || !prompt.trim() || prompt.trimStart().startsWith("-"))

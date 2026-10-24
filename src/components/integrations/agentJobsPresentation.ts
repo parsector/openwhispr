@@ -37,7 +37,8 @@ export function elapsedTime(
 
 export const stallTextKey = "agentJobs.pane.stallWarning";
 
-export function guaranteeKey(harness: string): string {
+export function guaranteeKey(harness: string, mode?: string): string {
+  if (mode === "write") return "agentJobs.guarantee.write";
   return harness === "cursor-agent"
     ? "agentJobs.guarantee.bestEffort"
     : "agentJobs.guarantee.enforced";
@@ -65,11 +66,15 @@ export function failureDescription(
   reason: string | null,
   lastError: string | null | undefined,
   translate: (key: string) => string,
-  harness: string = "claude"
+  harness: string = "claude",
+  worktree?: { branch?: string; worktreePath?: string; worktreeCreated?: boolean; discardedAt?: number }
 ): string {
   const message = failureMessage(reason, harness);
   const reasonText = "key" in message ? translate(message.key) : message.text;
-  return lastError ? `${reasonText}\n${translate(lastErrorKey)}: ${lastError}` : reasonText;
+  const detail = lastError ? `${reasonText}\n${translate(lastErrorKey)}: ${lastError}` : reasonText;
+  return worktree?.worktreePath && worktree.worktreeCreated && !worktree.discardedAt
+    ? `${detail}\n${translate("agentJobs.pane.worktreeKept")}: ${worktree.worktreePath} (${worktree.branch})`
+    : detail;
 }
 
 export function failureMessage(

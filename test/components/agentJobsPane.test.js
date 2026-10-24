@@ -38,6 +38,8 @@ test("queue position and elapsed time handle missing and completed jobs", () => 
 test("guarantee labels distinguish Claude enforcement from Cursor best effort", () => {
   assert.equal(guaranteeKey("claude"), "agentJobs.guarantee.enforced");
   assert.equal(guaranteeKey("cursor-agent"), "agentJobs.guarantee.bestEffort");
+  assert.equal(guaranteeKey("claude", "write"), "agentJobs.guarantee.write");
+  assert.equal(en.agentJobs.guarantee.write, "write (worktree)");
   assert.equal(en.agentJobs.guarantee.enforced, "read-only (enforced)");
   assert.equal(en.agentJobs.guarantee.bestEffort, "read-only (best effort)");
 });
@@ -198,10 +200,10 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
   const claudeMode = [...host.querySelectorAll("select")].find((item) =>
     item.querySelector('option[value="read-only"]')
   );
-  assert.equal(claudeMode.disabled, true);
+  assert.equal(claudeMode.disabled, false);
   assert.deepEqual(
     [...claudeMode.options].map((option) => option.value),
-    ["read-only"]
+    ["read-only", "write"]
   );
   await act(() => {
     harness.value = "cursor-agent";

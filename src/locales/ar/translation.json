@@ -4979,7 +4979,8 @@
       "cancelling": "جارٍ الإلغاء…",
       "started": "بدأت",
       "failed": "فشلت",
-      "cancelled": "أُلغيت"
+      "cancelled": "أُلغيت",
+      "branch": "الفرع"
     },
     "pane": {
       "description": "أدر وكلاء البرمجة المحليين للمشاريع التي أعددتها. تبدأ المهام بعد موافقتك.",
@@ -5036,7 +5037,12 @@
         "interrupted": "انقطعت المهمة.",
         "cancelled": "أُلغيت المهمة.",
         "lastError": "رسالة سطر الأوامر"
-      }
+      },
+      "worktreePath": "مسار worktree",
+      "worktreeKept": "تم الاحتفاظ بـ worktree",
+      "copyCommands": "نسخ الأوامر",
+      "discard": "تجاهل",
+      "cursorWriteUnavailable": "يتطلب وضع الكتابة Claude؛ يدعم Cursor وضع Plan أو Ask فقط."
     },
     "toast": {
       "done": "اكتملت مهمة الوكيل لـ {{project}}",
@@ -5045,7 +5051,8 @@
     },
     "guarantee": {
       "enforced": "للقراءة فقط (مفروض)",
-      "bestEffort": "للقراءة فقط (بأفضل جهد)"
+      "bestEffort": "للقراءة فقط (بأفضل جهد)",
+      "write": "كتابة (worktree)"
     },
     "mode": {
       "plan": "تخطيط",

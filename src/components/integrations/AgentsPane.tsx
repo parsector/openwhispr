@@ -179,6 +179,20 @@ export function AgentsPane({ title }: { title: string }) {
       setError(errorText(cause));
     }
   }
+  async function discard(jobId: string) {
+    try { await window.agentJobs.discard(jobId); }
+    catch (cause) { setError(errorText(cause)); }
+  }
+  function copyCommands(job: AgentJob) {
+    if (!job.branch || !job.worktreePath) return;
+    const quote = (value: string) => `'${value.replace(/'/g, "'\\''")}'`;
+    void navigator.clipboard.writeText(
+      `git -C ${quote(job.worktreePath)} checkout ${quote(job.branch)}\n` +
+      `git -C ${quote(job.worktreePath)} status\n` +
+      `# After reviewing and committing in the worktree, apply the commit to your main checkout:\n` +
+      `git -C ${quote(job.project.folder)} cherry-pick ${quote(job.branch)}`
+    );
+  }
 
   const inputClass =
     "w-full min-w-0 rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary";
@@ -241,8 +255,8 @@ export function AgentsPane({ title }: { title: string }) {
                     {project.folder}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {project.defaultHarness} · {modeLabel(project.mode)} ·{" "}
-                    {t(guaranteeKey(project.defaultHarness))} ·{" "}
+                    {project.defaultHarness} · {project.mode !== "write" && `${modeLabel(project.mode)} · `}
+                    {t(guaranteeKey(project.defaultHarness, project.mode))} ·{" "}
                     {modelLabel(project.model, project.defaultHarness)}
                   </p>
                   {modelWarning(project.defaultHarness, project.model) && (
@@ -358,19 +372,24 @@ export function AgentsPane({ title }: { title: string }) {
                     <option value="claude">Claude</option>
                     <option value="cursor-agent">Cursor</option>
                   </select>
+                  {draft.defaultHarness === "cursor-agent" && (
+                    <span className="block text-muted-foreground">{t("agentJobs.pane.cursorWriteUnavailable")}</span>
+                  )}
                 </label>
                 <label className="space-y-1 text-xs">
                   {t("agentJobs.pane.mode")}
                   <select
                     className={inputClass}
                     value={draft.mode}
-                    disabled={draft.defaultHarness === "claude"}
                     onChange={(e) =>
                       setDraft({ ...draft, mode: e.target.value as Project["mode"] })
                     }
                   >
                     {draft.defaultHarness === "claude" ? (
-                      <option value="read-only">{t("agentJobs.pane.readOnly")}</option>
+                      <>
+                        <option value="read-only">{t("agentJobs.pane.readOnly")}</option>
+                        <option value="write">{t("agentJobs.guarantee.write")}</option>
+                      </>
                     ) : (
                       <>
                         <option value="plan">{t("agentJobs.mode.plan")}</option>
@@ -540,8 +559,8 @@ export function AgentsPane({ title }: { title: string }) {
                     <div>
                       <h3 className="text-sm font-medium">{job.project.name}</h3>
                       <p className="text-xs text-muted-foreground">
-                        {job.harness} · {modeLabel(job.mode || "read-only")} ·{" "}
-                        {t(guaranteeKey(job.harness))} ·{" "}
+                        {job.harness} · {job.mode !== "write" && `${modeLabel(job.mode || "read-only")} · `}
+                        {t(guaranteeKey(job.harness, job.mode))} ·{" "}
                         {job.model || t("agentJobs.pane.defaultModel")}
                         {elapsed && ` · ${elapsed}`}
                       </p>
@@ -584,7 +603,12 @@ export function AgentsPane({ title }: { title: string }) {
                   )}
                   {job.status === "failed" && job.reason && (
                     <p role="alert" className="text-xs text-destructive whitespace-pre-line">
-                      {failureDescription(job.reason, job.lastError, t, job.harness)}
+                      {failureDescription(job.reason, job.lastError, t, job.harness, job.mode === "write" ? job : undefined)}
+                    </p>
+                  )}
+                  {job.status === "cancelled" && job.mode === "write" && job.worktreeCreated && (
+                    <p className="text-xs text-muted-foreground whitespace-pre-line">
+                      {failureDescription("cancelled", job.lastError, t, job.harness, job)}
                     </p>
                   )}
                   {(["pending", "queued", "running"] as const).includes(
@@ -602,6 +626,19 @@ export function AgentsPane({ title }: { title: string }) {
                     >
                       {t("agentJobs.pane.openNote")}
                     </Button>
+                  )}
+                  {job.mode === "write" && job.worktreeCreated && job.worktreePath && !job.discardedAt && (
+                    <div className="space-y-1 text-xs break-all">
+                      <p>{t("agentJobs.card.branch")}: {job.branch}</p>
+                      <p>{t("agentJobs.pane.worktreePath")}: {job.worktreePath}</p>
+                      {job.status === "done" && <pre className="whitespace-pre-wrap">{job.diffStat}</pre>}
+                      {!(["pending", "queued", "running"] as string[]).includes(job.status) && (
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => copyCommands(job)}>{t("agentJobs.pane.copyCommands")}</Button>
+                          <Button size="sm" variant="outline" onClick={() => void discard(job.jobId)}>{t("agentJobs.pane.discard")}</Button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </SettingsPanelRow>
               );
