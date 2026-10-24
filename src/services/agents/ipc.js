@@ -30,6 +30,7 @@ function registerAgentIpc({ ipcMain, projectStore, resolver, manager }) {
     return manager.approve(id, input);
   });
   ipcMain.handle("agent-job-cancel", (_event, id) => manager.cancel(name(id)));
+  ipcMain.handle("agent-job-discard", (_event, id) => manager.discard(name(id)));
   ipcMain.handle("agent-job-list", () => manager.list());
   ipcMain.handle("agent-job-get", (_event, id) => manager.get(name(id)));
 }
