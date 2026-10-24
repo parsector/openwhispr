@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const { createCursorRunner } = require("../../../src/services/agents/cursorRunner");
 const fakeCli = path.join(__dirname, "../../fixtures/fakeCursor.js");
+const trustBanner = "⚠ Workspace Trust Required\nDo you trust the contents of this directory?\n";
 
 test("Cursor argv uses only the fixed read-only template", async () => {
   const child = require("node:child_process").spawn(process.execPath, ["-e", ""], {
@@ -55,6 +56,45 @@ test("Cursor argv uses only the fixed read-only template", async () => {
   assert.throws(
     () => runner.start({ folder: process.cwd(), prompt: "x", model: "--force" }),
     /Invalid Cursor model/
+  );
+});
+
+test("Cursor trust comes only from project setting and refusal ignores exit code", async () => {
+  const { EventEmitter } = require("node:events");
+  const invocations = [];
+  const runner = createCursorRunner({
+    cliPath: fakeCli,
+    spawnImpl: (_file, args) => {
+      invocations.push(args);
+      const child = new EventEmitter();
+      child.pid = 123;
+      child.stdout = Object.assign(new EventEmitter(), { setEncoding() {} });
+      child.stderr = Object.assign(new EventEmitter(), { setEncoding() {} });
+      queueMicrotask(() => {
+        child.stdout.emit("data", trustBanner);
+        child.emit("close", 0, null);
+      });
+      return child;
+    },
+  });
+  const plain = await runner.start({ folder: process.cwd(), prompt: "hello" }).done;
+  const trusted = await runner.start({
+    folder: process.cwd(),
+    prompt: "hello",
+    trustWorkspace: true,
+  }).done;
+  assert.equal(plain.reason, "workspace_untrusted");
+  assert.equal(trusted.reason, "workspace_untrusted");
+  assert.match(plain.trustRefusalLine, /Workspace Trust Required/);
+  assert.equal(invocations[0].includes("--trust"), false);
+  assert.equal(invocations[1].filter((arg) => arg === "--trust").length, 1);
+  assert.equal(
+    invocations.flat().some((arg) => ["-f", "--yolo", "--force"].includes(arg)),
+    false
+  );
+  assert.throws(
+    () => runner.start({ folder: process.cwd(), prompt: "hello", "--trust": true }),
+    /Extra Cursor flags/
   );
 });
 

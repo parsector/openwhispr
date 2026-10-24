@@ -62,12 +62,21 @@ export function authStateKey(
 
 export const lastErrorKey = "agentJobs.pane.failure.lastError";
 
+export function cursorTrustKey(trustWorkspace: boolean): string {
+  return trustWorkspace ? "agentJobs.card.workspaceTrusted" : "agentJobs.card.workspaceUntrusted";
+}
+
 export function failureDescription(
   reason: string | null,
   lastError: string | null | undefined,
   translate: (key: string) => string,
   harness: string = "claude",
-  worktree?: { branch?: string; worktreePath?: string; worktreeCreated?: boolean; discardedAt?: number }
+  worktree?: {
+    branch?: string;
+    worktreePath?: string;
+    worktreeCreated?: boolean;
+    discardedAt?: number;
+  }
 ): string {
   const message = failureMessage(reason, harness);
   const reasonText = "key" in message ? translate(message.key) : message.text;
@@ -89,6 +98,7 @@ export function failureMessage(
           : "agentJobs.pane.failure.notAuthenticated",
     };
   if (reason === "interrupted") return { key: "agentJobs.pane.failure.interrupted" };
+  if (reason === "workspace_untrusted") return { key: "agentJobs.pane.failure.workspaceUntrusted" };
   if (reason === "cancelled") return { key: "agentJobs.pane.failure.cancelled" };
   return reason ? { text: reason } : { key: "agentJobs.toast.unknownError" };
 }
