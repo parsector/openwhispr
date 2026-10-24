@@ -118,3 +118,45 @@ test("local approval sends edited prompt and clears the pending entry", async ()
   assert.equal(useLocalApprovalStore.getState().entries["approval::call"], undefined);
   assert.equal(useLocalApprovalStore.getState().receipts["approval::call"].state, "started");
 });
+
+test("resume_agent_job rejects unknown jobs, creates an approval, and shares delegate cap", async () => {
+  const { createToolRegistry } = await import("../../../src/services/tools/index.ts");
+  const { useLocalApprovalStore } = await import("../../../src/stores/localApprovalStore.ts");
+  const registry = createToolRegistry({
+    isSignedIn: false,
+    calendarConnected: false,
+    cloudBackupEnabled: false,
+    webSearchEnabled: false,
+    agentAllowed: true,
+    agentProjects: [project],
+  });
+  const resume = registry.get("resume_agent_job");
+  const delegate = registry.get("delegate_task");
+  const ctx = context();
+  let prepared = 0;
+  global.window = {
+    agentJobs: {
+      get: async (id) => (id === "parent" ? { jobId: "parent" } : null),
+      prepare: async () => ({
+        jobId: String(++prepared),
+        project: { name: project.name },
+        harness: "claude",
+        model: "sonnet",
+        prompt: "Continue",
+      }),
+    },
+  };
+  assert.equal((await resume.execute({ jobId: "missing", task: "Continue" }, ctx)).success, false);
+  const first = await resume.execute({ jobId: "parent", task: "Continue" }, ctx);
+  assert.equal(first.data.jobId, "1");
+  assert.ok(useLocalApprovalStore.getState().entries["m1::t1"]);
+  assert.deepEqual(ctx.events, ["approval", "hold"]);
+  await delegate.execute({ project: project.name, task: "Review" }, { ...ctx, toolCallId: "t2" });
+  const third = await resume.execute(
+    { jobId: "parent", task: "Continue" },
+    { ...ctx, toolCallId: "t3" }
+  );
+  assert.equal(third.success, false);
+  assert.match(third.displayText, /two/i);
+  assert.equal(prepared, 2);
+});

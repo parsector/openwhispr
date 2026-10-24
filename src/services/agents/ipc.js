@@ -1,4 +1,5 @@
 const { harnessPayload, jobPayload } = require("./debugPayload");
+const { openTerminal } = require("./openTerminal");
 const { redactOutput } = require("./redactOutput");
 const debugLogger = require("../../helpers/debugLogger");
 
@@ -23,7 +24,14 @@ function invalid(field) {
   return error;
 }
 
-function registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manager }) {
+function registerAgentIpc({
+  ipcMain,
+  projectStore,
+  presetStore,
+  resolver,
+  manager,
+  openTerminalImpl = openTerminal,
+}) {
   const object = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
   const exact = (value, keys) =>
     object(value) && Object.keys(value).every((key) => keys.includes(key));
@@ -50,7 +58,7 @@ function registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manage
   ipcMain.handle("agent-job-prepare", async (_event, input) => {
     try {
       if (!object(input)) throw invalid("request");
-      if (!exact(input, ["project", "task", "harness", "model", "mode", "origin"]))
+      if (!exact(input, ["project", "task", "harness", "model", "mode", "origin", "resumeJobId"]))
         throw invalid("request");
       return jobPayload(await manager.prepare(input));
     } catch (error) {
@@ -71,6 +79,13 @@ function registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manage
   ipcMain.handle("agent-job-discard", async (_event, id) =>
     jobPayload(await manager.discard(name(id)))
   );
+  ipcMain.handle("agent-job-open-terminal", async (_event, input) => {
+    if (!exact(input, ["jobId"]) || Object.keys(input).length !== 1) throw invalid("request");
+    const job = manager.get(name(input.jobId));
+    if (!job) throw new Error("unknown_job");
+    await openTerminalImpl(job);
+    return { ok: true };
+  });
   ipcMain.handle("agent-job-list", () => manager.list().map(jobPayload));
   ipcMain.handle("agent-job-get", (_event, id) => jobPayload(manager.get(name(id))));
 }

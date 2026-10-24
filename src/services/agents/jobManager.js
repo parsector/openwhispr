@@ -4,6 +4,7 @@ const crypto = require("node:crypto");
 const { redactOutput } = require("./redactOutput");
 const { jobPayload } = require("./debugPayload");
 const { safeModel } = require("./modelSafety");
+const { validSessionId } = require("./sessionId");
 const { createWorktreeService, location } = require("./worktree");
 const debugLogger = require("../../helpers/debugLogger");
 
@@ -29,6 +30,13 @@ function normalizeOrigin(origin) {
     if (typeof origin[field] === "string" && /^[A-Za-z0-9_.:-]{1,128}$/.test(origin[field]))
       safe[field] = origin[field];
   return safe;
+}
+function existingDirectory(folder) {
+  try {
+    return typeof folder === "string" && fs.statSync(folder).isDirectory();
+  } catch {
+    return false;
+  }
 }
 function invalid(field) {
   const error = new Error(`invalid_${field} (${field})`);
@@ -185,7 +193,40 @@ function createJobManager({
       throw error;
     }
   }
-  async function prepareJob({ project, task, harness, model, mode, origin }) {
+  async function prepareJob({ project, task, harness, model, mode, origin, resumeJobId }) {
+    const parent = resumeJobId === undefined ? null : jobs.get(resumeJobId);
+    if (resumeJobId !== undefined && (!parent || !["done", "failed"].includes(parent.status)))
+      throw new Error("unknown_job");
+    if (parent && !validSessionId(parent.sessionId)) throw new Error("no_session");
+    if (
+      parent &&
+      !projectStore
+        .read()
+        .projects.some(
+          (item) =>
+            item.name === parent.project.name &&
+            item.folder === parent.project.folder &&
+            item.defaultHarness === parent.harness &&
+            item.mode === parent.mode &&
+            existingDirectory(item.folder)
+        )
+    )
+      throw new Error("project_missing");
+    if (
+      parent?.mode === "write" &&
+      (!parent.worktreePath || !existingDirectory(parent.worktreePath))
+    )
+      throw new Error("worktree_missing");
+    if (
+      parent &&
+      ((project !== undefined && project !== parent.project.name) ||
+        (harness !== undefined && harness !== parent.harness) ||
+        (mode !== undefined && mode !== parent.mode))
+    )
+      throw new Error("project_missing");
+    project = parent?.project.name ?? project;
+    harness = parent?.harness ?? harness;
+    mode = parent?.mode ?? mode;
     if (typeof project !== "string" || !project.trim()) throw invalid("project");
     if (typeof task !== "string" || !task.trim() || task.length > 100_000) throw invalid("task");
     if (harness !== undefined && !["claude", "cursor-agent"].includes(harness))
@@ -233,7 +274,7 @@ function createJobManager({
       },
       harness: selectedHarness,
       mode: selectedMode,
-      model: model?.trim() || selected.model || null,
+      model: model?.trim() || parent?.model || selected.model || null,
       prompt: task.trim(),
       ...(safeOrigin ? { origin: safeOrigin } : {}),
       ...(origin !== undefined && !safeOrigin ? { originDropped: true } : {}),
@@ -244,6 +285,7 @@ function createJobManager({
       lastError: null,
       costEstimate: null,
       sessionId: null,
+      ...(parent ? { resumedFrom: parent.jobId, resumeSessionId: parent.sessionId } : {}),
       createdAt: now(),
       expiresAt: now() + EXPIRY_MS,
       startedAt: null,
@@ -255,9 +297,15 @@ function createJobManager({
       position: null,
     };
     if (selectedMode === "write")
-      Object.assign(job, location(path.dirname(path.dirname(file)), selected.name, job.jobId), {
-        worktreeCreated: false,
-      });
+      Object.assign(
+        job,
+        parent
+          ? { branch: parent.branch, worktreePath: parent.worktreePath, worktreeCreated: true }
+          : {
+              ...location(path.dirname(path.dirname(file)), selected.name, job.jobId),
+              worktreeCreated: false,
+            }
+      );
     jobs.set(job.jobId, job);
     update(job);
     return {
@@ -293,7 +341,7 @@ function createJobManager({
         drain();
         return;
       }
-      if (job.mode === "write") {
+      if (job.mode === "write" && !job.resumedFrom) {
         preparingWorktrees.add(job.jobId);
         try {
           await worktreeService.create(job);
@@ -318,6 +366,11 @@ function createJobManager({
         drain();
         return;
       }
+      if (job.resumedFrom && job.mode === "write" && !existingDirectory(job.worktreePath)) {
+        fail(job, "worktree_missing");
+        drain();
+        return;
+      }
       const makeRunner =
         runnerFactories?.[job.harness] || (job.harness === "claude" ? runnerFactory : null);
       if (!makeRunner) throw new Error("Harness unavailable");
@@ -325,6 +378,7 @@ function createJobManager({
         folder: job.mode === "write" ? job.worktreePath : job.project.folder,
         prompt: job.prompt,
         model: job.model,
+        ...(job.resumeSessionId ? { resumeSessionId: job.resumeSessionId } : {}),
         ...(job.mode === "write" ? { mode: "write", branch: job.branch } : {}),
         ...(job.harness === "cursor-agent" ? { mode: job.mode } : {}),
         ...(job.harness === "cursor-agent" ? { trustWorkspace: job.project.trustWorkspace } : {}),
@@ -523,6 +577,15 @@ function createJobManager({
     )
       throw new Error("Job is still running");
     if (job.discardedAt) return get(jobId);
+    if (
+      [...jobs.values()].some(
+        (other) =>
+          other.jobId !== jobId &&
+          other.worktreePath === job.worktreePath &&
+          ["pending", "queued", "running"].includes(other.status)
+      )
+    )
+      throw new Error("Worktree is used by another job");
     await worktreeService.discard(job);
     job.discardedAt = now();
     return update(job);

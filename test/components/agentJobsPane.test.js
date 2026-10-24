@@ -172,7 +172,7 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
         },
       ],
     }),
-    list: async () => [],
+    list: async () => [{ jobId: "no-session", project: { name: "Existing project", folder: "/tmp/existing" }, harness: "claude", mode: "read-only", model: "sonnet", prompt: "Review", status: "done", steps: [], result: "ok", reason: null, sessionId: null, createdAt: 1, startedAt: 1, endedAt: 2, stalled: false, position: null }],
     onUpdated: () => () => {},
     testHarness: async () => ({
       path: "/usr/bin/claude",
@@ -218,6 +218,10 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
   assert.equal(host.textContent.includes("agentJobs.pane.copyDetails"), false);
   assert.ok(host.textContent.includes("/usr/bin/claude · v1"));
   assert.ok(host.textContent.includes("agentJobs.pane.auth.subscription"));
+  const terminalButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "agentJobs.pane.openTerminal");
+  assert.ok(terminalButton);
+  assert.equal(terminalButton.disabled, true);
+  assert.equal(terminalButton.title, "agentJobs.pane.noSession");
   assert.equal(host.textContent.includes("/tmp/config"), false);
   debugEnabled = true;
   await act(() => host.querySelector("button").click());
