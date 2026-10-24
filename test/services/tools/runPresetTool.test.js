@@ -50,6 +50,12 @@ test("run_preset rejects unknown names, expands values, and creates a local appr
   };
   const tool = createRunPresetTool([preset]);
   const ctx = context();
+  ctx.origin = {
+    conversationId: "8",
+    messageId: "preset-message",
+    toolCallId: "call",
+    surface: "assistant",
+  };
   assert.equal((await tool.execute({ preset: "unknown" }, ctx)).success, false);
   assert.equal((await tool.execute({ preset: preset.name, values: {} }, ctx)).success, false);
   const result = await tool.execute({ preset: preset.name, values: { pr: "42" } }, ctx);
@@ -59,6 +65,7 @@ test("run_preset rejects unknown names, expands values, and creates a local appr
     harness: "claude",
     mode: "read-only",
     model: "sonnet",
+    origin: ctx.origin,
   });
   assert.deepEqual(result.data.status, "awaiting_approval");
   assert.equal(result.data.jobId, "job-1");

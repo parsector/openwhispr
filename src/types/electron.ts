@@ -1341,6 +1341,12 @@ export interface AgentJob {
   mode: "read-only" | "write" | "plan" | "ask";
   model: string | null;
   prompt: string;
+  origin?: {
+    conversationId: string;
+    messageId: string;
+    toolCallId: string;
+    surface: "chat" | "assistant";
+  };
   status: "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
   steps: Array<{ kind: string; [key: string]: unknown }>;
   result: string | null;
@@ -1445,6 +1451,7 @@ declare global {
         harness?: "claude" | "cursor-agent";
         mode?: "read-only" | "write" | "plan" | "ask";
         model?: string;
+        origin?: AgentJob["origin"];
       }) => Promise<{
         jobId: string;
         project: { name: string; folder: string; trustWorkspace?: boolean };
@@ -3101,6 +3108,9 @@ declare global {
         metadata?: string;
         created_at: string;
       } | null>;
+      onAgentJobMessageAdded?: (
+        callback: (message: { conversationId: number; messageId: string; content: string }) => void
+      ) => () => void;
       getAgentMessages?: (conversationId: number) => Promise<
         Array<{
           id: number;

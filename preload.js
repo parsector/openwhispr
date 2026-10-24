@@ -1184,6 +1184,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-update-agent-conversation-title", id, title),
   addAgentMessage: (conversationId, role, content, metadata) =>
     ipcRenderer.invoke("db-add-agent-message", conversationId, role, content, metadata),
+  onAgentJobMessageAdded: registerListener(
+    "agent-job-message-added",
+    (callback) => (_event, message) => callback(message)
+  ),
   getAgentMessages: (conversationId) => ipcRenderer.invoke("db-get-agent-messages", conversationId),
   getAgentConversationsWithPreview: (limit, offset, includeArchived) =>
     ipcRenderer.invoke("db-get-agent-conversations-with-preview", limit, offset, includeArchived),

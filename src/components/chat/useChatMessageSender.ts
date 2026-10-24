@@ -80,7 +80,10 @@ export function useChatMessageSender({
           });
           if (!isCurrent()) return;
           submitted = true;
-          await streaming.sendToAI(text, [...previousMessages, userMessage], options);
+          await streaming.sendToAI(text, [...previousMessages, userMessage], {
+            ...options,
+            conversationId: convId,
+          });
         } catch (error) {
           if (isCurrent()) throw error;
         } finally {

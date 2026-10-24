@@ -2617,6 +2617,13 @@ class IPCHandlers {
           content,
           metadata
         );
+        if (result && /^job-[a-f0-9-]{36}$/.test(metadata?.messageId || "")) {
+          broadcastToWindows("agent-job-message-added", {
+            conversationId,
+            messageId: metadata.messageId,
+            content: result.content,
+          });
+        }
         if (result && this.vectorIndex?.isReady?.()) {
           const conv = this.databaseManager.getAgentConversation(conversationId);
           if (conv && conv.messages?.length % 3 === 0) {

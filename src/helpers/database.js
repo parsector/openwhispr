@@ -4909,6 +4909,20 @@ class DatabaseManager {
           .get(conversationId);
         if (!conversation) return null;
 
+        // Job deliveries use the same message table as chat. Their stable
+        // messageId makes repeated completion events harmless, even after restart.
+        if (
+          typeof metadata?.messageId === "string" &&
+          /^job-[a-f0-9-]{36}$/.test(metadata.messageId)
+        ) {
+          const existing = this.db
+            .prepare(
+              "SELECT * FROM agent_messages WHERE conversation_id = ? AND CASE WHEN json_valid(metadata) THEN json_extract(metadata, '$.messageId') END = ? LIMIT 1"
+            )
+            .get(conversationId, metadata.messageId);
+          if (existing) return existing;
+        }
+
         const metadataStr = metadata ? JSON.stringify(metadata) : null;
         const result = this.db
           .prepare(

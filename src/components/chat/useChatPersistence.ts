@@ -45,6 +45,19 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
+  useEffect(() => {
+    return window.electronAPI?.onAgentJobMessageAdded?.(
+      ({ conversationId: id, messageId, content }) => {
+        if (conversationIdRef.current !== id) return;
+        setMessages((current) =>
+          current.some((message) => message.id === messageId)
+            ? current
+            : [...current, { id: messageId, role: "assistant", content, isStreaming: false }]
+        );
+      }
+    );
+  }, []);
+
   const createConversation = useCallback(
     async (title: string, noteId?: number | null, scope?: ContainerScope): Promise<number> => {
       const version = sessionVersionRef.current;
@@ -88,7 +101,7 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
       const parsed = m.metadata ? tryParseMetadata(m.metadata) : undefined;
       const toolCalls = parsed?.toolCalls as ToolCallInfo[] | undefined;
       return {
-        id: crypto.randomUUID(),
+        id: typeof parsed?.messageId === "string" ? parsed.messageId : crypto.randomUUID(),
         role: m.role as Message["role"],
         content: m.content,
         isStreaming: false,

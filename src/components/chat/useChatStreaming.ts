@@ -159,6 +159,7 @@ interface UseChatStreamingOptions {
 }
 
 export interface SendToAIOptions {
+  conversationId?: number;
   /** Screenshot for this message; attached only when the resolved model can see it. */
   attachment?: ChatImageAttachment;
   /** Agent-response selection attached to this request without changing chat history. */
@@ -334,6 +335,14 @@ export function useChatStreaming({
       // released now rather than when (or if) they settle.
       toolScopeRef.current?.abort();
       const toolScope = createToolExecutionScope({
+        ...(options?.conversationId
+          ? {
+              origin: {
+                conversationId: String(options.conversationId),
+                surface: inferenceScope === "dictationAgent" ? "assistant" : "chat",
+              } as const,
+            }
+          : {}),
         onApprovalRequested: options?.onApprovalRequested,
         onHoldDelivery: options?.onHoldDelivery,
       });

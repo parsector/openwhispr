@@ -22,10 +22,13 @@ test("delegate_task rejects unknown project, prepares a card immediately, and ca
   const { useLocalApprovalStore } = await import("../../../src/stores/localApprovalStore.ts");
   const tool = createDelegateTaskTool([project]);
   const ctx = context();
+  ctx.origin = { conversationId: "7", messageId: "m1", toolCallId: "t1", surface: "chat" };
   let prepared = 0;
+  let preparedInput;
   global.window = {
     agentJobs: {
-      prepare: async () => {
+      prepare: async (input) => {
+        preparedInput = input;
         prepared++;
         return {
           jobId: String(prepared),
@@ -45,6 +48,7 @@ test("delegate_task rejects unknown project, prepares a card immediately, and ca
   const first = await tool.execute({ project: project.name, task: "Review code" }, ctx);
   assert.deepEqual(first.data.status, "awaiting_approval");
   assert.equal(first.data.jobId, "1");
+  assert.deepEqual(preparedInput.origin, ctx.origin);
   assert.ok(useLocalApprovalStore.getState().entries["m1::t1"]);
   assert.deepEqual(ctx.events, ["approval", "hold"]);
   await tool.execute({ project: project.name, task: "Review code" }, { ...ctx, toolCallId: "t2" });

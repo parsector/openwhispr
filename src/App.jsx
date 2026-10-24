@@ -21,6 +21,7 @@ import { useTranscriptionContextAllowed } from "./hooks/usePolicy";
 import { useTrayQuickActions } from "./hooks/useTrayQuickActions";
 import { VoicePill } from "./components/dictation/VoicePill";
 import { AssistantPanel } from "./components/dictation/AssistantPanel";
+import { AgentJobDeliveryListener } from "./components/AgentJobDeliveryListener";
 import { LiveTranscriptPanel } from "./components/dictation/LiveTranscriptPanel";
 import { VoiceModePanelCore } from "./components/dictation/VoiceModePanelCore";
 import { PillTooltip } from "./components/dictation/PillTooltip";
@@ -634,6 +635,7 @@ export default function App() {
 
   return (
     <div className="dictation-window">
+      <AgentJobDeliveryListener />
       {/* The panel footer can hide this pill, but never unmounts it. */}
       <div
         className={`voice-pill-position voice-pill-position-${voicePillDock} fixed z-50 transition-opacity duration-150 ease-out ${
