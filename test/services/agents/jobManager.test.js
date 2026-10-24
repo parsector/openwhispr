@@ -63,18 +63,24 @@ async function until(check, timeout = 3000) {
   }
   throw new Error("Timed out");
 }
-test("approval required and auth failure blocks prepare", async (t) => {
+test("approval proceeds with advisory auth warning", async (t) => {
   const { manager, notes } = setup(t);
   const prepared = await manager.prepare({ project: "openwhispr", task: "hello" });
   assert.equal(manager.get(prepared.jobId).status, "pending");
   assert.equal(notes.length, 0);
-  const blocked = setup(t, {
-    resolver: { authStatus: async () => ({ state: "not_authenticated" }) },
-  });
-  await assert.rejects(
-    blocked.manager.prepare({ project: "openwhispr", task: "hello" }),
-    /not_authenticated/
-  );
+  for (const state of ["not_authenticated", "unknown"]) {
+    const { manager: warned } = setup(t, {
+      resolver: {
+        authStatus: async () => ({ state }),
+        resolve: async () => ({ ok: true, path: fakeCli }),
+      },
+    });
+    const job = await warned.prepare({ project: "openwhispr", task: "hello" });
+    assert.equal(job.authWarning, true);
+    assert.equal(warned.get(job.jobId).authWarning, true);
+    await warned.approve(job.jobId);
+    await until(() => warned.get(job.jobId).status === "done");
+  }
 });
 test("two run and third queues FIFO then starts", async (t) => {
   const { manager } = setup(t);
@@ -261,20 +267,36 @@ test("write job edits only its worktree and note records the branch and diff", a
   const notes = [];
   const manager = createJobManager({
     file: path.join(root, "userData", "agents", "jobs.json"),
-    projectStore: { read: () => ({ projects: [{ name: "project", folder: repo, defaultHarness: "claude", mode: "write", model: null }] }) },
-    resolver: { authStatus: async () => ({ state: "authenticated" }), resolve: async () => ({ ok: true, path: process.execPath }) },
-    runnerFactory: () => ({ start: ({ folder, mode, branch, onEvent, prompt }) => {
-      assert.equal(mode, "write");
-      assert.equal(git(folder, "branch", "--show-current"), branch);
-      fs.writeFileSync(path.join(folder, "source.txt"), "after\n");
-      if (prompt === "fail") return { pid: 123, done: Promise.resolve({ exitCode: 1, stderr: "edit failed" }) };
-      const resultEvent = { kind: "result", answer: "Edited source", is_error: false };
-      onEvent(resultEvent);
-      return { pid: 123, done: Promise.resolve({ exitCode: 0, resultEvent }) };
-    } }),
+    projectStore: {
+      read: () => ({
+        projects: [
+          { name: "project", folder: repo, defaultHarness: "claude", mode: "write", model: null },
+        ],
+      }),
+    },
+    resolver: {
+      authStatus: async () => ({ state: "authenticated" }),
+      resolve: async () => ({ ok: true, path: process.execPath }),
+    },
+    runnerFactory: () => ({
+      start: ({ folder, mode, branch, onEvent, prompt }) => {
+        assert.equal(mode, "write");
+        assert.equal(git(folder, "branch", "--show-current"), branch);
+        fs.writeFileSync(path.join(folder, "source.txt"), "after\n");
+        if (prompt === "fail")
+          return { pid: 123, done: Promise.resolve({ exitCode: 1, stderr: "edit failed" }) };
+        const resultEvent = { kind: "result", answer: "Edited source", is_error: false };
+        onEvent(resultEvent);
+        return { pid: 123, done: Promise.resolve({ exitCode: 0, resultEvent }) };
+      },
+    }),
     databaseManager: {
-      getPrivateSpaceId: () => 7, getFolders: () => [{ id: 9, name: "Agent jobs" }],
-      saveNote: (...args) => { notes.push(args); return { success: true, note: { id: notes.length } }; },
+      getPrivateSpaceId: () => 7,
+      getFolders: () => [{ id: 9, name: "Agent jobs" }],
+      saveNote: (...args) => {
+        notes.push(args);
+        return { success: true, note: { id: notes.length } };
+      },
     },
     pidFile: { write() {}, clear() {} },
   });

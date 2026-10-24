@@ -26,7 +26,7 @@ export function cursorModels(probed = []) {
   return [
     ...new Set(
       probed.filter(
-        (model) => typeof model === "string" && /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(model)
+        (model) => typeof model === "string" && /^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,127}$/.test(model)
       )
     ),
   ].map((id) => ({ id, label: id }));

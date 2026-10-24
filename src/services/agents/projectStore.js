@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { safeModel } = require("./modelSafety");
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const fields = new Set(["name", "folder", "defaultHarness", "mode", "model"]);
@@ -31,19 +32,14 @@ function validateProject(project, fsImpl = fs) {
       : !["plan", "ask"].includes(project.mode)
   )
     throw new Error("Invalid project mode");
-  if (
-    project.model !== null &&
-    project.model !== undefined &&
-    (typeof project.model !== "string" ||
-      !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(project.model))
-  )
+  if (project.model !== null && project.model !== undefined && !safeModel(project.model))
     throw new Error("Invalid model");
   return {
     name: project.name,
     folder: project.folder,
     defaultHarness: project.defaultHarness,
     mode: project.mode,
-    model: project.model || null,
+    model: project.model?.trim() || null,
   };
 }
 function validateData(value, fsImpl = fs) {

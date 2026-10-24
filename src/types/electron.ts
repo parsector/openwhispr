@@ -1355,6 +1355,7 @@ export interface AgentJob {
   endedAt: number | null;
   finishedAt?: number | null;
   stalled: boolean;
+  authWarning?: boolean;
   position: number | null;
   branch?: string;
   worktreePath?: string;
@@ -1405,11 +1406,36 @@ declare global {
         path: string | null;
         version: string | null;
         error: string | null;
-        models?: string[];
+        argv: string[];
+        exitCode: number | string;
+        stdoutSnippet: string;
+        stderrSnippet: string;
+        authMethod: string | null;
+        configDirectory: string | null;
+        durationMs: number;
+        modelProbe?: { ok: boolean; models?: string[]; reason?: string };
         auth: {
           state: "authenticated" | "not_authenticated" | "unknown";
           method: string | null;
           detail: string | null;
+          path: string | null;
+          argv: string[];
+          exitCode: number | string;
+          stdoutSnippet: string;
+          stderrSnippet: string;
+          authMethod: string | null;
+          configDirectory: string | null;
+          durationMs: number;
+          textProbe?: {
+            path: string | null;
+            argv: string[];
+            exitCode: number | string;
+            stdoutSnippet: string;
+            stderrSnippet: string;
+            authMethod: string | null;
+            configDirectory: string | null;
+            durationMs: number;
+          };
         };
       }>;
       prepare: (input: {
@@ -1425,6 +1451,7 @@ declare global {
         mode: "read-only" | "write" | "plan" | "ask";
         model: string | null;
         prompt: string;
+        authWarning?: boolean;
         branch?: string;
       }>;
       approve: (id: string, input?: { prompt?: string }) => Promise<AgentJob>;

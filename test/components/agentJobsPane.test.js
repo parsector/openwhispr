@@ -158,12 +158,43 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     list: async () => [],
     onUpdated: () => () => {},
     testHarness: async (harness) => ({
+      argv: ["--version"],
+      exitCode: 0,
+      stdoutSnippet: "v1",
+      stderrSnippet: "",
+      authMethod: null,
+      configDirectory: null,
+      durationMs: 1,
       ok: false,
       path: null,
       version: null,
       error: "not found",
-      auth: { state: "unknown", method: null, detail: null },
-      ...(harness === "cursor-agent" ? { models: ["auto", "gpt-5"] } : {}),
+      auth: {
+        state: "unknown",
+        method: null,
+        detail: null,
+        path: "/usr/bin/claude",
+        argv: ["auth", "status"],
+        exitCode: 1,
+        stdoutSnippet: "{}",
+        stderrSnippet: "",
+        authMethod: null,
+        configDirectory: "/tmp/config",
+        durationMs: 2,
+        textProbe: {
+          path: "/usr/bin/claude",
+          argv: ["auth", "status", "--text"],
+          exitCode: 0,
+          stdoutSnippet: "Login method: Claude Max",
+          stderrSnippet: "",
+          authMethod: null,
+          configDirectory: null,
+          durationMs: 2,
+        },
+      },
+      ...(harness === "cursor-agent"
+        ? { modelProbe: { ok: true, models: ["auto", "gpt-5"] } }
+        : {}),
     }),
   };
   React = require("react");
@@ -184,6 +215,13 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     "agentJobs.pane.invalidClaudeModel"
   );
   await act(() => host.querySelector("button").click());
+  assert.ok(host.querySelector("details summary")?.textContent.includes("agentJobs.pane.details"));
+  assert.ok(host.querySelector("details pre")?.textContent.includes("Login method: Claude Max"));
+  assert.ok(
+    [...host.querySelectorAll("button")].some(
+      (button) => button.textContent === "agentJobs.pane.copyDetails"
+    )
+  );
   const groups = [...host.querySelectorAll("optgroup")];
   assert.deepEqual(
     groups.map((group) => group.label),
@@ -240,6 +278,29 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
   assert.equal(mode.disabled, false);
   assert.equal(mode.value, "plan");
   assert.ok(host.querySelector('option[value="gpt-5"]'));
+  dom.agentJobs.testHarness = async () => ({
+    ok: true,
+    path: "/usr/bin/cursor-agent",
+    version: "1",
+    error: null,
+    argv: ["--version"],
+    exitCode: 0,
+    stdoutSnippet: "1",
+    stderrSnippet: "",
+    authMethod: null,
+    configDirectory: null,
+    durationMs: 1,
+    auth: { state: "unknown", method: null, detail: null },
+    modelProbe: { ok: false, reason: "no models found" },
+  });
+  await act(() =>
+    [...host.querySelectorAll("button")]
+      .filter((button) => button.textContent === "agentJobs.pane.testHarness")
+      .at(-1)
+      .click()
+  );
+  assert.ok(host.textContent.includes("agentJobs.pane.cursorModelFallback"));
+  assert.equal(host.querySelector('option[value="gpt-5"]'), null);
   const reviewRow = [...host.querySelectorAll("h3")]
     .find((item) => item.textContent === "Review PR")
     ?.closest("div.flex.flex-wrap");
@@ -294,4 +355,42 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     ),
     false
   );
+  dom.electronAPI = { noteFilesPickFolder: async () => ({ path: "/tmp" }) };
+  dom.agentJobs.projectsSave = async () => {
+    throw new Error("Invalid model");
+  };
+  await act(() =>
+    [...host.querySelectorAll("button")]
+      .find((button) => button.textContent === "agentJobs.pane.browse")
+      .click()
+  );
+  const nameInput = host.querySelector('input[maxlength="80"]');
+  await act(() => {
+    Object.getOwnPropertyDescriptor(dom.HTMLInputElement.prototype, "value").set.call(
+      nameInput,
+      "New project"
+    );
+    nameInput.dispatchEvent(new dom.Event("input", { bubbles: true }));
+  });
+  await act(() =>
+    [...host.querySelectorAll("button")]
+      .find((button) => button.textContent === "agentJobs.pane.save" && !button.disabled)
+      .click()
+  );
+  assert.ok(
+    [...host.querySelectorAll('[role="alert"]')].some((item) =>
+      item.textContent.includes("Invalid model")
+    )
+  );
+  assert.ok(host.textContent.includes("agentJobs.pane.actionError"));
+  dom.agentJobs.testHarness = async () => {
+    throw new Error("probe IPC failed");
+  };
+  await act(() =>
+    [...host.querySelectorAll("button")]
+      .filter((button) => button.textContent === "agentJobs.pane.testHarness")
+      .at(-1)
+      .click()
+  );
+  assert.ok(host.textContent.includes("agentJobs.pane.actionError: probe IPC failed"));
 });

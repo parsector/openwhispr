@@ -47,11 +47,11 @@ test("Cursor harness probe includes available models", async () => {
         error: null,
       }),
       authStatus: async () => ({ state: "authenticated", method: null, detail: null }),
-      listModels: async () => ["auto", "gpt-5"],
+      listModels: async () => ({ ok: true, models: ["auto", "gpt-5"] }),
     },
   });
   const result = await handlers.get("agent-projects-test-harness")(null, "cursor-agent");
-  assert.deepEqual(result.models, ["auto", "gpt-5"]);
+  assert.deepEqual(result.modelProbe, { ok: true, models: ["auto", "gpt-5"] });
 });
 
 test("discard IPC delegates a validated job id", async () => {
@@ -59,10 +59,19 @@ test("discard IPC delegates a validated job id", async () => {
   let discarded;
   registerAgentIpc({
     ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
-    projectStore: {}, resolver: {},
-    manager: { discard: async (id) => { discarded = id; return { jobId: id, discardedAt: 123 }; } },
+    projectStore: {},
+    resolver: {},
+    manager: {
+      discard: async (id) => {
+        discarded = id;
+        return { jobId: id, discardedAt: 123 };
+      },
+    },
   });
-  assert.deepEqual(await handlers.get("agent-job-discard")(null, "job-1"), { jobId: "job-1", discardedAt: 123 });
+  assert.deepEqual(await handlers.get("agent-job-discard")(null, "job-1"), {
+    jobId: "job-1",
+    discardedAt: 123,
+  });
   assert.equal(discarded, "job-1");
   assert.throws(() => handlers.get("agent-job-discard")(null, "../bad"), /Invalid name/);
 });
@@ -72,17 +81,28 @@ test("preset IPC lists, saves, and removes through the validated store", () => {
   const calls = [];
   registerAgentIpc({
     ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
-    projectStore: {}, resolver: {}, manager: {},
+    projectStore: {},
+    resolver: {},
+    manager: {},
     presetStore: {
       read: () => ({ presets: [] }),
-      save: (preset) => { calls.push(["save", preset]); return { presets: [preset] }; },
-      remove: (id) => { calls.push(["remove", id]); return { presets: [] }; },
+      save: (preset) => {
+        calls.push(["save", preset]);
+        return { presets: [preset] };
+      },
+      remove: (id) => {
+        calls.push(["remove", id]);
+        return { presets: [] };
+      },
     },
   });
   const preset = { id: "preset-1" };
   assert.deepEqual(handlers.get("agent-presets-list")(), { presets: [] });
   assert.deepEqual(handlers.get("agent-presets-save")(null, preset), { presets: [preset] });
   assert.deepEqual(handlers.get("agent-presets-remove")(null, "preset-1"), { presets: [] });
-  assert.deepEqual(calls, [["save", preset], ["remove", "preset-1"]]);
+  assert.deepEqual(calls, [
+    ["save", preset],
+    ["remove", "preset-1"],
+  ]);
   assert.throws(() => handlers.get("agent-presets-remove")(null, "../bad"), /Invalid name/);
 });

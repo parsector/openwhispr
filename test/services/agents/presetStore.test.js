@@ -57,6 +57,10 @@ test("validates every field against the project allowlist and disallows mode smu
   const { store, preset } = setup(t);
   store.save(preset);
   assert.equal(store.read().presets[0].name, "Review PR");
+  assert.equal(
+    store.save({ ...preset, model: " provider/model:v2 " }).presets[0].model,
+    "provider/model:v2"
+  );
   store.save({ ...preset, name: "プルリクエストをレビュー" });
   assert.equal(store.read().presets[0].name, "プルリクエストをレビュー");
   for (const bad of [

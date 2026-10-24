@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { safeModel } = require("./modelSafety");
 const { extractPlaceholders, resolvePresetPrompt } = require("./presetPlaceholders.mjs");
 
 const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -36,18 +37,14 @@ function validatePreset(preset, projects) {
   if (!project) throw new Error("Unknown preset project");
   if (preset.harness !== project.defaultHarness || preset.mode !== project.mode)
     throw new Error("Preset harness or mode does not match project");
-  if (
-    preset.model !== null &&
-    (typeof preset.model !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/.test(preset.model))
-  )
-    throw new Error("Invalid preset model");
+  if (preset.model !== null && !safeModel(preset.model)) throw new Error("Invalid preset model");
   extractPlaceholders(preset.prompt);
   return {
     id: preset.id,
     name: preset.name,
     project: preset.project,
     harness: preset.harness,
-    model: preset.model,
+    model: preset.model?.trim() || null,
     mode: preset.mode,
     prompt: preset.prompt,
     description: preset.description,

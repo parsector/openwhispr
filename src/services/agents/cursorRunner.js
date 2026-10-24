@@ -1,6 +1,6 @@
 const { spawn } = require("node:child_process");
 const { createStreamParser } = require("./streamJson");
-const { minimalEnv } = require("./cliResolver");
+const { minimalEnv } = require("./minimalEnv");
 const { redactOutput } = require("./redactOutput");
 
 function createCursorRunner({ cliPath, spawnImpl = spawn } = {}) {

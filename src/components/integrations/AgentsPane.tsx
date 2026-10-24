@@ -64,6 +64,41 @@ export function AgentsPane({ title }: { title: string }) {
   >({});
   const [probeBusy, setProbeBusy] = useState<Harness | null>(null);
   const [now, setNow] = useState(Date.now());
+  function probeDetails(harness: Harness) {
+    const result = probe[harness];
+    if (!result) return null;
+    const details = JSON.stringify(
+      {
+        test: {
+          path: result.path,
+          argv: result.argv,
+          exitCode: result.exitCode,
+          stdoutSnippet: result.stdoutSnippet,
+          stderrSnippet: result.stderrSnippet,
+          authMethod: result.authMethod,
+          configDirectory: result.configDirectory,
+          durationMs: result.durationMs,
+        },
+        auth: result.auth,
+        modelProbe: result.modelProbe,
+      },
+      null,
+      2
+    );
+    return (
+      <details className="mt-1 text-xs text-muted-foreground">
+        <summary>{t("agentJobs.pane.details")}</summary>
+        <pre className="whitespace-pre-wrap break-all">{details}</pre>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void navigator.clipboard.writeText(details)}
+        >
+          {t("agentJobs.pane.copyDetails")}
+        </Button>
+      </details>
+    );
+  }
   function authLabel(harness: Harness) {
     const auth = probe[harness]?.auth;
     if (!auth) return null;
@@ -132,20 +167,13 @@ export function AgentsPane({ title }: { title: string }) {
 
   async function testHarness(harness: Harness) {
     setProbeBusy(harness);
+    setError("");
     try {
       const result = await window.agentJobs.testHarness(harness);
       setProbe((current) => ({ ...current, [harness]: result }));
     } catch (cause) {
-      setProbe((current) => ({
-        ...current,
-        [harness]: {
-          ok: false,
-          path: null,
-          version: null,
-          error: errorText(cause),
-          auth: { state: "unknown", method: null, detail: "not found" },
-        },
-      }));
+      setProbe((current) => ({ ...current, [harness]: undefined }));
+      setError(errorText(cause));
     } finally {
       setProbeBusy(null);
     }
@@ -317,6 +345,14 @@ export function AgentsPane({ title }: { title: string }) {
   const missingPlaceholder = runningPlaceholders.find((name) => !values[name]?.trim());
   return (
     <IntegrationsPane title={title} description={t("agentJobs.pane.description")}>
+      {error && (
+        <p
+          role="alert"
+          className="sticky top-0 z-20 rounded-md border border-destructive bg-background p-2 text-xs text-destructive"
+        >
+          {t("agentJobs.pane.actionError")}: {error}
+        </p>
+      )}
       <section className="space-y-2" aria-label={t("agentJobs.pane.projects")}>
         <div className="flex items-center justify-between gap-3">
           <SectionLabel>{t("agentJobs.pane.projects")}</SectionLabel>
@@ -417,6 +453,7 @@ export function AgentsPane({ title }: { title: string }) {
                   </span>
                 </p>
               )}
+              {probeDetails(project.defaultHarness)}
             </SettingsPanelRow>
           ))}
         </SettingsPanel>
@@ -536,19 +573,25 @@ export function AgentsPane({ title }: { title: string }) {
                     </select>
                   )}
                   {draft.defaultHarness === "cursor-agent" &&
-                    cursorModels(probe["cursor-agent"]?.models).length > 0 && (
+                    cursorModels(probe["cursor-agent"]?.modelProbe?.models).length > 0 && (
                       <select
                         className={inputClass}
                         value={draft.model || ""}
                         onChange={(e) => setDraft({ ...draft, model: e.target.value || null })}
                       >
                         <option value="">{t("agentJobs.pane.defaultModel")}</option>
-                        {cursorModels(probe["cursor-agent"]?.models).map((model) => (
+                        {cursorModels(probe["cursor-agent"]?.modelProbe?.models).map((model) => (
                           <option key={model.id} value={model.id}>
                             {model.label}
                           </option>
                         ))}
                       </select>
+                    )}
+                  {draft.defaultHarness === "cursor-agent" &&
+                    probe["cursor-agent"]?.modelProbe?.ok === false && (
+                      <p className="text-xs text-muted-foreground">
+                        {t("agentJobs.pane.cursorModelFallback")}
+                      </p>
                     )}
                   {(customModel || draft.defaultHarness === "cursor-agent") && (
                     <div className="space-y-1">
@@ -613,6 +656,7 @@ export function AgentsPane({ title }: { title: string }) {
                     : probe[draft.defaultHarness]?.error}
                 </p>
               )}
+              {probeDetails(draft.defaultHarness)}
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -921,6 +965,9 @@ export function AgentsPane({ title }: { title: string }) {
                       )}
                     </Badge>
                   </div>
+                  {job.authWarning && job.harness === "claude" && (
+                    <p className="text-xs text-warning">{t("agentJobs.pane.authSoftWarning")}</p>
+                  )}
                   {position && (
                     <p className="text-xs text-muted-foreground">
                       {t("agentJobs.pane.queuePosition", { position })}
@@ -1008,11 +1055,6 @@ export function AgentsPane({ title }: { title: string }) {
             })}
         </SettingsPanel>
       </section>
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
     </IntegrationsPane>
   );
 }
