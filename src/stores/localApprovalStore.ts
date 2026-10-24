@@ -14,6 +14,7 @@ export interface LocalApprovalEntry {
   prompt: string;
   state: "pending" | "approving" | "cancelling" | "started" | "failed" | "cancelled";
   error?: string;
+  authWarning?: boolean;
 }
 
 export const useLocalApprovalStore = create<{
@@ -53,7 +54,14 @@ function finish(key: string, changes: Partial<LocalApprovalEntry>): void {
 
 export function addLocalApproval(
   context: ToolExecutionContext,
-  job: { jobId: string; prompt: string; harness: string; mode?: string; branch?: string },
+  job: {
+    jobId: string;
+    prompt: string;
+    harness: string;
+    mode?: string;
+    branch?: string;
+    authWarning?: boolean;
+  },
   summary: string
 ): void {
   const key = approvalKey(context.messageId, context.toolCallId);
@@ -65,6 +73,7 @@ export function addLocalApproval(
     harness: job.harness,
     mode: job.mode,
     branch: job.branch,
+    authWarning: job.authWarning,
     summary,
     prompt: job.prompt,
     state: "pending",
