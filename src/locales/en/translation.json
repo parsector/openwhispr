@@ -4974,6 +4974,12 @@
       "ask": "Ask"
     },
     "presets": {
+      "openPullRequests": "Open pull requests",
+      "fanOutApproval": "Approve {{name}} for these pull requests",
+      "showingFive": "Showing 5 of {{total}}",
+      "groupCount": "{{count}} of {{total}}",
+      "gh_missing": "GitHub CLI (gh) is unavailable.",
+      "parse_failed": "Could not list open pull requests.",
       "title": "Presets",
       "add": "Add preset",
       "empty": "No presets yet.",

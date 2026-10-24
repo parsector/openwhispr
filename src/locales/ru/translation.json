@@ -5029,7 +5029,13 @@
       "missingValue": "Введите значение для {{name}}.",
       "reviewPrPrompt": "Проверь пул-реквест {{pr}}. Кратко опиши находки и риски.",
       "triageBugPrompt": "Разбери сообщение об ошибке {{issue}}. Определи вероятную причину и дальнейшие шаги.",
-      "designDocPrompt": "Подготовь проектный документ по теме {{topic}}."
+      "designDocPrompt": "Подготовь проектный документ по теме {{topic}}.",
+      "openPullRequests": "Open pull requests",
+      "fanOutApproval": "Approve {{name}} for these pull requests",
+      "showingFive": "Showing 5 of {{total}}",
+      "groupCount": "{{count}} of {{total}}",
+      "gh_missing": "GitHub CLI (gh) is unavailable.",
+      "parse_failed": "Could not list open pull requests."
     }
   }
 }

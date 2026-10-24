@@ -4989,7 +4989,13 @@
       "missingValue": "Inserisci un valore per {{name}}.",
       "reviewPrPrompt": "Esamina la pull request {{pr}}. Riassumi risultati e rischi.",
       "triageBugPrompt": "Analizza la segnalazione di bug {{issue}}. Individua la causa probabile e i prossimi passi.",
-      "designDocPrompt": "Redigi un documento di progettazione per {{topic}}."
+      "designDocPrompt": "Redigi un documento di progettazione per {{topic}}.",
+      "openPullRequests": "Open pull requests",
+      "fanOutApproval": "Approve {{name}} for these pull requests",
+      "showingFive": "Showing 5 of {{total}}",
+      "groupCount": "{{count}} of {{total}}",
+      "gh_missing": "GitHub CLI (gh) is unavailable.",
+      "parse_failed": "Could not list open pull requests."
     }
   }
 }

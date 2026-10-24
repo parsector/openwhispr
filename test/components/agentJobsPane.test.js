@@ -138,7 +138,10 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     }
   });
   let debugEnabled = false;
-  dom.electronAPI = { getDebugState: async () => ({ enabled: debugEnabled, logPath: null }), getNotes: async () => [] };
+  dom.electronAPI = {
+    getDebugState: async () => ({ enabled: debugEnabled, logPath: null }),
+    getNotes: async () => [],
+  };
   dom.agentJobs = {
     projectsList: async () => ({
       projects: [
@@ -170,9 +173,50 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
           prompt: "Review {{pr}}",
           description: "",
         },
+        {
+          id: "review-all",
+          name: "Review open PRs",
+          project: "Existing project",
+          harness: "claude",
+          mode: "read-only",
+          model: "sonnet",
+          prompt: "Review {{pr}}",
+          description: "",
+          fanOut: "open-pull-requests",
+        },
       ],
     }),
-    list: async () => [{ jobId: "no-session", project: { name: "Existing project", folder: "/tmp/existing" }, harness: "claude", mode: "read-only", model: "sonnet", prompt: "Review", status: "done", steps: [], result: "ok", reason: null, sessionId: null, createdAt: 1, startedAt: 1, endedAt: 2, stalled: false, position: null }],
+    list: async () => [
+      {
+        jobId: "no-session",
+        project: { name: "Existing project", folder: "/tmp/existing" },
+        harness: "claude",
+        mode: "read-only",
+        model: "sonnet",
+        prompt: "Review",
+        status: "done",
+        steps: [],
+        result: "ok",
+        reason: null,
+        sessionId: null,
+        createdAt: 1,
+        startedAt: 1,
+        endedAt: 2,
+        stalled: false,
+        position: null,
+        fanOutId: "batch",
+        fanOutIndex: 1,
+        fanOutTotal: 5,
+        fanOutPresetName: "Review open PRs",
+      },
+    ],
+    fanOutEnumerate: async () => ({
+      ok: true,
+      fanOutId: "batch-new",
+      total: 7,
+      targets: [1, 2, 3, 4, 5].map((number) => ({ number, title: `PR ${number}` })),
+    }),
+    fanOutCancel: async () => ({ ok: true }),
     onUpdated: () => () => {},
     testHarness: async () => ({
       path: "/usr/bin/claude",
@@ -218,7 +262,9 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
   assert.equal(host.textContent.includes("agentJobs.pane.copyDetails"), false);
   assert.ok(host.textContent.includes("/usr/bin/claude · v1"));
   assert.ok(host.textContent.includes("agentJobs.pane.auth.subscription"));
-  const terminalButton = [...host.querySelectorAll("button")].find((button) => button.textContent === "agentJobs.pane.openTerminal");
+  const terminalButton = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "agentJobs.pane.openTerminal"
+  );
   assert.ok(terminalButton);
   assert.equal(terminalButton.disabled, true);
   assert.equal(terminalButton.title, "agentJobs.pane.noSession");
@@ -342,6 +388,27 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     placeholder.dispatchEvent(new dom.Event("input", { bubbles: true }));
   });
   assert.ok([...host.querySelectorAll("textarea")].some((item) => item.value === "Review 42"));
+  assert.ok(host.textContent.includes("Review open PRs · agentJobs.presets.groupCount"));
+  const fanOutRow = [...host.querySelectorAll("h3")]
+    .find((item) => item.textContent === "Review open PRs")
+    ?.closest("div.flex.flex-wrap");
+  assert.ok(fanOutRow.textContent.includes("agentJobs.presets.openPullRequests"));
+  await act(() =>
+    [...fanOutRow.querySelectorAll("button")]
+      .find((item) => item.textContent === "agentJobs.presets.run")
+      .click()
+  );
+  assert.equal(host.querySelector('input[aria-label="pr"]'), null);
+  await act(() =>
+    [...host.querySelectorAll("button")]
+      .filter((item) => item.textContent === "agentJobs.presets.run" && !item.disabled)
+      .at(-1)
+      .click()
+  );
+  assert.ok(host.textContent.includes("agentJobs.presets.showingFive"));
+  assert.ok(host.textContent.includes("#1 — PR 1"));
+  assert.ok(host.textContent.includes("#5 — PR 5"));
+  assert.equal(host.textContent.includes("#6 —"), false);
   await act(() =>
     [...host.querySelectorAll("button")]
       .find((item) => item.textContent === "agentJobs.presets.add")
@@ -424,9 +491,13 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
   await act(() => root.render(React.createElement(LocalApprovalCard, { entry: approval })));
   assert.ok(host.textContent.includes("agentJobs.card.workspaceUntrusted"));
   assert.equal(host.querySelector("select"), null);
-  await act(() => root.render(React.createElement(LocalApprovalCard, {
-    entry: { ...approval, contextNoteId: 42, contextNoteTitle: "Meeting", contextChars: 87 },
-  })));
+  await act(() =>
+    root.render(
+      React.createElement(LocalApprovalCard, {
+        entry: { ...approval, contextNoteId: 42, contextNoteTitle: "Meeting", contextChars: 87 },
+      })
+    )
+  );
   assert.ok(host.textContent.includes("agentJobs.card.context"));
   assert.ok(host.textContent.includes("agentJobs.card.contextPrivacy"));
   assert.equal(host.querySelector("select"), null);

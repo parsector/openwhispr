@@ -52,6 +52,12 @@ export function AgentsPane({ title }: { title: string }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [resolvedPrompt, setResolvedPrompt] = useState("");
   const [presetBusy, setPresetBusy] = useState(false);
+  const [fanOutApproval, setFanOutApproval] = useState<{
+    id: string;
+    presetName: string;
+    targets: Array<{ number: number; title: string }>;
+    total: number;
+  } | null>(null);
   const approvalEntries = useLocalApprovalStore((state) => state.entries);
   const [projectsLoaded, setProjectsLoaded] = useState(false);
   const [jobsLoaded, setJobsLoaded] = useState(false);
@@ -263,8 +269,20 @@ export function AgentsPane({ title }: { title: string }) {
     setError("");
     try {
       const names = extractPlaceholders(runningPreset.prompt);
-      for (const name of names)
+      for (const name of names.filter((name) => !(runningPreset.fanOut && name === "pr")))
         if (!values[name]?.trim()) throw new Error(t("agentJobs.presets.missingValue", { name }));
+      if (runningPreset.fanOut) {
+        const result = await window.agentJobs.fanOutEnumerate(runningPreset.id, values);
+        if ("reason" in result) throw new Error(t(`agentJobs.presets.${result.reason}`));
+        setFanOutApproval({
+          id: result.fanOutId,
+          presetName: runningPreset.name,
+          targets: result.targets,
+          total: result.total,
+        });
+        setRunningPreset(null);
+        return;
+      }
       const job = await window.agentJobs.prepare({
         project: runningPreset.project,
         task: resolvedPrompt,
@@ -362,8 +380,23 @@ export function AgentsPane({ title }: { title: string }) {
   function modeLabel(mode: string) {
     return t(mode === "read-only" ? "agentJobs.pane.readOnly" : `agentJobs.mode.${mode}`);
   }
-  const runningPlaceholders = runningPreset ? extractPlaceholders(runningPreset.prompt) : [];
+  const runningPlaceholders = runningPreset
+    ? extractPlaceholders(runningPreset.prompt).filter(
+        (name) => !(runningPreset.fanOut && name === "pr")
+      )
+    : [];
   const missingPlaceholder = runningPlaceholders.find((name) => !values[name]?.trim());
+  const fanOutTimes = new Map<string, number>();
+  for (const job of jobs)
+    if (job.fanOutId)
+      fanOutTimes.set(job.fanOutId, Math.max(fanOutTimes.get(job.fanOutId) || 0, job.createdAt));
+  const sortedJobs = [...jobs].sort((a, b) => {
+    const aTime = a.fanOutId ? fanOutTimes.get(a.fanOutId)! : a.createdAt;
+    const bTime = b.fanOutId ? fanOutTimes.get(b.fanOutId)! : b.createdAt;
+    if (aTime !== bTime) return bTime - aTime;
+    if (a.fanOutId && a.fanOutId === b.fanOutId) return (a.fanOutIndex || 0) - (b.fanOutIndex || 0);
+    return (a.fanOutId || a.jobId).localeCompare(b.fanOutId || b.jobId);
+  });
   return (
     <IntegrationsPane title={title} description={t("agentJobs.pane.description")}>
       {error && (
@@ -766,6 +799,11 @@ export function AgentsPane({ title }: { title: string }) {
                     {preset.project} · {preset.harness} ·{" "}
                     {t(guaranteeKey(preset.harness, preset.mode))}
                   </p>
+                  {preset.fanOut && (
+                    <p className="text-xs text-muted-foreground">
+                      {t("agentJobs.presets.openPullRequests")}
+                    </p>
+                  )}
                 </div>
                 <div className="flex gap-1">
                   <Button size="sm" disabled={presetBusy} onClick={() => startPreset(preset)}>
@@ -858,6 +896,19 @@ export function AgentsPane({ title }: { title: string }) {
               <p className="text-xs text-muted-foreground">
                 {t("agentJobs.presets.placeholderHint")}
               </p>
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={Boolean(presetDraft.fanOut)}
+                  onChange={(e) =>
+                    setPresetDraft({
+                      ...presetDraft,
+                      fanOut: e.target.checked ? "open-pull-requests" : undefined,
+                    })
+                  }
+                />
+                {t("agentJobs.presets.openPullRequests")}
+              </label>
               <div className="space-y-1">
                 <p className="text-xs font-medium">{t("agentJobs.presets.suggestions")}</p>
                 {suggestions
@@ -932,6 +983,7 @@ export function AgentsPane({ title }: { title: string }) {
                   dir="auto"
                   className={`${inputClass} min-h-28`}
                   value={resolvedPrompt}
+                  readOnly={Boolean(runningPreset.fanOut)}
                   onChange={(e) => setResolvedPrompt(e.target.value)}
                 />
               </label>
@@ -960,6 +1012,63 @@ export function AgentsPane({ title }: { title: string }) {
           .map((entry) => (
             <LocalApprovalCard key={entry.key} entry={entry} />
           ))}
+        {fanOutApproval && (
+          <SettingsPanel>
+            <SettingsPanelRow className="space-y-3">
+              <h3 className="text-sm font-semibold">
+                {t("agentJobs.presets.fanOutApproval", { name: fanOutApproval.presetName })}
+              </h3>
+              {fanOutApproval.total > 5 && (
+                <p className="text-xs text-muted-foreground">
+                  {t("agentJobs.presets.showingFive", { total: fanOutApproval.total })}
+                </p>
+              )}
+              <ul
+                className="list-disc pl-5 text-xs"
+                aria-label={t("agentJobs.presets.openPullRequests")}
+              >
+                {fanOutApproval.targets.map((target) => (
+                  <li key={target.number}>
+                    #{target.number} — {target.title}
+                  </li>
+                ))}
+              </ul>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={presetBusy || fanOutApproval.targets.length === 0}
+                  onClick={() => {
+                    void (async () => {
+                      setPresetBusy(true);
+                      setError("");
+                      try {
+                        await window.agentJobs.fanOutApprove(fanOutApproval.id);
+                        setFanOutApproval(null);
+                      } catch (cause) {
+                        setError(errorText(cause));
+                      } finally {
+                        setPresetBusy(false);
+                      }
+                    })();
+                  }}
+                >
+                  {t("agentJobs.card.approve")}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={presetBusy}
+                  onClick={() => {
+                    void window.agentJobs.fanOutCancel(fanOutApproval.id);
+                    setFanOutApproval(null);
+                  }}
+                >
+                  {t("agentJobs.card.cancel")}
+                </Button>
+              </div>
+            </SettingsPanelRow>
+          </SettingsPanel>
+        )}
       </section>
       <section className="space-y-2" aria-label={t("agentJobs.pane.jobs")}>
         <SectionLabel>{t("agentJobs.pane.jobs")}</SectionLabel>
@@ -974,138 +1083,147 @@ export function AgentsPane({ title }: { title: string }) {
               <p className="text-xs text-muted-foreground">{t("agentJobs.pane.noJobs")}</p>
             </SettingsPanelRow>
           )}
-          {[...jobs]
-            .sort((a, b) => b.createdAt - a.createdAt)
-            .map((job) => {
-              const status = jobStatus(job.status, job.stalled);
-              const elapsed = elapsedTime(job.startedAt, job.endedAt, now);
-              const position = queuePosition(job.position);
-              return (
-                <SettingsPanelRow key={job.jobId} className="space-y-2">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-sm font-medium">{job.project.name}</h3>
-                      <p className="text-xs text-muted-foreground">
-                        {job.harness} ·{" "}
-                        {job.mode !== "write" && `${modeLabel(job.mode || "read-only")} · `}
-                        {t(guaranteeKey(job.harness, job.mode))} ·{" "}
-                        {job.model || t("agentJobs.pane.defaultModel")}
-                        {elapsed && ` · ${elapsed}`}
-                      </p>
-                    </div>
-                    <Badge
-                      variant={
-                        status.severity === "danger"
-                          ? "destructive"
-                          : status.severity === "neutral"
-                            ? "secondary"
-                            : status.severity
-                      }
-                    >
-                      {t(
-                        status.key === "stalled"
-                          ? stallTextKey
-                          : `agentJobs.pane.status.${status.key}`
-                      )}
-                    </Badge>
-                  </div>
-                  {job.authWarning && job.harness === "claude" && (
-                    <p className="text-xs text-warning">{t("agentJobs.pane.authSoftWarning")}</p>
+          {sortedJobs.map((job) => {
+            const status = jobStatus(job.status, job.stalled);
+            const elapsed = elapsedTime(job.startedAt, job.endedAt, now);
+            const position = queuePosition(job.position);
+            return (
+              <SettingsPanelRow key={job.jobId} className="space-y-2">
+                {job.fanOutId &&
+                  sortedJobs.find((item) => item.fanOutId === job.fanOutId)?.jobId ===
+                    job.jobId && (
+                    <h3 className="text-xs font-semibold">
+                      {job.fanOutPresetName} ·{" "}
+                      {t("agentJobs.presets.groupCount", {
+                        count: sortedJobs.filter((item) => item.fanOutId === job.fanOutId).length,
+                        total: job.fanOutTotal,
+                      })}
+                    </h3>
                   )}
-                  {position && (
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-medium">{job.project.name}</h3>
                     <p className="text-xs text-muted-foreground">
-                      {t("agentJobs.pane.queuePosition", { position })}
+                      {job.harness} ·{" "}
+                      {job.mode !== "write" && `${modeLabel(job.mode || "read-only")} · `}
+                      {t(guaranteeKey(job.harness, job.mode))} ·{" "}
+                      {job.model || t("agentJobs.pane.defaultModel")}
+                      {elapsed && ` · ${elapsed}`}
                     </p>
-                  )}
-                  {job.status === "running" && job.steps.length > 0 && (
-                    <ol
-                      className="max-h-44 overflow-y-auto space-y-1 text-xs text-muted-foreground"
-                      aria-label={t("agentJobs.pane.progress")}
-                    >
-                      {job.steps
-                        .slice(-20)
-                        .reverse()
-                        .map((step, index) => (
-                          <li key={`${job.jobId}-${index}`} className="break-words">
-                            {String(step.summary || step.kind)}
-                          </li>
-                        ))}
-                    </ol>
-                  )}
-                  {job.status === "failed" && job.reason && (
-                    <p role="alert" className="text-xs text-destructive whitespace-pre-line">
-                      {failureDescription(
-                        job.reason,
-                        job.lastError,
-                        t,
-                        job.harness,
-                        job.mode === "write" ? job : undefined
-                      )}
-                    </p>
-                  )}
-                  {job.status === "cancelled" && job.mode === "write" && job.worktreeCreated && (
-                    <p className="text-xs text-muted-foreground whitespace-pre-line">
-                      {failureDescription("cancelled", job.lastError, t, job.harness, job)}
-                    </p>
-                  )}
-                  {(["pending", "queued", "running"] as const).includes(
-                    job.status as "pending" | "queued" | "running"
-                  ) && (
-                    <Button size="sm" variant="outline" onClick={() => void cancel(job.jobId)}>
-                      {t("agentJobs.card.cancel")}
-                    </Button>
-                  )}
-                  {job.status === "done" && job.noteId && (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => void window.electronAPI.agentOpenNote?.(job.noteId!)}
-                    >
-                      {t("agentJobs.pane.openNote")}
-                    </Button>
-                  )}
+                  </div>
+                  <Badge
+                    variant={
+                      status.severity === "danger"
+                        ? "destructive"
+                        : status.severity === "neutral"
+                          ? "secondary"
+                          : status.severity
+                    }
+                  >
+                    {t(
+                      status.key === "stalled"
+                        ? stallTextKey
+                        : `agentJobs.pane.status.${status.key}`
+                    )}
+                  </Badge>
+                </div>
+                {job.authWarning && job.harness === "claude" && (
+                  <p className="text-xs text-warning">{t("agentJobs.pane.authSoftWarning")}</p>
+                )}
+                {position && (
+                  <p className="text-xs text-muted-foreground">
+                    {t("agentJobs.pane.queuePosition", { position })}
+                  </p>
+                )}
+                {job.status === "running" && job.steps.length > 0 && (
+                  <ol
+                    className="max-h-44 overflow-y-auto space-y-1 text-xs text-muted-foreground"
+                    aria-label={t("agentJobs.pane.progress")}
+                  >
+                    {job.steps
+                      .slice(-20)
+                      .reverse()
+                      .map((step, index) => (
+                        <li key={`${job.jobId}-${index}`} className="break-words">
+                          {String(step.summary || step.kind)}
+                        </li>
+                      ))}
+                  </ol>
+                )}
+                {job.status === "failed" && job.reason && (
+                  <p role="alert" className="text-xs text-destructive whitespace-pre-line">
+                    {failureDescription(
+                      job.reason,
+                      job.lastError,
+                      t,
+                      job.harness,
+                      job.mode === "write" ? job : undefined
+                    )}
+                  </p>
+                )}
+                {job.status === "cancelled" && job.mode === "write" && job.worktreeCreated && (
+                  <p className="text-xs text-muted-foreground whitespace-pre-line">
+                    {failureDescription("cancelled", job.lastError, t, job.harness, job)}
+                  </p>
+                )}
+                {(["pending", "queued", "running"] as const).includes(
+                  job.status as "pending" | "queued" | "running"
+                ) && (
+                  <Button size="sm" variant="outline" onClick={() => void cancel(job.jobId)}>
+                    {t("agentJobs.card.cancel")}
+                  </Button>
+                )}
+                {job.status === "done" && job.noteId && (
                   <Button
                     size="sm"
                     variant="ghost"
-                    disabled={!job.sessionId}
-                    title={!job.sessionId ? t("agentJobs.pane.noSession") : undefined}
-                    onClick={() => void openTerminal(job.jobId)}
+                    onClick={() => void window.electronAPI.agentOpenNote?.(job.noteId!)}
                   >
-                    {t("agentJobs.pane.openTerminal")}
+                    {t("agentJobs.pane.openNote")}
                   </Button>
-                  {job.mode === "write" &&
-                    job.worktreeCreated &&
-                    job.worktreePath &&
-                    !job.discardedAt && (
-                      <div className="space-y-1 text-xs break-all">
-                        <p>
-                          {t("agentJobs.card.branch")}: {job.branch}
-                        </p>
-                        <p>
-                          {t("agentJobs.pane.worktreePath")}: {job.worktreePath}
-                        </p>
-                        {job.status === "done" && (
-                          <pre className="whitespace-pre-wrap">{job.diffStat}</pre>
-                        )}
-                        {!(["pending", "queued", "running"] as string[]).includes(job.status) && (
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline" onClick={() => copyCommands(job)}>
-                              {t("agentJobs.pane.copyCommands")}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => void discard(job.jobId)}
-                            >
-                              {t("agentJobs.pane.discard")}
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                </SettingsPanelRow>
-              );
-            })}
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={!job.sessionId}
+                  title={!job.sessionId ? t("agentJobs.pane.noSession") : undefined}
+                  onClick={() => void openTerminal(job.jobId)}
+                >
+                  {t("agentJobs.pane.openTerminal")}
+                </Button>
+                {job.mode === "write" &&
+                  job.worktreeCreated &&
+                  job.worktreePath &&
+                  !job.discardedAt && (
+                    <div className="space-y-1 text-xs break-all">
+                      <p>
+                        {t("agentJobs.card.branch")}: {job.branch}
+                      </p>
+                      <p>
+                        {t("agentJobs.pane.worktreePath")}: {job.worktreePath}
+                      </p>
+                      {job.status === "done" && (
+                        <pre className="whitespace-pre-wrap">{job.diffStat}</pre>
+                      )}
+                      {!(["pending", "queued", "running"] as string[]).includes(job.status) && (
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => copyCommands(job)}>
+                            {t("agentJobs.pane.copyCommands")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void discard(job.jobId)}
+                          >
+                            {t("agentJobs.pane.discard")}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+              </SettingsPanelRow>
+            );
+          })}
         </SettingsPanel>
       </section>
     </IntegrationsPane>

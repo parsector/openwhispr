@@ -4989,7 +4989,13 @@
       "missingValue": "{{name}} の値を入力してください。",
       "reviewPrPrompt": "プルリクエスト {{pr}} をレビューし、発見事項とリスクをまとめてください。",
       "triageBugPrompt": "バグ報告 {{issue}} を調査し、考えられる原因と次の手順を示してください。",
-      "designDocPrompt": "{{topic}} の設計書を作成してください。"
+      "designDocPrompt": "{{topic}} の設計書を作成してください。",
+      "openPullRequests": "Open pull requests",
+      "fanOutApproval": "Approve {{name}} for these pull requests",
+      "showingFive": "Showing 5 of {{total}}",
+      "groupCount": "{{count}} of {{total}}",
+      "gh_missing": "GitHub CLI (gh) is unavailable.",
+      "parse_failed": "Could not list open pull requests."
     }
   }
 }

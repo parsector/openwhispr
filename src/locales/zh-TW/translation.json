@@ -4989,7 +4989,13 @@
       "missingValue": "請輸入 {{name}} 的值。",
       "reviewPrPrompt": "審查提取要求 {{pr}}，總結發現和風險。",
       "triageBugPrompt": "分析錯誤報告 {{issue}}，找出可能的原因與後續步驟。",
-      "designDocPrompt": "為 {{topic}} 草擬設計文件。"
+      "designDocPrompt": "為 {{topic}} 草擬設計文件。",
+      "openPullRequests": "Open pull requests",
+      "fanOutApproval": "Approve {{name}} for these pull requests",
+      "showingFive": "Showing 5 of {{total}}",
+      "groupCount": "{{count}} of {{total}}",
+      "gh_missing": "GitHub CLI (gh) is unavailable.",
+      "parse_failed": "Could not list open pull requests."
     }
   }
 }

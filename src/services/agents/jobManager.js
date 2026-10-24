@@ -7,6 +7,8 @@ const { safeModel } = require("./modelSafety");
 const { validSessionId } = require("./sessionId");
 const { attachedNotePrompt, appendResultToNote } = require("./noteContext");
 const { createWorktreeService, location } = require("./worktree");
+const { createOpenPullRequests } = require("./openPullRequests");
+const { resolvePresetPrompt } = require("./presetPlaceholders.mjs");
 const debugLogger = require("../../helpers/debugLogger");
 
 const EXPIRY_MS = 10 * 60 * 1000;
@@ -72,10 +74,13 @@ function createJobManager({
   clearIntervalImpl = clearInterval,
   pidFile = null,
   worktreeService = null,
+  enumerateOpenPullRequests = null,
 }) {
   pidFile ||= require("../../helpers/sidecarPidFile");
   worktreeService ||= createWorktreeService({ userData: path.dirname(path.dirname(file)) });
   const jobs = new Map();
+  const fanOuts = new Map();
+  enumerateOpenPullRequests ||= createOpenPullRequests({ resolver });
   const running = new Map();
   const preparingWorktrees = new Set();
   let queue = [];
@@ -194,7 +199,16 @@ function createJobManager({
       throw error;
     }
   }
-  async function prepareJob({ project, task, harness, model, mode, origin, resumeJobId, contextNoteId }) {
+  async function prepareJob({
+    project,
+    task,
+    harness,
+    model,
+    mode,
+    origin,
+    resumeJobId,
+    contextNoteId,
+  }) {
     const parent = resumeJobId === undefined ? null : jobs.get(resumeJobId);
     if (resumeJobId !== undefined && (!parent || !["done", "failed"].includes(parent.status)))
       throw new Error("unknown_job");
@@ -272,12 +286,19 @@ function createJobManager({
     if (contextNoteId !== undefined) {
       contextNote = databaseManager.getNote(contextNoteId);
       if (contextNote?.deleted_at) contextNote = null;
-      if (!contextNote) debugLogger.warn("Agent job context dropped", {
-        field: "contextNoteId", value: contextNoteId, reason: "note_missing",
-      });
+      if (!contextNote)
+        debugLogger.warn("Agent job context dropped", {
+          field: "contextNoteId",
+          value: contextNoteId,
+          reason: "note_missing",
+        });
     }
     const context = contextNote
-      ? attachedNotePrompt(task.trim(), contextNote.title, [contextNote.content, contextNote.enhanced_content].filter(Boolean).join("\n\n"))
+      ? attachedNotePrompt(
+          task.trim(),
+          contextNote.title,
+          [contextNote.content, contextNote.enhanced_content].filter(Boolean).join("\n\n")
+        )
       : null;
     const job = {
       jobId: crypto.randomUUID(),
@@ -290,8 +311,12 @@ function createJobManager({
       mode: selectedMode,
       model: model?.trim() || parent?.model || selected.model || null,
       prompt: context?.prompt ?? task.trim(),
-      ...(contextNote ? { contextNoteId, contextNoteTitle: contextNote.title, contextChars: context.contextChars } : {}),
-      ...(contextNoteId !== undefined && !contextNote ? { contextDropped: true, contextDropReason: "note_missing" } : {}),
+      ...(contextNote
+        ? { contextNoteId, contextNoteTitle: contextNote.title, contextChars: context.contextChars }
+        : {}),
+      ...(contextNoteId !== undefined && !contextNote
+        ? { contextDropped: true, contextDropReason: "note_missing" }
+        : {}),
       ...(safeOrigin ? { origin: safeOrigin } : {}),
       ...(origin !== undefined && !safeOrigin ? { originDropped: true } : {}),
       status: "pending",
@@ -531,10 +556,15 @@ function createJobManager({
     if (job.contextNoteId) {
       const note = databaseManager.getNote(job.contextNoteId);
       const space = note && databaseManager.getSpace?.(note.space_id);
-      const writable = note && !note.deleted_at &&
-        (!note.cloud_id || note.owner_user_id === databaseManager.activeAccountId ||
+      const writable =
+        note &&
+        !note.deleted_at &&
+        (!note.cloud_id ||
+          note.owner_user_id === databaseManager.activeAccountId ||
           space?.kind === "team") &&
-        (!space || space.kind !== "team" || !space.cloud_space_id ||
+        (!space ||
+          space.kind !== "team" ||
+          !space.cloud_space_id ||
           ["member", "admin"].includes(space.my_role));
       if (writable) {
         try {
@@ -545,7 +575,8 @@ function createJobManager({
           }
         } catch (error) {
           debugLogger.warn("Agent job context append unavailable", {
-            field: "contextNoteId", value: job.contextNoteId,
+            field: "contextNoteId",
+            value: job.contextNoteId,
             reason: redactOutput(error.message).slice(0, 128),
           });
         }
@@ -588,10 +619,15 @@ function createJobManager({
       throw new Error("Invalid Cursor prompt");
     if (prompt !== undefined) job.prompt = prompt.trim();
     if (contextNoteId !== undefined) {
-      if (!Number.isSafeInteger(contextNoteId) || contextNoteId <= 0) throw invalid("contextNoteId");
+      if (!Number.isSafeInteger(contextNoteId) || contextNoteId <= 0)
+        throw invalid("contextNoteId");
       const note = databaseManager.getNote(contextNoteId);
       if (note && !note.deleted_at) {
-        const context = attachedNotePrompt(job.prompt, note.title, [note.content, note.enhanced_content].filter(Boolean).join("\n\n"));
+        const context = attachedNotePrompt(
+          job.prompt,
+          note.title,
+          [note.content, note.enhanced_content].filter(Boolean).join("\n\n")
+        );
         job.prompt = context.prompt;
         job.contextNoteId = contextNoteId;
         job.contextNoteTitle = note.title;
@@ -602,7 +638,9 @@ function createJobManager({
         job.contextDropped = true;
         job.contextDropReason = "note_missing";
         debugLogger.warn("Agent job context dropped", {
-          field: "contextNoteId", value: contextNoteId, reason: "note_missing",
+          field: "contextNoteId",
+          value: contextNoteId,
+          reason: "note_missing",
         });
       }
     }
@@ -634,6 +672,51 @@ function createJobManager({
     for (const id of [...running.keys()]) cancel(id);
     clearIntervalImpl(timer);
   }
+  async function enumerateFanOut(preset, values = {}) {
+    if (preset?.fanOut !== "open-pull-requests" || !preset.prompt.includes("{{pr}}"))
+      throw new Error("Invalid fan-out preset");
+    const project = projectStore.read().projects.find((item) => item.name === preset.project);
+    if (!project || !existingDirectory(project.folder)) throw new Error("project_missing");
+    // Check all other values before discovery. The PR value is supplied by the enumerator.
+    resolvePresetPrompt(preset.prompt, { ...values, pr: "1" });
+    const result = await enumerateOpenPullRequests(project.folder);
+    if (!result.ok) return result;
+    const fanOutId = crypto.randomUUID();
+    const targets = result.targets.slice(0, 5);
+    fanOuts.set(fanOutId, { preset, values, targets, createdAt: now() });
+    return { ok: true, fanOutId, targets, total: result.total };
+  }
+  async function approveFanOut(fanOutId) {
+    const entry = fanOuts.get(fanOutId);
+    if (!entry || now() - entry.createdAt >= EXPIRY_MS) throw new Error("fan_out_expired");
+    fanOuts.delete(fanOutId);
+    const { preset, values, targets } = entry;
+    const created = [];
+    for (const [index, target] of targets.entries()) {
+      const job = await prepare({
+        project: preset.project,
+        task: resolvePresetPrompt(preset.prompt, { ...values, pr: String(target.number) }),
+        harness: preset.harness,
+        mode: preset.mode,
+        ...(preset.model ? { model: preset.model } : {}),
+      });
+      const stored = jobs.get(job.jobId);
+      Object.assign(stored, {
+        fanOutId,
+        fanOutIndex: index + 1,
+        fanOutTotal: targets.length,
+        fanOutPresetName: preset.name,
+      });
+      update(stored);
+      created.push(job.jobId);
+    }
+    for (const id of created) await approve(id);
+    return created.map(get);
+  }
+  function cancelFanOut(fanOutId) {
+    fanOuts.delete(fanOutId);
+    return { ok: true };
+  }
   async function discard(jobId) {
     const job = jobs.get(jobId);
     if (!job || job.mode !== "write") throw new Error("Unknown write job");
@@ -657,6 +740,18 @@ function createJobManager({
     job.discardedAt = now();
     return update(job);
   }
-  return { prepare, approve, cancel, discard, get, list, stopAll, checkStalls };
+  return {
+    prepare,
+    approve,
+    cancel,
+    discard,
+    get,
+    list,
+    stopAll,
+    checkStalls,
+    enumerateFanOut,
+    approveFanOut,
+    cancelFanOut,
+  };
 }
 module.exports = { createJobManager, EXPIRY_MS, STALL_MS };
