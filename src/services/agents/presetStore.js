@@ -14,13 +14,15 @@ const fields = new Set([
   "mode",
   "prompt",
   "description",
+  "fanOut",
 ]);
+const requiredFields = [...fields].filter((key) => key !== "fanOut");
 
 function validatePreset(preset, projects) {
   if (
     !isObject(preset) ||
     Object.keys(preset).some((key) => !fields.has(key)) ||
-    [...fields].some((key) => !(key in preset))
+    requiredFields.some((key) => !(key in preset))
   )
     throw new Error("Invalid preset fields");
   if (typeof preset.id !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(preset.id))
@@ -38,7 +40,12 @@ function validatePreset(preset, projects) {
   if (preset.harness !== project.defaultHarness || preset.mode !== project.mode)
     throw new Error("Preset harness or mode does not match project");
   if (preset.model !== null && !safeModel(preset.model)) throw new Error("Invalid preset model");
-  extractPlaceholders(preset.prompt);
+  const placeholders = extractPlaceholders(preset.prompt);
+  if (
+    preset.fanOut !== undefined &&
+    (preset.fanOut !== "open-pull-requests" || !placeholders.includes("pr"))
+  )
+    throw new Error("Invalid preset fanOut");
   return {
     id: preset.id,
     name: preset.name,
@@ -48,6 +55,7 @@ function validatePreset(preset, projects) {
     mode: preset.mode,
     prompt: preset.prompt,
     description: preset.description,
+    ...(preset.fanOut ? { fanOut: preset.fanOut } : {}),
   };
 }
 
