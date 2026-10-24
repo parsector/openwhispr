@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { redactOutput } = require("./redactOutput");
+const { createWorktreeService, location } = require("./worktree");
 
 const EXPIRY_MS = 10 * 60 * 1000;
 const STALL_MS = 20 * 60 * 1000;
@@ -18,10 +19,13 @@ function createJobManager({
   setIntervalImpl = setInterval,
   clearIntervalImpl = clearInterval,
   pidFile = null,
+  worktreeService = null,
 }) {
   pidFile ||= require("../../helpers/sidecarPidFile");
+  worktreeService ||= createWorktreeService({ userData: path.dirname(path.dirname(file)) });
   const jobs = new Map();
   const running = new Map();
+  const preparingWorktrees = new Set();
   let queue = [];
   function persist() {
     const dir = path.dirname(file);
@@ -49,6 +53,7 @@ function createJobManager({
         job.status = "failed";
         job.reason = "interrupted";
         job.endedAt = now();
+        job.finishedAt = job.endedAt;
       }
       jobs.set(job.jobId, job);
     }
@@ -56,6 +61,9 @@ function createJobManager({
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
+  void worktreeService.sweep([...jobs.values()], now()).then(persist).catch((error) =>
+    console.warn("Agent worktree sweep failed", redactOutput(error.message))
+  );
   function update(job) {
     persist();
     broadcast("agent-job-updated", { ...job });
@@ -89,6 +97,7 @@ function createJobManager({
     job.status = "failed";
     job.reason = reason;
     job.endedAt = now();
+    job.finishedAt = job.endedAt;
     update(job);
   }
   function lastError(stderr) {
@@ -132,7 +141,7 @@ function createJobManager({
     if (
       selectedMode !== selected.mode ||
       (selectedHarness === "claude"
-        ? selectedMode !== "read-only"
+        ? !["read-only", "write"].includes(selectedMode)
         : !["plan", "ask"].includes(selectedMode))
     )
       throw new Error("Mode does not match project");
@@ -158,10 +167,12 @@ function createJobManager({
       expiresAt: now() + EXPIRY_MS,
       startedAt: null,
       endedAt: null,
+      finishedAt: null,
       lastEventAt: null,
       stalled: false,
       position: null,
     };
+    if (selectedMode === "write") Object.assign(job, location(path.dirname(path.dirname(file)), selected.name, job.jobId), { worktreeCreated: false });
     jobs.set(job.jobId, job);
     update(job);
     return {
@@ -171,6 +182,7 @@ function createJobManager({
       mode: job.mode,
       model: job.model,
       prompt: job.prompt,
+      branch: job.branch,
     };
   }
   async function launch(job) {
@@ -200,13 +212,26 @@ function createJobManager({
       return;
     }
     try {
+      if (job.mode === "write") {
+        preparingWorktrees.add(job.jobId);
+        try { await worktreeService.create(job); job.worktreeCreated = true; update(job); }
+        catch (error) {
+          job.worktreeCreated = fs.existsSync(job.worktreePath);
+          job.lastError = redactOutput(error.message).trim().slice(0, 500);
+          fail(job, "worktree_failed");
+          drain();
+          return;
+        } finally { preparingWorktrees.delete(job.jobId); }
+      }
+      if (job.status === "cancelled") { drain(); return; }
       const makeRunner =
         runnerFactories?.[job.harness] || (job.harness === "claude" ? runnerFactory : null);
       if (!makeRunner) throw new Error("Harness unavailable");
       const runner = makeRunner(resolved.path).start({
-        folder: job.project.folder,
+        folder: job.mode === "write" ? job.worktreePath : job.project.folder,
         prompt: job.prompt,
         model: job.model,
+        ...(job.mode === "write" ? { mode: "write", branch: job.branch } : {}),
         ...(job.harness === "cursor-agent" ? { mode: job.mode } : {}),
         onEvent(event) {
           if (job.status !== "running") return;
@@ -228,20 +253,29 @@ function createJobManager({
       running.set(job.jobId, runner);
       pidFile.write(`agent-job-${job.jobId}`, runner.pid);
       update(job);
-      runner.done.then((outcome) => {
+      runner.done.then(async (outcome) => {
         running.delete(job.jobId);
         pidFile.clear(`agent-job-${job.jobId}`);
+        let collectionError = null;
+        if (job.mode === "write" && job.worktreePath) {
+          try { Object.assign(job, await worktreeService.collect(job)); }
+          catch (error) { collectionError = error; job.lastError = redactOutput(error.message).trim().slice(0, 500); }
+        }
         if (job.status === "cancelled") {
           job.endedAt = now();
+          job.finishedAt = job.endedAt;
           update(job);
           drain();
           return;
         }
-        if (outcome.exitCode === 0 && outcome.resultEvent && !outcome.resultEvent.is_error) {
+        if (collectionError) {
+          fail(job, "worktree_failed");
+        } else if (outcome.exitCode === 0 && outcome.resultEvent && !outcome.resultEvent.is_error) {
           try {
             job.noteId = saveNote(job);
             job.status = "done";
             job.endedAt = now();
+            job.finishedAt = job.endedAt;
             update(job);
           } catch (error) {
             fail(job, error.message);
@@ -276,6 +310,7 @@ function createJobManager({
     }
     const content = [
       job.result || "",
+      ...(job.mode === "write" ? ["Changes", `Branch: ${job.branch}`, `Worktree path: ${job.worktreePath}`, job.diffStat || "(no tracked changes)"] : []),
       `Project: ${job.project.name}`,
       `Duration: ${job.durationMs ?? "unknown"} ms`,
       `Cost estimate: ${job.costEstimate ?? "unknown"} USD`,
@@ -340,6 +375,7 @@ function createJobManager({
     if (job.status === "running") running.get(jobId)?.cancel();
     job.status = "cancelled";
     job.endedAt = now();
+    job.finishedAt = job.endedAt;
     update(job);
     return get(jobId);
   }
@@ -347,6 +383,15 @@ function createJobManager({
     for (const id of [...running.keys()]) cancel(id);
     clearIntervalImpl(timer);
   }
-  return { prepare, approve, cancel, get, list, stopAll, checkStalls };
+  async function discard(jobId) {
+    const job = jobs.get(jobId);
+    if (!job || job.mode !== "write") throw new Error("Unknown write job");
+    if (["pending", "queued", "running"].includes(job.status) || running.has(jobId) || preparingWorktrees.has(jobId)) throw new Error("Job is still running");
+    if (job.discardedAt) return get(jobId);
+    await worktreeService.discard(job);
+    job.discardedAt = now();
+    return update(job);
+  }
+  return { prepare, approve, cancel, discard, get, list, stopAll, checkStalls };
 }
 module.exports = { createJobManager, EXPIRY_MS, STALL_MS };

@@ -49,6 +49,8 @@ test("project mode is fixed for Claude and limited to Cursor plan or ask", (t) =
   const { file, project } = setup(t);
   const store = createProjectStore(file);
   assert.throws(() => store.save({ ...project, mode: "plan" }), /Invalid project mode/);
+  assert.equal(store.save({ ...project, mode: "write" }).projects[0].mode, "write");
+  assert.throws(() => store.save({ ...project, defaultHarness: "cursor-agent", mode: "write" }), /requires Claude/);
   for (const mode of ["plan", "ask"])
     assert.equal(
       store.save({ ...project, defaultHarness: "cursor-agent", mode }).projects[0].mode,

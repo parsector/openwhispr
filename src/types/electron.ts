@@ -1342,7 +1342,7 @@ export interface AgentJob {
   jobId: string;
   project: { name: string; folder: string };
   harness: string;
-  mode: "read-only" | "plan" | "ask";
+  mode: "read-only" | "write" | "plan" | "ask";
   model: string | null;
   prompt: string;
   status: "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
@@ -1357,8 +1357,15 @@ export interface AgentJob {
   expiresAt: number;
   startedAt: number | null;
   endedAt: number | null;
+  finishedAt?: number | null;
   stalled: boolean;
   position: number | null;
+  branch?: string;
+  worktreePath?: string;
+  worktreeCreated?: boolean;
+  diffStat?: string;
+  changedFileCount?: number;
+  discardedAt?: number;
 }
 
 declare global {
@@ -1369,7 +1376,7 @@ declare global {
           name: string;
           folder: string;
           defaultHarness: "claude" | "cursor-agent";
-          mode: "read-only" | "plan" | "ask";
+          mode: "read-only" | "write" | "plan" | "ask";
           model: string | null;
         }>;
       }>;
@@ -1377,7 +1384,7 @@ declare global {
         name: string;
         folder: string;
         defaultHarness: "claude" | "cursor-agent";
-        mode: "read-only" | "plan" | "ask";
+        mode: "read-only" | "write" | "plan" | "ask";
         model: string | null;
       }) => Promise<unknown>;
       projectsRemove: (name: string) => Promise<unknown>;
@@ -1397,18 +1404,20 @@ declare global {
         project: string;
         task: string;
         harness?: "claude" | "cursor-agent";
-        mode?: "read-only" | "plan" | "ask";
+        mode?: "read-only" | "write" | "plan" | "ask";
         model?: string;
       }) => Promise<{
         jobId: string;
         project: { name: string; folder: string };
         harness: string;
-        mode: "read-only" | "plan" | "ask";
+        mode: "read-only" | "write" | "plan" | "ask";
         model: string | null;
         prompt: string;
+        branch?: string;
       }>;
       approve: (id: string, input?: { prompt?: string }) => Promise<AgentJob>;
       cancel: (id: string) => Promise<AgentJob>;
+      discard: (id: string) => Promise<AgentJob>;
       list: () => Promise<AgentJob[]>;
       get: (id: string) => Promise<AgentJob | null>;
       onUpdated: (callback: (job: AgentJob) => void) => () => void;

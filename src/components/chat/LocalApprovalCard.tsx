@@ -27,10 +27,15 @@ export function LocalApprovalCard({ entry }: { entry: LocalApprovalEntry }) {
     >
       <p className="text-sm font-medium">{entry.summary}</p>
       <p className="text-xs text-muted-foreground">
-        {entry.mode &&
+        {entry.mode && entry.mode !== "write" &&
           `${t(entry.mode === "read-only" ? "agentJobs.pane.readOnly" : `agentJobs.mode.${entry.mode}`)} · `}
-        {t(guaranteeKey(entry.harness))}
+        {t(guaranteeKey(entry.harness, entry.mode))}
       </p>
+      {entry.mode === "write" && entry.branch && (
+        <p className="text-xs text-muted-foreground break-all">
+          {t("agentJobs.card.branch")}: {entry.branch}
+        </p>
+      )}
       <p className="text-xs text-muted-foreground" role="status">
         {t(`agentJobs.card.${entry.state}`)}
       </p>

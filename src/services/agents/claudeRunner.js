@@ -5,8 +5,10 @@ const { redactOutput } = require("./redactOutput");
 
 const ALLOWED_TOOLS =
   "Read,Grep,Glob,WebFetch,WebSearch,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr checks:*)";
+const WRITE_TOOLS = "Read,Grep,Glob,Edit,Write,NotebookEdit,Bash(git status:*),Bash(git diff:*),Bash(git log:*)";
+const DENIED_TOOLS = ["Bash(npm *)", "Bash(npx *)", "Bash(yarn *)", "Bash(pnpm *)", "Bash(git commit*)", "Bash(git push*)", "Bash(rm -rf *)"];
 function createClaudeRunner({ cliPath, spawnImpl = spawn } = {}) {
-  function start({ folder, prompt, model, onEvent = () => {} }) {
+  function start({ folder, prompt, model, mode = "read-only", branch, onEvent = () => {} }) {
     if (typeof cliPath !== "string" || !require("node:path").isAbsolute(cliPath))
       throw new Error("Claude CLI not resolved");
     const args = [
@@ -16,10 +18,16 @@ function createClaudeRunner({ cliPath, spawnImpl = spawn } = {}) {
       "stream-json",
       "--verbose",
       "--permission-mode",
-      "dontAsk",
+      mode === "write" ? "acceptEdits" : "dontAsk",
       "--allowedTools",
-      ALLOWED_TOOLS,
+      mode === "write" ? WRITE_TOOLS : ALLOWED_TOOLS,
     ];
+    if (mode === "write") {
+      if (!branch || !/^agent\/[a-z0-9-]+$/.test(branch)) throw new Error("Invalid worktree branch");
+      args.push("--disallowedTools", ...DENIED_TOOLS,
+        "--append-system-prompt",
+        `You are in an isolated git worktree on branch ${branch}. Make the requested edits and stop. Do not commit or push. Do not run package managers or test suites. Do not create files outside this repository.`);
+    } else if (mode !== "read-only") throw new Error("Invalid Claude mode");
     if (model) args.push("--model", model);
     const child = spawnImpl(cliPath, args, {
       cwd: folder,
@@ -80,4 +88,4 @@ function createClaudeRunner({ cliPath, spawnImpl = spawn } = {}) {
   }
   return { start };
 }
-module.exports = { ALLOWED_TOOLS, createClaudeRunner };
+module.exports = { ALLOWED_TOOLS, WRITE_TOOLS, DENIED_TOOLS, createClaudeRunner };
