@@ -135,7 +135,7 @@ function createCliResolver({ configuredPaths = {}, run = exec } = {}) {
     return value;
   }
   async function test(harness) {
-    if (!["claude", "cursor-agent"].includes(harness)) throw new Error("Invalid harness");
+    if (!["claude", "cursor-agent", "gh"].includes(harness)) throw new Error("Invalid harness");
     let lastAttempt = null;
     async function verify(candidate) {
       if (typeof candidate !== "string" || !path.isAbsolute(candidate)) return null;

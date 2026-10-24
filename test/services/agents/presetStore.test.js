@@ -80,6 +80,20 @@ test("validates every field against the project allowlist and disallows mode smu
   assert.equal(store.read().presets.length, 1);
 });
 
+test("fan-out requires the known enumerator and a pr placeholder", (t) => {
+  const { store, preset } = setup(t);
+  assert.equal(
+    store.save({ ...preset, fanOut: "open-pull-requests" }).presets[0].fanOut,
+    "open-pull-requests"
+  );
+  assert.throws(() => store.save({ ...preset, fanOut: "issues" }), /fanOut/);
+  assert.throws(
+    () => store.save({ ...preset, prompt: "Review this", fanOut: "open-pull-requests" }),
+    /fanOut/
+  );
+  assert.equal(store.save(preset).presets[0].fanOut, undefined);
+});
+
 test("writes atomically, cleans a failed temp write, and recovers a malformed file", (t) => {
   const { file, store, preset, projectStore } = setup(t);
   store.save(preset);
