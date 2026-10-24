@@ -78,6 +78,9 @@ contextBridge.exposeInMainWorld("mcpClient", {
   cancel: (requestId) => ipcRenderer.invoke("mcp-client-cancel", requestId),
 });
 contextBridge.exposeInMainWorld("agentJobs", {
+  presetsList: () => ipcRenderer.invoke("agent-presets-list"),
+  presetsSave: (preset) => ipcRenderer.invoke("agent-presets-save", preset),
+  presetsRemove: (id) => ipcRenderer.invoke("agent-presets-remove", id),
   projectsList: () => ipcRenderer.invoke("agent-projects-list"),
   projectsSave: (project) => ipcRenderer.invoke("agent-projects-save", project),
   projectsRemove: (name) => ipcRenderer.invoke("agent-projects-remove", name),

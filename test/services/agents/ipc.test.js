@@ -66,3 +66,23 @@ test("discard IPC delegates a validated job id", async () => {
   assert.equal(discarded, "job-1");
   assert.throws(() => handlers.get("agent-job-discard")(null, "../bad"), /Invalid name/);
 });
+
+test("preset IPC lists, saves, and removes through the validated store", () => {
+  const handlers = new Map();
+  const calls = [];
+  registerAgentIpc({
+    ipcMain: { handle: (name, handler) => handlers.set(name, handler) },
+    projectStore: {}, resolver: {}, manager: {},
+    presetStore: {
+      read: () => ({ presets: [] }),
+      save: (preset) => { calls.push(["save", preset]); return { presets: [preset] }; },
+      remove: (id) => { calls.push(["remove", id]); return { presets: [] }; },
+    },
+  });
+  const preset = { id: "preset-1" };
+  assert.deepEqual(handlers.get("agent-presets-list")(), { presets: [] });
+  assert.deepEqual(handlers.get("agent-presets-save")(null, preset), { presets: [preset] });
+  assert.deepEqual(handlers.get("agent-presets-remove")(null, "preset-1"), { presets: [] });
+  assert.deepEqual(calls, [["save", preset], ["remove", "preset-1"]]);
+  assert.throws(() => handlers.get("agent-presets-remove")(null, "../bad"), /Invalid name/);
+});

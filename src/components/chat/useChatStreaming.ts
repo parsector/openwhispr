@@ -460,9 +460,17 @@ export function useChatStreaming({
                 .then((value) => value.projects)
                 .catch(() => [])) ?? [])
             : [];
-          const projectsKey = JSON.stringify(
-            agentProjects.map(({ name, defaultHarness, model }) => [name, defaultHarness, model])
-          );
+          const agentPresets =
+            agentAllowed && agentProjects.length
+              ? ((await window.agentJobs
+                  ?.presetsList?.()
+                  .then((value) => value.presets)
+                  .catch(() => [])) ?? [])
+              : [];
+          const projectsKey = JSON.stringify([
+            agentProjects.map(({ name, defaultHarness, model }) => [name, defaultHarness, model]),
+            agentPresets,
+          ]);
           const mcpBudget =
             window.mcpClient || agentProjects.length > 0
               ? await resolveMcpResultBudget(
@@ -502,6 +510,7 @@ export function useChatStreaming({
               keepNotesUnchanged,
               mcpTools: mcp.tools,
               agentProjects,
+              agentPresets,
               agentAllowed,
             });
             toolRegistryRef.current = { key: cacheKey, registry };
