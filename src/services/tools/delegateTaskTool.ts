@@ -43,6 +43,7 @@ export function createDelegateTaskTool(projects: AgentProject[]): ToolDefinition
         const job = await window.agentJobs.prepare({
           project: project.name,
           task: args.task,
+          ...(context.origin ? { origin: context.origin } : {}),
           ...(args.harness === undefined
             ? {}
             : { harness: args.harness as "claude" | "cursor-agent" }),
