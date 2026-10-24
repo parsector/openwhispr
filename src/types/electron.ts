@@ -1358,6 +1358,12 @@ export interface AgentJob {
   steps: Array<{ kind: string; [key: string]: unknown }>;
   result: string | null;
   noteId?: number;
+  contextNoteId?: number;
+  contextNoteTitle?: string;
+  contextChars?: number;
+  contextDropped?: boolean;
+  contextDropReason?: string;
+  contextAppendFallback?: boolean;
   reason: string | null;
   lastError?: string | null;
   debug?: { lastError?: string | null; reason?: string };
@@ -1459,6 +1465,7 @@ declare global {
         harness?: "claude" | "cursor-agent";
         mode?: "read-only" | "write" | "plan" | "ask";
         model?: string;
+        contextNoteId?: number;
         origin?: Omit<NonNullable<AgentJob["origin"]>, "conversationId"> & {
           conversationId: string | number;
         };
@@ -1471,8 +1478,13 @@ declare global {
         prompt: string;
         authWarning?: boolean;
         branch?: string;
+        contextNoteId?: number;
+        contextNoteTitle?: string;
+        contextChars?: number;
+        contextDropped?: boolean;
+        contextDropReason?: string;
       }>;
-      approve: (id: string, input?: { prompt?: string }) => Promise<AgentJob>;
+      approve: (id: string, input?: { prompt?: string; contextNoteId?: number }) => Promise<AgentJob>;
       cancel: (id: string) => Promise<AgentJob>;
       discard: (id: string) => Promise<AgentJob>;
       openTerminal: (input: { jobId: string }) => Promise<{ ok: true }>;

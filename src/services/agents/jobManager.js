@@ -5,6 +5,7 @@ const { redactOutput } = require("./redactOutput");
 const { jobPayload } = require("./debugPayload");
 const { safeModel } = require("./modelSafety");
 const { validSessionId } = require("./sessionId");
+const { attachedNotePrompt, appendResultToNote } = require("./noteContext");
 const { createWorktreeService, location } = require("./worktree");
 const debugLogger = require("../../helpers/debugLogger");
 
@@ -193,7 +194,7 @@ function createJobManager({
       throw error;
     }
   }
-  async function prepareJob({ project, task, harness, model, mode, origin, resumeJobId }) {
+  async function prepareJob({ project, task, harness, model, mode, origin, resumeJobId, contextNoteId }) {
     const parent = resumeJobId === undefined ? null : jobs.get(resumeJobId);
     if (resumeJobId !== undefined && (!parent || !["done", "failed"].includes(parent.status)))
       throw new Error("unknown_job");
@@ -229,6 +230,8 @@ function createJobManager({
     mode = parent?.mode ?? mode;
     if (typeof project !== "string" || !project.trim()) throw invalid("project");
     if (typeof task !== "string" || !task.trim() || task.length > 100_000) throw invalid("task");
+    if (contextNoteId !== undefined && (!Number.isSafeInteger(contextNoteId) || contextNoteId <= 0))
+      throw invalid("contextNoteId");
     if (harness !== undefined && !["claude", "cursor-agent"].includes(harness))
       throw invalid("harness");
     if (model !== undefined && !safeModel(model)) throw invalid("model");
@@ -265,6 +268,17 @@ function createJobManager({
     const auth = await resolver.authStatus(selectedHarness).catch(() => ({ state: "unknown" }));
     const resolved = await resolver.resolve(selectedHarness);
     if (!resolved.ok) throw new Error(resolved.error);
+    let contextNote = null;
+    if (contextNoteId !== undefined) {
+      contextNote = databaseManager.getNote(contextNoteId);
+      if (contextNote?.deleted_at) contextNote = null;
+      if (!contextNote) debugLogger.warn("Agent job context dropped", {
+        field: "contextNoteId", value: contextNoteId, reason: "note_missing",
+      });
+    }
+    const context = contextNote
+      ? attachedNotePrompt(task.trim(), contextNote.title, [contextNote.content, contextNote.enhanced_content].filter(Boolean).join("\n\n"))
+      : null;
     const job = {
       jobId: crypto.randomUUID(),
       project: {
@@ -275,7 +289,9 @@ function createJobManager({
       harness: selectedHarness,
       mode: selectedMode,
       model: model?.trim() || parent?.model || selected.model || null,
-      prompt: task.trim(),
+      prompt: context?.prompt ?? task.trim(),
+      ...(contextNote ? { contextNoteId, contextNoteTitle: contextNote.title, contextChars: context.contextChars } : {}),
+      ...(contextNoteId !== undefined && !contextNote ? { contextDropped: true, contextDropReason: "note_missing" } : {}),
       ...(safeOrigin ? { origin: safeOrigin } : {}),
       ...(origin !== undefined && !safeOrigin ? { originDropped: true } : {}),
       status: "pending",
@@ -317,6 +333,11 @@ function createJobManager({
       prompt: job.prompt,
       authWarning: job.authWarning,
       branch: job.branch,
+      contextNoteId: job.contextNoteId,
+      contextNoteTitle: job.contextNoteTitle,
+      contextChars: job.contextChars,
+      contextDropped: job.contextDropped,
+      contextDropReason: job.contextDropReason,
     };
   }
   async function launch(job) {
@@ -431,7 +452,7 @@ function createJobManager({
           fail(job, "worktree_failed");
         } else if (outcome.exitCode === 0 && outcome.resultEvent && !outcome.resultEvent.is_error) {
           try {
-            job.noteId = saveNote(job);
+            job.noteId = saveResult(job);
             job.status = "done";
             job.endedAt = now();
             job.finishedAt = job.endedAt;
@@ -506,6 +527,33 @@ function createJobManager({
     broadcast("note-added", saved.note);
     return saved.note.id;
   }
+  function saveResult(job) {
+    if (job.contextNoteId) {
+      const note = databaseManager.getNote(job.contextNoteId);
+      const space = note && databaseManager.getSpace?.(note.space_id);
+      const writable = note && !note.deleted_at &&
+        (!note.cloud_id || note.owner_user_id === databaseManager.activeAccountId ||
+          space?.kind === "team") &&
+        (!space || space.kind !== "team" || !space.cloud_space_id ||
+          ["member", "admin"].includes(space.my_role));
+      if (writable) {
+        try {
+          const saved = appendResultToNote(databaseManager, note, job, now());
+          if (saved?.success) {
+            if (!saved.alreadyAppended) broadcast("note-updated", saved.note);
+            return note.id;
+          }
+        } catch (error) {
+          debugLogger.warn("Agent job context append unavailable", {
+            field: "contextNoteId", value: job.contextNoteId,
+            reason: redactOutput(error.message).slice(0, 128),
+          });
+        }
+      }
+      job.contextAppendFallback = true;
+    }
+    return saveNote(job);
+  }
   function drain() {
     while (activeCount() < 2 && queue.length) {
       const id = queue.shift();
@@ -521,7 +569,7 @@ function createJobManager({
       throw error;
     }
   }
-  async function approveJob(jobId, { prompt } = {}) {
+  async function approveJob(jobId, { prompt, contextNoteId } = {}) {
     if (
       typeof jobId !== "string" ||
       (prompt !== undefined &&
@@ -539,6 +587,25 @@ function createJobManager({
     if (job.harness === "cursor-agent" && prompt?.trimStart().startsWith("-"))
       throw new Error("Invalid Cursor prompt");
     if (prompt !== undefined) job.prompt = prompt.trim();
+    if (contextNoteId !== undefined) {
+      if (!Number.isSafeInteger(contextNoteId) || contextNoteId <= 0) throw invalid("contextNoteId");
+      const note = databaseManager.getNote(contextNoteId);
+      if (note && !note.deleted_at) {
+        const context = attachedNotePrompt(job.prompt, note.title, [note.content, note.enhanced_content].filter(Boolean).join("\n\n"));
+        job.prompt = context.prompt;
+        job.contextNoteId = contextNoteId;
+        job.contextNoteTitle = note.title;
+        job.contextChars = context.contextChars;
+        delete job.contextDropped;
+        delete job.contextDropReason;
+      } else {
+        job.contextDropped = true;
+        job.contextDropReason = "note_missing";
+        debugLogger.warn("Agent job context dropped", {
+          field: "contextNoteId", value: contextNoteId, reason: "note_missing",
+        });
+      }
+    }
     if (activeCount() >= 2 || queue.length) {
       job.status = "queued";
       queue.push(jobId);
