@@ -43,9 +43,7 @@ function harnessPayload(result, auth) {
 
 function jobPayload(job) {
   if (!job) return job;
-  const { lastError } = job;
   const safe = { ...job };
-  delete safe.lastError;
   delete safe.debug;
   const humanReasons = new Set([
     "agent_disallowed",
@@ -65,9 +63,6 @@ function jobPayload(job) {
   if (typeof safe.reason === "string" && !humanReasons.has(safe.reason)) {
     safe.reason = "command_failed";
     if (debugLogger.isDebugEnabled()) safe.debug = { reason: job.reason };
-  }
-  if (debugLogger.isDebugEnabled() && lastError) {
-    safe.debug = { ...safe.debug, lastError };
   }
   return safe;
 }

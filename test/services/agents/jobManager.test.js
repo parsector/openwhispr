@@ -142,14 +142,18 @@ test("failed job stores and broadcasts the redacted last stderr line", async (t)
   await until(() => manager.get(jobId).status === "failed");
   assert.equal(manager.get(jobId).lastError, "Bearer <REDACTED> <REDACTED> <REDACTED>");
   assert.equal(events.at(-1).channel, "agent-job-updated");
-  assert.equal(events.at(-1).job.lastError, undefined);
+  assert.equal(events.at(-1).job.lastError, "Bearer <REDACTED> <REDACTED> <REDACTED>");
   assert.equal(events.at(-1).job.debug, undefined);
+  assert.doesNotMatch(
+    JSON.stringify(events.at(-1).job),
+    /argv|stdoutSnippet|stderrSnippet|configDirectory|textProbe|email/
+  );
   const original = debugLogger.isDebugEnabled;
   debugLogger.isDebugEnabled = () => true;
   try {
     manager.checkStalls();
     const { jobPayload } = require("../../../src/services/agents/debugPayload");
-    assert.equal(jobPayload(manager.get(jobId)).debug.lastError, manager.get(jobId).lastError);
+    assert.equal(jobPayload(manager.get(jobId)).lastError, manager.get(jobId).lastError);
   } finally {
     debugLogger.isDebugEnabled = original;
   }
