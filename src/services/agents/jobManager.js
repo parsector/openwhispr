@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const { redactOutput } = require("./redactOutput");
 
 const EXPIRY_MS = 10 * 60 * 1000;
 const STALL_MS = 20 * 60 * 1000;
@@ -88,6 +89,12 @@ function createJobManager({
     job.endedAt = now();
     update(job);
   }
+  function lastError(stderr) {
+    const lines = redactOutput(stderr)
+      .split(/\r?\n/)
+      .map((line) => line.trim());
+    return lines.filter(Boolean).at(-1)?.slice(0, 500) || null;
+  }
   const activeCount = () => [...jobs.values()].filter((job) => job.status === "running").length;
   const projectStillAllowed = (job) =>
     projectStore
@@ -115,7 +122,8 @@ function createJobManager({
     if (!selected) throw new Error("Unknown project");
     const selectedHarness = harness || selected.defaultHarness;
     if (selectedHarness !== "claude") throw new Error("Harness unavailable in slice A");
-    if ((await resolver.authStatus()) !== "authenticated") throw new Error("not_authenticated");
+    if ((await resolver.authStatus("claude")).state !== "authenticated")
+      throw new Error("not_authenticated");
     const resolved = await resolver.resolve("claude");
     if (!resolved.ok) throw new Error(resolved.error);
     const job = {
@@ -128,6 +136,7 @@ function createJobManager({
       steps: [],
       result: null,
       reason: null,
+      lastError: null,
       costEstimate: null,
       sessionId: null,
       createdAt: now(),
@@ -159,7 +168,7 @@ function createJobManager({
       drain();
       return;
     }
-    if ((await resolver.authStatus()) !== "authenticated") {
+    if ((await resolver.authStatus("claude")).state !== "authenticated") {
       if (job.status === "running") fail(job, "not_authenticated");
       drain();
       return;
@@ -217,7 +226,8 @@ function createJobManager({
           } catch (error) {
             fail(job, error.message);
           }
-        } else
+        } else {
+          job.lastError = lastError(outcome.stderr);
           fail(
             job,
             outcome.error ||
@@ -225,6 +235,7 @@ function createJobManager({
                 ? "result_error"
                 : `exit_${outcome.exitCode ?? outcome.signal ?? "unknown"}`)
           );
+        }
         drain();
       });
     } catch (error) {

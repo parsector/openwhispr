@@ -37,8 +37,32 @@ export function elapsedTime(
 
 export const stallTextKey = "agentJobs.pane.stallWarning";
 
-export function authStateKey(state: "authenticated" | "not_authenticated" | "unknown"): string {
-  return `agentJobs.pane.auth.${state}`;
+export function authStateKey(
+  state: "authenticated" | "not_authenticated" | "unknown",
+  method: string | null = null,
+  harness: "claude" | "cursor-agent" = "claude"
+): string {
+  if (state === "not_authenticated" && harness === "cursor-agent")
+    return "agentJobs.pane.auth.cursorNotAuthenticated";
+  if (state !== "authenticated") return `agentJobs.pane.auth.${state}`;
+  if (method === "claude.ai") return "agentJobs.pane.auth.subscription";
+  if (method === "api_key" || method === "api_key_helper") return "agentJobs.pane.auth.apiKey";
+  if (method === "oauth_token") return "agentJobs.pane.auth.oauthToken";
+  return method && method !== "third_party"
+    ? "agentJobs.pane.auth.otherMethod"
+    : "agentJobs.pane.auth.authenticated";
+}
+
+export const lastErrorKey = "agentJobs.pane.failure.lastError";
+
+export function failureDescription(
+  reason: string | null,
+  lastError: string | null | undefined,
+  translate: (key: string) => string
+): string {
+  const message = failureMessage(reason);
+  const reasonText = "key" in message ? translate(message.key) : message.text;
+  return lastError ? `${reasonText}\n${translate(lastErrorKey)}: ${lastError}` : reasonText;
 }
 
 export function failureMessage(reason: string | null): { key: string } | { text: string } {

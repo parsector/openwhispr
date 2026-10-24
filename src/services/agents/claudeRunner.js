@@ -1,6 +1,7 @@
 const { spawn } = require("node:child_process");
 const { createStreamJson } = require("./streamJson");
 const { minimalEnv } = require("./cliResolver");
+const { redactOutput } = require("./redactOutput");
 
 const ALLOWED_TOOLS =
   "Read,Grep,Glob,WebFetch,WebSearch,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr list:*),Bash(gh pr checks:*)";
@@ -33,10 +34,13 @@ function createClaudeRunner({ cliPath, spawnImpl = spawn } = {}) {
       onEvent(event);
     };
     const stdout = createStreamJson(forward);
+    let stderr = "";
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => stdout.feed(chunk));
     child.stderr.setEncoding("utf8");
-    child.stderr.on("data", () => {});
+    child.stderr.on("data", (chunk) => {
+      stderr = (stderr + chunk).slice(-4096);
+    });
     let escalation;
     const signal = (sig) => {
       try {
@@ -58,12 +62,18 @@ function createClaudeRunner({ cliPath, spawnImpl = spawn } = {}) {
       child.once("error", (error) => {
         stdout.end();
         clearTimeout(escalation);
-        resolve({ exitCode: null, signal: null, resultEvent, error: error.message });
+        resolve({
+          exitCode: null,
+          signal: null,
+          resultEvent,
+          error: redactOutput(error.message),
+          stderr,
+        });
       });
-      child.once("exit", (exitCode, exitSignal) => {
+      child.once("close", (exitCode, exitSignal) => {
         stdout.end();
         clearTimeout(escalation);
-        resolve({ exitCode, signal: exitSignal, resultEvent });
+        resolve({ exitCode, signal: exitSignal, resultEvent, stderr });
       });
     });
     return { pid: child.pid, cancel, kill, done };

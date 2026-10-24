@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { ToastActionButton } from "./ui/Toast";
 import { useToast } from "./ui/useToast";
-import { failureMessage } from "./integrations/agentJobsPresentation";
+import { failureDescription } from "./integrations/agentJobsPresentation";
 
 /** Listens once at the control-panel level so completion is visible outside Settings. */
 export function AgentJobToastListener() {
@@ -33,10 +33,9 @@ export function AgentJobToastListener() {
             ) : undefined,
           });
         } else {
-          const message = failureMessage(job.reason);
           toast({
             title: t("agentJobs.toast.failed", { project: job.project.name }),
-            description: "key" in message ? t(message.key) : message.text,
+            description: failureDescription(job.reason, job.lastError, t),
             variant: "destructive",
             duration: 10000,
           });
