@@ -4,6 +4,7 @@ export interface McpToolInfo {
   name: string;
   description?: string;
   inputSchema?: Record<string, unknown>;
+  annotations?: { readOnlyHint?: boolean };
 }
 export interface McpServerInfo {
   name: string;
@@ -197,7 +198,7 @@ export async function loadMcpTools(
         name,
         description: tool.description || `MCP tool ${name}`,
         parameters: tool.inputSchema || { type: "object", properties: {} },
-        readOnly: false,
+        readOnly: tool.annotations?.readOnlyHint === true,
         execute: async (args, context): Promise<ToolResult> => {
           const requestId = crypto.randomUUID();
           const onAbort = () => {
