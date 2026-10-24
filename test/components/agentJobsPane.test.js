@@ -138,7 +138,7 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
     }
   });
   let debugEnabled = false;
-  dom.electronAPI = { getDebugState: async () => ({ enabled: debugEnabled, logPath: null }) };
+  dom.electronAPI = { getDebugState: async () => ({ enabled: debugEnabled, logPath: null }), getNotes: async () => [] };
   dom.agentJobs = {
     projectsList: async () => ({
       projects: [
@@ -423,6 +423,13 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
   };
   await act(() => root.render(React.createElement(LocalApprovalCard, { entry: approval })));
   assert.ok(host.textContent.includes("agentJobs.card.workspaceUntrusted"));
+  assert.equal(host.querySelector("select"), null);
+  await act(() => root.render(React.createElement(LocalApprovalCard, {
+    entry: { ...approval, contextNoteId: 42, contextNoteTitle: "Meeting", contextChars: 87 },
+  })));
+  assert.ok(host.textContent.includes("agentJobs.card.context"));
+  assert.ok(host.textContent.includes("agentJobs.card.contextPrivacy"));
+  assert.equal(host.querySelector("select"), null);
   await act(() =>
     root.render(
       React.createElement(LocalApprovalCard, {

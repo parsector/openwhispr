@@ -25,6 +25,7 @@ export function AgentJobToastListener() {
           let toastId: string;
           toastId = toast({
             title: t("agentJobs.toast.done", { project: job.project.name }),
+            description: job.contextAppendFallback ? t("agentJobs.toast.contextFallback") : undefined,
             variant: "success",
             duration: 10000,
             action: job.noteId ? (

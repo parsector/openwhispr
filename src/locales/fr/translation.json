@@ -4876,6 +4876,11 @@
       "failed": "Échec",
       "cancelled": "Annulé",
       "branch": "Branche",
+      "context": "Context: {{title}} · {{count}} characters",
+      "contextPrivacy": "The note text will be sent to the selected harness.",
+      "contextDropped": "The selected note could not be found. This job will run without it.",
+      "attachNote": "Attach a note",
+      "noNote": "No note",
       "workspaceTrusted": "dossier de travail approuvé (--trust)",
       "workspaceUntrusted": "dossier de travail non approuvé — Cursor refusera tant que vous n'aurez pas approuvé le dossier"
     },
@@ -4954,6 +4959,7 @@
       "noSession": "Aucune session disponible"
     },
     "toast": {
+      "contextFallback": "Could not append to that note. The result was saved in your private Agent jobs folder.",
       "done": "Tâche d’agent terminée pour {{project}}",
       "failed": "Échec de la tâche d’agent pour {{project}}",
       "unknownError": "La tâche a échoué."

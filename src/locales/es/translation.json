@@ -4876,6 +4876,11 @@
       "failed": "Fallido",
       "cancelled": "Cancelado",
       "branch": "Rama",
+      "context": "Context: {{title}} · {{count}} characters",
+      "contextPrivacy": "The note text will be sent to the selected harness.",
+      "contextDropped": "The selected note could not be found. This job will run without it.",
+      "attachNote": "Attach a note",
+      "noNote": "No note",
       "workspaceTrusted": "espacio de trabajo confiable (--trust)",
       "workspaceUntrusted": "espacio de trabajo no confiable — Cursor se negará hasta que confíes en la carpeta"
     },
@@ -4954,6 +4959,7 @@
       "noSession": "No hay sesión disponible"
     },
     "toast": {
+      "contextFallback": "Could not append to that note. The result was saved in your private Agent jobs folder.",
       "done": "Trabajo de agente terminado para {{project}}",
       "failed": "Falló el trabajo de agente para {{project}}",
       "unknownError": "El trabajo falló."

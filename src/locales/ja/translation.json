@@ -4876,6 +4876,11 @@
       "failed": "失敗",
       "cancelled": "キャンセル済み",
       "branch": "ブランチ",
+      "context": "Context: {{title}} · {{count}} characters",
+      "contextPrivacy": "The note text will be sent to the selected harness.",
+      "contextDropped": "The selected note could not be found. This job will run without it.",
+      "attachNote": "Attach a note",
+      "noNote": "No note",
       "workspaceTrusted": "ワークスペースを信頼済み（--trust）",
       "workspaceUntrusted": "ワークスペースが信頼されていません — フォルダーを信頼するまで Cursor は実行を拒否します"
     },
@@ -4954,6 +4959,7 @@
       "noSession": "セッションがありません"
     },
     "toast": {
+      "contextFallback": "Could not append to that note. The result was saved in your private Agent jobs folder.",
       "done": "{{project}}のエージェントジョブが完了しました",
       "failed": "{{project}}のエージェントジョブが失敗しました",
       "unknownError": "ジョブが失敗しました。"

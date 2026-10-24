@@ -16,6 +16,10 @@ export interface LocalApprovalEntry {
   error?: string;
   authWarning?: boolean;
   trustWorkspace?: boolean;
+  contextNoteId?: number;
+  contextNoteTitle?: string;
+  contextChars?: number;
+  contextDropped?: boolean;
 }
 
 export const useLocalApprovalStore = create<{
@@ -63,6 +67,10 @@ export function addLocalApproval(
     branch?: string;
     authWarning?: boolean;
     project?: { trustWorkspace?: boolean };
+    contextNoteId?: number;
+    contextNoteTitle?: string;
+    contextChars?: number;
+    contextDropped?: boolean;
   },
   summary: string
 ): void {
@@ -77,6 +85,10 @@ export function addLocalApproval(
     branch: job.branch,
     authWarning: job.authWarning,
     trustWorkspace: job.project?.trustWorkspace,
+    contextNoteId: job.contextNoteId,
+    contextNoteTitle: job.contextNoteTitle,
+    contextChars: job.contextChars,
+    contextDropped: job.contextDropped,
     summary,
     prompt: job.prompt,
     state: "pending",
@@ -91,12 +103,15 @@ export function updateLocalPrompt(key: string, prompt: string): void {
   if (entry?.state === "pending") patch(key, { prompt });
 }
 
-export async function approveLocal(key: string): Promise<void> {
+export async function approveLocal(key: string, contextNoteId?: number): Promise<void> {
   const entry = useLocalApprovalStore.getState().entries[key];
   if (entry?.state !== "pending") return;
   patch(key, { state: "approving", error: undefined });
   try {
-    const job = await window.agentJobs.approve(entry.jobId, { prompt: entry.prompt });
+    const job = await window.agentJobs.approve(entry.jobId, {
+      prompt: entry.prompt,
+      ...(contextNoteId === undefined ? {} : { contextNoteId }),
+    });
     finish(key, {
       state: job.status === "failed" ? "failed" : "started",
       error: job.reason ?? undefined,

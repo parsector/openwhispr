@@ -49,9 +49,10 @@ test("delegate_task rejects unknown project, prepares a card immediately, and ca
   assert.deepEqual(first.data.status, "awaiting_approval");
   assert.equal(first.data.jobId, "1");
   assert.deepEqual(preparedInput.origin, ctx.origin);
-  assert.ok(useLocalApprovalStore.getState().entries["m1::t1"]);
   assert.deepEqual(ctx.events, ["approval", "hold"]);
-  await tool.execute({ project: project.name, task: "Review code" }, { ...ctx, toolCallId: "t2" });
+  await tool.execute({ project: project.name, task: "Review code", noteId: 42 }, { ...ctx, toolCallId: "t2" });
+  assert.equal(preparedInput.contextNoteId, 42);
+  assert.ok(useLocalApprovalStore.getState().entries["m1::t1"]);
   const third = await tool.execute(
     { project: project.name, task: "Review code" },
     { ...ctx, toolCallId: "t3" }

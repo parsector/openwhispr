@@ -4876,6 +4876,11 @@
       "failed": "Fehlgeschlagen",
       "cancelled": "Abgebrochen",
       "branch": "Branch",
+      "context": "Context: {{title}} · {{count}} characters",
+      "contextPrivacy": "The note text will be sent to the selected harness.",
+      "contextDropped": "The selected note could not be found. This job will run without it.",
+      "attachNote": "Attach a note",
+      "noNote": "No note",
       "workspaceTrusted": "Arbeitsverzeichnis vertrauenswürdig (--trust)",
       "workspaceUntrusted": "Arbeitsverzeichnis nicht vertrauenswürdig — Cursor verweigert den Start, bis Sie dem Ordner vertrauen"
     },
@@ -4954,6 +4959,7 @@
       "noSession": "Keine Sitzung verfügbar"
     },
     "toast": {
+      "contextFallback": "Could not append to that note. The result was saved in your private Agent jobs folder.",
       "done": "Agentenauftrag für {{project}} abgeschlossen",
       "failed": "Agentenauftrag für {{project}} fehlgeschlagen",
       "unknownError": "Der Auftrag ist fehlgeschlagen."

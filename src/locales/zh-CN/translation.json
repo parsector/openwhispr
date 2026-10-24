@@ -4876,6 +4876,11 @@
       "failed": "失败",
       "cancelled": "已取消",
       "branch": "分支",
+      "context": "Context: {{title}} · {{count}} characters",
+      "contextPrivacy": "The note text will be sent to the selected harness.",
+      "contextDropped": "The selected note could not be found. This job will run without it.",
+      "attachNote": "Attach a note",
+      "noNote": "No note",
       "workspaceTrusted": "工作区已受信任（--trust）",
       "workspaceUntrusted": "工作区未受信任 — 在您信任此文件夹之前，Cursor 将拒绝运行"
     },
@@ -4954,6 +4959,7 @@
       "noSession": "没有可用的会话"
     },
     "toast": {
+      "contextFallback": "Could not append to that note. The result was saved in your private Agent jobs folder.",
       "done": "{{project}} 的代理任务已完成",
       "failed": "{{project}} 的代理任务失败",
       "unknownError": "任务失败。"

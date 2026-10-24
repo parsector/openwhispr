@@ -20,6 +20,7 @@ export function createDelegateTaskTool(projects: AgentProject[]): ToolDefinition
         task: { type: "string" },
         harness: { type: "string", enum: ["claude", "cursor-agent"] },
         model: { type: "string" },
+        noteId: { type: "number", description: "Optional note ID explicitly chosen by the user" },
       },
       required: ["project", "task"],
       additionalProperties: false,
@@ -48,6 +49,7 @@ export function createDelegateTaskTool(projects: AgentProject[]): ToolDefinition
             ? {}
             : { harness: args.harness as "claude" | "cursor-agent" }),
           ...(args.model === undefined ? {} : { model: args.model as string }),
+          ...(args.noteId === undefined ? {} : { contextNoteId: args.noteId as number }),
         });
         const action = job.prompt.replace(/\s+/g, " ").slice(0, 120);
         const summary = `harness ${job.harness} on repo ${job.project.name} with model ${job.model || "default"} for action ${action}`;

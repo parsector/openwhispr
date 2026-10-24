@@ -69,11 +69,13 @@ test("run_preset rejects unknown names, expands values, and creates a local appr
   });
   assert.deepEqual(result.data.status, "awaiting_approval");
   assert.equal(result.data.jobId, "job-1");
+  assert.deepEqual(ctx.events, ["approval", "hold"]);
+  await tool.execute({ preset: preset.name, values: { pr: "42" }, noteId: 42 }, { ...ctx, toolCallId: "with-note" });
+  assert.equal(input.contextNoteId, 42);
   assert.equal(
     useLocalApprovalStore.getState().entries["preset-message::call"].prompt,
     "Review 42"
   );
-  assert.deepEqual(ctx.events, ["approval", "hold"]);
 });
 
 test("run_preset shares the two-slot cap and obeys policy registration", async () => {

@@ -4986,6 +4986,11 @@
       "failed": "فشلت",
       "cancelled": "أُلغيت",
       "branch": "الفرع",
+      "context": "Context: {{title}} · {{count}} characters",
+      "contextPrivacy": "The note text will be sent to the selected harness.",
+      "contextDropped": "The selected note could not be found. This job will run without it.",
+      "attachNote": "Attach a note",
+      "noNote": "No note",
       "workspaceTrusted": "مساحة العمل موثوقة (--trust)",
       "workspaceUntrusted": "مساحة العمل غير موثوقة — سيرفض Cursor التشغيل حتى تثق بالمجلد"
     },
@@ -5064,6 +5069,7 @@
       "noSession": "لا توجد جلسة متاحة"
     },
     "toast": {
+      "contextFallback": "Could not append to that note. The result was saved in your private Agent jobs folder.",
       "done": "اكتملت مهمة الوكيل لـ {{project}}",
       "failed": "فشلت مهمة الوكيل لـ {{project}}",
       "unknownError": "فشلت المهمة."
