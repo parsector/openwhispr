@@ -838,6 +838,7 @@ export function AgentsPane({ title }: { title: string }) {
                     <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
+                        dir="ltr"
                         aria-label={t("agentJobs.presets.schedule")}
                         checked={preset.schedule?.enabled ?? false}
                         disabled={
@@ -859,6 +860,7 @@ export function AgentsPane({ title }: { title: string }) {
                       {t("agentJobs.presets.schedule")}
                     </label>
                     <select
+                      dir="ltr"
                       aria-label={t("agentJobs.presets.interval")}
                       className={inputClass}
                       value={preset.schedule?.intervalMinutes ?? 60}
@@ -1025,6 +1027,7 @@ export function AgentsPane({ title }: { title: string }) {
               <label className="flex items-center gap-2 text-xs">
                 <input
                   type="checkbox"
+                  dir="ltr"
                   checked={Boolean(presetDraft.fanOut)}
                   onChange={(e) =>
                     setPresetDraft({
