@@ -10,6 +10,7 @@ function redactOutput(value) {
       "$1<REDACTED>"
     )
     .replace(/\bBearer\s+[^\s,"'}]+/gi, "Bearer <REDACTED>")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "<REDACTED_EMAIL>")
     .replace(/\b(?:sk-[A-Za-z0-9_-]+|owk_[A-Za-z0-9_-]+)/gi, "<REDACTED>");
 }
 

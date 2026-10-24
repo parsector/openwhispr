@@ -20,7 +20,7 @@ function registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manage
     const result = await resolver.test(harness);
     const auth = await resolver.authStatus(harness);
     return harness === "cursor-agent"
-      ? { ...result, auth, models: await resolver.listModels(harness) }
+      ? { ...result, auth, modelProbe: await resolver.listModels(harness) }
       : { ...result, auth };
   });
   ipcMain.handle("agent-job-prepare", (_event, input) => {
