@@ -94,6 +94,76 @@ test("fan-out requires the known enumerator and a pr placeholder", (t) => {
   assert.equal(store.save(preset).presets[0].fanOut, undefined);
 });
 
+test("schedule bounds, static prompt and read-only mode are validated and run times persist", (t) => {
+  const { file, store, preset, projectStore } = setup(t);
+  const plain = { ...preset, prompt: "Review the repository" };
+  for (const intervalMinutes of [0, 14, 10081, 1.5, NaN, "60", null])
+    assert.throws(
+      () => store.save({ ...plain, schedule: { intervalMinutes, enabled: true } }),
+      /schedule/
+    );
+  for (const schedule of [
+    null,
+    [],
+    { intervalMinutes: 60 },
+    { intervalMinutes: 60, enabled: "yes" },
+    { intervalMinutes: 60, enabled: true, junk: 1 },
+  ])
+    assert.throws(() => store.save({ ...plain, schedule }), /schedule/);
+  assert.throws(
+    () => store.save({ ...preset, schedule: { intervalMinutes: 15, enabled: true } }),
+    /schedule_requires_static_prompt/
+  );
+  const first = store.save({ ...plain, schedule: { intervalMinutes: 15, enabled: true } })
+    .presets[0];
+  assert.ok(first.nextRunAt > Date.now());
+  assert.equal(first.lastRunAt, null);
+  assert.equal(store.recordRun("p1", 1000), true);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, "utf8")).presets[0].schedule, {
+    intervalMinutes: 15,
+    enabled: true,
+  });
+  assert.equal(store.read().presets[0].lastRunAt, 1000);
+  assert.equal(store.read().presets[0].nextRunAt, 901000);
+  assert.equal(
+    store.save({
+      ...plain,
+      schedule: { intervalMinutes: 15, enabled: true },
+      lastRunAt: 9999,
+      nextRunAt: 9999,
+    }).presets[0].nextRunAt,
+    901000
+  );
+  projectStore.remove("repo");
+  assert.equal(store.read().presets[0].id, "p1");
+  projectStore.save({
+    name: "repo",
+    folder: path.dirname(file),
+    defaultHarness: "claude",
+    mode: "read-only",
+    model: "sonnet",
+  });
+  projectStore.save({
+    name: "writer",
+    folder: path.dirname(file),
+    defaultHarness: "claude",
+    mode: "write",
+    model: null,
+  });
+  assert.throws(
+    () =>
+      store.save({
+        ...plain,
+        id: "w",
+        name: "Writer",
+        project: "writer",
+        mode: "write",
+        schedule: { intervalMinutes: 15, enabled: true },
+      }),
+    /schedule_requires_read_only/
+  );
+});
+
 test("writes atomically, cleans a failed temp write, and recovers a malformed file", (t) => {
   const { file, store, preset, projectStore } = setup(t);
   store.save(preset);

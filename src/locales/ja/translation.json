@@ -4974,6 +4974,15 @@
       "ask": "質問"
     },
     "presets": {
+      "schedule": "Schedule",
+      "interval": "Interval",
+      "everyMinutes": "Every {{count}} minutes",
+      "scheduleRequiresReadOnly": "Scheduling requires a read-only project.",
+      "scheduleRequiresStaticPrompt": "Scheduling requires a prompt without placeholders or pull-request fan-out.",
+      "scheduleConsequence": "This preset will run without asking, at this interval: {{interval}}.",
+      "enableSchedule": "Enable schedule",
+      "nextRun": "Next run:",
+      "scheduledFrom": "Scheduled from preset: {{name}}",
       "title": "プリセット",
       "add": "プリセットを追加",
       "empty": "プリセットはまだありません。",

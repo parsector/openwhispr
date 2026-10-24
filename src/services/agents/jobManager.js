@@ -84,6 +84,7 @@ function createJobManager({
   const running = new Map();
   const preparingWorktrees = new Set();
   let queue = [];
+  let stopped = false;
   function persist() {
     const dir = path.dirname(file);
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -208,6 +209,7 @@ function createJobManager({
     origin,
     resumeJobId,
     contextNoteId,
+    scheduledFrom,
   }) {
     const parent = resumeJobId === undefined ? null : jobs.get(resumeJobId);
     if (resumeJobId !== undefined && (!parent || !["done", "failed"].includes(parent.status)))
@@ -246,6 +248,11 @@ function createJobManager({
     if (typeof task !== "string" || !task.trim() || task.length > 100_000) throw invalid("task");
     if (contextNoteId !== undefined && (!Number.isSafeInteger(contextNoteId) || contextNoteId <= 0))
       throw invalid("contextNoteId");
+    if (
+      scheduledFrom !== undefined &&
+      (typeof scheduledFrom !== "string" || !/^[a-zA-Z0-9_-]{1,80}$/.test(scheduledFrom))
+    )
+      throw invalid("scheduledFrom");
     if (harness !== undefined && !["claude", "cursor-agent"].includes(harness))
       throw invalid("harness");
     if (model !== undefined && !safeModel(model)) throw invalid("model");
@@ -318,6 +325,7 @@ function createJobManager({
         ? { contextDropped: true, contextDropReason: "note_missing" }
         : {}),
       ...(safeOrigin ? { origin: safeOrigin } : {}),
+      ...(scheduledFrom ? { scheduledFrom } : {}),
       ...(origin !== undefined && !safeOrigin ? { originDropped: true } : {}),
       status: "pending",
       steps: [],
@@ -534,6 +542,7 @@ function createJobManager({
           ]
         : []),
       `Project: ${job.project.name}`,
+      ...(job.scheduledFrom ? [`Scheduled from preset: ${job.scheduledFrom}`] : []),
       `Duration: ${job.durationMs ?? "unknown"} ms`,
       `Cost estimate: ${job.costEstimate ?? "unknown"} USD`,
       `Session ID: ${job.sessionId || "unknown"}`,
@@ -669,8 +678,37 @@ function createJobManager({
     return get(jobId);
   }
   function stopAll() {
+    stopped = true;
     for (const id of [...running.keys()]) cancel(id);
+    for (const job of jobs.values())
+      if (job.scheduledFrom && ["pending", "queued"].includes(job.status)) cancel(job.jobId);
     clearIntervalImpl(timer);
+  }
+  async function startScheduled(preset) {
+    if (stopped) throw new Error("schedule_stopped");
+    if (preset.mode === "write") throw new Error("schedule_requires_read_only");
+    if (
+      list().some(
+        (job) =>
+          job.scheduledFrom === preset.id && ["pending", "queued", "running"].includes(job.status)
+      )
+    )
+      throw new Error("schedule_already_running");
+    const job = await prepare({
+      project: preset.project,
+      task: preset.prompt,
+      harness: preset.harness,
+      mode: preset.mode,
+      ...(preset.model ? { model: preset.model } : {}),
+      scheduledFrom: preset.id,
+    });
+    try {
+      if (stopped) throw new Error("schedule_stopped");
+      return await approve(job.jobId);
+    } catch (error) {
+      cancel(job.jobId);
+      throw error;
+    }
   }
   async function enumerateFanOut(preset, values = {}) {
     if (preset?.fanOut !== "open-pull-requests" || !preset.prompt.includes("{{pr}}"))
@@ -752,6 +790,7 @@ function createJobManager({
     enumerateFanOut,
     approveFanOut,
     cancelFanOut,
+    startScheduled,
   };
 }
 module.exports = { createJobManager, EXPIRY_MS, STALL_MS };

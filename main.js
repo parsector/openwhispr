@@ -369,6 +369,7 @@ let ipcHandlers = null;
 let stopLocalMcp = null;
 let mcpClientManager = null;
 let agentJobManager = null;
+let agentPresetScheduler = null;
 let cliBridge = null;
 let globeKeyAlertShown = false;
 let macAccessibilityFeaturesReady = false;
@@ -713,6 +714,7 @@ function initializeCoreManagers() {
   const { createClaudeRunner } = require("./src/services/agents/claudeRunner");
   const { createCursorRunner } = require("./src/services/agents/cursorRunner");
   const { createJobManager } = require("./src/services/agents/jobManager");
+  const { createPresetScheduler } = require("./src/services/agents/presetScheduler");
   const { registerAgentIpc } = require("./src/services/agents/ipc");
   const tokenStore = require("./src/helpers/tokenStore");
   const { compareAppVersions } = require("./src/helpers/appVersion");
@@ -720,7 +722,8 @@ function initializeCoreManagers() {
     path.join(app.getPath("userData"), "agents", "projects.json")
   );
   const presetStore = createPresetStore(
-    path.join(app.getPath("userData"), "agents", "presets.json"), projectStore
+    path.join(app.getPath("userData"), "agents", "presets.json"),
+    projectStore
   );
   const repoFolder = app.getAppPath();
   if (
@@ -765,6 +768,12 @@ function initializeCoreManagers() {
     },
   });
   registerAgentIpc({ ipcMain, projectStore, presetStore, resolver, manager: agentJobManager });
+  agentPresetScheduler = createPresetScheduler({
+    presetStore,
+    projectStore,
+    resolver,
+    manager: agentJobManager,
+  });
   void mcpClientManager
     .sync()
     .catch((error) => debugLogger.warn("MCP client startup failed", error));
@@ -803,9 +812,12 @@ function initializeCoreManagers() {
     database: databaseManager,
     getSemanticSearch: () => semanticSearch,
   });
+  agentPresetScheduler.start();
 }
 
 function registerSidecars() {
+  if (agentPresetScheduler)
+    sidecarRegistry.register("agent-preset-scheduler", () => agentPresetScheduler.stop());
   if (agentJobManager) sidecarRegistry.register("agent-jobs", () => agentJobManager.stopAll());
   if (whisperManager) sidecarRegistry.register("whisper", () => whisperManager.stopServer());
   if (parakeetManager) sidecarRegistry.register("parakeet", () => parakeetManager.stopServer());
@@ -2178,6 +2190,7 @@ if (gotSingleInstanceLock) {
     if (isShuttingDown) return;
     isShuttingDown = true;
     mcpClientManager?.stopAll();
+    agentPresetScheduler?.stop();
     agentJobManager?.stopAll();
     if (updateManager && updateManager.isQuittingForUpdate) {
       // Quit must proceed for the installer to run, so no preventDefault;

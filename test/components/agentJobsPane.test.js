@@ -184,6 +184,28 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
           description: "",
           fanOut: "open-pull-requests",
         },
+        {
+          id: "nightly",
+          name: "Nightly review",
+          project: "Existing project",
+          harness: "claude",
+          mode: "read-only",
+          model: "sonnet",
+          prompt: "Review the repository",
+          description: "",
+          schedule: { intervalMinutes: 60, enabled: true },
+          nextRunAt: Date.UTC(2026, 9, 25, 12),
+        },
+        {
+          id: "writer",
+          name: "Writer",
+          project: "Write project",
+          harness: "claude",
+          mode: "write",
+          model: "sonnet",
+          prompt: "Write docs",
+          description: "",
+        },
       ],
     }),
     list: async () => [
@@ -252,7 +274,16 @@ test("model picker groups aliases and pinned names and warns on a malformed alia
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
   await act(() => root.render(React.createElement(AgentsPane, { title: "Agents" })));
-  assert.equal(host.querySelector('input[type="checkbox"]'), null);
+  const scheduleToggles = [
+    ...host.querySelectorAll('input[aria-label="agentJobs.presets.schedule"]'),
+  ];
+  assert.equal(scheduleToggles.length, 4);
+  assert.equal(scheduleToggles[2].checked, true);
+  assert.equal(scheduleToggles[3].disabled, true);
+  assert.ok(host.textContent.includes("agentJobs.presets.scheduleRequiresReadOnly"));
+  assert.ok(host.textContent.includes("agentJobs.presets.nextRun"));
+  assert.equal(host.querySelector("time")?.dateTime, "2026-10-25T12:00:00.000Z");
+  assert.ok(host.querySelector("time")?.textContent);
   assert.equal(
     host.querySelector('[role="alert"]')?.textContent,
     "agentJobs.pane.invalidClaudeModel"
