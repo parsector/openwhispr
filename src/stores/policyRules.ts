@@ -500,7 +500,7 @@ export function isControlPanelViewAllowed(
   agentAllowed: boolean,
   policyActionsAllowed: boolean
 ): boolean {
-  if (view === "chat") return agentAllowed;
+  if (view === "chat" || view === "routines") return agentAllowed;
   if (view === "upload") return policyActionsAllowed;
   return true;
 }

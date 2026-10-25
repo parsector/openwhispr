@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { NOTE_OUTPUT_MAX_TOKENS, NOTHING_TO_SUMMARIZE } from "../helpers/builtinActions";
 import { stripThinkingTags } from "../helpers/stripThinking";
+import { isMarkerOnly } from "../helpers/routines/routineCompletion";
 import { compileSummaryActionPrompt, compileTemplatePrompt } from "../helpers/templatePrompts";
 import reasoningService from "../services/ReasoningService";
 import {
@@ -250,14 +251,7 @@ const nothingToSummarizeError = () =>
  * a section a small model answered with the marker, is still a summary.
  */
 function isNothingToSummarizeReply(reply: string): boolean {
-  const lines = stripThinkingTags(reply)
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("```"));
-  const last = lines.pop()?.replace(/^[*_`]+|[*_`.!]+$/g, "");
-  if (last !== NOTHING_TO_SUMMARIZE) return false;
-  const lead = lines.join("\n");
-  return lead.length <= 200 && !/^(?:#|[-*+]\s|\d+[.)]\s)/m.test(lead);
+  return isMarkerOnly(reply, NOTHING_TO_SUMMARIZE);
 }
 
 /** The translated refusal from #2142, for material no amount of splitting can fit. */

@@ -27,6 +27,7 @@ export interface InferenceScopeDefinition {
    * model, since a cloud mode counts as chosen with none.
    */
   optional?: true;
+  inheritMode?: true;
 }
 
 export const INFERENCE_SCOPES = {
@@ -107,6 +108,18 @@ export const INFERENCE_SCOPES = {
       disableThinking: "chatAgentDisableThinking",
       reasoningEffort: "chatAgentReasoningEffort",
     },
+  },
+  routines: {
+    cloudPurpose: "assistant",
+    storeKeys: {
+      mode: "routinesMode",
+      provider: "routinesProvider",
+      model: "routinesModel",
+      remoteUrl: "routinesRemoteUrl",
+    },
+    fallbackScope: "chatIntelligence",
+    optional: true,
+    inheritMode: true,
   },
   dictationTranslation: {
     cloudPurpose: "translation",
