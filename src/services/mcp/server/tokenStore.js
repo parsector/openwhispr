@@ -8,8 +8,9 @@ function createTokenStore(userData, fsImpl = fs) {
   const logFile = path.join(dir, "activity.json");
 
   function read(target) {
-    try { return JSON.parse(fsImpl.readFileSync(target, "utf8")); }
-    catch (error) {
+    try {
+      return JSON.parse(fsImpl.readFileSync(target, "utf8"));
+    } catch (error) {
       if (error.code === "ENOENT") return [];
       throw error;
     }
@@ -23,21 +24,34 @@ function createTokenStore(userData, fsImpl = fs) {
       fsImpl.renameSync(temp, target);
       if (process.platform !== "win32") fsImpl.chmodSync(target, 0o600);
     } catch (error) {
-      try { fsImpl.unlinkSync(temp); } catch { /* No temp file was created. */ }
+      try {
+        fsImpl.unlinkSync(temp);
+      } catch {
+        /* No temp file was created. */
+      }
       throw error;
     }
   }
-  const publicToken = ({ id, label, createdAt, lastUsedAt }) => ({ id, label, createdAt, lastUsedAt });
-  function list() { return read(file).map(publicToken); }
+  const publicToken = ({ id, label, createdAt, lastUsedAt }) => ({
+    id,
+    label,
+    createdAt,
+    lastUsedAt,
+  });
+  function list() {
+    return read(file).map(publicToken);
+  }
   function create(label) {
     if (typeof label !== "string" || !label.trim() || label.length > 100) {
       throw new Error("Token label must be 1–100 characters");
     }
     const plaintext = `owk_${crypto.randomBytes(32).toString("base64url")}`;
     const entry = {
-      id: crypto.randomUUID(), label: label.trim(),
+      id: crypto.randomUUID(),
+      label: label.trim(),
       hash: crypto.createHash("sha256").update(plaintext).digest("hex"),
-      createdAt: new Date().toISOString(), lastUsedAt: null,
+      createdAt: new Date().toISOString(),
+      lastUsedAt: null,
     };
     write(file, [...read(file), entry]);
     return { ...publicToken(entry), plaintext };
@@ -65,10 +79,17 @@ function createTokenStore(userData, fsImpl = fs) {
     write(file, remaining);
     return true;
   }
-  function activity() { return read(logFile); }
+  function activity() {
+    return read(logFile);
+  }
   function record(clientName, tool) {
     const safeName = typeof clientName === "string" ? clientName.slice(0, 100) : "Unknown client";
-    write(logFile, [...read(logFile), { clientName: safeName, tool, timestamp: new Date().toISOString() }].slice(-100));
+    write(
+      logFile,
+      [...read(logFile), { clientName: safeName, tool, timestamp: new Date().toISOString() }].slice(
+        -100
+      )
+    );
   }
   return { create, list, verify, revoke, activity, record };
 }

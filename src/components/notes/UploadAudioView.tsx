@@ -1671,8 +1671,7 @@ function SelectedView({
           </Button>
         )}
 
-        {(byokTooLarge && !requiresAccount && !isProUser) ||
-        (!byokTooLarge && requiresUpgrade) ? (
+        {(byokTooLarge && !requiresAccount && !isProUser) || (!byokTooLarge && requiresUpgrade) ? (
           <p className="text-center text-[13px] text-muted-foreground">
             {t("notes.upload.cloudUpgradeUnavailable")}
           </p>

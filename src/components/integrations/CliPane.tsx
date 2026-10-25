@@ -58,9 +58,7 @@ export function CliPane({ title, isPaid }: CliPaneProps): ReactElement {
                 </h3>
               </div>
               <p className="text-xs text-muted-foreground/70 mt-0.5 leading-relaxed">
-                {isPaid
-                  ? t("integrations.cli.cloud.description")
-                  : t("common.unavailableInBuild")}
+                {isPaid ? t("integrations.cli.cloud.description") : t("common.unavailableInBuild")}
               </p>
             </div>
             {isPaid ? (

@@ -79,7 +79,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     registry.register(createDelegateTaskTool(settings.agentProjects));
     registry.register(agentJobTool);
     registry.register(resumeAgentJobTool);
-    if (settings.agentPresets?.length) registry.register(createRunPresetTool(settings.agentPresets));
+    if (settings.agentPresets?.length)
+      registry.register(createRunPresetTool(settings.agentPresets));
   }
   for (const tool of settings.mcpTools || []) {
     if (registry.get(tool.name)) throw new Error(`MCP tool name collision: ${tool.name}`);
