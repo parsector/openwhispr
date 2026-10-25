@@ -668,6 +668,7 @@ class IPCHandlers {
     this.whisperVulkanManager = managers.whisperVulkanManager;
     this.googleCalendarManager = managers.googleCalendarManager;
     this.connectorManager = managers.connectorManager;
+    this.mcpClientManager = managers.mcpClientManager;
     this.microsoftCalendarManager = managers.microsoftCalendarManager;
     this.appleCalendarManager = managers.appleCalendarManager;
     this.meetingDetectionEngine = managers.meetingDetectionEngine;
@@ -1012,7 +1013,38 @@ class IPCHandlers {
       };
       deliver();
     };
-    const runner = new RoutineRunner({ database: this.databaseManager, infer, notify });
+    const { routineMcpApi } = require("./routines/routineMcpApi");
+    const modelUsable = async (choice) => {
+      if (!choice || typeof choice.model !== "string" || !choice.model.trim()) return false;
+      if (choice.mode === "self-hosted") return /^https?:\/\//.test(choice.remoteUrl || "");
+      if (choice.mode === "local") {
+        try {
+          const manager = require("./modelManagerBridge").default;
+          return await manager.isModelDownloaded(choice.model);
+        } catch {
+          return false;
+        }
+      }
+      if (choice.mode === "openwhispr") return Boolean(tokenStore.get());
+      const getters = {
+        openai: "getOpenAIKey",
+        gemini: "getGeminiKey",
+        groq: "getGroqKey",
+        openrouter: "getOpenrouterKey",
+        corti: "getCortiKey",
+        anthropic: "getAnthropicKey",
+        tinfoil: "getTinfoilKey",
+      };
+      const getter = getters[choice.provider];
+      return Boolean(getter && this.environmentManager[getter]?.());
+    };
+    const runner = new RoutineRunner({
+      database: this.databaseManager,
+      infer,
+      notify,
+      modelUsable,
+      mcpApi: this.mcpClientManager ? routineMcpApi(this.mcpClientManager) : null,
+    });
     const recordingSources = new Set();
     const recordingSenders = new WeakSet();
     const isRecording = () => Boolean(this._activeRecordingPipeline || recordingSources.size);
@@ -1043,6 +1075,14 @@ class IPCHandlers {
     });
     this.routineScheduler.start();
     ipcMain.handle("routines-list", () => this.databaseManager.listRoutines());
+    ipcMain.handle("routines-model-usable", (_event, choice) => modelUsable(choice));
+    ipcMain.handle("routines-model-choice-current", () => this._routineModelChoice);
+    ipcMain.handle("routines-mcp-sources", async () => {
+      if (!this.mcpClientManager) return [];
+      const { loadRoutineMcpTools } = require("../services/tools/mcpTools.ts");
+      const tools = await loadRoutineMcpTools(routineMcpApi(this.mcpClientManager), 32000);
+      return tools.map(({ name, description }) => ({ name, description }));
+    });
     ipcMain.handle("routines-presets", () => PRESETS);
     ipcMain.handle("routines-save", (_event, input) => {
       const result = this.databaseManager.saveRoutine(input);

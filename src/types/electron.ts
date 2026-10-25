@@ -1532,6 +1532,14 @@ declare global {
             slots: Array<{ days: number[]; time: string }>;
           };
           allowed_tools: string[];
+          model_override: {
+            mode: string;
+            provider: string;
+            model: string;
+            remoteUrl: string;
+          } | null;
+          catch_up_window_hours: number;
+          voice_hint: string | null;
           paused: number;
           last_status: string | null;
           last_run_at: string | null;
@@ -1552,11 +1560,32 @@ declare global {
           needs: string[];
         }>
       >;
+      routineMcpSources: () => Promise<Array<{ name: string; description: string }>>;
+      routineModelUsable: (choice: {
+        mode: string;
+        provider: string;
+        model: string;
+        remoteUrl: string;
+      }) => Promise<boolean>;
+      routineModelChoiceCurrent: () => Promise<{
+        mode: string;
+        provider: string;
+        model: string;
+        remoteUrl: string;
+      } | null>;
       saveRoutine: (routine: {
         id?: string;
         name: string;
         prompt: string;
         allowed_tools?: string[];
+        model_override?: {
+          mode: string;
+          provider: string;
+          model: string;
+          remoteUrl: string;
+        } | null;
+        catch_up_window_hours?: number;
+        voice_hint?: string;
         trigger_config: { schema_version: number; slots: Array<{ days: number[]; time: string }> };
       }) => Promise<{ success: boolean; error?: string }>;
       pauseRoutine: (id: string, paused: boolean) => Promise<{ success: boolean }>;
