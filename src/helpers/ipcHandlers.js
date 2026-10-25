@@ -2370,7 +2370,10 @@ class IPCHandlers {
       searchNotes({
         database: this.databaseManager,
         getSemanticSearch: this.getSemanticSearch,
-        query, limit, spaceId, folderId,
+        query,
+        limit,
+        spaceId,
+        folderId,
         logger: debugLogger,
       })
     );
@@ -4283,7 +4286,6 @@ class IPCHandlers {
         const { errorName, errorCode } = describeError(e);
         errors.push(`Connector revoke: ${errorCode ?? errorName}`);
       }
-
 
       // Close DB connection before deleting the file
       try {
@@ -10272,7 +10274,11 @@ class IPCHandlers {
         const authHeader = await getAuthHeader(event);
         if (!Object.keys(authHeader).length) throw new Error("Not authenticated");
 
-        debugLogger.debug("Agent web search request", { queryLength: textLength(query), numResults }, "cloud-api");
+        debugLogger.debug(
+          "Agent web search request",
+          { queryLength: textLength(query), numResults },
+          "cloud-api"
+        );
 
         const response = await proxyFetch(`${apiUrl}/api/agent/web-search`, {
           method: "POST",

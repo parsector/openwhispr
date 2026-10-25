@@ -36,11 +36,7 @@ import { followsSystemDefaultMic } from "./micSelectionRecovery";
 import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
-import {
-  countSpokenWords,
-  localDateKey,
-  resolveAnalyticsMode,
-} from "./analytics";
+import { countSpokenWords, localDateKey, resolveAnalyticsMode } from "./analytics";
 import {
   getSettings,
   useSettingsStore,
@@ -6253,7 +6249,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   // event. Held back until opt-in, a later sync would push the
                   // local copy under a second id and double every total.
                   clientTranscriptionId,
-
                 }
               );
               if (!res.success) {

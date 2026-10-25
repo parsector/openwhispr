@@ -64,7 +64,6 @@ import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { useSettings } from "../hooks/useSettings";
 import { useDialogs } from "../hooks/useDialogs";
 import { useSignOut } from "../hooks/useSignOut";
-import { useAccountPlan } from "../hooks/useAccountPlan";
 import { useInsightsSyncOptIn } from "../hooks/useInsightsSyncOptIn";
 import { useLeaderboardParticipation } from "../hooks/useLeaderboardParticipation";
 import { useWhisper } from "../hooks/useWhisper";
@@ -3380,14 +3379,12 @@ EOF`,
                         leaderboardParticipationUpdating ||
                         leaderboardParticipationError === "read" ||
                         (!leaderboardParticipationEnabled &&
-                          (!effectiveDataRetentionEnabled ||
-                            !insightsSyncAllowedByPolicy))
+                          (!effectiveDataRetentionEnabled || !insightsSyncAllowedByPolicy))
                       }
                       onChange={(enabled) => void updateLeaderboardParticipation(enabled)}
                     />
                   </SettingsRow>
                 </SettingsPanelRow>
-
               </SettingsPanel>
             </div>
 

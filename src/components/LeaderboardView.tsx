@@ -14,10 +14,7 @@ interface LeaderboardViewProps {
   syncAllowedByPolicy: boolean;
 }
 
-export default function LeaderboardView({
-  onSignIn,
-  syncAllowedByPolicy,
-}: LeaderboardViewProps) {
+export default function LeaderboardView({ onSignIn, syncAllowedByPolicy }: LeaderboardViewProps) {
   const { t } = useTranslation();
   const { isLoaded: authSettled, isSignedIn, user } = useAuth();
   const authGeneration = getValidatedAuthGeneration();

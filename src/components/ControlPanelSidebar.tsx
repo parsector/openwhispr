@@ -4,6 +4,7 @@ import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
 import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
+import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
 
 export type { ControlPanelView };
