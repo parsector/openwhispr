@@ -246,7 +246,8 @@ class ParakeetWsServer {
     if (!ready) {
       const info = getProcessInfo ? getProcessInfo() : {};
       const stderrLength = textLength(info.stderr);
-      const details = info.exitCode !== null ? `exit code: ${info.exitCode}` : `stderr length: ${stderrLength}`;
+      const details =
+        info.exitCode !== null ? `exit code: ${info.exitCode}` : `stderr length: ${stderrLength}`;
       throw new Error(`parakeet-ws process died during startup${details ? `: ${details}` : ""}`);
     }
 

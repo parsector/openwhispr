@@ -8,16 +8,12 @@ async function loadProfileMenu(t) {
   t.after(() => {
     delete globalThis.__auth;
     delete globalThis.__menuItems;
-    delete globalThis.__planLabel;
   });
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-profile-menu-",
     mockModules: {
       "/hooks/useAuth": "export const useAuth = () => globalThis.__auth;",
-      "/hooks/useUsage": "export const useUsage = () => null;",
-      "/hooks/useAccountPlan":
-        "export const useAccountPlan = () => ({ planLabel: globalThis.__planLabel ?? null });",
       "/MemberAvatar": "export default function MemberAvatar() { return null; }",
       // Renders the menu open and records each item's handler under its text.
       "/ui/dropdown-menu": `
@@ -83,18 +79,17 @@ test("the menu holds the account's own actions, ending with Sign out", async (t)
 
   assert.deepEqual(labels, [
     "settingsModal.sections.account.label",
-    "settingsModal.sections.plansBilling.label",
     "sidebar.referral",
     "settingsPage.account.signOut.signOut",
   ]);
-  assert.deepEqual(opened, ["account", "plansBilling", "referrals", "sign out"]);
+  assert.deepEqual(opened, ["account", "referrals", "sign out"]);
 });
 
-test("the header names the plan once it is known", async (t) => {
+test("the header shows account identity without a plan badge", async (t) => {
   const { render } = await loadProfileMenu(t);
 
-  assert.doesNotMatch(render(signedIn), />Pro</);
-
-  globalThis.__planLabel = "Pro";
-  assert.match(render(signedIn), />Pro</);
+  const markup = render(signedIn);
+  assert.match(markup, /Chad Piha/);
+  assert.match(markup, /chad@example.com/);
+  assert.doesNotMatch(markup, />Pro</);
 });

@@ -488,7 +488,6 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
                 <Cloud size={13} />
                 {syncStatusLabel}
               </div>
-
             </div>
           ) : (
             isSignedIn &&
@@ -523,10 +522,7 @@ export default function InsightsView({ onSignIn }: InsightsViewProps) {
         </TabsContent>
         <TabsContent value="leaderboard" className="mt-0">
           <Suspense fallback={isSignedIn ? <LeaderboardSkeleton /> : null}>
-            <LeaderboardView
-              onSignIn={onSignIn}
-              syncAllowedByPolicy={syncAllowedByPolicy}
-            />
+            <LeaderboardView onSignIn={onSignIn} syncAllowedByPolicy={syncAllowedByPolicy} />
           </Suspense>
         </TabsContent>
       </Tabs>

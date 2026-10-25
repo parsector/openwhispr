@@ -11,25 +11,36 @@ import {
 
 export function LocalApprovalCard({ entry }: { entry: LocalApprovalEntry }) {
   const { t } = useTranslation();
-  const [notes, setNotes] = useState<Array<{ id: number; title: string; content?: string | null; enhanced_content?: string | null }>>([]);
+  const [notes, setNotes] = useState<
+    Array<{ id: number; title: string; content?: string | null; enhanced_content?: string | null }>
+  >([]);
   const [selectedNoteId, setSelectedNoteId] = useState<number | undefined>();
   useEffect(() => {
     if (entry.contextNoteId) return;
     let live = true;
-    void window.electronAPI.getNotes(null, 500, null).then((items) => {
-      if (live) setNotes(items.filter((note) => !note.deleted_at));
-    }).catch(() => {});
-    return () => { live = false; };
+    void window.electronAPI
+      .getNotes(null, 500, null)
+      .then((items) => {
+        if (live) setNotes(items.filter((note) => !note.deleted_at));
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
   }, [entry.contextNoteId]);
   const selectedNote = notes.find((note) => note.id === selectedNoteId);
   const contextTitle = entry.contextNoteTitle ?? selectedNote?.title;
   const selectedText = selectedNote
     ? [selectedNote.content, selectedNote.enhanced_content].filter(Boolean).join("\n\n")
     : "";
-  const contextChars = entry.contextChars ?? (selectedText
-    ? Math.min(12000, Array.from(selectedText).length) +
-      (Array.from(selectedText).length > 12000 ? Array.from("… [note truncated at 12000 characters]").length : 0)
-    : 0);
+  const contextChars =
+    entry.contextChars ??
+    (selectedText
+      ? Math.min(12000, Array.from(selectedText).length) +
+        (Array.from(selectedText).length > 12000
+          ? Array.from("… [note truncated at 12000 characters]").length
+          : 0)
+      : 0);
   useEffect(
     () =>
       window.agentJobs.onUpdated((job) => {
@@ -68,11 +79,17 @@ export function LocalApprovalCard({ entry }: { entry: LocalApprovalEntry }) {
       )}
       {contextTitle && (
         <>
-          <p className="text-xs text-muted-foreground">{t("agentJobs.card.context", { title: contextTitle, count: contextChars })}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("agentJobs.card.context", { title: contextTitle, count: contextChars })}
+          </p>
           <p className="text-xs text-warning">{t("agentJobs.card.contextPrivacy")}</p>
         </>
       )}
-      {entry.contextDropped && <p className="text-xs text-warning" role="status">{t("agentJobs.card.contextDropped")}</p>}
+      {entry.contextDropped && (
+        <p className="text-xs text-warning" role="status">
+          {t("agentJobs.card.contextDropped")}
+        </p>
+      )}
       <p className="text-xs text-muted-foreground" role="status">
         {t(`agentJobs.card.${entry.state}`)}
       </p>
@@ -81,10 +98,20 @@ export function LocalApprovalCard({ entry }: { entry: LocalApprovalEntry }) {
           {!entry.contextNoteId && notes.length > 0 && (
             <label className="block text-xs">
               {t("agentJobs.card.attachNote")}
-              <select className="ml-2 rounded border border-border bg-background" value={selectedNoteId ?? ""}
-                onChange={(event) => setSelectedNoteId(event.target.value ? Number(event.target.value) : undefined)} disabled={busy}>
+              <select
+                className="ml-2 rounded border border-border bg-background"
+                value={selectedNoteId ?? ""}
+                onChange={(event) =>
+                  setSelectedNoteId(event.target.value ? Number(event.target.value) : undefined)
+                }
+                disabled={busy}
+              >
                 <option value="">{t("agentJobs.card.noNote")}</option>
-                {notes.map((note) => <option key={note.id} value={note.id}>{note.title}</option>)}
+                {notes.map((note) => (
+                  <option key={note.id} value={note.id}>
+                    {note.title}
+                  </option>
+                ))}
               </select>
             </label>
           )}

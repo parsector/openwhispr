@@ -14,7 +14,8 @@ const LOG_LEVELS = {
 const MAX_DEBUG_LOG_FILES = 5;
 
 function pruneDebugLogs(logsDir) {
-  const files = fs.readdirSync(logsDir)
+  const files = fs
+    .readdirSync(logsDir)
     .filter((name) => /^debug-.*\.log$/.test(name))
     .sort()
     .reverse();

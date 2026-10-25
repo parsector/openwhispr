@@ -192,9 +192,7 @@ export default function InviteTeammateDialog({
           </div>
 
           {seatBlocked && (
-            <p className="text-[11px] text-muted-foreground">
-              {t("common.unavailableInBuild")}
-            </p>
+            <p className="text-[11px] text-muted-foreground">{t("common.unavailableInBuild")}</p>
           )}
 
           <DialogFooter className="pt-1">
