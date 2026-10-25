@@ -542,6 +542,27 @@ class DatabaseManager {
         )
       `);
 
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS routines (
+          id TEXT PRIMARY KEY, name TEXT NOT NULL, prompt TEXT NOT NULL,
+          trigger_type TEXT NOT NULL, trigger_config TEXT NOT NULL,
+          allowed_tools TEXT NOT NULL DEFAULT '[]', model_override TEXT,
+          catch_up_window_hours REAL NOT NULL DEFAULT 4, voice_hint TEXT,
+          paused INTEGER NOT NULL DEFAULT 0, last_run_at TEXT, next_run_at TEXT,
+          space_id INTEGER, account_id TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS routine_runs (
+          id TEXT PRIMARY KEY, routine_id TEXT NOT NULL, slot_key TEXT NOT NULL,
+          trigger TEXT NOT NULL, status TEXT NOT NULL, note_id INTEGER,
+          source_note_id INTEGER, event_id TEXT, source_status TEXT NOT NULL DEFAULT '{}',
+          error TEXT, started_at TEXT, ended_at TEXT, seen_at TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS routine_runs_slot ON routine_runs(routine_id, slot_key);
+        CREATE INDEX IF NOT EXISTS routine_runs_recent ON routine_runs(routine_id, started_at DESC);
+      `);
+
       const folderCount = this.db.prepare("SELECT COUNT(*) as count FROM folders").get();
       if (folderCount.count === 0) {
         const seedFolder = this.db.prepare(
@@ -1583,6 +1604,11 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_folders_space_account_name ON folders(space_id, account_id, name) WHERE deleted_at IS NULL AND account_id IS NOT NULL"
       );
+      try {
+        this.db.exec("ALTER TABLE folders ADD COLUMN routine_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
 
       // A cloud space is workspace-owned, while visibility is account-specific.
       // Keep the many-to-many membership separate so signing out one local
@@ -3960,13 +3986,15 @@ class DatabaseManager {
     }
   }
 
-  renameFolder(id, name) {
+  renameFolder(id, name, allowRoutine = false) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const folder = this._getFolderInAccountScope(id);
       if (folder?.deleted_at) return { success: false, error: "Folder not found" };
       if (!folder) return { success: false, error: "Folder not found" };
       if (folder.is_default) return { success: false, error: "Cannot rename default folders" };
+      if (folder.routine_id && !allowRoutine)
+        return { success: false, error: "Rename this routine from Routines" };
       const trimmed = (name || "").trim();
       if (!trimmed) return { success: false, error: "Folder name is required" };
       const folderScope = this._accountScopeCondition("folders");
@@ -3998,6 +4026,7 @@ class DatabaseManager {
       if (folder?.deleted_at) return { success: false, error: "Folder not found" };
       if (!folder) return { success: false, error: "Folder not found" };
       if (folder.is_default) return { success: false, error: "Cannot move default folders" };
+      if (folder.routine_id) return { success: false, error: "Cannot move routine folders" };
       const space = this.getSpace(spaceId);
       if (!space) return { success: false, error: "Space not found" };
       if (folder.space_id === spaceId) return { success: true, folder, notes: [] };
@@ -8353,6 +8382,167 @@ class DatabaseManager {
       debugLogger.error("Error removing speaker mapping", { error: error.message }, "database");
       throw error;
     }
+  }
+
+  listRoutines() {
+    const scope = this._accountScopeCondition("routines");
+    return this.db
+      .prepare(
+        `SELECT routines.*,
+        (SELECT status FROM routine_runs WHERE routine_id=routines.id ORDER BY rowid DESC LIMIT 1) AS last_status
+        FROM routines WHERE ${scope.sql} ORDER BY created_at DESC`
+      )
+      .all(...scope.params)
+      .map((row) => ({
+        ...row,
+        trigger_config: JSON.parse(row.trigger_config),
+        allowed_tools: JSON.parse(row.allowed_tools || "[]"),
+      }));
+  }
+
+  getRoutine(id) {
+    return this.listRoutines().find((routine) => routine.id === id) || null;
+  }
+
+  saveRoutine(input) {
+    const { validateSchedule } = require("./routines/routineSchedulePolicy");
+    const name = String(input.name || "").trim();
+    const prompt = String(input.prompt || "").trim();
+    if (!name || !prompt) return { success: false, error: "Name and prompt are required" };
+    const config = input.trigger_config;
+    try {
+      validateSchedule(config);
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+    const prior = input.id ? this.getRoutine(input.id) : null;
+    if (input.id && !prior) return { success: false, error: "Routine not found" };
+    const allowedTools = Array.isArray(input.allowed_tools)
+      ? input.allowed_tools
+      : prior?.allowed_tools || [];
+    if (
+      allowedTools.some((tool) => !["search_notes", "get_note", "calendar_events"].includes(tool))
+    ) {
+      return { success: false, error: "Unsupported routine tool" };
+    }
+    const spaceId = prior?.space_id ?? this.getPrivateSpaceId();
+    let folder = prior
+      ? this.getFolders(spaceId).find((item) => item.routine_id === prior.id)
+      : null;
+    if (!folder) {
+      const created = this.createFolder(name, spaceId);
+      if (!created.success) return created;
+      folder = created.folder;
+    } else if (folder.name !== name) {
+      const renamed = this.renameFolder(folder.id, name, true);
+      if (!renamed.success) return renamed;
+    }
+    const id = prior?.id || randomUUID();
+    const now = new Date().toISOString();
+    if (prior) {
+      this.db
+        .prepare(
+          `UPDATE routines SET name=?, prompt=?, trigger_config=?, allowed_tools=?, updated_at=? WHERE id=?`
+        )
+        .run(name, prompt, JSON.stringify(config), JSON.stringify(allowedTools), now, id);
+    } else {
+      this.db
+        .prepare(
+          `INSERT INTO routines (id,name,prompt,trigger_type,trigger_config,allowed_tools,space_id,account_id,created_at,updated_at)
+        VALUES (?,?,?,'time',?,?,?,?,?,?)`
+        )
+        .run(
+          id,
+          name,
+          prompt,
+          JSON.stringify(config),
+          JSON.stringify(allowedTools),
+          spaceId,
+          this._accountIdForSpace(spaceId),
+          now,
+          now
+        );
+    }
+    this.db.prepare("UPDATE folders SET routine_id=? WHERE id=?").run(id, folder.id);
+    return { success: true, routine: this.getRoutine(id) };
+  }
+
+  pauseRoutine(id, paused) {
+    if (!this.getRoutine(id)) return { success: false, error: "Routine not found" };
+    this.db
+      .prepare("UPDATE routines SET paused=?, next_run_at=NULL, updated_at=? WHERE id=?")
+      .run(paused ? 1 : 0, new Date().toISOString(), id);
+    return { success: true };
+  }
+
+  getRoutineRuns(id, limit = 200) {
+    if (!this.getRoutine(id)) return [];
+    return this.db
+      .prepare("SELECT * FROM routine_runs WHERE routine_id=? ORDER BY rowid DESC LIMIT ?")
+      .all(id, Math.min(Math.max(limit, 1), 200));
+  }
+
+  claimRoutineRun(routineId, slotKey, trigger, id = randomUUID()) {
+    if (!this.getRoutine(routineId)) throw new Error("Routine not found");
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO routine_runs (id,routine_id,slot_key,trigger,status,source_status)
+      VALUES (?,?,?,?,'queued','{}')`
+      )
+      .run(id, routineId, slotKey, trigger);
+    return this.db
+      .prepare("SELECT * FROM routine_runs WHERE routine_id=? AND slot_key=?")
+      .get(routineId, slotKey);
+  }
+
+  updateRoutineRun(id, fields) {
+    const allowed = [
+      "status",
+      "note_id",
+      "source_status",
+      "error",
+      "started_at",
+      "ended_at",
+      "seen_at",
+    ];
+    const entries = Object.entries(fields).filter(([key]) => allowed.includes(key));
+    if (!entries.length) return;
+    this.db
+      .prepare(`UPDATE routine_runs SET ${entries.map(([key]) => `${key}=?`).join(",")} WHERE id=?`)
+      .run(...entries.map(([, value]) => value), id);
+    if (fields.ended_at) {
+      const row = this.db.prepare("SELECT routine_id FROM routine_runs WHERE id=?").get(id);
+      if (row) {
+        this.db
+          .prepare(
+            `DELETE FROM routine_runs WHERE routine_id=? AND
+          (ended_at < datetime('now', '-90 days') OR id NOT IN
+            (SELECT id FROM routine_runs WHERE routine_id=? ORDER BY rowid DESC LIMIT 200))`
+          )
+          .run(row.routine_id, row.routine_id);
+      }
+    }
+  }
+
+  markRoutineNoteSeen(noteId) {
+    const scope = this._accountScopeCondition("routines");
+    this.db
+      .prepare(
+        `UPDATE routine_runs SET seen_at=? WHERE note_id=? AND routine_id IN
+        (SELECT id FROM routines WHERE ${scope.sql})`
+      )
+      .run(new Date().toISOString(), noteId, ...scope.params);
+  }
+
+  routineUnreadCount() {
+    const scope = this._accountScopeCondition("routines");
+    return this.db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM routine_runs rr JOIN routines ON routines.id=rr.routine_id
+      JOIN notes ON notes.id=rr.note_id AND notes.deleted_at IS NULL
+      WHERE rr.seen_at IS NULL AND ${scope.sql}`
+      )
+      .get(...scope.params).count;
   }
 }
 

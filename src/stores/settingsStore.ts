@@ -982,6 +982,10 @@ export interface SettingsState
   reasoningModelByProvider: Record<string, string>;
 
   noteFormattingMode: InferenceMode;
+  routinesMode: InferenceMode;
+  routinesProvider: string;
+  routinesModel: string;
+  routinesRemoteUrl: string;
   noteFormattingProvider: string;
   noteFormattingModel: string;
   noteFormattingCloudMode: string;
@@ -1808,6 +1812,10 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     return "openwhispr" as InferenceMode;
   })(),
   noteFormattingProvider: readString("noteFormattingProvider", ""),
+  routinesMode: readString("routinesMode", "") as InferenceMode,
+  routinesProvider: readString("routinesProvider", ""),
+  routinesModel: readString("routinesModel", ""),
+  routinesRemoteUrl: readString("routinesRemoteUrl", ""),
   noteFormattingModel: readString("noteFormattingModel", ""),
   noteFormattingCloudMode: readString("noteFormattingCloudMode", ""),
   noteFormattingCloudBaseUrl: readString("noteFormattingCloudBaseUrl", ""),
@@ -2943,7 +2951,9 @@ export const selectResolvedLLMConfig = (
 
   const localConfig: ResolvedLLMConfig = {
     scope,
-    mode: state[def.storeKeys.mode] as InferenceMode,
+    mode: (def.inheritMode
+      ? (state[def.storeKeys.mode] as InferenceMode) || fallback?.mode
+      : state[def.storeKeys.mode]) as InferenceMode,
     provider: read("provider") || fallback?.provider || "",
     model: read("model") || fallback?.model || "",
     cloudMode: read("cloudMode") || fallback?.cloudMode,

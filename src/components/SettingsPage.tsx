@@ -134,6 +134,8 @@ import {
   TRANSCRIPTION_ENTERPRISE_POLICY_PROVIDER_IDS,
   TRANSCRIPTION_POLICY_PROVIDER_IDS,
   useSettingsStore,
+  selectResolvedLLMConfig,
+  setResolvedLLMConfig,
   type HotkeyRegistrationResult,
 } from "../stores/settingsStore";
 import {
@@ -832,6 +834,54 @@ function NoteFormattingSettings() {
   );
 }
 
+function RoutinesModelSettings() {
+  const { t } = useTranslation();
+  const mode = useSettingsStore((s) => s.routinesMode);
+  return (
+    <div className="space-y-4">
+      <SettingsPanel>
+        <SettingsPanelRow>
+          <SettingsRow
+            label={t("settingsPage.llms.tabs.routines")}
+            description={mode ? t("routines.model.custom") : t("routines.model.sameAsChat")}
+          >
+            <Toggle
+              checked={Boolean(mode)}
+              onChange={(enabled) => {
+                if (enabled) {
+                  const chat = selectResolvedLLMConfig(
+                    useSettingsStore.getState(),
+                    "chatIntelligence"
+                  );
+                  setResolvedLLMConfig("routines", {
+                    mode: chat.mode,
+                    provider: chat.provider,
+                    model: chat.model,
+                    remoteUrl: chat.remoteUrl || "",
+                  });
+                } else {
+                  setResolvedLLMConfig("routines", {
+                    mode: "" as InferenceMode,
+                    provider: "",
+                    model: "",
+                    remoteUrl: "",
+                  });
+                }
+              }}
+            />
+          </SettingsRow>
+        </SettingsPanelRow>
+      </SettingsPanel>
+      {mode && (
+        <InferenceConfigEditor
+          scope="routines"
+          allowedModes={["openwhispr", "providers", "local", "self-hosted"]}
+        />
+      )}
+    </div>
+  );
+}
+
 function AiModelsSection({ useCleanupModel, setUseCleanupModel, toast }: AiModelsSectionProps) {
   const { t } = useTranslation();
 
@@ -874,6 +924,7 @@ type LlmTab =
   | "dictationAgent"
   | "dictationTranslation"
   | "noteFormatting"
+  | "routines"
   | "chatIntelligence";
 
 const SPEECH_TABS: SpeechTab[] = ["dictation", "noteRecording", "upload"];
@@ -882,9 +933,10 @@ const LLM_TABS: LlmTab[] = [
   "dictationAgent",
   "dictationTranslation",
   "noteFormatting",
+  "routines",
   "chatIntelligence",
 ];
-const AGENT_LLM_TABS = new Set<LlmTab>(["dictationAgent", "chatIntelligence"]);
+const AGENT_LLM_TABS = new Set<LlmTab>(["dictationAgent", "chatIntelligence", "routines"]);
 
 function useSubTab<T extends string>(storageKey: string, options: readonly T[], initial?: T) {
   const [tab, setTab] = useLocalStorage<T>(storageKey, initial ?? options[0]);
@@ -1009,6 +1061,7 @@ function LlmsTabs({
   renderDictationAgent,
   renderDictationTranslation,
   renderNoteFormatting,
+  renderRoutines,
   renderChatIntelligence,
 }: {
   initialTab?: LlmTab;
@@ -1016,6 +1069,7 @@ function LlmsTabs({
   renderDictationAgent: () => React.ReactNode;
   renderDictationTranslation: () => React.ReactNode;
   renderNoteFormatting: () => React.ReactNode;
+  renderRoutines: () => React.ReactNode;
   renderChatIntelligence: () => React.ReactNode;
 }) {
   const { t } = useTranslation();
@@ -1030,6 +1084,7 @@ function LlmsTabs({
     { id: "dictationAgent", name: t("settingsPage.llms.tabs.dictationAgent") },
     { id: "dictationTranslation", name: t("settingsPage.llms.tabs.dictationTranslation") },
     { id: "noteFormatting", name: t("settingsPage.llms.tabs.noteFormatting") },
+    { id: "routines", name: t("settingsPage.llms.tabs.routines") },
     { id: "chatIntelligence", name: t("settingsPage.llms.tabs.chatIntelligence") },
   ].filter((item) => visibleTabIds.includes(item.id as LlmTab));
 
@@ -1048,6 +1103,7 @@ function LlmsTabs({
           if (id === "dictationAgent") return <Sparkles className="w-3.5 h-3.5" />;
           if (id === "dictationTranslation") return <Languages className="w-3.5 h-3.5" />;
           if (id === "noteFormatting") return <BookOpen className="w-3.5 h-3.5" />;
+          if (id === "routines") return <Sparkles className="w-3.5 h-3.5" />;
           return <MessageSquare className="w-3.5 h-3.5" />;
         }}
       />
@@ -1057,6 +1113,7 @@ function LlmsTabs({
       )}
       <TabPanel active={tab === "dictationTranslation"}>{renderDictationTranslation()}</TabPanel>
       <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
+      {agentAllowed && <TabPanel active={tab === "routines"}>{renderRoutines()}</TabPanel>}
       {agentAllowed && (
         <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
       )}
@@ -4067,6 +4124,7 @@ EOF`,
             renderDictationAgent={() => <DictationAgentSettings />}
             renderDictationTranslation={() => <DictationTranslationSettings />}
             renderNoteFormatting={() => <NoteFormattingSettings />}
+            renderRoutines={() => <RoutinesModelSettings />}
           />
         </TabPanel>
       )}

@@ -255,6 +255,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
+  listRoutines: () => ipcRenderer.invoke("routines-list"),
+  routinePresets: () => ipcRenderer.invoke("routines-presets"),
+  saveRoutine: (routine) => ipcRenderer.invoke("routines-save", routine),
+  pauseRoutine: (id, paused) => ipcRenderer.invoke("routines-pause", id, paused),
+  runRoutineNow: (id) => ipcRenderer.invoke("routines-run-now", id),
+  routineHistory: (id) => ipcRenderer.invoke("routines-history", id),
+  routineUnread: () => ipcRenderer.invoke("routines-unread"),
+  markRoutineSeen: (noteId) => ipcRenderer.invoke("routines-seen", noteId),
+  setRoutineModelChoice: (choice) => ipcRenderer.invoke("routines-model-choice", choice),
+  setRoutineRecording: (source, active) => ipcRenderer.send("routines-recording", source, active),
+  onRoutinesUpdated: registerListener("routines-updated", (callback) => () => callback()),
   saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId) =>
     ipcRenderer.invoke(
       "db-save-note",

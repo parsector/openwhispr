@@ -515,6 +515,7 @@ export const useAudioRecording = (toast, options = {}) => {
 
     audioManagerRef.current.setCallbacks({
       onStateChange: ({ isRecording, isProcessing, isStreaming, micCaptureStatus }) => {
+        window.electronAPI?.setRoutineRecording?.("dictation", Boolean(isRecording));
         reportLifecycle(isRecording ? "recording" : isProcessing ? "processing" : "idle");
         if (isRecording) {
           onDemoEventRef.current?.({ kind: demoKindRef.current, status: "listening" });
