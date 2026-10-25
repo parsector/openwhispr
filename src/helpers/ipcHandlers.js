@@ -1075,6 +1075,7 @@ class IPCHandlers {
     });
     this.routineScheduler.start();
     ipcMain.handle("routines-list", () => this.databaseManager.listRoutines());
+    ipcMain.handle("routines-people", () => this.databaseManager.listRoutinePeople());
     ipcMain.handle("routines-model-usable", (_event, choice) => modelUsable(choice));
     ipcMain.handle("routines-model-choice-current", () => this._routineModelChoice);
     ipcMain.handle("routines-mcp-sources", async () => {
@@ -1087,6 +1088,15 @@ class IPCHandlers {
     ipcMain.handle("routines-save", (_event, input) => {
       const result = this.databaseManager.saveRoutine(input);
       if (result.success) {
+        this.routineScheduler.check();
+        broadcastToWindows("routines-updated");
+      }
+      return result;
+    });
+    ipcMain.handle("routines-delete", (_event, id, deleteFolder) => {
+      const result = this.databaseManager.deleteRoutine(id, Boolean(deleteFolder));
+      if (result.success) {
+        queue.cancelScheduled(id);
         this.routineScheduler.check();
         broadcastToWindows("routines-updated");
       }

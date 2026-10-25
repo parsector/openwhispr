@@ -1532,6 +1532,7 @@ declare global {
             slots: Array<{ days: number[]; time: string }>;
           };
           allowed_tools: string[];
+          source_config: { folder_ids: number[]; people: string[]; lookback_days: number } | null;
           model_override: {
             mode: string;
             provider: string;
@@ -1557,10 +1558,12 @@ declare global {
             slots: Array<{ days: number[]; time: string }>;
           };
           suggested_tools: string[];
+          source_config?: { folder_ids: number[]; people: string[]; lookback_days: number };
           needs: string[];
         }>
       >;
       routineMcpSources: () => Promise<Array<{ name: string; description: string }>>;
+      routinePeople: () => Promise<Array<{ email: string; name: string }>>;
       routineModelUsable: (choice: {
         mode: string;
         provider: string;
@@ -1578,6 +1581,7 @@ declare global {
         name: string;
         prompt: string;
         allowed_tools?: string[];
+        source_config?: { folder_ids: number[]; people: string[]; lookback_days: number } | null;
         model_override?: {
           mode: string;
           provider: string;
@@ -1589,6 +1593,7 @@ declare global {
         trigger_config: { schema_version: number; slots: Array<{ days: number[]; time: string }> };
       }) => Promise<{ success: boolean; error?: string }>;
       pauseRoutine: (id: string, paused: boolean) => Promise<{ success: boolean }>;
+      deleteRoutine: (id: string, deleteFolder: boolean) => Promise<{ success: boolean; error?: string }>;
       runRoutineNow: (id: string) => Promise<{ success: boolean }>;
       routineHistory: (id: string) => Promise<
         Array<{
