@@ -547,6 +547,7 @@ class DatabaseManager {
           id TEXT PRIMARY KEY, name TEXT NOT NULL, prompt TEXT NOT NULL,
           trigger_type TEXT NOT NULL, trigger_config TEXT NOT NULL,
           allowed_tools TEXT NOT NULL DEFAULT '[]', model_override TEXT,
+          source_config TEXT,
           catch_up_window_hours REAL NOT NULL DEFAULT 4, voice_hint TEXT,
           paused INTEGER NOT NULL DEFAULT 0, last_run_at TEXT, next_run_at TEXT,
           space_id INTEGER, account_id TEXT,
@@ -1606,6 +1607,11 @@ class DatabaseManager {
       );
       try {
         this.db.exec("ALTER TABLE folders ADD COLUMN routine_id TEXT");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      try {
+        this.db.exec("ALTER TABLE routines ADD COLUMN source_config TEXT");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
@@ -3881,6 +3887,9 @@ class DatabaseManager {
         .map((row) => row.id);
       let relocatedNotes = [];
       this.db.transaction(() => {
+        if (folder.routine_id) {
+          this.db.prepare("UPDATE folders SET routine_id=NULL WHERE id=?").run(id);
+        }
         relocatedNotes = this._releaseOutOfScopeChildNotes(id);
         if (!folder.cloud_id) {
           // There is no server operation to deny. Local-only folders can
@@ -8399,6 +8408,7 @@ class DatabaseManager {
         ...row,
         trigger_config: JSON.parse(row.trigger_config),
         allowed_tools: JSON.parse(row.allowed_tools || "[]"),
+        source_config: row.source_config ? JSON.parse(row.source_config) : null,
         model_override: row.model_override ? JSON.parse(row.model_override) : null,
       }));
   }
@@ -8454,6 +8464,20 @@ class DatabaseManager {
       return { success: false, error: "Invalid catch-up window" };
     const voiceHint = String(input.voice_hint ?? prior?.voice_hint ?? "").trim();
     if (voiceHint.length > 200) return { success: false, error: "Voice hint too long" };
+    const source = input.source_config === undefined ? prior?.source_config : input.source_config;
+    const sourceConfig = source == null ? null : {
+      folder_ids: source.folder_ids,
+      people: source.people,
+      lookback_days: source.lookback_days,
+    };
+    if (sourceConfig && (
+      !Array.isArray(sourceConfig.folder_ids) ||
+      sourceConfig.folder_ids.some((id) => !Number.isSafeInteger(id) || id < 1) ||
+      !Array.isArray(sourceConfig.people) ||
+      sourceConfig.people.some((person) => typeof person !== "string" || person.length > 320) ||
+      !Number.isSafeInteger(sourceConfig.lookback_days) ||
+      sourceConfig.lookback_days < 1 || sourceConfig.lookback_days > 365
+    )) return { success: false, error: "Invalid note source selection" };
     const spaceId = prior?.space_id ?? this.getPrivateSpaceId();
     let folder = prior
       ? this.getFolders(spaceId).find((item) => item.routine_id === prior.id)
@@ -8471,7 +8495,7 @@ class DatabaseManager {
     if (prior) {
       this.db
         .prepare(
-          `UPDATE routines SET name=?, prompt=?, trigger_config=?, allowed_tools=?, model_override=?, catch_up_window_hours=?, voice_hint=?, updated_at=? WHERE id=?`
+          `UPDATE routines SET name=?, prompt=?, trigger_config=?, allowed_tools=?, model_override=?, catch_up_window_hours=?, voice_hint=?, source_config=?, updated_at=? WHERE id=?`
         )
         .run(
           name,
@@ -8481,14 +8505,15 @@ class DatabaseManager {
           override ? JSON.stringify(override) : null,
           catchUp,
           voiceHint,
+          sourceConfig ? JSON.stringify(sourceConfig) : null,
           now,
           id
         );
     } else {
       this.db
         .prepare(
-          `INSERT INTO routines (id,name,prompt,trigger_type,trigger_config,allowed_tools,model_override,catch_up_window_hours,voice_hint,space_id,account_id,created_at,updated_at)
-        VALUES (?,?,?,'time',?,?,?,?,?,?,?,?,?)`
+          `INSERT INTO routines (id,name,prompt,trigger_type,trigger_config,allowed_tools,model_override,catch_up_window_hours,voice_hint,source_config,space_id,account_id,created_at,updated_at)
+        VALUES (?,?,?,'time',?,?,?,?,?,?,?,?,?,?)`
         )
         .run(
           id,
@@ -8499,6 +8524,7 @@ class DatabaseManager {
           override ? JSON.stringify(override) : null,
           catchUp,
           voiceHint,
+          sourceConfig ? JSON.stringify(sourceConfig) : null,
           spaceId,
           this._accountIdForSpace(spaceId),
           now,
@@ -8507,6 +8533,47 @@ class DatabaseManager {
     }
     this.db.prepare("UPDATE folders SET routine_id=? WHERE id=?").run(id, folder.id);
     return { success: true, routine: this.getRoutine(id) };
+  }
+
+  listRoutinePeople() {
+    const scope = this._accountScopeCondition("notes");
+    const rows = this.db.prepare(
+      `SELECT participants FROM notes WHERE deleted_at IS NULL AND participants IS NOT NULL
+       AND ${scope.sql} AND id NOT IN
+       (SELECT note_id FROM routine_runs WHERE note_id IS NOT NULL)`
+    ).all(...scope.params);
+    const people = new Map();
+    for (const row of rows) {
+      let participants;
+      try { participants = JSON.parse(row.participants); } catch { continue; }
+      if (!Array.isArray(participants)) continue;
+      for (const person of participants) {
+        if (!person || typeof person.email !== "string" || person.self) continue;
+        const email = person.email.trim().toLowerCase();
+        if (email && !people.has(email)) people.set(email, {
+          email, name: person.displayName || email,
+        });
+      }
+    }
+    return [...people.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  deleteRoutine(id, deleteFolder = false) {
+    const routine = this.getRoutine(id);
+    if (!routine) return { success: false, error: "Routine not found" };
+    const folder = this.getFolders(routine.space_id).find((item) => item.routine_id === id);
+    return this.db.transaction(() => {
+      if (folder) {
+        if (deleteFolder) {
+          const result = this.deleteFolder(folder.id);
+          if (!result.success) return result;
+        } else {
+          this.db.prepare("UPDATE folders SET routine_id=NULL WHERE id=?").run(folder.id);
+        }
+      }
+      this.db.prepare("DELETE FROM routines WHERE id=?").run(id);
+      return { success: true };
+    })();
   }
 
   pauseRoutine(id, paused) {
