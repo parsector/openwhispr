@@ -2132,6 +2132,7 @@
         "dictationCleanup": "Limpieza de dictado",
         "dictationAgent": "Asistente de voz",
         "noteFormatting": "Formato de notas",
+        "routines": "Routines",
         "chatIntelligence": "Chat",
         "dictationTranslation": "Traducción"
       }
@@ -3493,6 +3494,7 @@
     }
   },
   "sidebar": {
+    "routines": "Routines",
     "insights": "Estadísticas",
     "home": "Inicio",
     "notes": "Notas",
@@ -5014,6 +5016,76 @@
       "groupCount": "{{count}} of {{total}}",
       "gh_missing": "GitHub CLI (gh) is unavailable.",
       "parse_failed": "Could not list open pull requests."
+    }
+  },
+  "routines": {
+    "title": "Routines",
+    "description": "Your scheduled briefs and notes, ready when you are.",
+    "new": "New routine",
+    "edit": "Edit",
+    "name": "Name",
+    "prompt": "Prompt",
+    "timeTrigger": "Time trigger",
+    "time": "Time",
+    "hour": "Hour",
+    "minute": "Minute",
+    "addSlot": "Add time slot",
+    "removeSlot": "Remove",
+    "save": "Save routine",
+    "cancel": "Cancel",
+    "saveFailed": "Could not save routine",
+    "errors": {
+      "folderNameTaken": "A folder with that name already exists",
+      "nameAndPrompt": "Enter a name and prompt",
+      "slotCount": "Choose between one and six time slots",
+      "invalidSlot": "Choose at least one day and a valid time for each slot"
+    },
+    "empty": "Create a routine to try a scheduled brief.",
+    "paused": "Paused",
+    "active": "Active",
+    "lastRun": "Last run",
+    "nextRun": "Next run",
+    "never": "Never",
+    "runNow": "Run now",
+    "runFailed": "Could not start the routine",
+    "notification": {
+      "ready": "Ready",
+      "withoutConfirmation": "finished without confirmation",
+      "sourcesUnavailable": "{{count}} source(s) unavailable"
+    },
+    "resume": "Resume",
+    "pause": "Pause",
+    "history": "Run history",
+    "gallery": "Start with a template",
+    "scratch": "Start from scratch",
+    "days": {
+      "0": "Sun",
+      "1": "Mon",
+      "2": "Tue",
+      "3": "Wed",
+      "4": "Thu",
+      "5": "Fri",
+      "6": "Sat"
+    },
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "done": "Done",
+      "partial": "Partial",
+      "empty": "Empty",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "model": {
+      "sameAsChat": "Same as chat",
+      "custom": "Use a different model for routines"
+    },
+    "presets": {
+      "morningBrief": {
+        "name": "Morning brief",
+        "description": "Today's meetings and recent open action items, with links to related notes.",
+        "pickTime": "Choose a time before saving"
+      }
     }
   }
 }
