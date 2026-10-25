@@ -12,11 +12,13 @@ export const LLM_REQUEST_TIMEOUT_CODE = "LLM_REQUEST_TIMEOUT";
 /**
  * Client-side deadline for a non-streaming LLM request, or idle timeout for a stream.
  * @param {{ streaming?: boolean, scope?: string }} [options] `scope` is the
- *   request's inference scope; note formatting gets the long deadline.
+ *   request's inference scope; document-length background tasks get the long deadline.
  */
 export function getLlmRequestTimeoutSeconds({ streaming = false, scope } = {}) {
   if (streaming) return LLM_STREAMING_TIMEOUT_SECONDS;
-  return scope === "noteFormatting" ? LLM_LONG_TASK_TIMEOUT_SECONDS : LLM_REQUEST_TIMEOUT_SECONDS;
+  return scope === "noteFormatting" || scope === "routines"
+    ? LLM_LONG_TASK_TIMEOUT_SECONDS
+    : LLM_REQUEST_TIMEOUT_SECONDS;
 }
 
 /**
