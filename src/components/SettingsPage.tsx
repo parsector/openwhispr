@@ -1112,8 +1112,9 @@ function LlmsTabs({
         <TabPanel active={tab === "dictationAgent"}>{renderDictationAgent()}</TabPanel>
       )}
       <TabPanel active={tab === "dictationTranslation"}>{renderDictationTranslation()}</TabPanel>
-      <TabPanel active={tab === "noteFormatting"}>{renderNoteFormatting()}</TabPanel>
-      {agentAllowed && <TabPanel active={tab === "routines"}>{renderRoutines()}</TabPanel>}
+      <TabPanel active={tab === "noteFormatting" || (agentAllowed && tab === "routines")}>
+        {tab === "routines" && agentAllowed ? renderRoutines() : renderNoteFormatting()}
+      </TabPanel>
       {agentAllowed && (
         <TabPanel active={tab === "chatIntelligence"}>{renderChatIntelligence()}</TabPanel>
       )}
