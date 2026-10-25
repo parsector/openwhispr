@@ -42,6 +42,45 @@ function actionItemContext(database, now) {
   };
 }
 
+function selectedNoteContext(database, config, now) {
+  if (!config) return null;
+  const scope = database._accountScopeCondition("notes");
+  const rows = database.db.prepare(
+    `SELECT notes.id,notes.title,notes.created_at,notes.participants,
+      notes.enhanced_content,notes.content,notes.folder_id,folders.routine_id
+     FROM notes LEFT JOIN folders ON folders.id=notes.folder_id
+     WHERE notes.deleted_at IS NULL AND datetime(notes.created_at)>=datetime(?)
+       AND ${scope.sql}
+       AND notes.id NOT IN (SELECT note_id FROM routine_runs WHERE note_id IS NOT NULL)
+     ORDER BY notes.created_at DESC, notes.id DESC LIMIT 200`
+  ).all(new Date(now - config.lookback_days * DAY).toISOString(), ...scope.params);
+  const folders = new Set(config.folder_ids);
+  const people = new Set(config.people.map((value) => value.toLowerCase()));
+  let count = 0;
+  let chars = 0;
+  const sections = [];
+  for (const note of rows) {
+    if (count >= 20 || chars >= 60000) break;
+    if (note.routine_id || (folders.size && !folders.has(note.folder_id))) continue;
+    let participants = [];
+    try {
+      const parsed = JSON.parse(note.participants || "[]");
+      if (Array.isArray(parsed)) participants = parsed;
+    } catch { /* malformed metadata */ }
+    if (people.size && !participants.some((person) =>
+      typeof person.email === "string" && people.has(person.email.trim().toLowerCase()))) continue;
+    const names = participants.map((person) => person.displayName || person.email).filter(Boolean);
+    const section = `[Note ${note.id}](note:${note.id}) ${note.title} (${note.created_at})\nPeople: ${names.join(", ") || "none"}\n${note.enhanced_content || note.content || ""}`;
+    const separator = sections.length ? 2 : 0;
+    const remaining = 60000 - chars - separator;
+    if (remaining <= 0) break;
+    sections.push(section.slice(0, remaining));
+    chars += separator + Math.min(section.length, remaining);
+    count++;
+  }
+  return { text: sections.join("\n\n") || "No selected notes", count };
+}
+
 function calendarContext(database, now) {
   try {
     const start = new Date(now);
@@ -128,12 +167,16 @@ class RoutineRunner {
         };
       }
       const calendar = calendarContext(database, now);
+      let selectedNotes;
+      try { selectedNotes = selectedNoteContext(database, routine.source_config, now); }
+      catch { selectedNotes = { text: "Selected notes unavailable", count: 0, status: "unavailable" }; }
       const sourceStatus = {
         action_items:
           actions.status === "unavailable"
             ? "unavailable"
             : { scanned: actions.scanned, matched: actions.matched },
         calendar: calendar.status,
+        ...(selectedNotes ? { selected_notes: selectedNotes.status || { matched: selectedNotes.count } } : {}),
       };
       let model = job.model;
       let modelWarning = "";
@@ -185,7 +228,7 @@ class RoutineRunner {
         claimTurnSlot: () => true,
         releaseTurnSlot: () => {},
       };
-      const prompt = `${routine.prompt}\n\nToday's calendar:\n${calendar.text}\n\nLast seven days' checkbox action items:\n${actions.text}\n\nCite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
+      const prompt = `${routine.prompt}\n\nToday's calendar:\n${calendar.text}\n\nLast seven days' checkbox action items:\n${actions.text}${selectedNotes ? `\n\nSelected notes (deterministically filtered):\n${selectedNotes.text}` : ""}\n\nCite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
       const response = await this.infer({ model, prompt, toolsAvailable, registry, context });
       if (toolsAvailable && !response.toolsAvailable) {
         for (const name of routine.allowed_tools)
@@ -260,4 +303,4 @@ class RoutineRunner {
   }
 }
 
-module.exports = { RoutineRunner, actionItemContext, calendarContext, linkNoteReferences };
+module.exports = { RoutineRunner, actionItemContext, selectedNoteContext, calendarContext, linkNoteReferences };

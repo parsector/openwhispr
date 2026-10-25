@@ -9,6 +9,16 @@ const PRESETS = [
     suggested_tools: ["search_notes", "get_note", "get_calendar_events"],
     needs: ["routines.presets.morningBrief.pickTime"],
   },
+  {
+    id: "friday-digest",
+    nameKey: "routines.presets.fridayDigest.name",
+    descriptionKey: "routines.presets.fridayDigest.description",
+    prompt: "Using only the selected notes from the past seven days, summarize decisions, risks, and blockers. Then draft a concise status update. Cite the supplied note links. If there is nothing useful to report, answer NOTHING_TO_REPORT.",
+    trigger_config: { schema_version: 1, slots: [{ days: [5], time: "16:00" }] },
+    source_config: { folder_ids: [], people: [], lookback_days: 7 },
+    suggested_tools: [],
+    needs: ["routines.presets.fridayDigest.pickFolders", "routines.presets.fridayDigest.pickPeople"],
+  },
 ];
 
 module.exports = { PRESETS };

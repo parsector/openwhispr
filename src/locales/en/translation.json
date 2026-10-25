@@ -2656,6 +2656,11 @@
     "sourceNote": "Read a note",
     "sourceCalendar": "Calendar events",
     "sourceUnavailable": "currently unavailable",
+    "selectedNotes": "Selected notes",
+    "useSelectedNotes": "Include notes from selected folders and people",
+    "folders": "Folders",
+    "people": "People",
+    "lookbackDays": "Look back (days)",
     "modelOverride": "Model",
     "modelFields": {
       "mode": "Mode",
@@ -2680,7 +2685,8 @@
       "folderNameTaken": "A folder with that name already exists",
       "nameAndPrompt": "Enter a name and prompt",
       "slotCount": "Choose between one and six time slots",
-      "invalidSlot": "Choose at least one day and a valid time for each slot"
+      "invalidSlot": "Choose at least one day and a valid time for each slot",
+      "digestSelection": "Pick at least one folder and one person for the Friday digest"
     },
     "empty": "Create a routine to try a scheduled brief.",
     "paused": "Paused",
@@ -2690,6 +2696,11 @@
     "never": "Never",
     "runNow": "Run now",
     "runFailed": "Could not start the routine",
+    "delete": "Delete routine",
+    "deleteQuestion": "Delete {{name}}? Choose what happens to its folder and notes.",
+    "keepFolder": "Keep folder and notes",
+    "deleteFolderNotes": "Delete folder and notes",
+    "deleteFailed": "Could not delete routine",
     "notification": {
       "ready": "Ready",
       "withoutConfirmation": "finished without confirmation",
@@ -2716,6 +2727,12 @@
         "name": "Morning brief",
         "description": "Today's meetings and recent open action items, with links to related notes.",
         "pickTime": "Choose a time before saving"
+      },
+      "fridayDigest": {
+        "name": "Friday digest",
+        "description": "Decisions, risks, blockers, and a draft status update from the past seven days.",
+        "pickFolders": "Pick folders",
+        "pickPeople": "Pick people"
       }
     }
   },

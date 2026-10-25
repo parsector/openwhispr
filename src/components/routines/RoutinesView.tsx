@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
-import { loadFolders } from "../../stores/noteStore";
+import { loadFolders, useFolders } from "../../stores/noteStore";
 import { routineEndpointSupportsTools } from "../../utils/modelCapability";
 
 type Routine = Awaited<ReturnType<Window["electronAPI"]["listRoutines"]>>[number];
@@ -13,6 +13,7 @@ type Draft = {
   name: string;
   prompt: string;
   allowed_tools: string[];
+  source_config: { folder_ids: number[]; people: string[]; lookback_days: number } | null;
   model_override: ModelChoice | null;
   catch_up_window_hours: number;
   voice_hint: string;
@@ -69,6 +70,7 @@ function newDraft(preset?: Preset, translatedName = ""): Draft {
     name: translatedName,
     prompt: preset?.prompt || "",
     allowed_tools: preset?.suggested_tools || [],
+    source_config: preset?.source_config || null,
     model_override: null,
     catch_up_window_hours: 4,
     voice_hint: "",
@@ -90,6 +92,9 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
     Awaited<ReturnType<Window["electronAPI"]["routineHistory"]>>
   >([]);
   const [error, setError] = useState("");
+  const [people, setPeople] = useState<Array<{ email: string; name: string }>>([]);
+  const [deleteTarget, setDeleteTarget] = useState<Routine | null>(null);
+  const folders = useFolders().filter((folder) => !folder.routine_id && !folder.deleted_at);
   const [mcpSources, setMcpSources] = useState<Array<{ name: string; description: string }>>([]);
   const [scopeModel, setScopeModel] = useState<ModelChoice | null>(null);
   const [overrideUsable, setOverrideUsable] = useState(true);
@@ -100,6 +105,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
   useEffect(() => {
     void refresh();
     void window.electronAPI.routinePresets().then(setPresets);
+    void window.electronAPI.routinePeople().then(setPeople);
     void window.electronAPI
       .routineMcpSources()
       .then(setMcpSources)
@@ -130,6 +136,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
       name: routine.name,
       prompt: routine.prompt,
       allowed_tools: routine.allowed_tools,
+      source_config: routine.source_config,
       model_override: routine.model_override,
       catch_up_window_hours: routine.catch_up_window_hours,
       voice_hint: routine.voice_hint || "",
@@ -156,6 +163,11 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
     );
   const save = async () => {
     if (!draft) return;
+    if (fromPreset?.id === "friday-digest" &&
+      (!draft.source_config?.folder_ids.length || !draft.source_config.people.length)) {
+      setError(t("routines.errors.digestSelection"));
+      return;
+    }
     let result;
     try {
       result = await window.electronAPI.saveRoutine(draft);
@@ -207,7 +219,10 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
           <h2 className="font-medium">{draft.id ? t("routines.edit") : t("routines.new")}</h2>
           {fromPreset && (
             <p className="text-xs text-muted-foreground">
-              {fromPreset.needs.map((key) => t(key)).join(" · ")}
+              {fromPreset.needs.filter((key) =>
+                key.endsWith("pickFolders") ? !draft.source_config?.folder_ids.length :
+                key.endsWith("pickPeople") ? !draft.source_config?.people.length : true
+              ).map((key) => t(key)).join(" · ")}
             </p>
           )}
           <div className="block space-y-1 text-sm">
@@ -373,6 +388,51 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                 </button>
               ))}
           </div>
+          <div className="space-y-3 text-sm">
+            <p className="font-medium">{t("routines.selectedNotes")}</p>
+            <button type="button" aria-pressed={!!draft.source_config}
+              className="flex w-full gap-2 rounded-md border border-border p-2 text-start"
+              onClick={() => setDraft({ ...draft, source_config: draft.source_config
+                ? null : { folder_ids: [], people: [], lookback_days: 7 } })}>
+              <span aria-hidden="true">{draft.source_config ? "☑" : "☐"}</span>
+              {t("routines.useSelectedNotes")}
+            </button>
+            {draft.source_config && <>
+              <fieldset className="space-y-1"><legend>{t("routines.folders")}</legend>
+                {folders.map((folder) => <button key={folder.id} type="button"
+                  aria-pressed={draft.source_config!.folder_ids.includes(folder.id)}
+                  className="flex w-full gap-2 rounded-md border border-border p-2 text-start"
+                  onClick={() => { const selected = draft.source_config!.folder_ids.includes(folder.id);
+                    setDraft({ ...draft, source_config: { ...draft.source_config!, folder_ids: selected
+                      ? draft.source_config!.folder_ids.filter((id) => id !== folder.id)
+                      : [...draft.source_config!.folder_ids, folder.id] } }); }}>
+                  <span aria-hidden="true">{draft.source_config!.folder_ids.includes(folder.id) ? "☑" : "☐"}</span>
+                  {folder.name}
+                </button>)}
+              </fieldset>
+              <fieldset className="space-y-1"><legend>{t("routines.people")}</legend>
+                {people.map((person) => <button key={person.email} type="button"
+                  aria-pressed={draft.source_config!.people.includes(person.email)}
+                  className="flex w-full gap-2 rounded-md border border-border p-2 text-start"
+                  onClick={() => { const selected = draft.source_config!.people.includes(person.email);
+                    setDraft({ ...draft, source_config: { ...draft.source_config!, people: selected
+                      ? draft.source_config!.people.filter((email) => email !== person.email)
+                      : [...draft.source_config!.people, person.email] } }); }}>
+                  <span aria-hidden="true">{draft.source_config!.people.includes(person.email) ? "☑" : "☐"}</span>
+                  {person.name}
+                </button>)}
+              </fieldset>
+              <label className="block">{t("routines.lookbackDays")}
+                <select className="ml-2 rounded-md border bg-background p-2"
+                  value={draft.source_config.lookback_days}
+                  onChange={(event) => setDraft({ ...draft, source_config: {
+                    ...draft.source_config!, lookback_days: Number(event.target.value),
+                  } })}>
+                  {Array.from({ length: 365 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+                </select>
+              </label>
+            </>}
+          </div>
           <div className="space-y-2 text-sm">
             <label className="block">
               {t("routines.modelOverride")}
@@ -526,10 +586,30 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                   <Button size="sm" variant="ghost" onClick={() => void showHistory(routine.id)}>
                     {t("routines.history")}
                   </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setDeleteTarget(routine)}>
+                    {t("routines.delete")}
+                  </Button>
                 </div>
               </section>
             ))}
           </div>
+          {deleteTarget && <section role="dialog" aria-modal="true" aria-label={t("routines.delete")}
+            className="rounded-xl border border-destructive p-4 space-y-3">
+            <p>{t("routines.deleteQuestion", { name: deleteTarget.name })}</p>
+            <div className="flex flex-wrap gap-2">
+              <Button autoFocus onClick={async () => { const result = await window.electronAPI.deleteRoutine(deleteTarget.id, false);
+                if (!result.success) setError(t("routines.deleteFailed"));
+                setDeleteTarget(null); void loadFolders(); await refresh(); }}>
+                {t("routines.keepFolder")}
+              </Button>
+              <Button variant="destructive" onClick={async () => { const result = await window.electronAPI.deleteRoutine(deleteTarget.id, true);
+                if (!result.success) setError(t("routines.deleteFailed"));
+                setDeleteTarget(null); void loadFolders(); await refresh(); }}>
+                {t("routines.deleteFolderNotes")}
+              </Button>
+              <Button variant="ghost" onClick={() => setDeleteTarget(null)}>{t("routines.cancel")}</Button>
+            </div>
+          </section>}
           {historyId && (
             <section className="space-y-2">
               <h2 className="font-medium">{t("routines.history")}</h2>
@@ -562,6 +642,9 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                 >
                   <strong>{t(preset.nameKey)}</strong>
                   <p className="mt-1 text-xs text-muted-foreground">{t(preset.descriptionKey)}</p>
+                  {preset.needs.length > 0 && <p className="mt-1 text-xs text-amber-700">
+                    {preset.needs.map((key) => t(key)).join(" · ")}
+                  </p>}
                 </button>
               ))}
             </div>
