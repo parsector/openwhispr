@@ -1,4 +1,11 @@
-import { useEffect, useRef, useCallback, useState, type MutableRefObject } from "react";
+import {
+  useEffect,
+  useRef,
+  useCallback,
+  useState,
+  type MouseEvent,
+  type MutableRefObject,
+} from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import { cn } from "../lib/utils";
 import { createMentionExtension } from "./RichTextEditorMention";
@@ -145,11 +152,26 @@ export function RichTextEditor({
     }
   }, [disabled, editor]);
 
-  const handleClick = useCallback(() => {
-    if (editor && !editor.isFocused && !disabled) {
-      editor.commands.focus();
-    }
-  }, [editor, disabled]);
+  const handleClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const link = (event.target as Element).closest<HTMLAnchorElement>("a[href]");
+      const match = link?.getAttribute("href")?.match(/^note:(\d+)$/);
+      if (match) {
+        event.preventDefault();
+        void window.electronAPI.agentOpenNote?.(Number(match[1]));
+        return;
+      }
+      if (link) {
+        event.preventDefault();
+        window.open(link.href, link.target || "_blank");
+        return;
+      }
+      if (editor && !editor.isFocused && !disabled) {
+        editor.commands.focus();
+      }
+    },
+    [editor, disabled]
+  );
 
   return (
     <div

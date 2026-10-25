@@ -3,6 +3,11 @@ const { modelSupportsToolCalls } = require("../../utils/modelCapability.ts");
 const { createToolRegistry } = require("./routineToolRegistry");
 
 const DAY = 86400000;
+function linkNoteReferences(text) {
+  return String(text || "")
+    .replace(/\[note:(\d+)\]/g, (_, id) => `[Note ${id}](note:${id})`)
+    .replace(/(?<!\]\()\bnote:(\d+)\b/g, (_, id) => `[Note ${id}](note:${id})`);
+}
 function actionItemContext(database, now) {
   const scope = database._accountScopeCondition("notes");
   const rows = database.db
@@ -25,7 +30,7 @@ function actionItemContext(database, now) {
       .filter((line) => /^\s*- \[[ xX]\]/.test(line));
     if (!lines.length) continue;
     matched++;
-    const section = `[note:${note.id}] ${note.title} (${note.created_at})\nAttendees: ${note.participants || "none"}\n${lines.join("\n")}`;
+    const section = `[Note ${note.id}](note:${note.id}) ${note.title} (${note.created_at})\nAttendees: ${note.participants || "none"}\n${lines.join("\n")}`;
     sections.push(section.slice(0, Math.max(0, 60000 - chars)));
     chars += section.length;
   }
@@ -64,7 +69,9 @@ function calendarContext(database, now) {
       }
       return (
         `${event.summary} — ${event.start_time} ${event.web_link || event.hangout_link || ""}\n` +
-        related.map((note) => `Related: [note:${note.id}] ${note.title}`).join("\n")
+        related
+          .map((note) => `Related: [Note ${note.id}](note:${note.id}) ${note.title}`)
+          .join("\n")
       );
     });
     return { text: lines.join("\n") || "No meetings today", status: "ok" };
@@ -152,7 +159,7 @@ class RoutineRunner {
         claimTurnSlot: () => true,
         releaseTurnSlot: () => {},
       };
-      const prompt = `${routine.prompt}\n\nToday's calendar:\n${calendar.text}\n\nLast seven days' checkbox action items:\n${actions.text}\n\nCite notes as note:<id>. Do not invent unavailable sources. ${toolsAvailable && model.mode !== "openwhispr" ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
+      const prompt = `${routine.prompt}\n\nToday's calendar:\n${calendar.text}\n\nLast seven days' checkbox action items:\n${actions.text}\n\nCite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable && model.mode !== "openwhispr" ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
       const response = await this.infer({ model, prompt, toolsAvailable, registry, context });
       if (toolsAvailable && !response.toolsAvailable) {
         for (const name of routine.allowed_tools) sourceStatus[name] = "unavailable";
@@ -187,7 +194,7 @@ class RoutineRunner {
       const sourceLine = `Sources: ${actions.scanned} notes scanned, ${actions.matched} with checkboxes; calendar ${calendar.status}${unavailable.length ? `; unavailable: ${unavailable.join(", ")}` : ""}`;
       const note = database.saveNote(
         noteTitle(database, routine, now),
-        `${result.text}\n\n${sourceLine}`,
+        `${linkNoteReferences(result.text)}\n\n${sourceLine}`,
         "personal",
         null,
         null,
@@ -229,4 +236,4 @@ class RoutineRunner {
   }
 }
 
-module.exports = { RoutineRunner, actionItemContext, calendarContext };
+module.exports = { RoutineRunner, actionItemContext, calendarContext, linkNoteReferences };

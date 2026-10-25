@@ -94,6 +94,13 @@ const createEditor = (markdown) =>
     content: markdown,
   });
 
+test("note citation links survive the editor Markdown round trip", () => {
+  const editor = createEditor("[Source note](note:42)");
+  assert.match(editor.getHTML(), /href="note:42"/);
+  assert.equal(markdownOf(editor), "[Source note](note:42)");
+  editor.destroy();
+});
+
 function markdownOf(editor) {
   const markdown = editor.storage.markdown.getMarkdown();
   assert.doesNotMatch(markdown, LOST_NODE);
@@ -746,6 +753,19 @@ const clickButton = (element) => {
   );
   element.click();
 };
+
+test("clicking a note citation opens that note", async (t) => {
+  const opened = [];
+  happyWindow.electronAPI = { agentOpenNote: async (id) => opened.push(id) };
+  t.after(() => {
+    delete happyWindow.electronAPI;
+  });
+  const notes = await mountNotes(t, "[Source note](note:42)");
+  const link = notes.host.querySelector('a[href="note:42"]');
+  assert.ok(link);
+  await notes.act(() => link.click());
+  assert.deepEqual(opened, [42]);
+});
 const addEmptyLastLine = (editor) => {
   editor.commands.insertContentAt(editor.state.doc.content.size, { type: "paragraph" });
   editor.commands.setTextSelection(editor.state.doc.content.size - 1);

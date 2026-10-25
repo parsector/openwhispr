@@ -32,7 +32,9 @@ function createToolRegistry({ database, allowedTools = [], finishRun, onUnavaila
           data: notes.map(({ id, title, created_at }) => ({ id, title, created_at })),
           displayText:
             notes
-              .map((note) => `[note:${note.id}] ${note.title} (${note.created_at})`)
+              .map(
+                (note) => `[Note ${note.id}](note:${note.id}) ${note.title} (${note.created_at})`
+              )
               .join("\n") || "No notes found",
         };
       },
