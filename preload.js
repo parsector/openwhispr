@@ -257,6 +257,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Note functions
   listRoutines: () => ipcRenderer.invoke("routines-list"),
   routinePresets: () => ipcRenderer.invoke("routines-presets"),
+  routineMcpSources: () => ipcRenderer.invoke("routines-mcp-sources"),
+  routineModelUsable: (choice) => ipcRenderer.invoke("routines-model-usable", choice),
+  routineModelChoiceCurrent: () => ipcRenderer.invoke("routines-model-choice-current"),
   saveRoutine: (routine) => ipcRenderer.invoke("routines-save", routine),
   pauseRoutine: (id, paused) => ipcRenderer.invoke("routines-pause", id, paused),
   runRoutineNow: (id) => ipcRenderer.invoke("routines-run-now", id),

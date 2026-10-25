@@ -8399,6 +8399,7 @@ class DatabaseManager {
         ...row,
         trigger_config: JSON.parse(row.trigger_config),
         allowed_tools: JSON.parse(row.allowed_tools || "[]"),
+        model_override: row.model_override ? JSON.parse(row.model_override) : null,
       }));
   }
 
@@ -8424,11 +8425,35 @@ class DatabaseManager {
       : prior?.allowed_tools || [];
     if (
       allowedTools.some(
-        (tool) => !["search_notes", "get_note", "get_calendar_events"].includes(tool)
+        (tool) =>
+          typeof tool !== "string" ||
+          !(
+            ["search_notes", "get_note", "get_calendar_events"].includes(tool) ||
+            /^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+$/.test(tool)
+          ) ||
+          tool.length > 64
       )
     ) {
       return { success: false, error: "Unsupported routine tool" };
     }
+    const override =
+      input.model_override === undefined ? (prior?.model_override ?? null) : input.model_override;
+    if (
+      override !== null &&
+      (typeof override !== "object" ||
+        !["local", "openwhispr", "providers", "self-hosted", "enterprise"].includes(
+          override.mode
+        ) ||
+        typeof override.provider !== "string" ||
+        typeof override.model !== "string" ||
+        typeof override.remoteUrl !== "string")
+    )
+      return { success: false, error: "Invalid model override" };
+    const catchUp = Number(input.catch_up_window_hours ?? prior?.catch_up_window_hours ?? 4);
+    if (!Number.isFinite(catchUp) || catchUp < 0 || catchUp > 168)
+      return { success: false, error: "Invalid catch-up window" };
+    const voiceHint = String(input.voice_hint ?? prior?.voice_hint ?? "").trim();
+    if (voiceHint.length > 200) return { success: false, error: "Voice hint too long" };
     const spaceId = prior?.space_id ?? this.getPrivateSpaceId();
     let folder = prior
       ? this.getFolders(spaceId).find((item) => item.routine_id === prior.id)
@@ -8446,14 +8471,24 @@ class DatabaseManager {
     if (prior) {
       this.db
         .prepare(
-          `UPDATE routines SET name=?, prompt=?, trigger_config=?, allowed_tools=?, updated_at=? WHERE id=?`
+          `UPDATE routines SET name=?, prompt=?, trigger_config=?, allowed_tools=?, model_override=?, catch_up_window_hours=?, voice_hint=?, updated_at=? WHERE id=?`
         )
-        .run(name, prompt, JSON.stringify(config), JSON.stringify(allowedTools), now, id);
+        .run(
+          name,
+          prompt,
+          JSON.stringify(config),
+          JSON.stringify(allowedTools),
+          override ? JSON.stringify(override) : null,
+          catchUp,
+          voiceHint,
+          now,
+          id
+        );
     } else {
       this.db
         .prepare(
-          `INSERT INTO routines (id,name,prompt,trigger_type,trigger_config,allowed_tools,space_id,account_id,created_at,updated_at)
-        VALUES (?,?,?,'time',?,?,?,?,?,?)`
+          `INSERT INTO routines (id,name,prompt,trigger_type,trigger_config,allowed_tools,model_override,catch_up_window_hours,voice_hint,space_id,account_id,created_at,updated_at)
+        VALUES (?,?,?,'time',?,?,?,?,?,?,?,?,?)`
         )
         .run(
           id,
@@ -8461,6 +8496,9 @@ class DatabaseManager {
           prompt,
           JSON.stringify(config),
           JSON.stringify(allowedTools),
+          override ? JSON.stringify(override) : null,
+          catchUp,
+          voiceHint,
           spaceId,
           this._accountIdForSpace(spaceId),
           now,

@@ -43,6 +43,8 @@ interface ToolRegistrySettings {
   agentProjects?: AgentProject[];
   agentPresets?: AgentPreset[];
   agentAllowed?: boolean;
+  /** Main-process callers replace renderer-backed execution without changing assembly. */
+  executionOverrides?: Partial<Record<string, import("./ToolRegistry").ToolDefinition["execute"]>>;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -85,6 +87,11 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   for (const tool of settings.mcpTools || []) {
     if (registry.get(tool.name)) throw new Error(`MCP tool name collision: ${tool.name}`);
     registry.register(tool);
+  }
+
+  for (const [name, execute] of Object.entries(settings.executionOverrides || {})) {
+    const tool = registry.get(name);
+    if (tool && execute) registry.register({ ...tool, execute });
   }
 
   return registry;

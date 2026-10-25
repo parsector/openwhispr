@@ -826,6 +826,7 @@ function initializeCoreManagers() {
     microsoftCalendarManager,
     appleCalendarManager,
     connectorManager,
+    mcpClientManager,
     meetingDetectionEngine,
     audioTapManager,
     linuxPortalAudioManager,

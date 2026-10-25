@@ -226,3 +226,58 @@ export async function loadMcpTools(
   }
   return { key: mcpCacheKey(state.servers, state.revision, modelBudget), tools };
 }
+
+/** Unattended routines may only use sources requiring no approval. */
+export async function loadRoutineMcpTools(
+  api: McpClientApi,
+  modelBudget: number,
+  onUnavailable: (name: string, reason: string) => void = () => {}
+): Promise<ToolDefinition[]> {
+  const state = await api.list();
+  const eligible = new Map<string, { serverName: string; toolName: string }>();
+  for (const server of state.servers) {
+    if (!server.enabled || server.status !== "connected") continue;
+    for (const tool of await api.tools(server.name)) {
+      const name = `${server.name}__${tool.name}`;
+      if (
+        TOOL_NAME.test(name) &&
+        (tool.annotations?.readOnlyHint === true || server.allowWithoutAsking)
+      )
+        eligible.set(name, { serverName: server.name, toolName: tool.name });
+    }
+  }
+  const { tools } = await loadMcpTools(api, modelBudget);
+  return tools
+    .filter((tool) => eligible.has(tool.name))
+    .map((tool) => ({
+      ...tool,
+      execute: async (args, context) => {
+        const { serverName, toolName } = eligible.get(tool.name)!;
+        try {
+          const current = await api.list();
+          const server = current.servers.find((item) => item.name === serverName);
+          const currentTool =
+            server?.enabled && server.status === "connected"
+              ? (await api.tools(serverName)).find((item) => item.name === toolName)
+              : undefined;
+          if (
+            !currentTool ||
+            !(currentTool.annotations?.readOnlyHint === true || server?.allowWithoutAsking)
+          ) {
+            onUnavailable(tool.name, "needs approval");
+            return {
+              success: false,
+              data: null,
+              displayText: "Source unavailable: needs approval",
+            };
+          }
+          const result = await tool.execute(args, context);
+          if (!result.success) onUnavailable(tool.name, result.displayText || "source failed");
+          return result;
+        } catch (error) {
+          onUnavailable(tool.name, (error as Error).message || "source failed");
+          return { success: false, data: null, displayText: "Source unavailable" };
+        }
+      },
+    }));
+}

@@ -10,3 +10,20 @@ export function modelSupportsToolCalls(modelId: string): boolean {
   const sizeB = estimateModelSizeB(modelId);
   return sizeB === null || sizeB >= LOCAL_TOOL_MIN_PARAMS_B;
 }
+
+/** Capability of the endpoint actually used by an unattended routine. */
+export function routineEndpointSupportsTools(
+  choice:
+    | {
+        mode: string;
+        provider: string;
+        model: string;
+      }
+    | null
+    | undefined
+): boolean {
+  if (!choice?.model) return false;
+  if (choice.mode === "openwhispr") return false; // /api/reason has no tool loop
+  if (choice.mode === "local") return modelSupportsToolCalls(choice.model);
+  return ["providers", "self-hosted", "enterprise"].includes(choice.mode);
+}
