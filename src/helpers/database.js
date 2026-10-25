@@ -8423,7 +8423,9 @@ class DatabaseManager {
       ? input.allowed_tools
       : prior?.allowed_tools || [];
     if (
-      allowedTools.some((tool) => !["search_notes", "get_note", "calendar_events"].includes(tool))
+      allowedTools.some(
+        (tool) => !["search_notes", "get_note", "get_calendar_events"].includes(tool)
+      )
     ) {
       return { success: false, error: "Unsupported routine tool" };
     }

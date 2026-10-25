@@ -57,8 +57,8 @@ function createToolRegistry({ database, allowedTools = [], finishRun, onUnavaila
         return { success: true, data: { id: note.id, title: note.title }, displayText: text };
       },
     },
-    calendar_events: {
-      name: "calendar_events",
+    get_calendar_events: {
+      name: "get_calendar_events",
       description: "Read today's calendar events.",
       parameters: { type: "object", properties: {} },
       readOnly: true,
@@ -75,7 +75,7 @@ function createToolRegistry({ database, allowedTools = [], finishRun, onUnavaila
             "apple",
           ]);
         } catch {
-          onUnavailable("calendar_events");
+          onUnavailable("get_calendar_events");
           return { success: false, data: null, displayText: "Calendar unavailable" };
         }
         return {
@@ -110,7 +110,9 @@ function createToolRegistry({ database, allowedTools = [], finishRun, onUnavaila
     },
   };
   const names = new Set(
-    allowedTools.filter((name) => ["search_notes", "get_note", "calendar_events"].includes(name))
+    allowedTools.filter((name) =>
+      ["search_notes", "get_note", "get_calendar_events"].includes(name)
+    )
   );
   names.add("finish_run");
   return {
