@@ -2,15 +2,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { loadFolders } from "../../stores/noteStore";
+import { routineEndpointSupportsTools } from "../../utils/modelCapability";
 
 type Routine = Awaited<ReturnType<Window["electronAPI"]["listRoutines"]>>[number];
 type Preset = Awaited<ReturnType<Window["electronAPI"]["routinePresets"]>>[number];
 type Slot = { days: number[]; time: string };
+type ModelChoice = { mode: string; provider: string; model: string; remoteUrl: string };
 type Draft = {
   id?: string;
   name: string;
   prompt: string;
   allowed_tools: string[];
+  model_override: ModelChoice | null;
+  catch_up_window_hours: number;
+  voice_hint: string;
   trigger_config: { schema_version: number; slots: Slot[] };
 };
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -28,11 +33,13 @@ function PlainTextField({
   onChange,
   label,
   multiline = false,
+  direction = "auto",
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   multiline?: boolean;
+  direction?: "auto" | "ltr";
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -45,7 +52,7 @@ function PlainTextField({
       role="textbox"
       aria-label={label}
       aria-multiline={multiline}
-      dir="auto"
+      dir={direction}
       contentEditable="plaintext-only"
       suppressContentEditableWarning
       onInput={(event) => onChange(event.currentTarget.innerText)}
@@ -62,6 +69,9 @@ function newDraft(preset?: Preset, translatedName = ""): Draft {
     name: translatedName,
     prompt: preset?.prompt || "",
     allowed_tools: preset?.suggested_tools || [],
+    model_override: null,
+    catch_up_window_hours: 4,
+    voice_hint: "",
     trigger_config: preset?.trigger_config || {
       schema_version: 1,
       slots: [{ days: [1, 2, 3, 4, 5], time: "09:00" }],
@@ -80,6 +90,9 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
     Awaited<ReturnType<Window["electronAPI"]["routineHistory"]>>
   >([]);
   const [error, setError] = useState("");
+  const [mcpSources, setMcpSources] = useState<Array<{ name: string; description: string }>>([]);
+  const [scopeModel, setScopeModel] = useState<ModelChoice | null>(null);
+  const [overrideUsable, setOverrideUsable] = useState(true);
   const refresh = useCallback(async () => {
     setRoutines(await window.electronAPI.listRoutines());
     if (historyId) setHistory(await window.electronAPI.routineHistory(historyId));
@@ -87,16 +100,39 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
   useEffect(() => {
     void refresh();
     void window.electronAPI.routinePresets().then(setPresets);
+    void window.electronAPI
+      .routineMcpSources()
+      .then(setMcpSources)
+      .catch(() => setMcpSources([]));
+    void window.electronAPI.routineModelChoiceCurrent().then(setScopeModel);
     return window.electronAPI.onRoutinesUpdated(() => {
       void refresh();
     });
   }, [refresh]);
+  useEffect(() => {
+    if (!draft?.model_override) return;
+    let active = true;
+    void window.electronAPI
+      .routineModelUsable(draft.model_override)
+      .then((usable) => {
+        if (active) setOverrideUsable(usable);
+      })
+      .catch(() => {
+        if (active) setOverrideUsable(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [draft?.model_override]);
   const edit = (routine: Routine) => {
     setDraft({
       id: routine.id,
       name: routine.name,
       prompt: routine.prompt,
       allowed_tools: routine.allowed_tools,
+      model_override: routine.model_override,
+      catch_up_window_hours: routine.catch_up_window_hours,
+      voice_hint: routine.voice_hint || "",
       trigger_config: routine.trigger_config,
     });
     setFromPreset(null);
@@ -141,6 +177,16 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
     setHistoryId(id);
     setHistory(await window.electronAPI.routineHistory(id));
   };
+  const effectiveModel =
+    draft?.model_override && overrideUsable ? draft.model_override : scopeModel;
+  const toolWarning =
+    draft && draft.allowed_tools.length > 0 && !routineEndpointSupportsTools(effectiveModel);
+  const sourceOptions = [
+    { name: "search_notes", description: t("routines.sourceNotes") },
+    { name: "get_note", description: t("routines.sourceNote") },
+    { name: "get_calendar_events", description: t("routines.sourceCalendar") },
+    ...mcpSources,
+  ];
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-6 text-foreground">
@@ -282,6 +328,126 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
               </Button>
             )}
           </div>
+          <div className="space-y-2">
+            <p className="text-sm font-medium">{t("routines.allowedTools")}</p>
+            {sourceOptions.map((source) => (
+              <button
+                key={source.name}
+                type="button"
+                aria-pressed={draft.allowed_tools.includes(source.name)}
+                className="flex w-full items-start gap-2 rounded-md border border-border p-2 text-start text-sm"
+                onClick={() =>
+                  setDraft({
+                    ...draft,
+                    allowed_tools: draft.allowed_tools.includes(source.name)
+                      ? draft.allowed_tools.filter((name) => name !== source.name)
+                      : [...draft.allowed_tools, source.name],
+                  })
+                }
+              >
+                <span aria-hidden="true">
+                  {draft.allowed_tools.includes(source.name) ? "☑" : "☐"}
+                </span>
+                <span>
+                  <strong>{source.name}</strong> — {source.description}
+                </span>
+              </button>
+            ))}
+            {draft.allowed_tools
+              .filter((name) => !sourceOptions.some((source) => source.name === name))
+              .map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  aria-pressed
+                  className="flex w-full gap-2 rounded-md border border-border p-2 text-start text-sm text-muted-foreground"
+                  onClick={() =>
+                    setDraft({
+                      ...draft,
+                      allowed_tools: draft.allowed_tools.filter((item) => item !== name),
+                    })
+                  }
+                >
+                  <span aria-hidden="true">☑</span>
+                  {name} ({t("routines.sourceUnavailable")})
+                </button>
+              ))}
+          </div>
+          <div className="space-y-2 text-sm">
+            <label className="block">
+              {t("routines.modelOverride")}
+              <select
+                className="ml-2 rounded-md border border-border bg-background p-2"
+                value={draft.model_override ? "override" : "scope"}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    model_override:
+                      event.target.value === "override"
+                        ? scopeModel || {
+                            mode: "providers",
+                            provider: "openai",
+                            model: "",
+                            remoteUrl: "",
+                          }
+                        : null,
+                  })
+                }
+              >
+                <option value="scope">{t("routines.model.sameAsChat")}</option>
+                <option value="override">{t("routines.model.custom")}</option>
+              </select>
+            </label>
+            {draft.model_override && (
+              <div className="grid grid-cols-2 gap-2">
+                {(["mode", "provider", "model", "remoteUrl"] as const).map((field) => (
+                  <label key={field}>
+                    {t(`routines.modelFields.${field}`)}
+                    <PlainTextField
+                      label={t(`routines.modelFields.${field}`)}
+                      direction="ltr"
+                      value={draft.model_override?.[field] || ""}
+                      onChange={(value) =>
+                        setDraft({
+                          ...draft,
+                          model_override: { ...draft.model_override!, [field]: value },
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
+            {draft.model_override && !overrideUsable && (
+              <p role="status" className="text-amber-700">
+                {t("routines.unusableOverride")}
+              </p>
+            )}
+            {toolWarning && (
+              <p role="status" className="text-amber-700">
+                {t("routines.needsToolModel", {
+                  sources: draft.allowed_tools.map((name) => name.split("__")[0]).join(", "),
+                })}
+              </p>
+            )}
+          </div>
+          <label className="block text-sm">
+            {t("routines.catchUpWindow")}
+            <PlainTextField
+              label={t("routines.catchUpWindow")}
+              direction="ltr"
+              value={String(draft.catch_up_window_hours)}
+              onChange={(value) => setDraft({ ...draft, catch_up_window_hours: Number(value) })}
+            />
+          </label>
+          <label className="block text-sm">
+            {t("routines.voiceHint")}
+            <PlainTextField
+              label={t("routines.voiceHint")}
+              value={draft.voice_hint}
+              onChange={(value) => setDraft({ ...draft, voice_hint: value.slice(0, 200) })}
+            />
+          </label>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}

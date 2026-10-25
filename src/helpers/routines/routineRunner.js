@@ -1,6 +1,7 @@
 const { localDate } = require("./routineSchedulePolicy");
-const { modelSupportsToolCalls } = require("../../utils/modelCapability.ts");
+const { routineEndpointSupportsTools } = require("../../utils/modelCapability.ts");
 const { createToolRegistry } = require("./routineToolRegistry");
+const { loadRoutineMcpTools } = require("../../services/tools/mcpTools.ts");
 
 const DAY = 86400000;
 function linkNoteReferences(text) {
@@ -93,10 +94,12 @@ function noteTitle(database, routine, now) {
 }
 
 class RoutineRunner {
-  constructor({ database, infer, notify = () => {} }) {
+  constructor({ database, infer, notify = () => {}, mcpApi = null, modelUsable = () => true }) {
     this.database = database;
     this.infer = infer;
     this.notify = notify;
+    this.mcpApi = mcpApi;
+    this.modelUsable = modelUsable;
   }
 
   async run(job) {
@@ -132,14 +135,36 @@ class RoutineRunner {
             : { scanned: actions.scanned, matched: actions.matched },
         calendar: calendar.status,
       };
-      const model = job.model;
-      const toolsAvailable = Boolean(
-        model && modelSupportsToolCalls(model.model, model.provider, model.mode === "local")
-      );
+      let model = job.model;
+      let modelWarning = "";
+      if (routine.model_override) {
+        if (await this.modelUsable(routine.model_override)) model = routine.model_override;
+        else modelWarning = `model override unavailable, used ${model?.model || "default"}`;
+      }
+      if (modelWarning) sourceStatus.model_override = modelWarning;
+      const toolsAvailable = routineEndpointSupportsTools(model);
       if (!toolsAvailable) {
-        for (const name of routine.allowed_tools) sourceStatus[name] = "unavailable";
+        for (const name of routine.allowed_tools)
+          sourceStatus[name] = "unavailable: needs a tool-capable model";
       }
       let finishRun = null;
+      let mcpTools = [];
+      if (toolsAvailable && this.mcpApi) {
+        try {
+          mcpTools = await loadRoutineMcpTools(this.mcpApi, 32000, (name, reason) => {
+            sourceStatus[name] = `unavailable: ${reason}`;
+          });
+        } catch {
+          for (const name of routine.allowed_tools.filter((item) => item.includes("__")))
+            sourceStatus[name] = "unavailable: source failed";
+        }
+      }
+      if (toolsAvailable) {
+        const availableNames = new Set(mcpTools.map((tool) => tool.name));
+        for (const name of routine.allowed_tools.filter((item) => item.includes("__"))) {
+          if (!availableNames.has(name)) sourceStatus[name] = "unavailable: needs approval";
+        }
+      }
       const registry = createToolRegistry({
         database,
         allowedTools: routine.allowed_tools,
@@ -149,6 +174,7 @@ class RoutineRunner {
         onUnavailable: (name) => {
           sourceStatus[name] = "unavailable";
         },
+        mcpTools,
       });
       const context = {
         messageId: job.id,
@@ -159,10 +185,11 @@ class RoutineRunner {
         claimTurnSlot: () => true,
         releaseTurnSlot: () => {},
       };
-      const prompt = `${routine.prompt}\n\nToday's calendar:\n${calendar.text}\n\nLast seven days' checkbox action items:\n${actions.text}\n\nCite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable && model.mode !== "openwhispr" ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
+      const prompt = `${routine.prompt}\n\nToday's calendar:\n${calendar.text}\n\nLast seven days' checkbox action items:\n${actions.text}\n\nCite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
       const response = await this.infer({ model, prompt, toolsAvailable, registry, context });
       if (toolsAvailable && !response.toolsAvailable) {
-        for (const name of routine.allowed_tools) sourceStatus[name] = "unavailable";
+        for (const name of routine.allowed_tools)
+          sourceStatus[name] = "unavailable: endpoint did not attach tools";
       }
       const result = completion({
         text: response.text,
@@ -189,9 +216,9 @@ class RoutineRunner {
           .run(routine.id, folder.id);
       }
       const unavailable = Object.entries(sourceStatus)
-        .filter(([, value]) => value === "unavailable")
+        .filter(([, value]) => typeof value === "string" && value.startsWith("unavailable"))
         .map(([name]) => name.replaceAll("_", " "));
-      const sourceLine = `Sources: ${actions.scanned} notes scanned, ${actions.matched} with checkboxes; calendar ${calendar.status}${unavailable.length ? `; unavailable: ${unavailable.join(", ")}` : ""}`;
+      const sourceLine = `Sources: ${actions.scanned} notes scanned, ${actions.matched} with checkboxes; calendar ${calendar.status}${unavailable.length ? `; unavailable: ${unavailable.join(", ")}` : ""}${modelWarning ? `; ${modelWarning}` : ""}`;
       const note = database.saveNote(
         noteTitle(database, routine, now),
         `${linkNoteReferences(result.text)}\n\n${sourceLine}`,
@@ -201,10 +228,7 @@ class RoutineRunner {
         folder.id,
         routine.space_id
       ).note;
-      const status =
-        Object.values(sourceStatus).includes("unavailable") || result.status === "partial"
-          ? "partial"
-          : "done";
+      const status = unavailable.length > 0 || result.status === "partial" ? "partial" : "done";
       database.updateRoutineRun(job.id, {
         status,
         note_id: note.id,
