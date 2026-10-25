@@ -1512,6 +1512,7 @@ async function startApp() {
   const { powerMonitor } = require("electron");
   powerMonitor.on("resume", () => {
     if (calendarReminderScheduler) calendarReminderScheduler.onWakeFromSleep();
+    ipcHandlers?.routineScheduler?.wake();
     if (googleCalendarManager) {
       googleCalendarManager.onWakeFromSleep();
     }

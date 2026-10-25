@@ -30,6 +30,7 @@ import {
 import {
   getSettings,
   selectPolicyEffectiveSettings,
+  selectResolvedLLMConfig,
   useSettingsStore,
 } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
@@ -103,6 +104,7 @@ const SIDEBAR_WIDTH_PX = 192;
 const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
+const RoutinesView = React.lazy(() => import("./routines/RoutinesView"));
 const InsightsView = React.lazy(() => import("./InsightsView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
@@ -159,6 +161,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const isSidePanelLayout =
     isMeetingMode || (isNarrowWindow && activeView === "personal-notes" && activeNoteId != null);
   const recordingNoteId = useMeetingRecordingStore((s) => s.recordingNoteId);
+  const meetingIsRecording = useMeetingRecordingStore((s) => s.isRecording);
+  useEffect(() => {
+    window.electronAPI?.setRoutineRecording?.("meeting", meetingIsRecording);
+  }, [meetingIsRecording]);
   const recordingFolderId = useMeetingRecordingStore((s) => s.recordingFolderId);
   const [meetingRecordingRequest, setMeetingRecordingRequest] = useState<{
     noteId: number;
@@ -214,6 +220,37 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   // Policy-effective, because the settings pane the GPU banner links to renders
   // the clamped mode — see eligibleGpuOffers.
   const policySnapshot = usePolicySnapshot();
+  const routineModel = useSettingsStore(
+    useShallow((settings) => {
+      const resolved = selectResolvedLLMConfig(
+        selectPolicyEffectiveSettings(settings, policySnapshot),
+        "routines"
+      );
+      let remoteUrl = "";
+      if (resolved.remoteUrl) {
+        try {
+          const endpoint = new URL(resolved.remoteUrl);
+          if (!endpoint.username && !endpoint.password && /^https?:$/.test(endpoint.protocol)) {
+            endpoint.search = "";
+            endpoint.hash = "";
+            remoteUrl = endpoint.toString();
+          }
+        } catch {}
+      }
+      return {
+        mode: resolved.mode,
+        provider: resolved.provider,
+        model: resolved.model,
+        remoteUrl,
+      };
+    })
+  );
+  useEffect(() => {
+    void window.electronAPI?.setRoutineModelChoice?.(routineModel);
+  }, [routineModel]);
+  useEffect(() => {
+    if (activeNoteId != null) void window.electronAPI?.markRoutineSeen?.(activeNoteId);
+  }, [activeNoteId]);
   const gpuBannerSettings = useSettingsStore(
     useShallow((settings) => {
       const effective = selectPolicyEffectiveSettings(settings, policySnapshot);
@@ -1217,6 +1254,24 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                     invitationEntry={invitationNotesEntry}
                     onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
+                  />
+                </Suspense>
+              )}
+              {activeView === "routines" && agentAllowedByPolicy && (
+                <Suspense fallback={null}>
+                  <RoutinesView
+                    onOpenNote={(id) => {
+                      void window.electronAPI.getNote(id).then((result) => {
+                        const note = result;
+                        if (!note) return;
+                        if (note?.folder_id) {
+                          setActiveFolderId(note.folder_id);
+                          void initializeNotes(null, 50, note.folder_id);
+                        }
+                        setActiveNoteId(id);
+                        setActiveView("personal-notes");
+                      });
+                    }}
                   />
                 </Suspense>
               )}

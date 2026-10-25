@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Gift, Settings, HelpCircle } from "./icons";
 import logoIcon from "../assets/icon.png";
 import { useTranslation } from "react-i18next";
@@ -40,6 +40,14 @@ export default function ControlPanelSidebar({
   const showLimitBanner = Boolean(isSignedIn) && Boolean(isOverLimit);
 
   const navItems = useControlPanelNavItems();
+  const [routineUnread, setRoutineUnread] = useState(0);
+  useEffect(() => {
+    const refresh = () => {
+      void window.electronAPI?.routineUnread?.().then(setRoutineUnread);
+    };
+    refresh();
+    return window.electronAPI?.onRoutinesUpdated?.(refresh);
+  }, []);
 
   return (
     <div className="w-48 h-full shrink-0 flex flex-col bg-surface-window">
@@ -84,6 +92,11 @@ export default function ControlPanelSidebar({
               >
                 {item.label}
               </span>
+              {item.id === "routines" && routineUnread > 0 && (
+                <span className="ms-auto rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
+                  {routineUnread}
+                </span>
+              )}
             </button>
           );
         })}

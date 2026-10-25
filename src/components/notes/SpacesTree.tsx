@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Check,
   ChevronRight,
+  Clock,
   ExternalLink,
   FileText,
   Folder,
@@ -590,7 +591,8 @@ function FolderRow({
 }) {
   const [spaceSearch, setSpaceSearch] = useState("");
   const displayName = defaultFolderDisplayName(folder, t);
-  const canMoveToSpace = canManageDestructive && !folder.is_default && spaces.length > 1;
+  const canMoveToSpace =
+    canManageDestructive && !folder.is_default && !folder.routine_id && spaces.length > 1;
   const filteredSpaces = useMemo(
     () =>
       spaceSearch
@@ -633,13 +635,19 @@ function FolderRow({
         isExpanded={isExpanded}
         onToggle={onToggle}
         icon={
-          <Folder
-            size={14}
-            className={cn(
-              "transition-colors duration-150",
-              isDragOver || isActive ? "text-primary" : "text-foreground/55 dark:text-foreground/45"
-            )}
-          />
+          folder.routine_id ? (
+            <Clock size={14} className="text-primary" />
+          ) : (
+            <Folder
+              size={14}
+              className={cn(
+                "transition-colors duration-150",
+                isDragOver || isActive
+                  ? "text-primary"
+                  : "text-foreground/55 dark:text-foreground/45"
+              )}
+            />
+          )
         }
       />
       <span
@@ -696,16 +704,18 @@ function FolderRow({
               {!folder.is_default && (
                 <>
                   {noteFilesEnabled && <DropdownMenuSeparator />}
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRename();
-                    }}
-                    className={MENU_ITEM_CLASS}
-                  >
-                    <Pencil size={11} className="text-muted-foreground/70" />
-                    {t("notes.context.rename")}
-                  </DropdownMenuItem>
+                  {!folder.routine_id && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRename();
+                      }}
+                      className={MENU_ITEM_CLASS}
+                    >
+                      <Pencil size={11} className="text-muted-foreground/70" />
+                      {t("notes.context.rename")}
+                    </DropdownMenuItem>
+                  )}
                   {canMoveToSpace && (
                     <SearchableMoveSubmenu
                       icon={<Users size={11} className="text-muted-foreground/70" />}

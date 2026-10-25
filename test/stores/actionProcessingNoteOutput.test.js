@@ -2,6 +2,23 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
+test("the summary marker detector also accepts NOTHING_TO_REPORT", async () => {
+  const { isMarkerOnly } = await import("../../src/helpers/routines/routineCompletion.js");
+  for (const reply of [
+    "NOTHING_TO_REPORT",
+    "**NOTHING_TO_REPORT**",
+    "```markdown\nNOTHING_TO_REPORT\n```",
+    "No useful items.\nNOTHING_TO_REPORT",
+    "<think>draft</think>\nNOTHING_TO_REPORT",
+  ]) {
+    assert.equal(isMarkerOnly(reply, "NOTHING_TO_REPORT"), true, reply);
+  }
+  assert.equal(
+    isMarkerOnly("## Summary\n- Useful item\nNOTHING_TO_REPORT", "NOTHING_TO_REPORT"),
+    false
+  );
+});
+
 // Note formatting had no explicit output budget, so it inherited the generic
 // 2048-token default from calculateMaxTokens. Summaries of long meetings were
 // cut off at that ceiling and saved anyway, with no error and nothing in the

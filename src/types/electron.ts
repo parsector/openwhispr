@@ -610,6 +610,7 @@ export interface NoteShareInvitation {
 }
 
 export interface FolderItem {
+  routine_id?: string | null;
   id: number;
   name: string;
   is_default: number;
@@ -1520,6 +1521,66 @@ declare global {
     };
     mcpClient: import("../services/tools/mcpTools").McpClientApi;
     electronAPI: {
+      listRoutines: () => Promise<
+        Array<{
+          id: string;
+          name: string;
+          prompt: string;
+          trigger_type: string;
+          trigger_config: {
+            schema_version: number;
+            slots: Array<{ days: number[]; time: string }>;
+          };
+          allowed_tools: string[];
+          paused: number;
+          last_status: string | null;
+          last_run_at: string | null;
+          next_run_at: string | null;
+        }>
+      >;
+      routinePresets: () => Promise<
+        Array<{
+          id: string;
+          nameKey: string;
+          descriptionKey: string;
+          prompt: string;
+          trigger_config: {
+            schema_version: number;
+            slots: Array<{ days: number[]; time: string }>;
+          };
+          suggested_tools: string[];
+          needs: string[];
+        }>
+      >;
+      saveRoutine: (routine: {
+        id?: string;
+        name: string;
+        prompt: string;
+        allowed_tools?: string[];
+        trigger_config: { schema_version: number; slots: Array<{ days: number[]; time: string }> };
+      }) => Promise<{ success: boolean; error?: string }>;
+      pauseRoutine: (id: string, paused: boolean) => Promise<{ success: boolean }>;
+      runRoutineNow: (id: string) => Promise<{ success: boolean }>;
+      routineHistory: (id: string) => Promise<
+        Array<{
+          id: string;
+          status: string;
+          trigger: string;
+          started_at: string | null;
+          note_id: number | null;
+          error: string | null;
+        }>
+      >;
+      routineUnread: () => Promise<number>;
+      markRoutineSeen: (noteId: number) => Promise<void>;
+      setRoutineModelChoice: (choice: {
+        mode: string;
+        provider: string;
+        model: string;
+        remoteUrl: string;
+      }) => Promise<boolean>;
+      setRoutineRecording: (source: string, active: boolean) => void;
+      onRoutinesUpdated: (callback: () => void) => () => void;
       localMcpState: () => Promise<{
         enabled: boolean;
         url: string | null;

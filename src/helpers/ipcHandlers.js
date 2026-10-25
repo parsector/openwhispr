@@ -2,6 +2,7 @@ const { textLength } = require("./logRedaction");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
 const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
+const { Notification } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -734,12 +735,351 @@ class IPCHandlers {
     // Warm the OS default mic answer before the first hotkey press (~2s on Windows).
     resolveSystemDefaultMicrophone();
     this.setupHandlers();
+    this.setupRoutines();
     // Lives for the app's lifetime; IPCHandlers has no teardown path.
     tokenStore.subscribe((state) => this._handleAuthTokenChange(state));
 
     if (this.whisperManager?.serverManager) {
       this._attachWhisperServerListeners(this.whisperManager.serverManager);
     }
+  }
+
+  setupRoutines() {
+    const { RoutineRunner } = require("./routines/routineRunner");
+    const { RoutineQueue } = require("./routines/routineQueue");
+    const { RoutineScheduler } = require("./routines/routineScheduler");
+    const { PRESETS } = require("./routines/routinePresets");
+    const notificationText = require("../locales/en/translation.json").routines.notification;
+    const choicePath = path.join(app.getPath("userData"), "routine-model-choice.json");
+    try {
+      this._routineModelChoice = JSON.parse(fs.readFileSync(choicePath, "utf8"));
+    } catch {
+      this._routineModelChoice = null;
+    }
+    const infer = async ({ model, prompt, toolsAvailable, registry, context }) => {
+      if (!model?.model) throw new Error("Choose a chat model before running a routine");
+      let localRoute = null;
+      if (model.mode === "local" && toolsAvailable) {
+        const manager = require("./modelManagerBridge").default;
+        if (await manager.prewarmServer(model.model)) {
+          const { port } = manager.getServerStatus();
+          if (port) localRoute = [null, `http://127.0.0.1:${port}/v1/chat/completions`];
+        }
+      }
+      if (model.mode === "local" && !localRoute) {
+        const bridge = require("../services/localReasoningBridge").default;
+        return {
+          text: await bridge.processText(prompt, model.model, {
+            maxTokens: 1800,
+            temperature: 0.3,
+            systemPrompt: "Write a concise, factual routine note in Markdown.",
+          }),
+        };
+      }
+      if (model.mode === "openwhispr") {
+        let runtimeUrl = "";
+        try {
+          runtimeUrl =
+            JSON.parse(
+              fs.readFileSync(path.join(__dirname, "..", "dist", "runtime-env.json"), "utf8")
+            ).VITE_OPENWHISPR_API_URL || "";
+        } catch {}
+        const apiUrl =
+          process.env.OPENWHISPR_API_URL || process.env.VITE_OPENWHISPR_API_URL || runtimeUrl;
+        const token = tokenStore.get();
+        if (!apiUrl || !token) throw new Error("OpenWhispr cloud model is unavailable");
+        const response = await net.fetch(`${apiUrl}/api/reason`, {
+          method: "POST",
+          useSessionCookies: false,
+          headers: withPolicyRequestHeaders(
+            { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            app.getVersion()
+          ),
+          body: JSON.stringify({
+            text: prompt,
+            model: model.model,
+            requestPurpose: "assistant",
+            purpose: "assistant",
+            systemPrompt: "Write a concise, factual routine note in Markdown.",
+            sessionId: this.sessionId,
+            clientType: "desktop",
+            appVersion: app.getVersion(),
+          }),
+        });
+        if (!response.ok) throw new Error(`Cloud model request failed (${response.status})`);
+        return { text: (await response.json()).text || "" };
+      }
+      const providers = {
+        openai: ["getOpenAIKey", "https://api.openai.com/v1/chat/completions"],
+        gemini: [
+          "getGeminiKey",
+          "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+        ],
+        groq: ["getGroqKey", "https://api.groq.com/openai/v1/chat/completions"],
+        openrouter: ["getOpenrouterKey", "https://openrouter.ai/api/v1/chat/completions"],
+        corti: ["getCortiKey", "https://ai.eu.corti.app/v1/chat/completions"],
+      };
+      if (model.provider === "anthropic") {
+        const key = this.environmentManager.getAnthropicKey();
+        if (!key) throw new Error("Anthropic key is missing");
+        const messages = [{ role: "user", content: prompt }];
+        let noteText = "";
+        let confirmed = false;
+        for (let turn = 0; turn < 6; turn++) {
+          const response = await net.fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": key,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: model.model,
+              max_tokens: 1800,
+              messages,
+              ...(toolsAvailable && !confirmed
+                ? {
+                    tools: registry.list().map((tool) => ({
+                      name: tool.name,
+                      description: tool.description,
+                      input_schema: tool.parameters,
+                    })),
+                  }
+                : {}),
+            }),
+          });
+          if (!response.ok) throw new Error(`Anthropic request failed (${response.status})`);
+          const data = await response.json();
+          const parts = data.content || [];
+          noteText += parts
+            .filter((part) => part.type === "text")
+            .map((part) => part.text)
+            .join("\n");
+          const calls = parts.filter((part) => part.type === "tool_use");
+          if (!calls.length) break;
+          messages.push({ role: "assistant", content: parts });
+          const results = [];
+          for (const call of calls) {
+            const tool = registry.get(call.name);
+            context.toolCallId = call.id;
+            const result = tool
+              ? await tool.execute(call.input || {}, context)
+              : { success: false, displayText: "Unavailable tool" };
+            if (call.name === "finish_run") confirmed = true;
+            results.push({
+              type: "tool_result",
+              tool_use_id: call.id,
+              content: result.displayText,
+            });
+          }
+          messages.push({ role: "user", content: results });
+          if (confirmed && noteText.trim()) break;
+        }
+        return { text: noteText, toolsAvailable };
+      }
+      const route =
+        localRoute ||
+        (model.mode === "self-hosted" && /^https?:\/\//.test(model.remoteUrl || "")
+          ? [null, `${model.remoteUrl.replace(/\/$/, "")}/chat/completions`]
+          : providers[model.provider]);
+      if (!route && model.provider !== "tinfoil")
+        throw new Error(`Routine model provider ${model.provider || model.mode} is unavailable`);
+      const key =
+        model.provider === "tinfoil"
+          ? this.environmentManager.getTinfoilKey()
+          : route[0]
+            ? this.environmentManager[route[0]]()
+            : null;
+      if ((route?.[0] || model.provider === "tinfoil") && !key)
+        throw new Error(`${model.provider} key is missing`);
+      let complete;
+      if (model.provider === "tinfoil") {
+        const { TinfoilAI } = await import("tinfoil");
+        const client = new TinfoilAI({ apiKey: key });
+        complete = (body) => client.chat.completions.create(body);
+      } else {
+        complete = async (body) => {
+          const response = await net.fetch(route[1], {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(key ? { Authorization: `Bearer ${key}` } : {}),
+            },
+            body: JSON.stringify(body),
+          });
+          if (!response.ok)
+            throw new Error(`${model.provider} request failed (${response.status})`);
+          return response.json();
+        };
+      }
+      const messages = [{ role: "user", content: prompt }];
+      let noteText = "";
+      let confirmed = false;
+      for (let turn = 0; turn < 6; turn++) {
+        const data = await complete({
+          model: model.model,
+          messages,
+          max_tokens: 1800,
+          ...(toolsAvailable && !confirmed
+            ? {
+                tools: registry.list().map((tool) => ({
+                  type: "function",
+                  function: {
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.parameters,
+                  },
+                })),
+              }
+            : {}),
+        });
+        const message = data.choices?.[0]?.message;
+        if (!message) break;
+        noteText += message.content || "";
+        if (!message.tool_calls?.length) break;
+        messages.push(message);
+        for (const call of message.tool_calls) {
+          const tool = registry.get(call.function.name);
+          let args = {};
+          try {
+            args = JSON.parse(call.function.arguments || "{}");
+          } catch {}
+          context.toolCallId = call.id;
+          const result = tool
+            ? await tool.execute(args, context)
+            : { success: false, displayText: "Unavailable tool" };
+          if (call.function.name === "finish_run") confirmed = true;
+          messages.push({ role: "tool", tool_call_id: call.id, content: result.displayText });
+        }
+        if (confirmed && noteText.trim()) break;
+      }
+      return { text: noteText, toolsAvailable };
+    };
+    const notify = ({
+      routine,
+      note,
+      folder,
+      status,
+      headline,
+      sourceStatus,
+      confirmationSkipped,
+    }) => {
+      broadcastToWindows("note-added", note);
+      this.notifyVectorChanges();
+      try {
+        this._asyncMirrorWrite(note);
+      } catch (error) {
+        debugLogger.warn("Routine note mirror failed", { error: error.message });
+      }
+      broadcastToWindows("routines-updated");
+      const unavailable = Object.values(sourceStatus).filter(
+        (value) => value === "unavailable"
+      ).length;
+      const suffixes = [];
+      if (confirmationSkipped) suffixes.push(notificationText.withoutConfirmation);
+      if (unavailable)
+        suffixes.push(
+          notificationText.sourcesUnavailable.replace("{{count}}", String(unavailable))
+        );
+      const deliver = () => {
+        if (isRecording()) {
+          setTimeout(deliver, 2500);
+          return;
+        }
+        setTimeout(() => {
+          if (isRecording()) {
+            deliver();
+            return;
+          }
+          try {
+            const notification = new Notification({
+              title: routine.name,
+              body: [headline || notificationText.ready, ...suffixes].join(" · "),
+            });
+            notification.on("click", () => {
+              this.windowManager.showControlPanel();
+              void this.windowManager
+                .queueNoteNavigation({ noteId: note.id, folderId: folder.id })
+                .catch((error) =>
+                  debugLogger.warn("Routine note navigation failed", { error: error.message })
+                );
+            });
+            notification.show();
+          } catch (error) {
+            debugLogger.warn("Routine notification failed", { error: error.message });
+          }
+        }, 2500);
+      };
+      deliver();
+    };
+    const runner = new RoutineRunner({ database: this.databaseManager, infer, notify });
+    const recordingSources = new Set();
+    const recordingSenders = new WeakSet();
+    const isRecording = () => Boolean(this._activeRecordingPipeline || recordingSources.size);
+    const queue = new RoutineQueue({ run: (job) => runner.run(job), isRecording });
+    ipcMain.on("routines-recording", (event, source, active) => {
+      if (typeof source !== "string" || source.length > 32) return;
+      const key = `${event.sender.id}:${source}`;
+      if (active) recordingSources.add(key);
+      else {
+        recordingSources.delete(key);
+        queue.recordingStopped();
+      }
+      if (!recordingSenders.has(event.sender)) {
+        recordingSenders.add(event.sender);
+        event.sender.once("destroyed", () => {
+          for (const item of recordingSources) {
+            if (item.startsWith(`${event.sender.id}:`)) recordingSources.delete(item);
+          }
+          queue.recordingStopped();
+        });
+      }
+    });
+    this.routineScheduler = new RoutineScheduler({
+      database: this.databaseManager,
+      queue,
+      modelChoice: () => this._routineModelChoice,
+      onRunFinished: () => broadcastToWindows("routines-updated"),
+    });
+    this.routineScheduler.start();
+    ipcMain.handle("routines-list", () => this.databaseManager.listRoutines());
+    ipcMain.handle("routines-presets", () => PRESETS);
+    ipcMain.handle("routines-save", (_event, input) => {
+      const result = this.databaseManager.saveRoutine(input);
+      if (result.success) {
+        this.routineScheduler.check();
+        broadcastToWindows("routines-updated");
+      }
+      return result;
+    });
+    ipcMain.handle("routines-pause", (_event, id, paused) => {
+      const result = this.databaseManager.pauseRoutine(id, paused);
+      if (result.success) {
+        if (paused) queue.cancelScheduled(id);
+        this.routineScheduler.check();
+        broadcastToWindows("routines-updated");
+      }
+      return result;
+    });
+    ipcMain.handle("routines-run-now", (_event, id) => {
+      void this.routineScheduler.runNow(id);
+      broadcastToWindows("routines-updated");
+      return { success: true };
+    });
+    ipcMain.handle("routines-history", (_event, id) => this.databaseManager.getRoutineRuns(id));
+    ipcMain.handle("routines-unread", () => this.databaseManager.routineUnreadCount());
+    ipcMain.handle("routines-seen", (_event, noteId) => {
+      this.databaseManager.markRoutineNoteSeen(noteId);
+      broadcastToWindows("routines-updated");
+    });
+    ipcMain.handle("routines-model-choice", (_event, choice) => {
+      const { mode, provider, model, remoteUrl = "" } = choice || {};
+      if (![mode, provider, model].every((value) => typeof value === "string")) return false;
+      if (typeof remoteUrl !== "string") return false;
+      this._routineModelChoice = { mode, provider, model, remoteUrl };
+      fs.writeFileSync(choicePath, JSON.stringify(this._routineModelChoice));
+      return true;
+    });
   }
 
   createFolderWithEffects(name, spaceId) {
