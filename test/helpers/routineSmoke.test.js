@@ -52,6 +52,7 @@ test("saving the gallery template and running it writes a note and done row", as
   const runner = new RoutineRunner({
     database,
     infer: async ({ registry, context }) => {
+      assert.ok(registry.get("get_calendar_events"));
       await registry.get("finish_run").execute({ empty: false, headline: "Ready" }, context);
       return { text: "## Morning brief\n- [ ] Follow up tomorrow", toolsAvailable: true };
     },
