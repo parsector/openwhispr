@@ -14,6 +14,10 @@ import { HorizontalRuleOutsideTables, markdownTableExtensions } from "./RichText
 export function createRichTextExtensions(placeholder: string) {
   return [
     StarterKit.configure({
+      link: {
+        openOnClick: false,
+        isAllowedUri: (url, context) => /^note:\d+$/.test(url) || context.defaultValidate(url),
+      },
       heading: { levels: [1, 2, 3] },
       bulletList: { keepMarks: true },
       orderedList: { keepMarks: true },

@@ -88,3 +88,11 @@ test("saving the gallery template and running it writes a note and done row", as
     0
   );
 });
+
+test("routine note references become openable Markdown links", () => {
+  const { linkNoteReferences } = require("../../src/helpers/routines/routineRunner");
+  assert.equal(
+    linkNoteReferences("See [note:42], note:43, and [already](note:44)."),
+    "See [Note 42](note:42), [Note 43](note:43), and [already](note:44)."
+  );
+});

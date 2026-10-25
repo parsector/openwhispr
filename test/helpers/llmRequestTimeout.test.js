@@ -53,6 +53,7 @@ const DEADLINE_CLASS_BY_SCOPE = {
   dictationTranslation: "interactive",
   chatIntelligence: "interactive", // typed chat; streaming carries its own idle deadline
   noteFormatting: "background", // whole transcript, runs off-screen with a cancel button
+  routines: "background", // unattended run; nobody is waiting
 };
 const INTERACTIVE_MAX_SECONDS = 60;
 const BACKGROUND_MIN_SECONDS = 300;
