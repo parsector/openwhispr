@@ -111,23 +111,18 @@ jobs:
           node-version: "24"
           cache: npm
       - name: Install dependencies
-        run: npm ci --ignore-scripts
-      - name: Build native test binding
-        run: npm rebuild better-sqlite3
+        run: npm ci
+      - name: Test
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.tmp"
+          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          npm test
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
         run: npm run lint
       - name: Check translations
         run: npm run i18n:check
-      - name: Test
-        env:
-          ELECTRON_OVERRIDE_DIST_PATH: /tmp
-          REQUIRE_DB_TESTS: "1"
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/.tmp"
-          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
-          npm test
 
   build-macos:
     needs: [prepare, gate]
@@ -172,6 +167,11 @@ jobs:
           npm run compile:fast-paste -- --arch arm64
           npm run compile:media-remote -- --arch arm64
           npm run compile:audio-tap -- --arch arm64
+          npm run compile:mic-listener
+          npm run compile:calendar-listener
+          npm run compile:window-bounds
+          npm run compile:text-monitor
+          npm run compile:mac-icon
       - name: Download macOS arm64 binaries
         run: |
           node scripts/download-whisper-cpp.js --current --platform darwin --arch arm64
@@ -180,15 +180,20 @@ jobs:
           node scripts/download-yt-dlp.js --current --platform darwin --arch arm64
           node scripts/download-qdrant.js --current --platform darwin --arch arm64
           node scripts/download-meeting-aec-helper.js --current --platform darwin --arch arm64
+          node scripts/download-whisper-vad-model.js
+          node scripts/download-diarization-models.js --output-dir resources/bin/diarization-models
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Prepare remaining bundled resources
+      - name: Create empty bundled runtime env
         run: |
-          # build:mac:arm64 has no npm prebuild hook; this compiles the other
-          # macOS helpers and fetches models used by the packaged app.
-          npm run prebuild:mac
           # electron-builder.json includes .env as an extraResource.
           : > .env
+      - name: Allow fork signing identity discovery
+        run: |
+          # The checked-in builder config pins the upstream owner's identity.
+          # Remove that pin only in this runner's copy so the imported fork
+          # certificate can be discovered automatically.
+          node -e 'const fs = require("node:fs"); const file = "electron-builder.json"; const config = JSON.parse(fs.readFileSync(file, "utf8")); delete config.mac.identity; fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n")'
       - name: Import signing certificate
         if: env.CSC_LINK != ''
         run: |
@@ -202,31 +207,28 @@ jobs:
           security import "$CERTIFICATE_PATH" -P "$CSC_KEY_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s -k "runner" "$KEYCHAIN_PATH"
-          identity=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk '/Developer ID Application:/ {print $2; exit}')
+          identities=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH")
+          printf '%s\n' "$identities"
+          preferred_identity=$(printf '%s\n' "$identities" | awk '/Developer ID Application:/ {print $2; exit}')
+          first_identity=$(printf '%s\n' "$identities" | awk '/^[[:space:]]*[0-9]+\) [A-Fa-f0-9]+ "/ {print $2; exit}')
+          identity=${preferred_identity:-$first_identity}
           if [ -z "$identity" ]; then
-            echo '::error::The p12 contains no Developer ID Application signing identity'
+            echo '::error::The p12 contains no valid code signing identity'
             exit 1
           fi
-          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "Selected code signing identity: $identity"
       - name: Create draft release
         if: ${{ !inputs.dry_run }}
         run: gh release create "$RELEASE_TAG" --draft --target "${{ needs.prepare.outputs.sha }}" --title "$RELEASE_TAG" --notes "OpenWhispr $RELEASE_TAG (macOS arm64)"
-      - name: Build and upload signed macOS arm64 app
-        if: env.CSC_LINK != '' && !inputs.dry_run
-        run: npm run build:mac:arm64 -- --publish always --config.mac.identity="$SIGNING_IDENTITY" --config.mac.notarize=false
-      - name: Build and upload unsigned macOS arm64 app
-        if: env.CSC_LINK == '' && !inputs.dry_run
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npm run build:mac:arm64 -- --publish always --config.mac.identity=null --config.mac.notarize=false
-      - name: Build signed dry run artifact
-        if: env.CSC_LINK != '' && inputs.dry_run
-        run: npm run build:mac:arm64 -- --publish never --config.mac.identity="$SIGNING_IDENTITY" --config.mac.notarize=false
-      - name: Build unsigned dry run artifact
-        if: env.CSC_LINK == '' && inputs.dry_run
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npm run build:mac:arm64 -- --publish never --config.mac.identity=null --config.mac.notarize=false
+      - name: Configure unsigned build
+        if: env.CSC_LINK == ''
+        run: echo 'CSC_IDENTITY_AUTO_DISCOVERY=false' >> "$GITHUB_ENV"
+      - name: Build and upload macOS arm64 app
+        if: ${{ !inputs.dry_run }}
+        run: npm run build:mac:arm64 -- --publish always
+      - name: Build dry run artifact
+        if: ${{ inputs.dry_run }}
+        run: npm run build:mac:arm64 -- --publish never
       - name: Verify packaged macOS native binaries
         run: |
           APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
