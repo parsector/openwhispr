@@ -190,13 +190,22 @@ jobs:
         run: |
           # electron-builder.json includes .env as an extraResource.
           : > .env
-      - name: Allow fork signing identity discovery
+      - name: Configure fork signing mode
         run: |
-          # The checked-in builder config pins the upstream owner's identity and
-          # turns on notarization, neither of which can work without Apple
-          # credentials. Remove both only in this runner's copy so an imported
-          # fork certificate can be discovered automatically.
-          node -e 'const fs = require("node:fs"); const file = "electron-builder.json"; const config = JSON.parse(fs.readFileSync(file, "utf8")); delete config.mac.identity; delete config.mac.notarize; fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n")'
+          # Change only the runner's copy. A null identity skips signing before
+          # certificate lookup; signed builds discover the imported identity.
+          node -e '
+            const fs = require("node:fs");
+            const file = "electron-builder.json";
+            const config = JSON.parse(fs.readFileSync(file, "utf8"));
+            const signed = Boolean(process.env.CSC_LINK);
+            if (signed) delete config.mac.identity;
+            else config.mac.identity = null;
+            delete config.mac.notarize;
+            config.mac.forceCodeSigning = signed;
+            fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n");
+            console.log(`fork mac signing mode: ${signed ? "signed" : "unsigned"}; identity=${String(config.mac.identity)}; forceCodeSigning=${config.mac.forceCodeSigning}`);
+          '
       - name: Import signing certificate
         if: env.CSC_LINK != ''
         run: |
@@ -228,10 +237,25 @@ jobs:
         run: echo 'CSC_IDENTITY_AUTO_DISCOVERY=false' >> "$GITHUB_ENV"
       - name: Build and upload macOS arm64 app
         if: ${{ !inputs.dry_run }}
-        run: npm run build:mac:arm64 -- --publish always
+        run: |
+          # An empty CSC_LINK is treated as a certificate path by electron-builder.
+          if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          npm run build:mac:arm64 -- --publish always
       - name: Build dry run artifact
         if: ${{ inputs.dry_run }}
-        run: npm run build:mac:arm64 -- --publish never
+        run: |
+          if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          npm run build:mac:arm64 -- --publish never
+      - name: Verify signing outcome
+        run: |
+          set -euo pipefail
+          APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
+          if [ -n "$CSC_LINK" ]; then
+            codesign --verify --deep --strict "$APP_PATH"
+            echo "packaged signed: $APP_PATH"
+          else
+            echo "packaged unsigned: $APP_PATH"
+          fi
       - name: Verify packaged macOS native binaries
         run: |
           APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
