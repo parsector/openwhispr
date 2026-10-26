@@ -5111,7 +5111,11 @@
       "custom": "Utiliser un modèle différent pour les routines"
     },
     "presets": {
-      "meetingPrep": { "name": "Préparation de réunion", "description": "Ordre du jour, historique avec les participants et points en suspens avant la réunion.", "reviewSources": "Vérifiez les sources connectées et le filtre de titre facultatif" },
+      "meetingPrep": {
+        "name": "Préparation de réunion",
+        "description": "Ordre du jour, historique avec les participants et points en suspens avant la réunion.",
+        "reviewSources": "Vérifiez les sources connectées et le filtre de titre facultatif"
+      },
       "morningBrief": {
         "name": "Briefing du matin",
         "description": "Les réunions d'aujourd' hui et les actions ouvertes récentes, avec des liens vers des notes connexes.",
@@ -5133,6 +5137,31 @@
     "delete": "Supprimer la routine",
     "deleteQuestion": "Supprimer {{name}} ? Choisissez ce qu'il advient de son dossier et de ses notes.",
     "keepFolder": "Conserver le dossier et les notes",
-    "deleteFailed": "Impossible de supprimer la routine"
+    "deleteFailed": "Impossible de supprimer la routine",
+    "editor": {
+      "notes": "Notes",
+      "calendar": "Calendar",
+      "every": "Every",
+      "chooseWhen": "Choose when",
+      "beforeEventWhen": "{{count}} min before meetings{{filters}}",
+      "read": "read",
+      "tellMe": "tell me",
+      "noteSelection": "Choose notes",
+      "allNotes": "All notes",
+      "noneSelected": "Nothing selected",
+      "saveTo": "save to",
+      "nextRuns": "Next: {{runs}}",
+      "nextRunsUnavailable": "Next runs depend on matching events",
+      "advanced": "Advanced",
+      "on": "on",
+      "off": "off",
+      "partial": "partially selected",
+      "custom": "Custom tools selected",
+      "noSources": "No sources selected. The prompt supplies the instructions.",
+      "needsApproval": "Needs approval for unattended runs",
+      "notConnected": "Server is not connected",
+      "noTools": "No eligible tools",
+      "promptPlaceholder": "Tell me what this routine should do…"
+    }
   }
 }

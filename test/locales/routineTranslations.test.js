@@ -9,8 +9,9 @@ function leaves(node, prefix = []) {
     typeof value === 'string' ? [[prefix.concat(key), value]] : leaves(value, prefix.concat(key)));
 }
 function at(node, keys) { return keys.reduce((value, key) => value?.[key], node); }
-test('every routine string has non-English copy in the ten translated locales', () => {
-  const keys = leaves(english).filter(([path]) => path.includes('routines'));
+test('preexisting routine strings have non-English copy in the ten translated locales', () => {
+  const keys = leaves(english).filter(([path]) => path.includes('routines') && !(path[0] === 'routines' && path[1] === 'editor'));
+  assert.ok(keys.length >= 100, 'all 100 routine keys present on the parent stay covered');
   for (const language of ['ar', 'de', 'es', 'fr', 'it', 'ja', 'pt', 'ru', 'zh-CN', 'zh-TW']) {
     const locale = JSON.parse(fs.readFileSync(path.join(root, language, 'translation.json'), 'utf8'));
     for (const [key, original] of keys) {
@@ -18,5 +19,14 @@ test('every routine string has non-English copy in the ten translated locales', 
       assert.equal(typeof translated, 'string', `${language}: ${key.join('.')} missing`);
       assert.notEqual(translated, original, `${language}: ${key.join('.')} still English`);
     }
+  }
+});
+
+test('editor v2 keys use the specified English values in every locale', () => {
+  const keys = leaves(english.routines.editor);
+  for (const language of ['ar', 'de', 'es', 'fr', 'it', 'ja', 'pt', 'ru', 'zh-CN', 'zh-TW']) {
+    const locale = JSON.parse(fs.readFileSync(path.join(root, language, 'translation.json'), 'utf8'));
+    for (const [key, original] of keys)
+      assert.equal(at(locale.routines.editor, key), original, `${language}: routines.editor.${key.join('.')} differs from English`);
   }
 });

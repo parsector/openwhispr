@@ -5111,7 +5111,11 @@
       "custom": "Utilizzare un modello diverso per le routine"
     },
     "presets": {
-      "meetingPrep": { "name": "Preparazione riunione", "description": "Ordine del giorno, precedenti con i partecipanti e questioni aperte prima della riunione.", "reviewSources": "Controlla le fonti collegate e il filtro facoltativo per il titolo" },
+      "meetingPrep": {
+        "name": "Preparazione riunione",
+        "description": "Ordine del giorno, precedenti con i partecipanti e questioni aperte prima della riunione.",
+        "reviewSources": "Controlla le fonti collegate e il filtro facoltativo per il titolo"
+      },
       "morningBrief": {
         "name": "Riepilogo del mattino",
         "description": "Le riunioni di oggi e le recenti azioni aperte, con collegamenti alle note correlate.",
@@ -5133,6 +5137,31 @@
     "delete": "Elimina routine",
     "deleteQuestion": "Elimina {{name}}? Scegli cosa succede alla sua cartella e alle sue note.",
     "keepFolder": "Conserva cartella e note",
-    "deleteFailed": "Impossibile eliminare la routine"
+    "deleteFailed": "Impossibile eliminare la routine",
+    "editor": {
+      "notes": "Notes",
+      "calendar": "Calendar",
+      "every": "Every",
+      "chooseWhen": "Choose when",
+      "beforeEventWhen": "{{count}} min before meetings{{filters}}",
+      "read": "read",
+      "tellMe": "tell me",
+      "noteSelection": "Choose notes",
+      "allNotes": "All notes",
+      "noneSelected": "Nothing selected",
+      "saveTo": "save to",
+      "nextRuns": "Next: {{runs}}",
+      "nextRunsUnavailable": "Next runs depend on matching events",
+      "advanced": "Advanced",
+      "on": "on",
+      "off": "off",
+      "partial": "partially selected",
+      "custom": "Custom tools selected",
+      "noSources": "No sources selected. The prompt supplies the instructions.",
+      "needsApproval": "Needs approval for unattended runs",
+      "notConnected": "Server is not connected",
+      "noTools": "No eligible tools",
+      "promptPlaceholder": "Tell me what this routine should do…"
+    }
   }
 }
