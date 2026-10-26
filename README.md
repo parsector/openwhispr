@@ -7,8 +7,8 @@
 <p align="center">
   <a href="https://github.com/OpenWhispr/openwhispr/blob/main/LICENSE"><img src="https://img.shields.io/github/license/OpenWhispr/openwhispr?style=flat" alt="License" /></a>
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-lightgrey?style=flat" alt="Platform" />
-  <a href="https://github.com/OpenWhispr/openwhispr/releases/latest"><img src="https://img.shields.io/github/v/release/OpenWhispr/openwhispr?style=flat&sort=semver" alt="GitHub release" /></a>
-  <a href="https://github.com/OpenWhispr/openwhispr/releases"><img src="https://img.shields.io/github/downloads/OpenWhispr/openwhispr/total?style=flat&color=blue" alt="Downloads" /></a>
+  <a href="https://github.com/parsector/openwhispr/releases/latest"><img src="https://img.shields.io/github/v/release/parsector/openwhispr?style=flat&sort=semver" alt="GitHub release" /></a>
+  <a href="https://github.com/parsector/openwhispr/releases"><img src="https://img.shields.io/github/downloads/parsector/openwhispr/total?style=flat&color=blue" alt="Downloads" /></a>
   <a href="https://github.com/OpenWhispr/openwhispr/stargazers"><img src="https://img.shields.io/github/stars/OpenWhispr/openwhispr?style=flat" alt="GitHub stars" /></a>
 </p>
 
@@ -20,7 +20,7 @@
 <p align="center">
   <a href="https://openwhispr.com">Website</a> &middot;
   <a href="https://docs.openwhispr.com">Docs</a> &middot;
-  <a href="https://github.com/OpenWhispr/openwhispr/releases/latest">Download</a> &middot;
+  <a href="https://github.com/parsector/openwhispr/releases/latest">Download</a> &middot;
   <a href="https://docs.openwhispr.com/api/overview">API</a> &middot;
   <a href="https://github.com/OpenWhispr/openwhispr/blob/main/CHANGELOG.md">Changelog</a>
 </p>
@@ -33,10 +33,10 @@ OpenWhispr turns your voice into text, notes, and actions from your desktop. Pre
 
 | Platform              | Download                                                                                                                                                                                                                                                                                  |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS (Apple Silicon) | [`.dmg`](https://github.com/OpenWhispr/openwhispr/releases/latest)                                                                                                                                                                                                                        |
-| macOS (Intel) \*      | [`.dmg`](https://github.com/OpenWhispr/openwhispr/releases/latest)                                                                                                                                                                                                                        |
-| Windows               | [`.exe`](https://github.com/OpenWhispr/openwhispr/releases/latest)                                                                                                                                                                                                                        |
-| Linux                 | [`.AppImage`](https://github.com/OpenWhispr/openwhispr/releases/latest) / [`.deb`](https://github.com/OpenWhispr/openwhispr/releases/latest) / [`.rpm`](https://github.com/OpenWhispr/openwhispr/releases/latest) / [`.tar.gz`](https://github.com/OpenWhispr/openwhispr/releases/latest) |
+| macOS (Apple Silicon) | [`.dmg`](https://github.com/parsector/openwhispr/releases/latest)                                                                                                                                                                                                                        |
+| macOS (Intel) \*      | [`.dmg`](https://github.com/parsector/openwhispr/releases/latest)                                                                                                                                                                                                                        |
+| Windows               | [`.exe`](https://github.com/parsector/openwhispr/releases/latest)                                                                                                                                                                                                                        |
+| Linux                 | [`.AppImage`](https://github.com/parsector/openwhispr/releases/latest) / [`.deb`](https://github.com/parsector/openwhispr/releases/latest) / [`.rpm`](https://github.com/parsector/openwhispr/releases/latest) / [`.tar.gz`](https://github.com/parsector/openwhispr/releases/latest) |
 
 \* On Intel Macs, live speaker identification and voice fingerprinting are unavailable: they depend on ONNX Runtime, which [stopped shipping macOS x86_64 binaries in 1.24](https://github.com/microsoft/onnxruntime/releases/tag/v1.24.1). Meetings still record and transcribe normally, and notes search falls back to keyword matching instead of semantic search.
 
