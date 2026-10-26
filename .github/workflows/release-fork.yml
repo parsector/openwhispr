@@ -116,8 +116,8 @@ jobs:
         run: npm rebuild better-sqlite3
       - name: Test
         run: |
-          mkdir -p "$GITHUB_WORKSPACE/.tmp"
-          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          mkdir -p "$RUNNER_TEMP/tmp"
+          export TMPDIR="$RUNNER_TEMP/tmp"
           npm test
       - name: Typecheck
         run: npm run typecheck
