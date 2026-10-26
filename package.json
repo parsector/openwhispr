@@ -79,6 +79,7 @@
     "format:check": "eslint . && cd src && eslint . && prettier --check \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "lint": "eslint . && cd src && eslint .",
     "test": "node --import tsx --test \"test/**/*.test.js\"",
+    "test:affected": "node scripts/select-affected-tests.js --run",
     "typecheck": "cd src && tsc --noEmit",
     "quality-check": "npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",

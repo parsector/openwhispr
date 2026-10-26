@@ -1,0 +1,30 @@
+name: Nightly full tests
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Rebuild native modules for the runner's Node
+        run: npm rebuild better-sqlite3
+      - name: Run full suite
+        run: |
+          mkdir -p "$RUNNER_TEMP/tmp"
+          export TMPDIR="$RUNNER_TEMP/tmp"
+          npm test
