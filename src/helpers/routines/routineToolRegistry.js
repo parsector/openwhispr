@@ -1,4 +1,5 @@
-const { createToolRegistry: assembleTools } = require("../../services/tools/index.ts");
+const assembleTools = (settings) =>
+  require("../../services/tools/index.ts").createToolRegistry(settings);
 
 // Names and schemas come from chat assembly. Main injects only local read handlers.
 function createToolRegistry({
