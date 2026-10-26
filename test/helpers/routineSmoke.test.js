@@ -87,6 +87,18 @@ test("saving the gallery template and running it writes a note and done row", as
       .matched,
     0
   );
+  const plain = database.saveRoutine({ name: "No sources", prompt: "Write from this instruction",
+    trigger_config: preset.trigger_config, allowed_tools: [] });
+  assert.equal(plain.success, true, plain.error);
+  const plainRun = database.claimRoutineRun(plain.routine.id, "manual:no-sources", "manual");
+  let sentPrompt = "";
+  const plainRunner = new RoutineRunner({ database, infer: async ({ prompt }) => {
+    sentPrompt = prompt;
+    return { text: "A note", toolsAvailable: false };
+  } });
+  await plainRunner.run({ id: plainRun.id, routineId: plain.routine.id,
+    model: { mode: "local", provider: "local", model: "test" } });
+  assert.doesNotMatch(sentPrompt, /Today's calendar|Last seven days' checkbox action items|Selected notes \(deterministically filtered\)/);
 });
 
 test("routine note references become openable Markdown links", () => {

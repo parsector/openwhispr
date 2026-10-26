@@ -8408,7 +8408,8 @@ class DatabaseManager {
         ...row,
         trigger_config: JSON.parse(row.trigger_config),
         allowed_tools: JSON.parse(row.allowed_tools || "[]"),
-        source_config: row.source_config ? JSON.parse(row.source_config) : null,
+        source_config: row.source_config ? JSON.parse(row.source_config)
+          : { folder_ids: null, people: null, lookback_days: 7 },
         model_override: row.model_override ? JSON.parse(row.model_override) : null,
       }));
   }
@@ -8468,19 +8469,21 @@ class DatabaseManager {
     const voiceHint = String(input.voice_hint ?? prior?.voice_hint ?? "").trim();
     if (voiceHint.length > 200) return { success: false, error: "Voice hint too long" };
     const source = input.source_config === undefined ? prior?.source_config : input.source_config;
-    const sourceConfig = source == null ? null : {
-      folder_ids: source.folder_ids,
-      people: source.people,
-      lookback_days: source.lookback_days,
+    if (source != null && (typeof source !== "object" || Array.isArray(source)))
+      return { success: false, error: "Invalid note source selection" };
+    const sourceConfig = {
+      folder_ids: source?.folder_ids ?? null,
+      people: source?.people ?? null,
+      lookback_days: source?.lookback_days ?? 7,
     };
-    if (sourceConfig && (
-      !Array.isArray(sourceConfig.folder_ids) ||
-      sourceConfig.folder_ids.some((id) => !Number.isSafeInteger(id) || id < 1) ||
-      !Array.isArray(sourceConfig.people) ||
-      sourceConfig.people.some((person) => typeof person !== "string" || person.length > 320) ||
+    if (
+      (sourceConfig.folder_ids !== null && (!Array.isArray(sourceConfig.folder_ids) ||
+      sourceConfig.folder_ids.some((id) => !Number.isSafeInteger(id) || id < 1))) ||
+      (sourceConfig.people !== null && (!Array.isArray(sourceConfig.people) ||
+      sourceConfig.people.some((person) => typeof person !== "string" || person.length > 320))) ||
       !Number.isSafeInteger(sourceConfig.lookback_days) ||
       sourceConfig.lookback_days < 1 || sourceConfig.lookback_days > 365
-    )) return { success: false, error: "Invalid note source selection" };
+    ) return { success: false, error: "Invalid note source selection" };
     const spaceId = prior?.space_id ?? this.getPrivateSpaceId();
     let folder = prior
       ? this.getFolders(spaceId).find((item) => item.routine_id === prior.id)

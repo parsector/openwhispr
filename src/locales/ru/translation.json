@@ -5151,7 +5151,11 @@
       "custom": "Используйте другую модель для процедур"
     },
     "presets": {
-      "meetingPrep": { "name": "Подготовка к встрече", "description": "Повестка, история общения с участниками и открытые вопросы перед встречей.", "reviewSources": "Проверьте подключённые источники и необязательный фильтр названия" },
+      "meetingPrep": {
+        "name": "Подготовка к встрече",
+        "description": "Повестка, история общения с участниками и открытые вопросы перед встречей.",
+        "reviewSources": "Проверьте подключённые источники и необязательный фильтр названия"
+      },
       "morningBrief": {
         "name": "Утренний бриф",
         "description": "Сегодняшние встречи и недавние открытые мероприятия со ссылками на соответствующие заметки.",
@@ -5173,6 +5177,31 @@
     "delete": "Удалить процедуру",
     "deleteQuestion": "Удалить {{name}}? Выберите, что произойдет с его папкой и заметками.",
     "keepFolder": "Хранить папку и заметки",
-    "deleteFailed": "Не удалось удалить процедуру"
+    "deleteFailed": "Не удалось удалить процедуру",
+    "editor": {
+      "notes": "Notes",
+      "calendar": "Calendar",
+      "every": "Every",
+      "chooseWhen": "Choose when",
+      "beforeEventWhen": "{{count}} min before meetings{{filters}}",
+      "read": "read",
+      "tellMe": "tell me",
+      "noteSelection": "Choose notes",
+      "allNotes": "All notes",
+      "noneSelected": "Nothing selected",
+      "saveTo": "save to",
+      "nextRuns": "Next: {{runs}}",
+      "nextRunsUnavailable": "Next runs depend on matching events",
+      "advanced": "Advanced",
+      "on": "on",
+      "off": "off",
+      "partial": "partially selected",
+      "custom": "Custom tools selected",
+      "noSources": "No sources selected. The prompt supplies the instructions.",
+      "needsApproval": "Needs approval for unattended runs",
+      "notConnected": "Server is not connected",
+      "noTools": "No eligible tools",
+      "promptPlaceholder": "Tell me what this routine should do…"
+    }
   }
 }

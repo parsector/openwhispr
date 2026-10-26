@@ -2723,7 +2723,15 @@
     "history": "Run history",
     "gallery": "Start with a template",
     "scratch": "Start from scratch",
-    "days": { "0": "Sun", "1": "Mon", "2": "Tue", "3": "Wed", "4": "Thu", "5": "Fri", "6": "Sat" },
+    "days": {
+      "0": "Sun",
+      "1": "Mon",
+      "2": "Tue",
+      "3": "Wed",
+      "4": "Thu",
+      "5": "Fri",
+      "6": "Sat"
+    },
     "status": {
       "queued": "Queued",
       "running": "Running",
@@ -2733,9 +2741,16 @@
       "failed": "Failed",
       "skipped": "Skipped"
     },
-    "model": { "sameAsChat": "Same as chat", "custom": "Use a different model for routines" },
+    "model": {
+      "sameAsChat": "Same as chat",
+      "custom": "Use a different model for routines"
+    },
     "presets": {
-      "meetingPrep": { "name": "Meeting prep", "description": "An agenda, history with attendees, and open items before a meeting.", "reviewSources": "Review connected sources and optional title filter" },
+      "meetingPrep": {
+        "name": "Meeting prep",
+        "description": "An agenda, history with attendees, and open items before a meeting.",
+        "reviewSources": "Review connected sources and optional title filter"
+      },
       "morningBrief": {
         "name": "Morning brief",
         "description": "Today's meetings and recent open action items, with links to related notes.",
@@ -2747,6 +2762,31 @@
         "pickFolders": "Pick folders",
         "pickPeople": "Pick people"
       }
+    },
+    "editor": {
+      "notes": "Notes",
+      "calendar": "Calendar",
+      "every": "Every",
+      "chooseWhen": "Choose when",
+      "beforeEventWhen": "{{count}} min before meetings{{filters}}",
+      "read": "read",
+      "tellMe": "tell me",
+      "noteSelection": "Choose notes",
+      "allNotes": "All notes",
+      "noneSelected": "Nothing selected",
+      "saveTo": "save to",
+      "nextRuns": "Next: {{runs}}",
+      "nextRunsUnavailable": "Next runs depend on matching events",
+      "advanced": "Advanced",
+      "on": "on",
+      "off": "off",
+      "partial": "partially selected",
+      "custom": "Custom tools selected",
+      "noSources": "No sources selected. The prompt supplies the instructions.",
+      "needsApproval": "Needs approval for unattended runs",
+      "notConnected": "Server is not connected",
+      "noTools": "No eligible tools",
+      "promptPlaceholder": "Tell me what this routine should do…"
     }
   },
   "insights": {

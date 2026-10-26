@@ -5111,7 +5111,11 @@
       "custom": "Verwenden Sie ein anderes Modell für Routinen"
     },
     "presets": {
-      "meetingPrep": { "name": "Besprechung vorbereiten", "description": "Agenda, Verlauf mit Teilnehmenden und offene Punkte vor der Besprechung.", "reviewSources": "Verbundene Quellen und optionalen Titelfilter prüfen" },
+      "meetingPrep": {
+        "name": "Besprechung vorbereiten",
+        "description": "Agenda, Verlauf mit Teilnehmenden und offene Punkte vor der Besprechung.",
+        "reviewSources": "Verbundene Quellen und optionalen Titelfilter prüfen"
+      },
       "morningBrief": {
         "name": "Morgen-Briefing",
         "description": "Heutige Besprechungen und aktuelle offene Aktionspunkte mit Links zu zugehörigen Notizen.",
@@ -5133,6 +5137,31 @@
     "delete": "Routine löschen",
     "deleteQuestion": "{{name}} löschen? Wählen Sie aus, was mit dem Ordner und den Notizen passiert.",
     "keepFolder": "Ordner und Notizen aufbewahren",
-    "deleteFailed": "Routine konnte nicht gelöscht werden"
+    "deleteFailed": "Routine konnte nicht gelöscht werden",
+    "editor": {
+      "notes": "Notes",
+      "calendar": "Calendar",
+      "every": "Every",
+      "chooseWhen": "Choose when",
+      "beforeEventWhen": "{{count}} min before meetings{{filters}}",
+      "read": "read",
+      "tellMe": "tell me",
+      "noteSelection": "Choose notes",
+      "allNotes": "All notes",
+      "noneSelected": "Nothing selected",
+      "saveTo": "save to",
+      "nextRuns": "Next: {{runs}}",
+      "nextRunsUnavailable": "Next runs depend on matching events",
+      "advanced": "Advanced",
+      "on": "on",
+      "off": "off",
+      "partial": "partially selected",
+      "custom": "Custom tools selected",
+      "noSources": "No sources selected. The prompt supplies the instructions.",
+      "needsApproval": "Needs approval for unattended runs",
+      "notConnected": "Server is not connected",
+      "noTools": "No eligible tools",
+      "promptPlaceholder": "Tell me what this routine should do…"
+    }
   }
 }
