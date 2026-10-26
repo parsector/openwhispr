@@ -117,6 +117,13 @@ const BYOK_API_KEYS = [
     save: "saveChatAgentCustomKey",
     storeKey: "chatAgentCustomApiKey",
   },
+  {
+    base: "routines-custom",
+    env: "ROUTINES_CUSTOM_API_KEY",
+    get: "getRoutinesCustomKey",
+    save: "saveRoutinesCustomKey",
+    storeKey: "routinesCustomApiKey",
+  },
 ];
 
 module.exports = { BYOK_API_KEYS };

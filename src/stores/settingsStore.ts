@@ -985,7 +985,9 @@ export interface SettingsState
   routinesMode: InferenceMode;
   routinesProvider: string;
   routinesModel: string;
+  routinesCloudBaseUrl: string;
   routinesRemoteUrl: string;
+  routinesCustomApiKey: string;
   noteFormattingProvider: string;
   noteFormattingModel: string;
   noteFormattingCloudMode: string;
@@ -1280,6 +1282,7 @@ export interface SettingsState
   setChatAgentCloudBaseUrl: (value: string) => void;
   setChatAgentRemoteUrl: (url: string) => void;
   setChatAgentCustomApiKey: (key: string) => void;
+  setRoutinesCustomApiKey: (key: string) => void;
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => void;
   setCloudTranscriptionForAllScopes: (settings: Partial<TranscriptionSettings>) => void;
@@ -1422,6 +1425,7 @@ const SECRET_IPC_SAVERS = {
   dictationAgentCustom: "saveDictationAgentCustomKey",
   dictationAgentVisionCustom: "saveDictationAgentVisionCustomKey",
   chatAgentCustom: "saveChatAgentCustomKey",
+  routinesCustom: "saveRoutinesCustomKey",
   bedrockAccessKeyId: "saveBedrockAccessKeyId",
   bedrockSecretAccessKey: "saveBedrockSecretAccessKey",
   bedrockSessionToken: "saveBedrockSessionToken",
@@ -1473,6 +1477,7 @@ const STALE_SECRET_LOCALSTORAGE_KEYS = [
   "dictationAgentCustomApiKey",
   "dictationAgentVisionCustomApiKey",
   "chatAgentCustomApiKey",
+  "routinesCustomApiKey",
   "bedrockAccessKeyId",
   "bedrockSecretAccessKey",
   "bedrockSessionToken",
@@ -1815,7 +1820,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   routinesMode: readString("routinesMode", "") as InferenceMode,
   routinesProvider: readString("routinesProvider", ""),
   routinesModel: readString("routinesModel", ""),
+  routinesCloudBaseUrl: readString("routinesCloudBaseUrl", ""),
   routinesRemoteUrl: readString("routinesRemoteUrl", ""),
+  routinesCustomApiKey: readString("routinesCustomApiKey", ""),
   noteFormattingModel: readString("noteFormattingModel", ""),
   noteFormattingCloudMode: readString("noteFormattingCloudMode", ""),
   noteFormattingCloudBaseUrl: readString("noteFormattingCloudBaseUrl", ""),
@@ -2610,6 +2617,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "chatAgentCustom",
     "custom"
   ),
+  setRoutinesCustomApiKey: createSecretSetter("routinesCustomApiKey", "routinesCustom", "custom"),
 
   updateTranscriptionSettings: (settings: Partial<TranscriptionSettings>) => {
     const s = useSettingsStore.getState();
@@ -2989,6 +2997,7 @@ const SECRET_SCOPE_KEY_SETTERS = {
   dictationAgentCustomApiKey: "setDictationAgentCustomApiKey",
   dictationAgentVisionCustomApiKey: "setDictationAgentVisionCustomApiKey",
   chatAgentCustomApiKey: "setChatAgentCustomApiKey",
+  routinesCustomApiKey: "setRoutinesCustomApiKey",
 } as const;
 
 export function setResolvedLLMConfig(
@@ -3404,6 +3413,7 @@ export async function initializeSettings(): Promise<void> {
         dictationAgentCustom,
         dictationAgentVisionCustom,
         chatAgentCustom,
+        routinesCustom,
         bedrockAccessKeyId,
         bedrockSecretAccessKey,
         bedrockSessionToken,
@@ -3430,6 +3440,7 @@ export async function initializeSettings(): Promise<void> {
         window.electronAPI.getDictationAgentCustomKey?.(),
         window.electronAPI.getDictationAgentVisionCustomKey?.(),
         window.electronAPI.getChatAgentCustomKey?.(),
+        window.electronAPI.getRoutinesCustomKey?.(),
         window.electronAPI.getBedrockAccessKeyId?.(),
         window.electronAPI.getBedrockSecretAccessKey?.(),
         window.electronAPI.getBedrockSessionToken?.(),
@@ -3464,6 +3475,7 @@ export async function initializeSettings(): Promise<void> {
             "saveDictationAgentVisionCustomKey",
           ],
           ["chatAgentCustomApiKey", chatAgentCustom, "saveChatAgentCustomKey"],
+          ["routinesCustomApiKey", routinesCustom, "saveRoutinesCustomKey"],
         ])),
         bedrockSecretAccessKey: bedrockSecretAccessKey || "",
         bedrockSessionToken: bedrockSessionToken || "",

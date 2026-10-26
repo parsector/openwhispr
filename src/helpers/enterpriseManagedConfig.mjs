@@ -3,6 +3,7 @@ const ENTERPRISE_INFERENCE_SCOPES = [
   "dictationAgent",
   "noteFormatting",
   "chatIntelligence",
+  "routines",
   "dictationTranslation",
 ];
 
@@ -74,7 +75,12 @@ function isValidLlmSection(allowed, defaults) {
   }
   if (!isStringMap(defaults)) return false;
   if (
-    !ENTERPRISE_INFERENCE_SCOPES.every((scope) => isNonEmptyString(defaults[scope])) ||
+    // Older managed envelopes predate routines; inherit the chat deployment.
+    !ENTERPRISE_INFERENCE_SCOPES.every((scope) =>
+      isNonEmptyString(
+        defaults[scope] ?? (scope === "routines" ? defaults.chatIntelligence : undefined)
+      )
+    ) ||
     !Object.keys(defaults).every((scope) => ENTERPRISE_INFERENCE_SCOPES.includes(scope))
   ) {
     return false;
@@ -174,14 +180,17 @@ function managedModelFor(record, scope) {
   if (scope === ENTERPRISE_TRANSCRIPTION_SCOPE) {
     return record.config.transcription?.defaultDeployment;
   }
-  return record.config.scopeDefaults?.[scope];
+  return (
+    record.config.scopeDefaults?.[scope] ??
+    (scope === "routines" ? record.config.scopeDefaults?.chatIntelligence : undefined)
+  );
 }
 
 function resolveManagedEnterpriseScope(envelope, scope, setupMode = "auto") {
+  if (!envelope?.providers?.length) return { kind: "manual" };
   if (!ENTERPRISE_INFERENCE_SCOPES.includes(scope) && scope !== ENTERPRISE_TRANSCRIPTION_SCOPE) {
     return resolutionError("MANAGED_SCOPE_INVALID", "The requested inference scope is invalid.");
   }
-  if (!envelope?.providers?.length) return { kind: "manual" };
 
   const configured = envelope.providers.filter(
     (record) => record.mode !== "disabled" && isNonEmptyString(managedModelFor(record, scope))
@@ -223,6 +232,9 @@ function managedScopesForConfig(config) {
     if (record.mode === "disabled") continue;
     const isEnforced = record.mode === "managed_required" || !record.allowManualSetup;
     for (const scope of [...ENTERPRISE_INFERENCE_SCOPES, ENTERPRISE_TRANSCRIPTION_SCOPE]) {
+      // A legacy envelope may omit routines; keep its original enforcement summary.
+      if (scope === "routines" && !isNonEmptyString(record.config.scopeDefaults?.routines))
+        continue;
       if (!isNonEmptyString(managedModelFor(record, scope))) continue;
       if (!managed.includes(scope)) managed.push(scope);
       if (isEnforced && !enforced.includes(scope)) enforced.push(scope);

@@ -176,7 +176,9 @@ export default function InferenceConfigEditor({
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div>
             <p className="text-sm font-medium">
-              {t("settingsPage.aiModels.managedEnterprise.errorTitle")}
+              {managed.code === "MANAGED_SCOPE_INVALID"
+                ? t("common.error")
+                : t("settingsPage.aiModels.managedEnterprise.errorTitle")}
             </p>
             <p className="mt-0.5 text-xs text-muted-foreground">
               {managed.messageKey ? t(managed.messageKey) : managed.message}

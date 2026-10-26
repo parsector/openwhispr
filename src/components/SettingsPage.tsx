@@ -857,6 +857,7 @@ function RoutinesModelSettings() {
                     mode: chat.mode,
                     provider: chat.provider,
                     model: chat.model,
+                    cloudBaseUrl: chat.cloudBaseUrl || "",
                     remoteUrl: chat.remoteUrl || "",
                   });
                 } else {
@@ -864,6 +865,7 @@ function RoutinesModelSettings() {
                     mode: "" as InferenceMode,
                     provider: "",
                     model: "",
+                    cloudBaseUrl: "",
                     remoteUrl: "",
                   });
                 }
