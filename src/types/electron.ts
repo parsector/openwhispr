@@ -1539,7 +1539,7 @@ declare global {
             folder_ids?: number[];
           };
           allowed_tools: string[];
-          source_config: { folder_ids: number[]; people: string[]; lookback_days: number } | null;
+          source_config: { folder_ids: number[] | null; people: string[] | null; lookback_days: number } | null;
           model_override: {
             mode: string;
             provider: string;
@@ -1572,11 +1572,12 @@ declare global {
           };
           trigger_type?: string;
           suggested_tools: string[];
-          source_config?: { folder_ids: number[]; people: string[]; lookback_days: number };
+          source_config?: { folder_ids: number[] | null; people: string[] | null; lookback_days: number };
+          required_selection?: string[];
           needs: string[];
         }>
       >;
-      routineMcpSources: () => Promise<Array<{ name: string; description: string }>>;
+      routineMcpSources: () => Promise<Array<{ name: string; tools: Array<{ name: string; description: string }>; reason: "notConnected" | "needsApproval" | "noTools" | null }>>;
       routinePeople: () => Promise<Array<{ email: string; name: string }>>;
       routineModelUsable: (choice: {
         mode: string;
@@ -1595,7 +1596,7 @@ declare global {
         name: string;
         prompt: string;
         allowed_tools?: string[];
-        source_config?: { folder_ids: number[]; people: string[]; lookback_days: number } | null;
+        source_config?: { folder_ids: number[] | null; people: string[] | null; lookback_days: number } | null;
         model_override?: {
           mode: string;
           provider: string;

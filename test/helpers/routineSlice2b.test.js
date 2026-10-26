@@ -31,6 +31,8 @@ test('routine rename refuses folder collision and deletion offers both folder ou
   t.after(() => database.db.close());
   const first = save(database, 'First');
   assert.equal(first.success, true, first.error);
+  assert.deepEqual(database.getRoutine(first.routine.id).source_config,
+    { folder_ids: null, people: null, lookback_days: 7 });
   assert.ok(database.db.prepare('PRAGMA table_info(routines)').all().some((column) => column.name === 'source_config'));
   const sourceConfig = { folder_ids: [], people: ['alex@example.com'], lookback_days: 7 };
   const configured = database.saveRoutine({ id: first.routine.id, name: 'First', prompt: 'Write a digest',
@@ -105,5 +107,17 @@ test('Friday digest template has Friday trigger and source selection requirement
   assert.deepEqual(preset.trigger_config.slots[0].days, [5]);
   assert.deepEqual(preset.source_config, { folder_ids: [], people: [], lookback_days: 7 });
   assert.deepEqual(preset.needs, ['routines.presets.fridayDigest.pickFolders', 'routines.presets.fridayDigest.pickPeople']);
+  assert.deepEqual(preset.required_selection, ['folders', 'people']);
   for (const item of ['decisions', 'risks', 'blockers', 'status update']) assert.match(preset.prompt, new RegExp(item));
+});
+
+
+test('selected notes treats null as all and empty arrays as nothing', () => {
+  const now = Date.now();
+  const rows = [{ id: 1, title: 'Meeting', created_at: new Date(now).toISOString(),
+    participants: JSON.stringify([{ email: 'alex@example.com' }]), enhanced_content: '', content: 'Decision', folder_id: 2, routine_id: null }];
+  const db = { _accountScopeCondition: () => ({ sql: '1=1', params: [] }), db: { prepare: () => ({ all: () => rows }) } };
+  assert.equal(selectedNoteContext(db, { folder_ids: null, people: null, lookback_days: 7 }, now).count, 1);
+  assert.equal(selectedNoteContext(db, { folder_ids: [], people: null, lookback_days: 7 }, now).count, 0);
+  assert.equal(selectedNoteContext(db, { folder_ids: null, people: [], lookback_days: 7 }, now).count, 0);
 });

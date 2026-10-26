@@ -54,20 +54,20 @@ function selectedNoteContext(database, config, now) {
        AND notes.id NOT IN (SELECT note_id FROM routine_runs WHERE note_id IS NOT NULL)
      ORDER BY notes.created_at DESC, notes.id DESC LIMIT 200`
   ).all(new Date(now - config.lookback_days * DAY).toISOString(), ...scope.params);
-  const folders = new Set(config.folder_ids);
-  const people = new Set(config.people.map((value) => value.toLowerCase()));
+  const folders = config.folder_ids === null ? null : new Set(config.folder_ids);
+  const people = config.people === null ? null : new Set(config.people.map((value) => value.toLowerCase()));
   let count = 0;
   let chars = 0;
   const sections = [];
   for (const note of rows) {
     if (count >= 20 || chars >= 60000) break;
-    if (note.routine_id || (folders.size && !folders.has(note.folder_id))) continue;
+    if (note.routine_id || (folders && !folders.has(note.folder_id))) continue;
     let participants = [];
     try {
       const parsed = JSON.parse(note.participants || "[]");
       if (Array.isArray(parsed)) participants = parsed;
     } catch { /* malformed metadata */ }
-    if (people.size && !participants.some((person) =>
+    if (people && !participants.some((person) =>
       typeof person.email === "string" && people.has(person.email.trim().toLowerCase()))) continue;
     const names = participants.map((person) => person.displayName || person.email).filter(Boolean);
     const section = `[Note ${note.id}](note:${note.id}) ${note.title} (${note.created_at})\nPeople: ${names.join(", ") || "none"}\n${note.enhanced_content || note.content || ""}`;
@@ -143,7 +143,7 @@ function eventContext(database, eventId) {
   let status = "ok";
   if (people.length) {
     try {
-      history = selectedNoteContext(database, { folder_ids: [], people, lookback_days: 90 }, Date.now()).text;
+      history = selectedNoteContext(database, { folder_ids: null, people, lookback_days: 90 }, Date.now()).text;
     } catch {
       history = "Prior notes unavailable";
       status = "unavailable";
@@ -187,27 +187,31 @@ class RoutineRunner {
       .prepare("UPDATE routines SET last_run_at=? WHERE id=?")
       .run(new Date(now).toISOString(), routine.id);
     try {
-      let actions;
-      try {
-        actions = actionItemContext(database, now);
-      } catch {
-        actions = {
-          text: "Action items unavailable",
-          scanned: 0,
-          matched: 0,
-          status: "unavailable",
-        };
+      const readNotes = routine.allowed_tools.some((name) => name === "search_notes" || name === "get_note");
+      const readCalendar = routine.allowed_tools.includes("get_calendar_events");
+      let actions = null;
+      if (readNotes) {
+        try {
+          actions = actionItemContext(database, now);
+        } catch {
+          actions = {
+            text: "Action items unavailable",
+            scanned: 0,
+            matched: 0,
+            status: "unavailable",
+          };
+        }
       }
-      const calendar = calendarContext(database, now);
+      const calendar = readCalendar ? calendarContext(database, now) : null;
       let selectedNotes;
-      try { selectedNotes = selectedNoteContext(database, routine.source_config, now); }
-      catch { selectedNotes = { text: "Selected notes unavailable", count: 0, status: "unavailable" }; }
+      if (readNotes) {
+        try { selectedNotes = selectedNoteContext(database, routine.source_config, now); }
+        catch { selectedNotes = { text: "Selected notes unavailable", count: 0, status: "unavailable" }; }
+      }
       const sourceStatus = {
-        action_items:
-          actions.status === "unavailable"
-            ? "unavailable"
-            : { scanned: actions.scanned, matched: actions.matched },
-        calendar: calendar.status,
+        ...(actions ? { action_items: actions.status === "unavailable"
+          ? "unavailable" : { scanned: actions.scanned, matched: actions.matched } } : {}),
+        ...(calendar ? { calendar: calendar.status } : {}),
         ...(selectedNotes ? { selected_notes: selectedNotes.status || { matched: selectedNotes.count } } : {}),
         ...(job.trigger === "meeting_ended" ? { diarization: job.diarization || "pending" } : {}),
       };
@@ -264,7 +268,7 @@ class RoutineRunner {
       const prep = job.trigger === "before_event" ? eventContext(database, job.eventId) : null;
       if (prep?.status === "unavailable") sourceStatus.event_history = "unavailable";
       const triggerContext = job.trigger === "meeting_ended" ? meetingContext(database, job.sourceNoteId) : prep?.text || "";
-      const prompt = `${routine.prompt}\n\n${triggerContext ? `${triggerContext}\n\n` : ""}Today's calendar:\n${calendar.text}\n\nLast seven days' checkbox action items:\n${actions.text}${selectedNotes ? `\n\nSelected notes (deterministically filtered):\n${selectedNotes.text}` : ""}\n\nCite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
+      const prompt = `${routine.prompt}\n\n${triggerContext ? `${triggerContext}\n\n` : ""}${calendar ? `Today's calendar:\n${calendar.text}\n\n` : ""}${actions ? `Last seven days' checkbox action items:\n${actions.text}\n\n` : ""}${selectedNotes ? `Selected notes (deterministically filtered):\n${selectedNotes.text}\n\n` : ""}Cite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
       const response = await this.infer({ model, prompt, toolsAvailable, registry, context });
       if (toolsAvailable && !response.toolsAvailable) {
         for (const name of routine.allowed_tools)
@@ -297,10 +301,16 @@ class RoutineRunner {
       const unavailable = Object.entries(sourceStatus)
         .filter(([, value]) => typeof value === "string" && value.startsWith("unavailable"))
         .map(([name]) => name.replaceAll("_", " "));
-      const sourceLine = `Sources: ${actions.scanned} notes scanned, ${actions.matched} with checkboxes; calendar ${calendar.status}${unavailable.length ? `; unavailable: ${unavailable.join(", ")}` : ""}${modelWarning ? `; ${modelWarning}` : ""}`;
+      const sourceParts = [
+        ...(actions ? [`${actions.scanned} notes scanned, ${actions.matched} with checkboxes`] : []),
+        ...(calendar ? [`calendar ${calendar.status}`] : []),
+        ...(unavailable.length ? [`unavailable: ${unavailable.join(", ")}`] : []),
+        ...(modelWarning ? [modelWarning] : []),
+      ];
+      const sourceLine = sourceParts.length ? `Sources: ${sourceParts.join("; ")}` : "";
       const note = database.saveNote(
         noteTitle(database, routine, now),
-        `${linkNoteReferences(result.text)}\n\n${sourceLine}`,
+        `${linkNoteReferences(result.text)}${sourceLine ? `\n\n${sourceLine}` : ""}`,
         "personal",
         null,
         null,

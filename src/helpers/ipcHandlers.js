@@ -1119,8 +1119,21 @@ class IPCHandlers {
     ipcMain.handle("routines-mcp-sources", async () => {
       if (!this.mcpClientManager) return [];
       const { loadRoutineMcpTools } = require("../services/tools/mcpTools.ts");
-      const tools = await loadRoutineMcpTools(routineMcpApi(this.mcpClientManager), 32000);
-      return tools.map(({ name, description }) => ({ name, description }));
+      const api = routineMcpApi(this.mcpClientManager);
+      const servers = (await api.list()).servers;
+      const eligible = await loadRoutineMcpTools(api, 32000).catch(() => []);
+      const ownerOf = (name) => servers.filter((item) => name.startsWith(`${item.name}__`))
+        .sort((left, right) => right.name.length - left.name.length)[0]?.name;
+      return Promise.all(servers.map(async (server) => {
+        const tools = eligible.filter((tool) => ownerOf(tool.name) === server.name)
+          .map((tool) => ({ name: tool.name, description: tool.description }));
+        const available = server.enabled && server.status === "connected"
+          ? await api.tools(server.name).catch(() => []) : [];
+        return { name: server.name, tools, reason: !server.enabled || server.status !== "connected"
+          ? "notConnected" : tools.length ? null
+            : available.some((tool) => tool.annotations?.readOnlyHint !== true && !server.allowWithoutAsking)
+              ? "needsApproval" : "noTools" };
+      }));
     });
     ipcMain.handle("routines-presets", () => PRESETS);
     ipcMain.handle("routines-save", (_event, input) => {

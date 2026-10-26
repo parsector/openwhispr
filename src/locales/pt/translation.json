@@ -5111,7 +5111,11 @@
       "custom": "Usar um modelo diferente para rotinas"
     },
     "presets": {
-      "meetingPrep": { "name": "Preparação para reunião", "description": "Pauta, histórico com os participantes e pendências antes da reunião.", "reviewSources": "Revise as fontes conectadas e o filtro de título opcional" },
+      "meetingPrep": {
+        "name": "Preparação para reunião",
+        "description": "Pauta, histórico com os participantes e pendências antes da reunião.",
+        "reviewSources": "Revise as fontes conectadas e o filtro de título opcional"
+      },
       "morningBrief": {
         "name": "Resumo da manhã",
         "description": "Reuniões de hoje e recentes itens de ação em aberto, com links para notas relacionadas.",
@@ -5133,6 +5137,31 @@
     "delete": "Eliminar rotina",
     "deleteQuestion": "Excluir {{name}}? Escolha o que acontece com a pasta e as anotações.",
     "keepFolder": "Manter pasta e notas",
-    "deleteFailed": "Não foi possível eliminar a rotina"
+    "deleteFailed": "Não foi possível eliminar a rotina",
+    "editor": {
+      "notes": "Notes",
+      "calendar": "Calendar",
+      "every": "Every",
+      "chooseWhen": "Choose when",
+      "beforeEventWhen": "{{count}} min before meetings{{filters}}",
+      "read": "read",
+      "tellMe": "tell me",
+      "noteSelection": "Choose notes",
+      "allNotes": "All notes",
+      "noneSelected": "Nothing selected",
+      "saveTo": "save to",
+      "nextRuns": "Next: {{runs}}",
+      "nextRunsUnavailable": "Next runs depend on matching events",
+      "advanced": "Advanced",
+      "on": "on",
+      "off": "off",
+      "partial": "partially selected",
+      "custom": "Custom tools selected",
+      "noSources": "No sources selected. The prompt supplies the instructions.",
+      "needsApproval": "Needs approval for unattended runs",
+      "notConnected": "Server is not connected",
+      "noTools": "No eligible tools",
+      "promptPlaceholder": "Tell me what this routine should do…"
+    }
   }
 }

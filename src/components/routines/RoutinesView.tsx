@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { loadFolders, useFolders } from "../../stores/noteStore";
 import { routineEndpointSupportsTools } from "../../utils/modelCapability";
+import { customTools, defaultSelection, missingRequiredSelection, nextThreeRuns, sourceState, toggleSource, type Selection, type Source } from "./editorPolicy";
 
 type Routine = Awaited<ReturnType<Window["electronAPI"]["listRoutines"]>>[number];
 type Preset = Awaited<ReturnType<Window["electronAPI"]["routinePresets"]>>[number];
@@ -14,7 +15,7 @@ type Draft = {
   name: string;
   prompt: string;
   allowed_tools: string[];
-  source_config: { folder_ids: number[]; people: string[]; lookback_days: number } | null;
+  source_config: Selection | null;
   model_override: ModelChoice | null;
   catch_up_window_hours: number;
   voice_hint: string;
@@ -37,12 +38,18 @@ function PlainTextField({
   label,
   multiline = false,
   direction = "auto",
+  placeholder,
+  id,
+  title = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   label: string;
   multiline?: boolean;
   direction?: "auto" | "ltr";
+  placeholder?: string;
+  id?: string;
+  title?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -52,17 +59,19 @@ function PlainTextField({
   return (
     <div
       ref={ref}
+      id={id}
       role="textbox"
       aria-label={label}
       aria-multiline={multiline}
       dir={direction}
+      data-placeholder={placeholder}
       contentEditable="plaintext-only"
       suppressContentEditableWarning
       onInput={(event) => onChange(event.currentTarget.innerText)}
       onKeyDown={(event) => {
         if (!multiline && event.key === "Enter") event.preventDefault();
       }}
-      className={`w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/30 whitespace-pre-wrap ${multiline ? "min-h-32" : "min-h-10"}`}
+      className={`w-full outline-none focus-visible:ring-2 focus-visible:ring-primary/30 whitespace-pre-wrap empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)] ${title ? "rounded-sm border-b border-transparent px-0 py-1 text-lg hover:border-border" : `rounded-md border border-border bg-background px-3 py-2 text-sm ${multiline ? "min-h-32" : "min-h-10"}`}`}
     />
   );
 }
@@ -72,7 +81,7 @@ function newDraft(preset?: Preset, translatedName = ""): Draft {
     name: translatedName,
     prompt: preset?.prompt || "",
     allowed_tools: preset?.suggested_tools || [],
-    source_config: preset?.source_config || null,
+    source_config: preset?.source_config || defaultSelection(),
     model_override: null,
     catch_up_window_hours: 4,
     voice_hint: "",
@@ -85,7 +94,7 @@ function newDraft(preset?: Preset, translatedName = ""): Draft {
 }
 
 export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) => void }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -98,7 +107,12 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
   const [people, setPeople] = useState<Array<{ email: string; name: string }>>([]);
   const [deleteTarget, setDeleteTarget] = useState<Routine | null>(null);
   const folders = useFolders().filter((folder) => !folder.routine_id && !folder.deleted_at);
-  const [mcpSources, setMcpSources] = useState<Array<{ name: string; description: string }>>([]);
+  const [mcpSources, setMcpSources] = useState<Awaited<ReturnType<Window["electronAPI"]["routineMcpSources"]>>>([]);
+  const [whenOpen, setWhenOpen] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [previewNow, setPreviewNow] = useState(() => new Date());
+  const hasDraft = Boolean(draft);
   const [scopeModel, setScopeModel] = useState<ModelChoice | null>(null);
   const [overrideUsable, setOverrideUsable] = useState(true);
   const [meetingPreview, setMeetingPreview] = useState<number | null>(null);
@@ -135,6 +149,11 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
     };
   }, [draft?.model_override]);
   useEffect(() => {
+    if (!hasDraft) return;
+    const timer = window.setInterval(() => setPreviewNow(new Date()), 60000);
+    return () => window.clearInterval(timer);
+  }, [hasDraft]);
+  useEffect(() => {
     if (draft?.trigger_type !== "meeting_ended") { setMeetingPreview(null); return; }
     const config = draft.trigger_config;
     let active = true;
@@ -149,7 +168,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
       name: routine.name,
       prompt: routine.prompt,
       allowed_tools: routine.allowed_tools,
-      source_config: routine.source_config,
+      source_config: routine.source_config || defaultSelection(),
       model_override: routine.model_override,
       catch_up_window_hours: routine.catch_up_window_hours,
       voice_hint: routine.voice_hint || "",
@@ -158,11 +177,19 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
     });
     setFromPreset(null);
     setError("");
+    setWhenOpen(false);
+    setNotesOpen(false);
+    setAdvancedOpen(false);
+    setPreviewNow(new Date());
   };
   const choose = (preset?: Preset) => {
     setDraft(newDraft(preset, preset ? t(preset.nameKey) : ""));
     setFromPreset(preset || null);
     setError("");
+    setWhenOpen(false);
+    setNotesOpen(false);
+    setAdvancedOpen(false);
+    setPreviewNow(new Date());
   };
   const updateSlot = (index: number, slot: Slot) =>
     setDraft(
@@ -180,8 +207,9 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
     if (draft.trigger_type === "meeting_ended" && !(draft.trigger_config.folder_ids?.length || draft.trigger_config.title_pattern?.trim())) {
       setError(t("routines.errors.meetingFilter")); return;
     }
-    if (fromPreset?.id === "friday-digest" &&
-      (!draft.source_config?.folder_ids.length || !draft.source_config.people.length)) {
+    const missing = missingRequiredSelection(draft.source_config, fromPreset?.required_selection || []);
+    if (missing.folders || missing.people) {
+      setNotesOpen(true);
       setError(t("routines.errors.digestSelection"));
       return;
     }
@@ -210,12 +238,26 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
     draft?.model_override && overrideUsable ? draft.model_override : scopeModel;
   const toolWarning =
     draft && draft.allowed_tools.length > 0 && !routineEndpointSupportsTools(effectiveModel);
-  const sourceOptions = [
-    { name: "search_notes", description: t("routines.sourceNotes") },
-    { name: "get_note", description: t("routines.sourceNote") },
-    { name: "get_calendar_events", description: t("routines.sourceCalendar") },
-    ...mcpSources,
+  const sources: Source[] = [
+    { id: "notes", label: t("routines.editor.notes"), tools: ["search_notes", "get_note"] },
+    { id: "calendar", label: t("routines.editor.calendar"), tools: ["get_calendar_events"] },
+    ...mcpSources.map((server) => ({ id: `mcp:${server.name}`, label: server.name,
+      tools: server.tools.map((tool) => tool.name), reason: server.reason || undefined })),
   ];
+  const unlistedTools = draft ? customTools(sources, draft.allowed_tools) : [];
+  const missing = draft ? missingRequiredSelection(draft.source_config, fromPreset?.required_selection || []) : { folders: false, people: false };
+  const nextRuns = draft?.trigger_type === "time"
+    ? nextThreeRuns(draft.trigger_config.slots || [], previewNow) : [];
+  const whenLabel = draft?.trigger_type === "time"
+    ? (draft.trigger_config.slots || []).map((slot) => `${slot.days.map((day) => t(`routines.days.${day}`)).join("/")} ${slot.time}`).join(" · ")
+    : draft?.trigger_type === "before_event"
+      ? t("routines.editor.beforeEventWhen", { count: draft.trigger_config.minutes_before ?? 10,
+        filters: [
+          ...(draft.trigger_config.has_attendees ? [t("routines.has_attendees")] : []),
+          ...(draft.trigger_config.has_meeting_link ? [t("routines.has_meeting_link")] : []),
+          ...(draft.trigger_config.title_pattern ? [`${t("routines.titlePattern")} ${draft.trigger_config.title_pattern}`] : []),
+        ].map((filter) => ` · ${filter}`).join("") })
+      : t("routines.meetingEnded");
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-6 text-foreground">
@@ -233,47 +275,46 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
       )}
       {draft ? (
         <section className="space-y-4 rounded-xl border border-border p-5">
-          <h2 className="font-medium">{draft.id ? t("routines.edit") : t("routines.new")}</h2>
-          {fromPreset && (
-            <p className="text-xs text-muted-foreground">
-              {fromPreset.needs.filter((key) =>
-                key.endsWith("pickFolders") ? !draft.source_config?.folder_ids.length :
-                key.endsWith("pickPeople") ? !draft.source_config?.people.length : true
-              ).map((key) => t(key)).join(" · ")}
-            </p>
-          )}
-          <div className="block space-y-1 text-sm">
-            <span>{t("routines.name")}</span>
-            <PlainTextField
-              label={t("routines.name")}
-              value={draft.name}
-              onChange={(value) => setDraft({ ...draft, name: value })}
-            />
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-48 flex-1 text-lg font-semibold">
+              <PlainTextField id="routine-editor-name" title label={t("routines.name")} placeholder={t("routines.name")} value={draft.name}
+                onChange={(value) => setDraft({ ...draft, name: value })} />
+            </div>
+            <span className="text-xs text-muted-foreground">{draft.id ? t("routines.edit") : t("routines.new")}</span>
           </div>
-          <div className="block space-y-1 text-sm">
-            <span>{t("routines.prompt")}</span>
-            <PlainTextField
-              multiline
-              label={t("routines.prompt")}
-              value={draft.prompt}
-              onChange={(value) => setDraft({ ...draft, prompt: value })}
-            />
-          </div>
-          <label className="block text-sm">{t("routines.trigger")}
-            <select className="ml-2 rounded-md border bg-background p-2" value={draft.trigger_type}
-              onChange={(event) => {
-                const type = event.target.value;
-                setDraft({ ...draft, trigger_type: type, trigger_config: type === "time"
-                  ? { schema_version: 1, slots: [{ days: [1, 2, 3, 4, 5], time: "09:00" }] }
-                  : type === "before_event"
-                    ? { schema_version: 1, minutes_before: 10, title_pattern: "", has_attendees: false, has_meeting_link: false, skip_declined: true }
-                    : { schema_version: 1, folder_ids: [], title_pattern: "" } });
-              }}>
-              <option value="time">{t("routines.timeTrigger")}</option>
-              <option value="before_event">{t("routines.beforeEvent")}</option>
-              <option value="meeting_ended">{t("routines.meetingEnded")}</option>
-            </select>
-          </label>
+          {fromPreset && <p className="text-xs text-muted-foreground">
+            {fromPreset.needs.filter((key) =>
+              key.endsWith("pickFolders") ? missing.folders :
+              key.endsWith("pickPeople") ? missing.people : true
+            ).map((key) => t(key)).join(" · ")}
+          </p>}
+          <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-4 text-sm">
+            <div className="relative">
+              <div className="flex flex-wrap items-start gap-2">
+                <span className="pt-2 text-muted-foreground">{t("routines.editor.every")}</span>
+                <button type="button" aria-expanded={whenOpen} onClick={() => setWhenOpen(!whenOpen)}
+                  className="rounded-full border border-border bg-background px-3 py-2 text-start">
+                  {whenLabel || t("routines.editor.chooseWhen")} ▾
+                </button>
+              </div>
+            {whenOpen && <div role="dialog" aria-label={t("routines.trigger")}
+              onKeyDown={(event) => { if (event.key === "Escape") setWhenOpen(false); }}
+              className="absolute inset-x-0 top-full z-20 mt-2 max-h-[65vh] space-y-3 overflow-y-auto rounded-lg border border-border bg-background p-3 shadow-xl">
+              <label className="block">{t("routines.trigger")}
+                <select dir="auto" className="ml-2 rounded-md border bg-background p-2" value={draft.trigger_type}
+                  onChange={(event) => {
+                    const type = event.target.value;
+                    setDraft({ ...draft, trigger_type: type, trigger_config: type === "time"
+                      ? { schema_version: 1, slots: [{ days: [1, 2, 3, 4, 5], time: "09:00" }] }
+                      : type === "before_event"
+                        ? { schema_version: 1, minutes_before: 10, title_pattern: "", has_attendees: false, has_meeting_link: false, skip_declined: true }
+                        : { schema_version: 1, folder_ids: [], title_pattern: "" } });
+                  }}>
+                  <option value="time">{t("routines.timeTrigger")}</option>
+                  <option value="before_event">{t("routines.beforeEvent")}</option>
+                  <option value="meeting_ended">{t("routines.meetingEnded")}</option>
+                </select>
+              </label>
           {draft.trigger_type === "time" && <div className="space-y-3">
             <span className="text-sm font-medium">{t("routines.timeTrigger")}</span>
             {(draft.trigger_config.slots || []).map((slot, index) => (
@@ -407,96 +448,116 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
             </div>
             <p role="status">{meetingPreview == null ? t("routines.previewUnavailable") : t("routines.meetingPreview", { count: meetingPreview })}</p>
           </div>}
-          <div className="space-y-2">
-            <p className="text-sm font-medium">{t("routines.allowedTools")}</p>
-            {sourceOptions.map((source) => (
-              <button
-                key={source.name}
-                type="button"
-                aria-pressed={draft.allowed_tools.includes(source.name)}
-                className="flex w-full items-start gap-2 rounded-md border border-border p-2 text-start text-sm"
-                onClick={() =>
-                  setDraft({
-                    ...draft,
-                    allowed_tools: draft.allowed_tools.includes(source.name)
-                      ? draft.allowed_tools.filter((name) => name !== source.name)
-                      : [...draft.allowed_tools, source.name],
-                  })
-                }
-              >
-                <span aria-hidden="true">
-                  {draft.allowed_tools.includes(source.name) ? "☑" : "☐"}
-                </span>
-                <span>
-                  <strong>{source.name}</strong> — {source.description}
-                </span>
+            </div>}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground">{t("routines.editor.read")}</span>
+              {sources.map((source) => {
+                const state = sourceState(source, draft.allowed_tools);
+                const reason = state === "disabled" ? t(`routines.editor.${source.reason || "noTools"}`) : "";
+                return <button key={source.id} type="button" aria-disabled={state === "disabled"} title={reason}
+                  aria-label={`${source.label}: ${state === "disabled" ? reason : t(`routines.editor.${state}`)}`}
+                  aria-pressed={state === "on"}
+                  className={`rounded-full border px-3 py-1.5 ${state === "disabled" ? "cursor-not-allowed opacity-50" : state === "on" ? "border-primary bg-primary/10" : "border-border"}`}
+                  onClick={() => { if (state !== "disabled") setDraft({ ...draft, allowed_tools: toggleSource(source, draft.allowed_tools) }); }}>
+                  {source.label} {state === "on" ? "✓" : state === "partial" ? "◐" : state === "disabled" ? reason : "+"}
+                </button>;
+              })}
+              {(unlistedTools.length > 0 || sources.some((source) => sourceState(source, draft.allowed_tools) === "partial")) && <span className="text-xs text-muted-foreground">{t("routines.editor.custom")}</span>}
+            </div>
+            {!draft.allowed_tools.length && <p className="text-xs text-muted-foreground">{t("routines.editor.noSources")}</p>}
+            {toolWarning && <p role="status" className="rounded-md border border-amber-500 p-2 text-amber-700">
+              {t("routines.needsToolModel", { sources: draft.allowed_tools.map((name) => name.split("__")[0]).join(", ") })}
+            </p>}
+            <div className="flex items-start gap-2">
+              <span className="pt-2 text-muted-foreground">{t("routines.editor.tellMe")}</span>
+              <PlainTextField multiline label={t("routines.prompt")} placeholder={t("routines.editor.promptPlaceholder")} value={draft.prompt}
+                onChange={(value) => setDraft({ ...draft, prompt: value })} />
+            </div>
+            <div className="space-y-2">
+              <button type="button" aria-expanded={notesOpen} onClick={() => setNotesOpen(!notesOpen)}
+                className="rounded-full border border-border bg-background px-3 py-1.5">
+                {t("routines.editor.noteSelection")} ▾
               </button>
-            ))}
-            {draft.allowed_tools
-              .filter((name) => !sourceOptions.some((source) => source.name === name))
-              .map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  aria-pressed
-                  className="flex w-full gap-2 rounded-md border border-border p-2 text-start text-sm text-muted-foreground"
-                  onClick={() =>
-                    setDraft({
-                      ...draft,
-                      allowed_tools: draft.allowed_tools.filter((item) => item !== name),
-                    })
-                  }
-                >
-                  <span aria-hidden="true">☑</span>
-                  {name} ({t("routines.sourceUnavailable")})
-                </button>
-              ))}
+              {notesOpen && <div className="grid gap-3 rounded-lg border border-border bg-background p-3 sm:grid-cols-2">
+                <fieldset className={`space-y-1 ${missing.folders ? "rounded border border-destructive p-2" : ""}`}>
+                  <legend>{t("routines.folders")}</legend>
+                  <button type="button" aria-pressed={draft.source_config?.folder_ids === null}
+                    className="block w-full rounded-md border p-2 text-start"
+                    onClick={() => setDraft({ ...draft, source_config: { ...(draft.source_config || defaultSelection()), folder_ids: null } })}>
+                    {draft.source_config?.folder_ids === null ? "☑" : "☐"} {t("routines.editor.allNotes")}
+                  </button>
+                  {folders.map((folder) => <button key={folder.id} type="button"
+                    aria-pressed={draft.source_config?.folder_ids?.includes(folder.id) || false}
+                    className="block w-full rounded-md border p-2 text-start"
+                    onClick={() => { const selected = draft.source_config?.folder_ids || [];
+                      setDraft({ ...draft, source_config: { ...(draft.source_config || defaultSelection()), folder_ids: selected.includes(folder.id)
+                        ? selected.filter((id) => id !== folder.id) : [...selected, folder.id] } }); }}>
+                    {draft.source_config?.folder_ids?.includes(folder.id) ? "☑" : "☐"} {folder.name}
+                  </button>)}
+                  <button type="button" aria-pressed={Array.isArray(draft.source_config?.folder_ids) && draft.source_config.folder_ids.length === 0}
+                    className="block w-full rounded-md border p-2 text-start"
+                    onClick={() => setDraft({ ...draft, source_config: { ...(draft.source_config || defaultSelection()), folder_ids: [] } })}>
+                    {t("routines.editor.noneSelected")}
+                  </button>
+                </fieldset>
+                <fieldset className={`space-y-1 ${missing.people ? "rounded border border-destructive p-2" : ""}`}>
+                  <legend>{t("routines.people")}</legend>
+                  <button type="button" aria-pressed={draft.source_config?.people === null}
+                    className="block w-full rounded-md border p-2 text-start"
+                    onClick={() => setDraft({ ...draft, source_config: { ...(draft.source_config || defaultSelection()), people: null } })}>
+                    {draft.source_config?.people === null ? "☑" : "☐"} {t("routines.editor.allNotes")}
+                  </button>
+                  {people.map((person) => <button key={person.email} type="button"
+                    aria-pressed={draft.source_config?.people?.includes(person.email) || false}
+                    className="block w-full rounded-md border p-2 text-start"
+                    onClick={() => { const selected = draft.source_config?.people || [];
+                      setDraft({ ...draft, source_config: { ...(draft.source_config || defaultSelection()), people: selected.includes(person.email)
+                        ? selected.filter((email) => email !== person.email) : [...selected, person.email] } }); }}>
+                    {draft.source_config?.people?.includes(person.email) ? "☑" : "☐"} {person.name}
+                  </button>)}
+                  <button type="button" aria-pressed={Array.isArray(draft.source_config?.people) && draft.source_config.people.length === 0}
+                    className="block w-full rounded-md border p-2 text-start"
+                    onClick={() => setDraft({ ...draft, source_config: { ...(draft.source_config || defaultSelection()), people: [] } })}>
+                    {t("routines.editor.noneSelected")}
+                  </button>
+                </fieldset>
+              </div>}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">{t("routines.editor.saveTo")}</span>
+              <button type="button" onClick={() => document.getElementById("routine-editor-name")?.focus()}
+                className="rounded-full border border-border bg-background px-3 py-1.5">{draft.name || t("routines.name")}</button>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">{nextRuns.length
+                ? t("routines.editor.nextRuns", { runs: nextRuns.map((run) => run.toLocaleString(i18n.language, { weekday: "short", hour: "2-digit", minute: "2-digit" })).join(" · ") })
+                : t("routines.editor.nextRunsUnavailable")}</p>
+            </div>
           </div>
-          <div className="space-y-3 text-sm">
-            <p className="font-medium">{t("routines.selectedNotes")}</p>
-            <button type="button" aria-pressed={!!draft.source_config}
-              className="flex w-full gap-2 rounded-md border border-border p-2 text-start"
-              onClick={() => setDraft({ ...draft, source_config: draft.source_config
-                ? null : { folder_ids: [], people: [], lookback_days: 7 } })}>
-              <span aria-hidden="true">{draft.source_config ? "☑" : "☐"}</span>
-              {t("routines.useSelectedNotes")}
-            </button>
-            {draft.source_config && <>
-              <fieldset className="space-y-1"><legend>{t("routines.folders")}</legend>
-                {folders.map((folder) => <button key={folder.id} type="button"
-                  aria-pressed={draft.source_config!.folder_ids.includes(folder.id)}
-                  className="flex w-full gap-2 rounded-md border border-border p-2 text-start"
-                  onClick={() => { const selected = draft.source_config!.folder_ids.includes(folder.id);
-                    setDraft({ ...draft, source_config: { ...draft.source_config!, folder_ids: selected
-                      ? draft.source_config!.folder_ids.filter((id) => id !== folder.id)
-                      : [...draft.source_config!.folder_ids, folder.id] } }); }}>
-                  <span aria-hidden="true">{draft.source_config!.folder_ids.includes(folder.id) ? "☑" : "☐"}</span>
-                  {folder.name}
+          <details open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)} className="space-y-3">
+            <summary className="cursor-pointer text-sm font-medium">{t("routines.editor.advanced")}</summary>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{t("routines.allowedTools")}</p>
+              {[...sources.flatMap((source) => source.tools.map((name) => ({ name, description: source.label }))),
+                ...unlistedTools.map((name) => ({ name, description: t("routines.sourceUnavailable") }))].map((tool) =>
+                <button key={tool.name} type="button" aria-pressed={draft.allowed_tools.includes(tool.name)}
+                  className="flex w-full gap-2 rounded-md border border-border p-2 text-start text-sm"
+                  onClick={() => setDraft({ ...draft, allowed_tools: draft.allowed_tools.includes(tool.name)
+                    ? draft.allowed_tools.filter((name) => name !== tool.name) : [...draft.allowed_tools, tool.name] })}>
+                  <span aria-hidden="true">{draft.allowed_tools.includes(tool.name) ? "☑" : "☐"}</span>
+                  {tool.name} — {tool.description}
                 </button>)}
-              </fieldset>
-              <fieldset className="space-y-1"><legend>{t("routines.people")}</legend>
-                {people.map((person) => <button key={person.email} type="button"
-                  aria-pressed={draft.source_config!.people.includes(person.email)}
-                  className="flex w-full gap-2 rounded-md border border-border p-2 text-start"
-                  onClick={() => { const selected = draft.source_config!.people.includes(person.email);
-                    setDraft({ ...draft, source_config: { ...draft.source_config!, people: selected
-                      ? draft.source_config!.people.filter((email) => email !== person.email)
-                      : [...draft.source_config!.people, person.email] } }); }}>
-                  <span aria-hidden="true">{draft.source_config!.people.includes(person.email) ? "☑" : "☐"}</span>
-                  {person.name}
-                </button>)}
-              </fieldset>
-              <label className="block">{t("routines.lookbackDays")}
-                <select className="ml-2 rounded-md border bg-background p-2"
-                  value={draft.source_config.lookback_days}
-                  onChange={(event) => setDraft({ ...draft, source_config: {
-                    ...draft.source_config!, lookback_days: Number(event.target.value),
-                  } })}>
-                  {Array.from({ length: 365 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
-                </select>
-              </label>
-            </>}
-          </div>
+            </div>
+            <label className="block text-sm">{t("routines.lookbackDays")}
+              <select dir="ltr" className="ml-2 rounded-md border bg-background p-2"
+                value={draft.source_config?.lookback_days ?? 7}
+                onChange={(event) => setDraft({ ...draft, source_config: {
+                  ...(draft.source_config || defaultSelection()), lookback_days: Number(event.target.value),
+                } })}>
+                {Array.from({ length: 365 }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+              </select>
+            </label>
           <div className="space-y-2 text-sm">
             <label className="block">
               {t("routines.modelOverride")}
@@ -547,13 +608,6 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                 {t("routines.unusableOverride")}
               </p>
             )}
-            {toolWarning && (
-              <p role="status" className="text-amber-700">
-                {t("routines.needsToolModel", {
-                  sources: draft.allowed_tools.map((name) => name.split("__")[0]).join(", "),
-                })}
-              </p>
-            )}
           </div>
           <label className="block text-sm">
             {t("routines.catchUpWindow")}
@@ -564,14 +618,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
               onChange={(value) => setDraft({ ...draft, catch_up_window_hours: Number(value) })}
             />
           </label>
-          <label className="block text-sm">
-            {t("routines.voiceHint")}
-            <PlainTextField
-              label={t("routines.voiceHint")}
-              value={draft.voice_hint}
-              onChange={(value) => setDraft({ ...draft, voice_hint: value.slice(0, 200) })}
-            />
-          </label>
+          </details>
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
