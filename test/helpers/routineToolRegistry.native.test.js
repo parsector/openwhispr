@@ -5,14 +5,16 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "../..");
 
-test("routine assembly is current and loads without the tsx test hook", () => {
+test("committed routine assembly matches the TypeScript source", () => {
   const check = spawnSync(process.execPath, ["scripts/build-routine-tool-assembly.js", "--check"], {
     cwd: root,
     encoding: "utf8",
     env: { ...process.env, NODE_OPTIONS: "" },
   });
-  assert.equal(check.status, 0, check.stderr);
+  assert.equal(check.status, 0, check.stderr || "Run npm run compile:routine-tools");
+});
 
+test("routine assembly loads without the tsx test hook", () => {
   const probe = spawnSync(
     process.execPath,
     [
