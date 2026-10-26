@@ -1693,7 +1693,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     // Persist here, not in a notes-view effect: an auto-end stop can fire while
     // that view is unmounted, and any view-scoped saver dies with it. (Delayed
     // diarization results are persisted by the module-level listener below.)
-    const { recordingNoteId, segments: finalSegments } = useMeetingRecordingStore.getState();
+    const { recordingNoteId, segments: finalSegments, sessionDiarizationEnabled } = useMeetingRecordingStore.getState();
     const hasNewSegments = finalSegments.length > sessionSeedLength;
     let stopTranscript = "";
     const persistTranscript = async (transcript: string) => {
@@ -1787,6 +1787,11 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     });
 
     logger.info("Meeting transcription stopped", {}, "meeting");
+    if (recordingNoteId != null) {
+      window.electronAPI?.meetingNoteStopped?.(recordingNoteId);
+      if (!sessionDiarizationEnabled || !diarizationSessionId)
+        window.electronAPI?.meetingNoteFinalized?.({ noteId: recordingNoteId, diarized: "skipped" });
+    }
     // Reaching here means this call ended a live recording and its transcript
     // was written above. A failed main-side teardown is surfaced by
     // reportMeetingError and must not be reported as a recording that never stopped.
@@ -1834,6 +1839,12 @@ if (typeof window !== "undefined") {
   // result merges on top of the earlier one's persisted transcript.
   const enqueueDiarizationCompletion = createSerialQueue();
   window.electronAPI?.onMeetingDiarizationComplete?.((data) => {
+    let completionNoteId: number | null = null;
+    let finalized = false;
+    const finalize = (noteId: number, diarized: boolean) => {
+      finalized = true;
+      window.electronAPI?.meetingNoteFinalized?.({ noteId, diarized });
+    };
     enqueueDiarizationCompletion(async () => {
       const {
         diarizationSessionId,
@@ -1851,6 +1862,7 @@ if (typeof window !== "undefined") {
         if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
         return;
       }
+      completionNoteId = targetNoteId;
 
       // Publishing an empty result clears a waiting editor's spinner without
       // painting an overlay; anything non-empty is already persisted.
@@ -1865,6 +1877,7 @@ if (typeof window !== "undefined") {
       if (!data?.segments?.length) {
         if (data?.sessionId) seedLengthByDiarizationSession.delete(data.sessionId);
         publish([]);
+        finalize(targetNoteId, false);
         return;
       }
 
@@ -1888,6 +1901,7 @@ if (typeof window !== "undefined") {
       // index.
       if (!persisted || persisted.deleted_at) {
         publish([]);
+        finalize(targetNoteId, false);
         return;
       }
 
@@ -1922,6 +1936,7 @@ if (typeof window !== "undefined") {
         });
       } catch (error) {
         publish([]);
+        finalize(targetNoteId, false);
         throw error;
       }
       for (const pending of laterSeeds) pending.seedLength -= removedCount;
@@ -1950,11 +1965,13 @@ if (typeof window !== "undefined") {
         });
       }
       publish(enriched);
+      finalize(targetNoteId, true);
 
       if (data.speakerEmbeddings) {
         await window.electronAPI?.saveNoteSpeakerEmbeddings?.(targetNoteId, data.speakerEmbeddings);
       }
     }).catch((error) => {
+      if (completionNoteId != null && !finalized) finalize(completionNoteId, false);
       logger.error(
         "Diarization completion handling failed",
         { error: (error as Error).message },

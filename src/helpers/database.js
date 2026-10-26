@@ -8419,16 +8419,19 @@ class DatabaseManager {
 
   saveRoutine(input) {
     const { validateSchedule } = require("./routines/routineSchedulePolicy");
+    const { validateEventTrigger } = require("./routines/routineEventTriggers");
     const name = String(input.name || "").trim();
     const prompt = String(input.prompt || "").trim();
     if (!name || !prompt) return { success: false, error: "Name and prompt are required" };
+    const prior = input.id ? this.getRoutine(input.id) : null;
+    const triggerType = input.trigger_type || prior?.trigger_type || "time";
     const config = input.trigger_config;
     try {
-      validateSchedule(config);
+      validateEventTrigger(triggerType, config);
+      if (triggerType === "time") validateSchedule(config);
     } catch (error) {
       return { success: false, error: error.message };
     }
-    const prior = input.id ? this.getRoutine(input.id) : null;
     if (input.id && !prior) return { success: false, error: "Routine not found" };
     const allowedTools = Array.isArray(input.allowed_tools)
       ? input.allowed_tools
@@ -8495,11 +8498,12 @@ class DatabaseManager {
     if (prior) {
       this.db
         .prepare(
-          `UPDATE routines SET name=?, prompt=?, trigger_config=?, allowed_tools=?, model_override=?, catch_up_window_hours=?, voice_hint=?, source_config=?, updated_at=? WHERE id=?`
+          `UPDATE routines SET name=?, prompt=?, trigger_type=?, trigger_config=?, allowed_tools=?, model_override=?, catch_up_window_hours=?, voice_hint=?, source_config=?, next_run_at=NULL, updated_at=? WHERE id=?`
         )
         .run(
           name,
           prompt,
+          triggerType,
           JSON.stringify(config),
           JSON.stringify(allowedTools),
           override ? JSON.stringify(override) : null,
@@ -8513,12 +8517,13 @@ class DatabaseManager {
       this.db
         .prepare(
           `INSERT INTO routines (id,name,prompt,trigger_type,trigger_config,allowed_tools,model_override,catch_up_window_hours,voice_hint,source_config,space_id,account_id,created_at,updated_at)
-        VALUES (?,?,?,'time',?,?,?,?,?,?,?,?,?,?)`
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         )
         .run(
           id,
           name,
           prompt,
+          triggerType,
           JSON.stringify(config),
           JSON.stringify(allowedTools),
           override ? JSON.stringify(override) : null,
@@ -8613,6 +8618,8 @@ class DatabaseManager {
       "started_at",
       "ended_at",
       "seen_at",
+      "source_note_id",
+      "event_id",
     ];
     const entries = Object.entries(fields).filter(([key]) => allowed.includes(key));
     if (!entries.length) return;

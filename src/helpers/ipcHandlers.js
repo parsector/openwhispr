@@ -973,6 +973,7 @@ class IPCHandlers {
         debugLogger.warn("Routine note mirror failed", { error: error.message });
       }
       broadcastToWindows("routines-updated");
+      if (routine.trigger_type === "before_event") return;
       const unavailable = Object.values(sourceStatus).filter(
         (value) => value === "unavailable"
       ).length;
@@ -1074,8 +1075,45 @@ class IPCHandlers {
       onRunFinished: () => broadcastToWindows("routines-updated"),
     });
     this.routineScheduler.start();
+    ipcMain.on("meeting-note-stopped", (_event, noteId) => {
+      if (Number.isSafeInteger(noteId) && noteId > 0) this.routineScheduler.meetingStopped(noteId);
+    });
+    ipcMain.on("meeting-note-finalized", (_event, data) => {
+      if (Number.isSafeInteger(data?.noteId) && data.noteId > 0 &&
+        [true, false, "skipped"].includes(data.diarized))
+        this.routineScheduler.meetingFinalized(data.noteId, data.diarized);
+    });
     ipcMain.handle("routines-list", () => this.databaseManager.listRoutines());
     ipcMain.handle("routines-people", () => this.databaseManager.listRoutinePeople());
+    ipcMain.handle("routines-meeting-preview", (_event, config) => {
+      const { meetingEndedPreview } = require("./routines/routineEventTriggers");
+      return meetingEndedPreview(this.databaseManager, config);
+    });
+    ipcMain.handle("routines-note-links", (_event, noteId) => {
+      if (!Number.isSafeInteger(noteId) || !this.databaseManager.getNote(noteId)) return null;
+      const run = this.databaseManager.db.prepare("SELECT source_note_id,event_id FROM routine_runs WHERE note_id=?").get(noteId);
+      if (!run) return null;
+      const source = run.source_note_id ? this.databaseManager.getNote(run.source_note_id) : null;
+      const event = run.event_id ? this.databaseManager.getCalendarEventById(run.event_id) : null;
+      return { source: source ? { id: source.id, title: source.title } : null,
+        event: event ? { id: event.id, title: event.summary, url: event.web_link || event.hangout_link || null } : null };
+    });
+    ipcMain.handle("routines-open-linked-note", async (_event, noteId) => {
+      if (!Number.isSafeInteger(noteId)) return false;
+      const note = this.databaseManager.getNote(noteId);
+      if (!note) return false;
+      await this.windowManager.queueNoteNavigation({ noteId, folderId: note.folder_id });
+      return true;
+    });
+    ipcMain.handle("meeting-notification-open-prep", async (_event, noteId) => {
+      if (!Number.isSafeInteger(noteId)) return false;
+      const run = this.databaseManager.db.prepare("SELECT note_id FROM routine_runs WHERE note_id=? AND event_id IS NOT NULL AND status IN ('done','partial')").get(noteId);
+      const note = run && this.databaseManager.getNote(noteId);
+      if (!note) return false;
+      this.windowManager.showControlPanel();
+      await this.windowManager.queueNoteNavigation({ noteId, folderId: note.folder_id });
+      return true;
+    });
     ipcMain.handle("routines-model-usable", (_event, choice) => modelUsable(choice));
     ipcMain.handle("routines-model-choice-current", () => this._routineModelChoice);
     ipcMain.handle("routines-mcp-sources", async () => {

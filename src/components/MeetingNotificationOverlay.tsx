@@ -465,6 +465,11 @@ export default function MeetingNotificationOverlay(): ReactElement {
                 </button>
               ) : undefined
             }
+            prepAction={data?.variant === "starting" && data.prepNoteId ? (
+              <button type="button" className="text-xs text-primary underline" onClick={() => void window.electronAPI.meetingNotificationOpenPrep?.(data.prepNoteId!)}>
+                {t("meetingNotification.openPrep")}
+              </button>
+            ) : undefined}
             onDismiss={presentation.dismissible ? dismiss : undefined}
             closeVisible={isHovered}
             onMouseEnter={handleMouseEnter}

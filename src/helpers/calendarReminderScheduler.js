@@ -26,6 +26,11 @@ class CalendarReminderScheduler {
   }
 
   scheduleNextMeeting() {
+    try {
+      this.onEventsChanged?.();
+    } catch (error) {
+      debugLogger.warn("Routine calendar re-plan failed", { error: error.message }, "calendar");
+    }
     if (this.activeMeeting) {
       this.reconcileProvider(this.activeMeeting.provider);
     }

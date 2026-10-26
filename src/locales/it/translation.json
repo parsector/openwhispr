@@ -4635,6 +4635,7 @@
     "maxTargets": "Fino a {{max}} lingue"
   },
   "meetingNotification": {
+    "openPrep": "Apri preparazione",
     "title": "Riunione rilevata",
     "body": {
       "detected": "Sembra che tu sia in riunione. Vuoi prendere appunti?",
@@ -5019,6 +5020,17 @@
     }
   },
   "routines": {
+    "trigger": "Attivazione",
+    "beforeEvent": "Prima di un evento del calendario",
+    "meetingEnded": "Nota riunione completata",
+    "minutesBefore": "Minuti prima",
+    "titlePattern": "Il titolo contiene",
+    "has_attendees": "Con partecipanti",
+    "has_meeting_link": "Con link alla riunione",
+    "skip_declined": "Salta gli eventi rifiutati",
+    "meetingFolders": "Cartelle riunioni",
+    "meetingPreview": "{{count}} riunioni degli ultimi 7 giorni sarebbero corrisposte",
+    "previewUnavailable": "Anteprima non disponibile",
     "title": "Routine",
     "description": "I tuoi brief e appunti programmati, pronti quando vuoi.",
     "new": "Nuova routine",
@@ -5051,6 +5063,7 @@
     "cancel": "Annulla",
     "saveFailed": "Impossibile salvare la routine",
     "errors": {
+      "meetingFilter": "Scegli una cartella o un filtro per il titolo",
       "folderNameTaken": "Una cartella con quel nome esiste già",
       "nameAndPrompt": "Inserisci un nome e un prompt",
       "slotCount": "Scegli tra una e sei fasce orarie",
@@ -5098,6 +5111,7 @@
       "custom": "Utilizzare un modello diverso per le routine"
     },
     "presets": {
+      "meetingPrep": { "name": "Preparazione riunione", "description": "Ordine del giorno, precedenti con i partecipanti e questioni aperte prima della riunione.", "reviewSources": "Controlla le fonti collegate e il filtro facoltativo per il titolo" },
       "morningBrief": {
         "name": "Riepilogo del mattino",
         "description": "Le riunioni di oggi e le recenti azioni aperte, con collegamenti alle note correlate.",

@@ -4635,6 +4635,7 @@
     "maxTargets": "最大{{max}}言語"
   },
   "meetingNotification": {
+    "openPrep": "準備メモを開く",
     "title": "会議を検出しました",
     "body": {
       "detected": "会議中のようです。メモを取りますか？",
@@ -5019,6 +5020,17 @@
     }
   },
   "routines": {
+    "trigger": "トリガー",
+    "beforeEvent": "カレンダーの予定前",
+    "meetingEnded": "会議メモの確定時",
+    "minutesBefore": "開始前の分数",
+    "titlePattern": "タイトルに含む文字",
+    "has_attendees": "参加者あり",
+    "has_meeting_link": "会議リンクあり",
+    "skip_declined": "辞退した予定を除外",
+    "meetingFolders": "会議フォルダー",
+    "meetingPreview": "過去7日間の{{count}}件の会議が一致します",
+    "previewUnavailable": "プレビューを表示できません",
     "title": "ルーチン",
     "description": "予定されているブリーフとメモは、いつでも準備できます。",
     "new": "新しいルーチン",
@@ -5051,6 +5063,7 @@
     "cancel": "キャンセル",
     "saveFailed": "ルーチンを保存できませんでした",
     "errors": {
+      "meetingFilter": "フォルダーまたはタイトルの条件を選択",
       "folderNameTaken": "この名前のフォルダはすでに存在します",
       "nameAndPrompt": "名前とプロンプトを入力してください",
       "slotCount": "1～6個の時間枠を選択してください",
@@ -5098,6 +5111,7 @@
       "custom": "ルーチンに別のモデルを使用する"
     },
     "presets": {
+      "meetingPrep": { "name": "会議の準備", "description": "議題、参加者との過去の経緯、会議前の未解決事項。", "reviewSources": "接続済みの情報源と任意のタイトル条件を確認" },
       "morningBrief": {
         "name": "モーニングブリーフ",
         "description": "今日のミーティングと最近のオープンアクションアイテムには、関連するメモへのリンクがあります。",

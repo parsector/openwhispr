@@ -21,6 +21,20 @@ const MEETING_LINK_BY_PROVIDER = {
   apple: "https://example.zoom.us/j/123456789",
 };
 
+test("routine planning failure cannot suppress the calendar reminder", () => {
+  const event = activeEvent("google", "meeting-1");
+  const scheduler = new CalendarReminderScheduler({
+    getUpcomingEvents: () => [event],
+    getActiveEvents: () => [event],
+  });
+  scheduler.onEventsChanged = () => { throw new Error("routine planning unavailable"); };
+  let reminders = 0;
+  scheduler.meetingDetectionEngine = { handleCalendarReminder: () => { reminders++; } };
+  scheduler.scheduleNextMeeting();
+  assert.equal(reminders, 1);
+  scheduler.stop();
+});
+
 for (const provider of Object.keys(MEETING_LINK_BY_PROVIDER)) {
   test(`does not remind for a ${provider} time block without attendees or a meeting link`, () => {
     const timeBlock = activeEvent(provider, "time-block");

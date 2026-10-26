@@ -120,6 +120,38 @@ function calendarContext(database, now) {
   }
 }
 
+function meetingContext(database, noteId) {
+  if (database.db.prepare("SELECT 1 FROM routine_runs WHERE note_id=? LIMIT 1").get(noteId))
+    throw new Error("Routine notes cannot be meeting sources");
+  const note = database.getNote(noteId);
+  if (!note || note.deleted_at) throw new Error("Source meeting note unavailable");
+  const event = note.calendar_event_id ? database.getCalendarEventById(note.calendar_event_id) : null;
+  return `Meeting note: [${note.title}](note:${note.id})\nNote content:\n${note.content || "none"}\nTranscript (including speaker labels when available):\n${note.transcript || "none"}\nAttendees: ${note.participants || "none"}\nCalendar event: ${event ? `${event.summary} — ${event.start_time}` : "none"}\nsummary: ${note.enhanced_content || "not yet generated"}`;
+}
+
+function eventContext(database, eventId) {
+  const event = database.getCalendarEventById(eventId);
+  if (!event || event.status === "cancelled") throw new Error("Calendar event unavailable");
+  let people = [];
+  try {
+    const attendees = JSON.parse(event.attendees || "[]");
+    if (Array.isArray(attendees)) people = attendees
+      .filter((person) => !person.self && typeof person.email === "string")
+      .map((person) => person.email.trim().toLowerCase());
+  } catch { /* malformed attendee metadata */ }
+  let history = "No prior notes with these attendees";
+  let status = "ok";
+  if (people.length) {
+    try {
+      history = selectedNoteContext(database, { folder_ids: [], people, lookback_days: 90 }, Date.now()).text;
+    } catch {
+      history = "Prior notes unavailable";
+      status = "unavailable";
+    }
+  }
+  return { text: `Upcoming meeting: ${event.summary} — ${event.start_time}\nAttendees: ${event.attendees || "none"}\nMeeting link: ${event.web_link || event.hangout_link || "none"}\nHistory with these attendees:\n${history}`, status };
+}
+
 function noteTitle(database, routine, now) {
   const date = localDate(new Date(now));
   const base = `${routine.name} — ${date}`;
@@ -177,6 +209,7 @@ class RoutineRunner {
             : { scanned: actions.scanned, matched: actions.matched },
         calendar: calendar.status,
         ...(selectedNotes ? { selected_notes: selectedNotes.status || { matched: selectedNotes.count } } : {}),
+        ...(job.trigger === "meeting_ended" ? { diarization: job.diarization || "pending" } : {}),
       };
       let model = job.model;
       let modelWarning = "";
@@ -228,7 +261,10 @@ class RoutineRunner {
         claimTurnSlot: () => true,
         releaseTurnSlot: () => {},
       };
-      const prompt = `${routine.prompt}\n\nToday's calendar:\n${calendar.text}\n\nLast seven days' checkbox action items:\n${actions.text}${selectedNotes ? `\n\nSelected notes (deterministically filtered):\n${selectedNotes.text}` : ""}\n\nCite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
+      const prep = job.trigger === "before_event" ? eventContext(database, job.eventId) : null;
+      if (prep?.status === "unavailable") sourceStatus.event_history = "unavailable";
+      const triggerContext = job.trigger === "meeting_ended" ? meetingContext(database, job.sourceNoteId) : prep?.text || "";
+      const prompt = `${routine.prompt}\n\n${triggerContext ? `${triggerContext}\n\n` : ""}Today's calendar:\n${calendar.text}\n\nLast seven days' checkbox action items:\n${actions.text}${selectedNotes ? `\n\nSelected notes (deterministically filtered):\n${selectedNotes.text}` : ""}\n\nCite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
       const response = await this.infer({ model, prompt, toolsAvailable, registry, context });
       if (toolsAvailable && !response.toolsAvailable) {
         for (const name of routine.allowed_tools)
@@ -303,4 +339,4 @@ class RoutineRunner {
   }
 }
 
-module.exports = { RoutineRunner, actionItemContext, selectedNoteContext, calendarContext, linkNoteReferences };
+module.exports = { RoutineRunner, actionItemContext, selectedNoteContext, calendarContext, eventContext, linkNoteReferences };
