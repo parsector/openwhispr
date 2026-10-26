@@ -51,8 +51,7 @@ test("every always-run path selects the full suite", (t) => {
     "scripts/afterPack.js",
     "scripts/download-a.js",
     "scripts/build-a.js",
-    "test/helpers/shared.js",
-    "test/fixtures/example.json",
+    "scripts/lib/shared.js",
     "src/vite.config.ts",
   ]) {
     const result = selectForChanges(root, [file]);
@@ -60,6 +59,37 @@ test("every always-run path selects the full suite", (t) => {
     assert.equal(result.count, 3, file);
     assert.match(result.reason, /always-run/, file);
   }
+});
+
+test("a suite under test/helpers selects itself without a directory-wide fallback", (t) => {
+  const root = fixture(t);
+  const suite = "test/helpers/routineSources.test.js";
+  fs.mkdirSync(path.join(root, "test/helpers"), { recursive: true });
+  fs.writeFileSync(path.join(root, suite), "require('../../src/other');\n");
+  fs.writeFileSync(path.join(root, "test/importing.test.js"), "require('./helpers/routineSources.test');\n");
+  const result = selectForChanges(root, [suite]);
+  assert.equal(result.full, false);
+  assert.deepEqual(result.files, [suite, "test/unreferenced.test.js"]);
+});
+
+test("a non-suite test helper selects its importing suite", (t) => {
+  const root = fixture(t);
+  fs.mkdirSync(path.join(root, "test/helpers"), { recursive: true });
+  fs.writeFileSync(path.join(root, "test/helpers/shared.js"), "module.exports = require('../../src/other');\n");
+  fs.writeFileSync(path.join(root, "test/helpers/usesShared.test.js"), "require('./shared');\n");
+  const result = selectForChanges(root, ["test/helpers/shared.js"]);
+  assert.equal(result.full, false);
+  assert.deepEqual(result.files, ["test/helpers/usesShared.test.js", "test/unreferenced.test.js"]);
+});
+
+test("a test fixture selects its importing suite", (t) => {
+  const root = fixture(t);
+  fs.mkdirSync(path.join(root, "test/fixtures"), { recursive: true });
+  fs.writeFileSync(path.join(root, "test/fixtures/sample.json"), '{"message":"sample"}\n');
+  fs.writeFileSync(path.join(root, "test/fixtureUser.test.js"), "require('./fixtures/sample.json');\n");
+  const result = selectForChanges(root, ["test/fixtures/sample.json"]);
+  assert.equal(result.full, false);
+  assert.deepEqual(result.files, ["test/fixtureUser.test.js", "test/unreferenced.test.js"]);
 });
 
 test("an unknown file selects the full suite", (t) => {

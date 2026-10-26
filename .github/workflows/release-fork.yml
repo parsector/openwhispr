@@ -122,17 +122,25 @@ jobs:
           export TMPDIR="$RUNNER_TEMP/tmp"
           if base=$(git merge-base HEAD origin/master); then
             if [ "$base" = "$(git rev-parse HEAD)" ]; then
-              base=$(git rev-parse HEAD^ 2>/dev/null || true)
+              if git rev-parse --verify --quiet HEAD~1 >/dev/null; then
+                base=HEAD~1
+                echo "::warning::merge-base is HEAD; using --base $base ($(git rev-parse "$base"))"
+              else
+                base=
+              fi
             fi
             if [ -n "$base" ]; then
+              echo "Diff tested: $(git rev-parse "$base")..HEAD (base: $base)"
               npm run test:affected -- --base "$base" --no-include-uncommitted
             else
               count=$(rg --files test -g '*.test.js' | wc -l)
+              echo '::warning::No dry-run diff base available; running the full suite'
               echo "selected $count/$count test files: no preceding commit; full suite" >> "$GITHUB_STEP_SUMMARY"
               npm test
             fi
           else
             count=$(rg --files test -g '*.test.js' | wc -l)
+            echo '::warning::Cannot resolve dry-run merge-base; running the full suite'
             echo "selected $count/$count test files: cannot resolve dry-run base; full suite" >> "$GITHUB_STEP_SUMMARY"
             npm test
           fi

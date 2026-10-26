@@ -62,7 +62,7 @@ function alwaysRunReason(file) {
   if (file.startsWith(".github/")) return file;
   if (file === "scripts/afterPack.js") return file;
   if (/^scripts\/(?:download|build)-[^/]+\.js$/.test(file)) return file;
-  if (file.startsWith("test/helpers/") || file.startsWith("test/fixtures/")) return file;
+  if (file.startsWith("scripts/lib/")) return file;
   if (path.posix.basename(file).includes(".config.")) return file;
   return null;
 }
@@ -149,7 +149,8 @@ function selectForChanges(root, changedFiles) {
   const { reverse, testSources } = dependencyGraph(root, tests);
   const selected = new Set();
   const testSet = new Set(tests);
-  const queue = [...changedFiles];
+  const queue = changedFiles.filter((file) => !testSet.has(file));
+  for (const file of changedFiles) if (testSet.has(file)) selected.add(file);
   const visited = new Set();
   while (queue.length) {
     const file = queue.pop();
