@@ -777,6 +777,7 @@ class IPCHandlers {
           }),
         };
       }
+      const customEndpoint = require("./routines/routineCustomEndpoint").routineCustomEndpoint(model);
       if (model.mode === "openwhispr") {
         let runtimeUrl = "";
         try {
@@ -820,7 +821,7 @@ class IPCHandlers {
         openrouter: ["getOpenrouterKey", "https://openrouter.ai/api/v1/chat/completions"],
         corti: ["getCortiKey", "https://ai.eu.corti.app/v1/chat/completions"],
       };
-      if (model.provider === "anthropic") {
+      if (model.provider === "anthropic" && !customEndpoint) {
         const key = this.environmentManager.getAnthropicKey();
         if (!key) throw new Error("Anthropic key is missing");
         const messages = [{ role: "user", content: prompt }];
@@ -878,30 +879,38 @@ class IPCHandlers {
         }
         return { text: noteText, toolsAvailable };
       }
-      const customEndpoint = require("./routines/routineCustomEndpoint").routineCustomEndpoint(model);
       const customBaseUrl = customEndpoint?.baseUrl;
       const route = localRoute || (customEndpoint
         ? [null, customEndpoint.completionsUrl] : providers[model.provider]);
       if (!route && model.provider !== "tinfoil")
         throw new Error(`Routine model provider ${model.provider || model.mode} is unavailable`);
-      const key =
-        model.provider === "tinfoil"
-          ? this.environmentManager.getTinfoilKey()
-          : model.provider === "custom" &&
-              this._routineModelChoice?.useRoutinesEndpointKey === true &&
-              customBaseUrl === (this._routineModelChoice?.cloudBaseUrl || this._routineModelChoice?.remoteUrl)
-            ? this.environmentManager.getRoutinesCustomKey()
-          : model.provider === "custom" &&
-              this._routineModelChoice?.useChatEndpointKey === true &&
-              customBaseUrl === (this._routineModelChoice?.cloudBaseUrl || this._routineModelChoice?.remoteUrl)
+      const customChoice = this._routineModelChoice;
+      const matchesChosenEndpoint = customEndpoint &&
+        customBaseUrl === (customChoice?.cloudBaseUrl || customChoice?.remoteUrl);
+      const customKeySetting = matchesChosenEndpoint && customChoice?.useRoutinesEndpointKey
+        ? "Routines"
+        : matchesChosenEndpoint && customChoice?.useChatEndpointKey
+          ? "Chat"
+          : null;
+      const key = customEndpoint
+        ? customKeySetting === "Routines"
+          ? this.environmentManager.getRoutinesCustomKey()
+          : customKeySetting === "Chat"
             ? this.environmentManager.getChatAgentCustomKey()
+            : null
+        : model.provider === "tinfoil"
+          ? this.environmentManager.getTinfoilKey()
           : route[0]
             ? this.environmentManager[route[0]]()
             : null;
+      if (customEndpoint && !key) {
+        const setting = customKeySetting || "Routines";
+        throw new Error(`${setting} custom endpoint API key is missing. Set it in Settings → ${setting}.`);
+      }
       if ((route?.[0] || model.provider === "tinfoil") && !key)
         throw new Error(`${model.provider} key is missing`);
       let complete;
-      if (model.provider === "tinfoil") {
+      if (model.provider === "tinfoil" && !customEndpoint) {
         const { TinfoilAI } = await import("tinfoil");
         const client = new TinfoilAI({ apiKey: key });
         complete = (body) => client.chat.completions.create(body);
