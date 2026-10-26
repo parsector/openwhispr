@@ -170,6 +170,7 @@ export interface MeetingNotificationData {
   event: { summary?: string | null } | null;
   variant: MeetingPromptVariant;
   joinUrl: string | null;
+  prepNoteId?: number;
 }
 
 export interface MeetingFolderRef {
@@ -1529,7 +1530,13 @@ declare global {
           trigger_type: string;
           trigger_config: {
             schema_version: number;
-            slots: Array<{ days: number[]; time: string }>;
+            slots?: Array<{ days: number[]; time: string }>;
+            minutes_before?: number;
+            title_pattern?: string;
+            has_attendees?: boolean;
+            has_meeting_link?: boolean;
+            skip_declined?: boolean;
+            folder_ids?: number[];
           };
           allowed_tools: string[];
           source_config: { folder_ids: number[]; people: string[]; lookback_days: number } | null;
@@ -1555,8 +1562,15 @@ declare global {
           prompt: string;
           trigger_config: {
             schema_version: number;
-            slots: Array<{ days: number[]; time: string }>;
+            slots?: Array<{ days: number[]; time: string }>;
+            minutes_before?: number;
+            title_pattern?: string;
+            has_attendees?: boolean;
+            has_meeting_link?: boolean;
+            skip_declined?: boolean;
+            folder_ids?: number[];
           };
+          trigger_type?: string;
           suggested_tools: string[];
           source_config?: { folder_ids: number[]; people: string[]; lookback_days: number };
           needs: string[];
@@ -1590,8 +1604,12 @@ declare global {
         } | null;
         catch_up_window_hours?: number;
         voice_hint?: string;
-        trigger_config: { schema_version: number; slots: Array<{ days: number[]; time: string }> };
+        trigger_type?: string;
+        trigger_config: { schema_version: number; slots?: Array<{ days: number[]; time: string }>; minutes_before?: number; title_pattern?: string; has_attendees?: boolean; has_meeting_link?: boolean; skip_declined?: boolean; folder_ids?: number[] };
       }) => Promise<{ success: boolean; error?: string }>;
+      routineMeetingPreview: (config: { schema_version: number; folder_ids: number[]; title_pattern: string }) => Promise<number>;
+      routineNoteLinks: (noteId: number) => Promise<{ source: { id: number; title: string } | null; event: { id: string; title: string; url: string | null } | null } | null>;
+      routineOpenLinkedNote: (noteId: number) => Promise<boolean>;
       pauseRoutine: (id: string, paused: boolean) => Promise<{ success: boolean }>;
       deleteRoutine: (id: string, deleteFolder: boolean) => Promise<{ success: boolean; error?: string }>;
       runRoutineNow: (id: string) => Promise<{ success: boolean }>;
@@ -3559,6 +3577,8 @@ declare global {
         success: boolean;
         reason?: "recording-active";
       }>;
+      meetingNoteStopped?: (noteId: number) => void;
+      meetingNoteFinalized?: (data: { noteId: number; diarized: boolean | "skipped" }) => void;
       onMeetingTranscriptionSegment?: (
         callback: (data: {
           text: string;
@@ -3816,6 +3836,7 @@ declare global {
       ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
+      meetingNotificationOpenPrep?: (noteId: number) => Promise<boolean>;
       meetingNotificationRespond?: (
         detectionId: string,
         action: string,

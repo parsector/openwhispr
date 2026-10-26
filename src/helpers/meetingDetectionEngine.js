@@ -409,6 +409,16 @@ class MeetingDetectionEngine {
       variant = started ? "underway" : "starting";
     }
     const joinUrl = source === "calendar" ? getMeetingJoinUrl(calendarEvent) : null;
+    const routineScope = variant === "starting" && calendarEvent?.id
+      ? this.databaseManager?._accountScopeCondition?.("routines") : null;
+    const prepNoteId = routineScope
+      ? this.databaseManager.db.prepare(
+          `SELECT routine_runs.note_id FROM routine_runs JOIN routines ON routines.id=routine_runs.routine_id
+           WHERE routine_runs.event_id=? AND routine_runs.status IN ('done','partial')
+             AND routine_runs.note_id IS NOT NULL AND ${routineScope.sql}
+           ORDER BY routine_runs.ended_at DESC LIMIT 1`
+        ).get(calendarEvent.id, ...routineScope.params)?.note_id
+      : undefined;
 
     debugLogger.info(
       "Showing notification",
@@ -434,6 +444,7 @@ class MeetingDetectionEngine {
       event,
       variant,
       joinUrl,
+      ...(prepNoteId ? { prepNoteId } : {}),
     });
   }
 

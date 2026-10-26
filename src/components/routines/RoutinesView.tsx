@@ -7,6 +7,7 @@ import { routineEndpointSupportsTools } from "../../utils/modelCapability";
 type Routine = Awaited<ReturnType<Window["electronAPI"]["listRoutines"]>>[number];
 type Preset = Awaited<ReturnType<Window["electronAPI"]["routinePresets"]>>[number];
 type Slot = { days: number[]; time: string };
+type TriggerConfig = { schema_version: number; slots?: Slot[]; minutes_before?: number; title_pattern?: string; has_attendees?: boolean; has_meeting_link?: boolean; skip_declined?: boolean; folder_ids?: number[] };
 type ModelChoice = { mode: string; provider: string; model: string; remoteUrl: string };
 type Draft = {
   id?: string;
@@ -17,7 +18,8 @@ type Draft = {
   model_override: ModelChoice | null;
   catch_up_window_hours: number;
   voice_hint: string;
-  trigger_config: { schema_version: number; slots: Slot[] };
+  trigger_type: string;
+  trigger_config: TriggerConfig;
 };
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 const HOURS = Array.from({ length: 24 }, (_, hour) => String(hour).padStart(2, "0"));
@@ -74,6 +76,7 @@ function newDraft(preset?: Preset, translatedName = ""): Draft {
     model_override: null,
     catch_up_window_hours: 4,
     voice_hint: "",
+    trigger_type: preset?.trigger_type || "time",
     trigger_config: preset?.trigger_config || {
       schema_version: 1,
       slots: [{ days: [1, 2, 3, 4, 5], time: "09:00" }],
@@ -98,6 +101,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
   const [mcpSources, setMcpSources] = useState<Array<{ name: string; description: string }>>([]);
   const [scopeModel, setScopeModel] = useState<ModelChoice | null>(null);
   const [overrideUsable, setOverrideUsable] = useState(true);
+  const [meetingPreview, setMeetingPreview] = useState<number | null>(null);
   const refresh = useCallback(async () => {
     setRoutines(await window.electronAPI.listRoutines());
     if (historyId) setHistory(await window.electronAPI.routineHistory(historyId));
@@ -130,6 +134,15 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
       active = false;
     };
   }, [draft?.model_override]);
+  useEffect(() => {
+    if (draft?.trigger_type !== "meeting_ended") { setMeetingPreview(null); return; }
+    const config = draft.trigger_config;
+    let active = true;
+    void window.electronAPI.routineMeetingPreview({ schema_version: 1, folder_ids: config.folder_ids || [], title_pattern: config.title_pattern || "" })
+      .then((count) => { if (active) setMeetingPreview(count); })
+      .catch(() => { if (active) setMeetingPreview(null); });
+    return () => { active = false; };
+  }, [draft?.trigger_type, draft?.trigger_config]);
   const edit = (routine: Routine) => {
     setDraft({
       id: routine.id,
@@ -140,6 +153,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
       model_override: routine.model_override,
       catch_up_window_hours: routine.catch_up_window_hours,
       voice_hint: routine.voice_hint || "",
+      trigger_type: routine.trigger_type,
       trigger_config: routine.trigger_config,
     });
     setFromPreset(null);
@@ -157,12 +171,15 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
           ...current,
           trigger_config: {
             ...current.trigger_config,
-            slots: current.trigger_config.slots.map((item, i) => (i === index ? slot : item)),
+            slots: (current.trigger_config.slots || []).map((item, i) => (i === index ? slot : item)),
           },
         }
     );
   const save = async () => {
     if (!draft) return;
+    if (draft.trigger_type === "meeting_ended" && !(draft.trigger_config.folder_ids?.length || draft.trigger_config.title_pattern?.trim())) {
+      setError(t("routines.errors.meetingFilter")); return;
+    }
     if (fromPreset?.id === "friday-digest" &&
       (!draft.source_config?.folder_ids.length || !draft.source_config.people.length)) {
       setError(t("routines.errors.digestSelection"));
@@ -242,9 +259,24 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
               onChange={(value) => setDraft({ ...draft, prompt: value })}
             />
           </div>
-          <div className="space-y-3">
+          <label className="block text-sm">{t("routines.trigger")}
+            <select className="ml-2 rounded-md border bg-background p-2" value={draft.trigger_type}
+              onChange={(event) => {
+                const type = event.target.value;
+                setDraft({ ...draft, trigger_type: type, trigger_config: type === "time"
+                  ? { schema_version: 1, slots: [{ days: [1, 2, 3, 4, 5], time: "09:00" }] }
+                  : type === "before_event"
+                    ? { schema_version: 1, minutes_before: 10, title_pattern: "", has_attendees: false, has_meeting_link: false, skip_declined: true }
+                    : { schema_version: 1, folder_ids: [], title_pattern: "" } });
+              }}>
+              <option value="time">{t("routines.timeTrigger")}</option>
+              <option value="before_event">{t("routines.beforeEvent")}</option>
+              <option value="meeting_ended">{t("routines.meetingEnded")}</option>
+            </select>
+          </label>
+          {draft.trigger_type === "time" && <div className="space-y-3">
             <span className="text-sm font-medium">{t("routines.timeTrigger")}</span>
-            {draft.trigger_config.slots.map((slot, index) => (
+            {(draft.trigger_config.slots || []).map((slot, index) => (
               <div key={index} className="rounded-lg border border-border p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <select
@@ -284,7 +316,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                       </option>
                     ))}
                   </select>
-                  {draft.trigger_config.slots.length > 1 && (
+                  {(draft.trigger_config.slots || []).length > 1 && (
                     <Button
                       variant="ghost"
                       onClick={() =>
@@ -292,7 +324,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                           ...draft,
                           trigger_config: {
                             ...draft.trigger_config,
-                            slots: draft.trigger_config.slots.filter((_, i) => i !== index),
+                            slots: (draft.trigger_config.slots || []).filter((_, i) => i !== index),
                           },
                         })
                       }
@@ -323,7 +355,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                 </div>
               </div>
             ))}
-            {draft.trigger_config.slots.length < 6 && (
+            {(draft.trigger_config.slots || []).length < 6 && (
               <Button
                 variant="ghost"
                 onClick={() =>
@@ -332,7 +364,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                     trigger_config: {
                       ...draft.trigger_config,
                       slots: [
-                        ...draft.trigger_config.slots,
+                        ...(draft.trigger_config.slots || []),
                         { days: [1, 2, 3, 4, 5], time: "09:00" },
                       ],
                     },
@@ -342,7 +374,39 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                 {t("routines.addSlot")}
               </Button>
             )}
-          </div>
+          </div>}
+          {draft.trigger_type === "before_event" && <div className="space-y-2 text-sm">
+            <div>{t("routines.minutesBefore")}
+              <PlainTextField label={t("routines.minutesBefore")} direction="ltr"
+                value={String(draft.trigger_config.minutes_before ?? 10)}
+                onChange={(value) => setDraft({ ...draft, trigger_config: { ...draft.trigger_config, minutes_before: Number(value) } })} />
+            </div>
+            <div>{t("routines.titlePattern")}
+              <PlainTextField label={t("routines.titlePattern")} value={draft.trigger_config.title_pattern || ""}
+                onChange={(value) => setDraft({ ...draft, trigger_config: { ...draft.trigger_config, title_pattern: value } })} />
+            </div>
+            {(["has_attendees", "has_meeting_link", "skip_declined"] as const).map((key) => <button key={key} type="button"
+              aria-pressed={!!draft.trigger_config[key]} className="block w-full rounded-md border border-border p-2 text-start"
+              onClick={() => setDraft({ ...draft, trigger_config: { ...draft.trigger_config, [key]: !draft.trigger_config[key] } })}>
+              {draft.trigger_config[key] ? "☑" : "☐"} {t(`routines.${key}`)}
+            </button>)}
+          </div>}
+          {draft.trigger_type === "meeting_ended" && <div className="space-y-2 text-sm">
+            <p>{t("routines.meetingFolders")}</p>
+            {folders.map((folder) => <button key={folder.id} type="button" className="block w-full rounded-md border border-border p-2 text-start"
+              aria-pressed={(draft.trigger_config.folder_ids || []).includes(folder.id)}
+              onClick={() => { const selected = (draft.trigger_config.folder_ids || []).includes(folder.id);
+                setDraft({ ...draft, trigger_config: { ...draft.trigger_config, folder_ids: selected
+                  ? (draft.trigger_config.folder_ids || []).filter((id) => id !== folder.id)
+                  : [...(draft.trigger_config.folder_ids || []), folder.id] } }); }}>
+              {(draft.trigger_config.folder_ids || []).includes(folder.id) ? "☑" : "☐"} {folder.name}
+            </button>)}
+            <div>{t("routines.titlePattern")}
+              <PlainTextField label={t("routines.titlePattern")} value={draft.trigger_config.title_pattern || ""}
+                onChange={(value) => setDraft({ ...draft, trigger_config: { ...draft.trigger_config, title_pattern: value } })} />
+            </div>
+            <p role="status">{meetingPreview == null ? t("routines.previewUnavailable") : t("routines.meetingPreview", { count: meetingPreview })}</p>
+          </div>}
           <div className="space-y-2">
             <p className="text-sm font-medium">{t("routines.allowedTools")}</p>
             {sourceOptions.map((source) => (
@@ -539,13 +603,13 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {t("routines.timeTrigger")}:{" "}
-                  {routine.trigger_config.slots
+                  {routine.trigger_type === "time" ? t("routines.timeTrigger") : routine.trigger_type === "before_event" ? t("routines.beforeEvent") : t("routines.meetingEnded")}:{" "}
+                  {(routine.trigger_config.slots || [])
                     .map(
                       (slot) =>
                         `${slot.days.map((day) => t(`routines.days.${day}`)).join("/")} ${slot.time}`
                     )
-                    .join(", ")}{" "}
+                    .join(", ") || (routine.trigger_type === "before_event" ? `${routine.trigger_config.minutes_before} ${t("routines.minutesBefore")}` : routine.trigger_config.title_pattern || t("routines.meetingFolders"))}{" "}
                   · {t("routines.lastRun")}:{" "}
                   {routine.last_run_at
                     ? new Date(routine.last_run_at).toLocaleString()

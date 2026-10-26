@@ -2645,6 +2645,17 @@
     "expand": "Expand sidebar"
   },
   "routines": {
+    "trigger": "Trigger",
+    "beforeEvent": "Before a calendar event",
+    "meetingEnded": "Meeting note finalized",
+    "minutesBefore": "Minutes before",
+    "titlePattern": "Title contains",
+    "has_attendees": "Has attendees",
+    "has_meeting_link": "Has meeting link",
+    "skip_declined": "Skip declined events",
+    "meetingFolders": "Meeting folders",
+    "meetingPreview": "{{count}} meetings in the last 7 days would have matched",
+    "previewUnavailable": "Preview unavailable",
     "title": "Routines",
     "description": "Your scheduled briefs and notes, ready when you are.",
     "new": "New routine",
@@ -2682,6 +2693,7 @@
     "cancel": "Cancel",
     "saveFailed": "Could not save routine",
     "errors": {
+      "meetingFilter": "Choose a folder or title filter",
       "folderNameTaken": "A folder with that name already exists",
       "nameAndPrompt": "Enter a name and prompt",
       "slotCount": "Choose between one and six time slots",
@@ -2723,6 +2735,7 @@
     },
     "model": { "sameAsChat": "Same as chat", "custom": "Use a different model for routines" },
     "presets": {
+      "meetingPrep": { "name": "Meeting prep", "description": "An agenda, history with attendees, and open items before a meeting.", "reviewSources": "Review connected sources and optional title filter" },
       "morningBrief": {
         "name": "Morning brief",
         "description": "Today's meetings and recent open action items, with links to related notes.",
@@ -4727,6 +4740,7 @@
     "maxTargets": "Up to {{max}} languages"
   },
   "meetingNotification": {
+    "openPrep": "Open prep",
     "title": "Meeting detected",
     "body": {
       "detected": "It sounds like you're in a meeting. Want to take notes?",

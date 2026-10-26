@@ -9,6 +9,7 @@ interface MeetingNotificationCardProps {
   startLabel: string;
   onStart?: () => void;
   picker?: ReactNode;
+  prepAction?: ReactNode;
   busy?: boolean;
   dismissLabel?: string;
   onDismiss?: () => void;
@@ -31,6 +32,7 @@ export function MeetingNotificationCard({
   startLabel,
   onStart,
   picker,
+  prepAction,
   busy = false,
   dismissLabel,
   onDismiss,
@@ -107,6 +109,7 @@ export function MeetingNotificationCard({
           {picker}
         </div>
       </div>
+      {prepAction && <div className="mt-2 text-right">{prepAction}</div>}
     </div>
   );
 }
