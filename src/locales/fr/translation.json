@@ -4635,6 +4635,7 @@
     "maxTargets": "Jusqu’à {{max}} langues"
   },
   "meetingNotification": {
+    "openPrep": "Ouvrir la préparation",
     "title": "Réunion détectée",
     "body": {
       "detected": "On dirait que vous êtes en réunion. Vous voulez prendre des notes ?",
@@ -5019,6 +5020,17 @@
     }
   },
   "routines": {
+    "trigger": "Déclencheur",
+    "beforeEvent": "Avant un événement du calendrier",
+    "meetingEnded": "Note de réunion finalisée",
+    "minutesBefore": "Minutes avant",
+    "titlePattern": "Le titre contient",
+    "has_attendees": "Avec des participants",
+    "has_meeting_link": "Avec un lien de réunion",
+    "skip_declined": "Ignorer les événements refusés",
+    "meetingFolders": "Dossiers de réunions",
+    "meetingPreview": "{{count}} réunions des 7 derniers jours auraient correspondu",
+    "previewUnavailable": "Aperçu indisponible",
     "title": "Habitudes",
     "description": "Vos briefings et notes programmés, prêts quand vous l'êtes.",
     "new": "Nouvelle routine",
@@ -5051,6 +5063,7 @@
     "cancel": "Annuler",
     "saveFailed": "Impossible d'enregistrer la routine",
     "errors": {
+      "meetingFilter": "Choisissez un dossier ou un filtre de titre",
       "folderNameTaken": "Un dossier portant ce nom existe déjà.",
       "nameAndPrompt": "Saisissez un nom et une invite",
       "slotCount": "Choisissez entre un et six créneaux horaires",
@@ -5098,6 +5111,7 @@
       "custom": "Utiliser un modèle différent pour les routines"
     },
     "presets": {
+      "meetingPrep": { "name": "Préparation de réunion", "description": "Ordre du jour, historique avec les participants et points en suspens avant la réunion.", "reviewSources": "Vérifiez les sources connectées et le filtre de titre facultatif" },
       "morningBrief": {
         "name": "Briefing du matin",
         "description": "Les réunions d'aujourd' hui et les actions ouvertes récentes, avec des liens vers des notes connexes.",

@@ -4635,6 +4635,7 @@
     "maxTargets": "Bis zu {{max}} Sprachen"
   },
   "meetingNotification": {
+    "openPrep": "Vorbereitung öffnen",
     "title": "Meeting erkannt",
     "body": {
       "detected": "Es klingt, als wärst du in einem Meeting. Notizen aufnehmen?",
@@ -5019,6 +5020,17 @@
     }
   },
   "routines": {
+    "trigger": "Auslöser",
+    "beforeEvent": "Vor einem Kalendertermin",
+    "meetingEnded": "Besprechungsnotiz abgeschlossen",
+    "minutesBefore": "Minuten vorher",
+    "titlePattern": "Titel enthält",
+    "has_attendees": "Mit Teilnehmenden",
+    "has_meeting_link": "Mit Besprechungslink",
+    "skip_declined": "Abgelehnte Termine überspringen",
+    "meetingFolders": "Besprechungsordner",
+    "meetingPreview": "{{count}} Besprechungen der letzten 7 Tage hätten gepasst",
+    "previewUnavailable": "Vorschau nicht verfügbar",
     "title": "Routinen",
     "description": "Ihre geplanten Kurzberichte und Notizen, wenn Sie sie brauchen.",
     "new": "Neue Routine",
@@ -5051,6 +5063,7 @@
     "cancel": "Abbrechen",
     "saveFailed": "Routine konnte nicht gespeichert werden",
     "errors": {
+      "meetingFilter": "Ordner oder Titelfilter auswählen",
       "folderNameTaken": "Ein Ordner mit dem Namen existiert bereits.",
       "nameAndPrompt": "Geben Sie einen Namen und eine Anweisung ein",
       "slotCount": "Wählen Sie zwischen einem und sechs Zeitfenstern",
@@ -5098,6 +5111,7 @@
       "custom": "Verwenden Sie ein anderes Modell für Routinen"
     },
     "presets": {
+      "meetingPrep": { "name": "Besprechung vorbereiten", "description": "Agenda, Verlauf mit Teilnehmenden und offene Punkte vor der Besprechung.", "reviewSources": "Verbundene Quellen und optionalen Titelfilter prüfen" },
       "morningBrief": {
         "name": "Morgen-Briefing",
         "description": "Heutige Besprechungen und aktuelle offene Aktionspunkte mit Links zu zugehörigen Notizen.",

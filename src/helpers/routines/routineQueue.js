@@ -11,12 +11,12 @@ class RoutineQueue {
 
   enqueue(job) {
     const key = `${job.routineId}:${job.slotKey}`;
-    if (job.catchUp && this.claimed.has(key)) return this.claimed.get(key);
+    if (this.claimed.has(key)) return this.claimed.get(key);
     const promise = new Promise((resolve, reject) => {
       this.pending.push({ ...job, resolve, reject, queuedAt: this.now() });
       this.drain();
     });
-    if (job.catchUp) this.claimed.set(key, promise);
+    this.claimed.set(key, promise);
     promise.finally(() => this.claimed.delete(key)).catch(() => {});
     return promise;
   }
@@ -35,11 +35,19 @@ class RoutineQueue {
     this.pending = keep;
   }
 
+  cancelSlot(routineId, slotKey) {
+    this.pending = this.pending.filter((job) => {
+      if (job.routineId !== routineId || job.slotKey !== slotKey) return true;
+      job.resolve({ status: "skipped", reason: "cancelled" });
+      return false;
+    });
+  }
+
   drain() {
     while (this.active.size < this.maxConcurrent) {
       const index = this.pending.findIndex((job) => {
         if (this.active.has(job.routineId)) return false;
-        if (!this.isRecording()) return true;
+        if (job.trigger === "before_event" || !this.isRecording()) return true;
         return !job.localModel && this.now() - job.queuedAt >= 3600000;
       });
       if (index < 0) break;

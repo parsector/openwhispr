@@ -4635,6 +4635,7 @@
     "maxTargets": "最多 {{max}} 种语言"
   },
   "meetingNotification": {
+    "openPrep": "打开准备笔记",
     "title": "检测到会议",
     "body": {
       "detected": "你似乎正在开会。要开始记录吗？",
@@ -5019,6 +5020,17 @@
     }
   },
   "routines": {
+    "trigger": "触发条件",
+    "beforeEvent": "日历活动开始前",
+    "meetingEnded": "会议笔记定稿时",
+    "minutesBefore": "提前分钟数",
+    "titlePattern": "标题包含",
+    "has_attendees": "有参会者",
+    "has_meeting_link": "有会议链接",
+    "skip_declined": "跳过已拒绝的活动",
+    "meetingFolders": "会议文件夹",
+    "meetingPreview": "过去 7 天有 {{count}} 场会议符合条件",
+    "previewUnavailable": "预览不可用",
     "title": "日常流程",
     "description": "您的预定简报和笔记，随时准备就绪。",
     "new": "添加新例程",
@@ -5051,6 +5063,7 @@
     "cancel": "取消",
     "saveFailed": "无法保存例程",
     "errors": {
+      "meetingFilter": "选择文件夹或标题筛选条件",
       "folderNameTaken": "已存在同名文件夹",
       "nameAndPrompt": "输入名称和提示词",
       "slotCount": "选择一到六个时段",
@@ -5098,6 +5111,7 @@
       "custom": "对例程使用不同的模型"
     },
     "presets": {
+      "meetingPrep": { "name": "会议准备", "description": "在会议前整理议程、与参会者的过往记录及待办事项。", "reviewSources": "检查已连接的信息来源和可选标题筛选条件" },
       "morningBrief": {
         "name": "晨间简报",
         "description": "今天的会议和最近开放的行动项目，并带有相关笔记的链接。",

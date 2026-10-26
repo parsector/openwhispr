@@ -273,6 +273,12 @@ export default function NoteEditor({
   onFlushPendingSaves,
 }: NoteEditorProps) {
   const { t } = useTranslation();
+  const [routineLinks, setRoutineLinks] = useState<Awaited<ReturnType<Window["electronAPI"]["routineNoteLinks"]>>>(null);
+  useEffect(() => {
+    let active = true;
+    void window.electronAPI.routineNoteLinks?.(note.id).then((links) => { if (active) setRoutineLinks(links); });
+    return () => { active = false; };
+  }, [note.id]);
   const locale = useUiLocale();
   const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
   const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
@@ -1030,6 +1036,14 @@ export default function NoteEditor({
             aria-label={t("notes.editor.noteTitle")}
           />
           <div className="mt-3 flex flex-wrap items-center gap-2 [&>*]:max-w-full">
+            {routineLinks?.source && <button type="button" className={NOTE_META_CHIP_CLASS}
+              onClick={() => void window.electronAPI.routineOpenLinkedNote(routineLinks.source!.id)}>
+              {routineLinks.source.title}
+            </button>}
+            {routineLinks?.event && (routineLinks.event.url
+              ? <button type="button" className={NOTE_META_CHIP_CLASS}
+                  onClick={() => void window.electronAPI.openExternal(routineLinks.event!.url!)}>{routineLinks.event.title}</button>
+              : <span className={NOTE_META_CHIP_CLASS}>{routineLinks.event.title}</span>)}
             <NoteParticipants
               noteId={note.id}
               participants={parsedParticipants}

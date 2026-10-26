@@ -4635,6 +4635,7 @@
     "maxTargets": "Até {{max}} idiomas"
   },
   "meetingNotification": {
+    "openPrep": "Abrir preparação",
     "title": "Reunião detectada",
     "body": {
       "detected": "Parece que você está em uma reunião. Quer fazer anotações?",
@@ -5019,6 +5020,17 @@
     }
   },
   "routines": {
+    "trigger": "Acionador",
+    "beforeEvent": "Antes de um evento do calendário",
+    "meetingEnded": "Nota de reunião finalizada",
+    "minutesBefore": "Minutos antes",
+    "titlePattern": "Título contém",
+    "has_attendees": "Com participantes",
+    "has_meeting_link": "Com link da reunião",
+    "skip_declined": "Ignorar eventos recusados",
+    "meetingFolders": "Pastas de reuniões",
+    "meetingPreview": "{{count}} reuniões dos últimos 7 dias teriam correspondido",
+    "previewUnavailable": "Prévia indisponível",
     "title": "Rotinas",
     "description": "Seus resumos e notas agendados, disponíveis quando precisar.",
     "new": "Nova rotina",
@@ -5051,6 +5063,7 @@
     "cancel": "Cancelar",
     "saveFailed": "Não foi possível guardar a rotina",
     "errors": {
+      "meetingFilter": "Escolha uma pasta ou filtro de título",
       "folderNameTaken": "Já existe uma pasta com esse nome.",
       "nameAndPrompt": "Introduza um nome e uma instrução",
       "slotCount": "Escolha entre um e seis horários",
@@ -5098,6 +5111,7 @@
       "custom": "Usar um modelo diferente para rotinas"
     },
     "presets": {
+      "meetingPrep": { "name": "Preparação para reunião", "description": "Pauta, histórico com os participantes e pendências antes da reunião.", "reviewSources": "Revise as fontes conectadas e o filtro de título opcional" },
       "morningBrief": {
         "name": "Resumo da manhã",
         "description": "Reuniões de hoje e recentes itens de ação em aberto, com links para notas relacionadas.",

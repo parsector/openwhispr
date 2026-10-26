@@ -837,6 +837,7 @@ function initializeCoreManagers() {
     oauthProtocolRegistered: protocolRegistered,
     oauthProtocol: OAUTH_PROTOCOL,
   });
+  calendarReminderScheduler.onEventsChanged = () => ipcHandlers?.routineScheduler?.checkEvents();
   stopLocalMcp = require("./src/services/mcp/server").registerLocalMcp({
     ipcMain,
     userData: app.getPath("userData"),

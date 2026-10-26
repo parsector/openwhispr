@@ -4635,6 +4635,7 @@
     "maxTargets": "最多 {{max}} 種語言"
   },
   "meetingNotification": {
+    "openPrep": "開啟準備筆記",
     "title": "偵測到會議",
     "body": {
       "detected": "你似乎正在開會。要開始記錄嗎？",
@@ -5019,6 +5020,17 @@
     }
   },
   "routines": {
+    "trigger": "觸發條件",
+    "beforeEvent": "行事曆活動開始前",
+    "meetingEnded": "會議筆記定稿時",
+    "minutesBefore": "提前分鐘數",
+    "titlePattern": "標題包含",
+    "has_attendees": "有與會者",
+    "has_meeting_link": "有會議連結",
+    "skip_declined": "略過已拒絕的活動",
+    "meetingFolders": "會議資料夾",
+    "meetingPreview": "過去 7 天有 {{count}} 場會議符合條件",
+    "previewUnavailable": "無法預覽",
     "title": "例程",
     "description": "預約的簡報和備註，隨時準備就緒。",
     "new": "新例程",
@@ -5051,6 +5063,7 @@
     "cancel": "取消",
     "saveFailed": "無法保存例程",
     "errors": {
+      "meetingFilter": "選擇資料夾或標題篩選條件",
       "folderNameTaken": "同樣名稱的資料夾已經存在。",
       "nameAndPrompt": "輸入名稱和提示詞",
       "slotCount": "在1至6個時段之間選擇",
@@ -5098,6 +5111,7 @@
       "custom": "對例程使用不同的模型"
     },
     "presets": {
+      "meetingPrep": { "name": "會議準備", "description": "在會議前整理議程、與會者的過往紀錄及待辦事項。", "reviewSources": "檢查已連結的資訊來源和選用的標題篩選條件" },
       "morningBrief": {
         "name": "晨間摘要",
         "description": "今天的會議和最近的公開行動項目，以及相關備註的連結。",

@@ -258,6 +258,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   listRoutines: () => ipcRenderer.invoke("routines-list"),
   routinePeople: () => ipcRenderer.invoke("routines-people"),
   routinePresets: () => ipcRenderer.invoke("routines-presets"),
+  routineMeetingPreview: (config) => ipcRenderer.invoke("routines-meeting-preview", config),
+  routineNoteLinks: (noteId) => ipcRenderer.invoke("routines-note-links", noteId),
+  routineOpenLinkedNote: (noteId) => ipcRenderer.invoke("routines-open-linked-note", noteId),
   routineMcpSources: () => ipcRenderer.invoke("routines-mcp-sources"),
   routineModelUsable: (choice) => ipcRenderer.invoke("routines-model-usable", choice),
   routineModelChoiceCurrent: () => ipcRenderer.invoke("routines-model-choice-current"),
@@ -574,6 +577,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-diarization-complete",
     (callback) => (_event, data) => callback(data)
   ),
+  meetingNoteStopped: (noteId) => ipcRenderer.send("meeting-note-stopped", noteId),
+  meetingNoteFinalized: (data) => ipcRenderer.send("meeting-note-finalized", data),
 
   // Speaker name mapping
   getSpeakerMappings: (noteId) => ipcRenderer.invoke("get-speaker-mappings", noteId),
@@ -1500,6 +1505,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),
   meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
+  meetingNotificationOpenPrep: (noteId) => ipcRenderer.invoke("meeting-notification-open-prep", noteId),
   meetingNotificationRespond: (detectionId, action, options) =>
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action, options),
   confirmMeetingNoteNavigation: (navigationId, status) =>

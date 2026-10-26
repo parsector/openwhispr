@@ -109,6 +109,23 @@ test("an unanswered audio prompt expires without cooling down the mic detector",
   assert.equal(engine.activeDetections.size, 0, "expired detections must be cleared");
 });
 
+test("meeting overlay carries prep note only for the starting variant", () => {
+  const { engine, shown } = createEngine();
+  engine.databaseManager.db = { prepare: () => ({ get: () => ({ note_id: 88 }) }) };
+  engine.databaseManager._accountScopeCondition = () => ({ sql: '1=1', params: [] });
+  const future = { id: 'event-1', summary: 'Planning', start_time: new Date(Date.now() + 600000).toISOString() };
+  engine._showPrompt('calendar:event-1', 'calendar', 'event-1', { event: future });
+  assert.equal(shown.at(-1).variant, 'starting');
+  assert.equal(shown.at(-1).prepNoteId, 88);
+  engine._showPrompt('calendar:event-1', 'calendar', 'event-1', { event: { ...future, start_time: new Date(Date.now() - 60000).toISOString() } });
+  assert.equal(shown.at(-1).variant, 'underway');
+  assert.equal('prepNoteId' in shown.at(-1), false);
+  engine._showPrompt('audio:mic', 'audio', 'mic', {});
+  assert.equal(shown.at(-1).variant, 'detected');
+  assert.equal('prepNoteId' in shown.at(-1), false);
+  engine.stop();
+});
+
 test("explicitly dismissing an audio prompt still starts the mic cooldown", async () => {
   const { engine, audioDetector, shown } = createEngine();
 
