@@ -190,10 +190,11 @@ jobs:
           : > .env
       - name: Allow fork signing identity discovery
         run: |
-          # The checked-in builder config pins the upstream owner's identity.
-          # Remove that pin only in this runner's copy so the imported fork
-          # certificate can be discovered automatically.
-          node -e 'const fs = require("node:fs"); const file = "electron-builder.json"; const config = JSON.parse(fs.readFileSync(file, "utf8")); delete config.mac.identity; fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n")'
+          # The checked-in builder config pins the upstream owner's identity and
+          # turns on notarization, neither of which can work without Apple
+          # credentials. Remove both only in this runner's copy so an imported
+          # fork certificate can be discovered automatically.
+          node -e 'const fs = require("node:fs"); const file = "electron-builder.json"; const config = JSON.parse(fs.readFileSync(file, "utf8")); delete config.mac.identity; delete config.mac.notarize; fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n")'
       - name: Import signing certificate
         if: env.CSC_LINK != ''
         run: |
