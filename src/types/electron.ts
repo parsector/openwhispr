@@ -1631,6 +1631,9 @@ declare global {
         provider: string;
         model: string;
         remoteUrl: string;
+        cloudBaseUrl: string;
+        useChatEndpointKey: boolean;
+        useRoutinesEndpointKey: boolean;
       }) => Promise<boolean>;
       setRoutineRecording: (source: string, active: boolean) => void;
       onRoutinesUpdated: (callback: () => void) => () => void;
@@ -2757,6 +2760,8 @@ declare global {
       saveDictationAgentVisionCustomKey?: (key: string) => Promise<void>;
       getChatAgentCustomKey?: () => Promise<string | null>;
       saveChatAgentCustomKey?: (key: string) => Promise<void>;
+      getRoutinesCustomKey?: () => Promise<string | null>;
+      saveRoutinesCustomKey?: (key: string) => Promise<void>;
 
       // Enterprise provider key persistence
       getBedrockRegion?: () => Promise<string | null>;

@@ -878,16 +878,23 @@ class IPCHandlers {
         }
         return { text: noteText, toolsAvailable };
       }
-      const route =
-        localRoute ||
-        (model.mode === "self-hosted" && /^https?:\/\//.test(model.remoteUrl || "")
-          ? [null, `${model.remoteUrl.replace(/\/$/, "")}/chat/completions`]
-          : providers[model.provider]);
+      const customEndpoint = require("./routines/routineCustomEndpoint").routineCustomEndpoint(model);
+      const customBaseUrl = customEndpoint?.baseUrl;
+      const route = localRoute || (customEndpoint
+        ? [null, customEndpoint.completionsUrl] : providers[model.provider]);
       if (!route && model.provider !== "tinfoil")
         throw new Error(`Routine model provider ${model.provider || model.mode} is unavailable`);
       const key =
         model.provider === "tinfoil"
           ? this.environmentManager.getTinfoilKey()
+          : model.provider === "custom" &&
+              this._routineModelChoice?.useRoutinesEndpointKey === true &&
+              customBaseUrl === (this._routineModelChoice?.cloudBaseUrl || this._routineModelChoice?.remoteUrl)
+            ? this.environmentManager.getRoutinesCustomKey()
+          : model.provider === "custom" &&
+              this._routineModelChoice?.useChatEndpointKey === true &&
+              customBaseUrl === (this._routineModelChoice?.cloudBaseUrl || this._routineModelChoice?.remoteUrl)
+            ? this.environmentManager.getChatAgentCustomKey()
           : route[0]
             ? this.environmentManager[route[0]]()
             : null;
@@ -1017,7 +1024,8 @@ class IPCHandlers {
     const { routineMcpApi } = require("./routines/routineMcpApi");
     const modelUsable = async (choice) => {
       if (!choice || typeof choice.model !== "string" || !choice.model.trim()) return false;
-      if (choice.mode === "self-hosted") return /^https?:\/\//.test(choice.remoteUrl || "");
+      if (choice.mode === "self-hosted" || choice.provider === "custom")
+        return Boolean(require("./routines/routineCustomEndpoint").routineCustomEndpoint(choice));
       if (choice.mode === "local") {
         try {
           const manager = require("./modelManagerBridge").default;
@@ -1174,10 +1182,13 @@ class IPCHandlers {
       broadcastToWindows("routines-updated");
     });
     ipcMain.handle("routines-model-choice", (_event, choice) => {
-      const { mode, provider, model, remoteUrl = "" } = choice || {};
+      const { mode, provider, model, remoteUrl = "", cloudBaseUrl = "",
+        useChatEndpointKey = false, useRoutinesEndpointKey = false } = choice || {};
       if (![mode, provider, model].every((value) => typeof value === "string")) return false;
-      if (typeof remoteUrl !== "string") return false;
-      this._routineModelChoice = { mode, provider, model, remoteUrl };
+      if (typeof remoteUrl !== "string" || typeof cloudBaseUrl !== "string" ||
+          typeof useChatEndpointKey !== "boolean" || typeof useRoutinesEndpointKey !== "boolean") return false;
+      this._routineModelChoice = { mode, provider, model, remoteUrl, cloudBaseUrl,
+        useChatEndpointKey, useRoutinesEndpointKey };
       fs.writeFileSync(choicePath, JSON.stringify(this._routineModelChoice));
       return true;
     });

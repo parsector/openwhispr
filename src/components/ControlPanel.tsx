@@ -35,6 +35,7 @@ import {
 } from "../stores/settingsStore";
 import { usePolicyStore } from "../stores/policyStore";
 import { usePolicySnapshot } from "../hooks/usePolicy";
+import { routineModelChoice } from "../helpers/routines/routineModelChoice";
 import {
   isAgentAllowed,
   isControlPanelViewAllowed,
@@ -222,27 +223,12 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const policySnapshot = usePolicySnapshot();
   const routineModel = useSettingsStore(
     useShallow((settings) => {
-      const resolved = selectResolvedLLMConfig(
-        selectPolicyEffectiveSettings(settings, policySnapshot),
-        "routines"
+      const effective = selectPolicyEffectiveSettings(settings, policySnapshot);
+      return routineModelChoice(
+        selectResolvedLLMConfig(effective, "routines"),
+        selectResolvedLLMConfig(effective, "chatIntelligence"),
+        Boolean(effective.routinesMode)
       );
-      let remoteUrl = "";
-      if (resolved.remoteUrl) {
-        try {
-          const endpoint = new URL(resolved.remoteUrl);
-          if (!endpoint.username && !endpoint.password && /^https?:$/.test(endpoint.protocol)) {
-            endpoint.search = "";
-            endpoint.hash = "";
-            remoteUrl = endpoint.toString();
-          }
-        } catch {}
-      }
-      return {
-        mode: resolved.mode,
-        provider: resolved.provider,
-        model: resolved.model,
-        remoteUrl,
-      };
     })
   );
   useEffect(() => {

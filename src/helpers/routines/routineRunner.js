@@ -218,7 +218,12 @@ class RoutineRunner {
       let model = job.model;
       let modelWarning = "";
       if (routine.model_override) {
-        if (await this.modelUsable(routine.model_override)) model = routine.model_override;
+        if (await this.modelUsable(routine.model_override)) {
+          model = routine.model_override;
+          sourceStatus.model_override = {
+            mode: model.mode, provider: model.provider, model: model.model,
+          };
+        }
         else modelWarning = `model override unavailable, used ${model?.model || "default"}`;
       }
       if (modelWarning) sourceStatus.model_override = modelWarning;

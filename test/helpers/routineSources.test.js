@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const { loadRoutineMcpTools } = require("../../src/services/tools/mcpTools.ts");
 const { routineEndpointSupportsTools } = require("../../src/utils/modelCapability.ts");
 const { RoutineRunner } = require("../../src/helpers/routines/routineRunner");
+const { routineCustomEndpoint } = require("../../src/helpers/routines/routineCustomEndpoint");
 const { routineMcpApi } = require("../../src/helpers/routines/routineMcpApi");
 
 function mcpApi() {
@@ -213,4 +214,67 @@ test("unusable override falls back and records the chosen model", async () => {
   const result = await runner.run({ id: "run2", routineId: routine.id, model: fallback });
   assert.equal(result.status, "done");
   assert.match(database.notes[0].content, /model override unavailable, used test-4b/);
+});
+
+test("custom endpoint routine runs use the synced model and record a usable pinned override", async () => {
+  for (const base of [
+    {
+      mode: "self-hosted",
+      provider: "custom",
+      model: "chat-model",
+      remoteUrl: "https://models.example/v1",
+    },
+    {
+      mode: "providers",
+      provider: "custom",
+      model: "chat-model",
+      remoteUrl: "",
+      cloudBaseUrl: "https://models.example/v1",
+    },
+  ]) {
+    assert.deepEqual(routineCustomEndpoint(base), {
+      baseUrl: "https://models.example/v1",
+      completionsUrl: "https://models.example/v1/chat/completions",
+    });
+    const pinned = { ...base, model: "pinned-model" };
+    for (const modelOverride of [null, pinned]) {
+      const routine = {
+        id: "custom-routine",
+        name: "Brief",
+        prompt: "Write a brief",
+        space_id: 1,
+        allowed_tools: [],
+        model_override: modelOverride,
+      };
+      const database = fakeDatabase(routine);
+      const runner = new RoutineRunner({
+        database,
+        modelUsable: async () => true,
+        infer: async ({ model, registry, context }) => {
+          assert.equal(model.model, modelOverride ? "pinned-model" : "chat-model");
+          assert.equal(model.cloudBaseUrl || model.remoteUrl, "https://models.example/v1");
+          await registry.get("finish_run").execute({ empty: false, headline: "Ready" }, context);
+          return { text: "Useful brief", toolsAvailable: true };
+        },
+      });
+      const result = await runner.run({ id: "custom-run", routineId: routine.id, model: base });
+      assert.equal(result.status, "done");
+      const status = JSON.parse(database.updates.at(-1).source_status);
+      assert.deepEqual(
+        status.model_override,
+        modelOverride ? { mode: base.mode, provider: "custom", model: "pinned-model" } : undefined
+      );
+    }
+  }
+  assert.deepEqual(
+    routineCustomEndpoint({
+      mode: "providers",
+      provider: "custom",
+      cloudBaseUrl: "https://models.example/api/v1?compat=chat",
+    }),
+    {
+      baseUrl: "https://models.example/api/v1?compat=chat",
+      completionsUrl: "https://models.example/api/v1/chat/completions?compat=chat",
+    }
+  );
 });
