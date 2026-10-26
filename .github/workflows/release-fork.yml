@@ -1,0 +1,282 @@
+name: Release fork (macOS arm64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        options: [patch, minor, major, explicit]
+        default: patch
+      version:
+        description: Version (required when bump is explicit, e.g. 1.10.5)
+        type: string
+      require_signing:
+        description: Fail if the signing certificate is missing
+        type: boolean
+        default: false
+      dry_run:
+        description: Build without pushing a commit/tag or creating a release
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-fork
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      sha: ${{ steps.version.outputs.sha }}
+      base_sha: ${{ steps.version.outputs.base_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Bump version, commit, and tag locally
+        id: version
+        shell: bash
+        env:
+          BUMP: ${{ inputs.bump }}
+          EXPLICIT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          echo "base_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          case "$BUMP" in
+            patch|minor|major)
+              npm version "$BUMP" --no-git-tag-version
+              ;;
+            explicit)
+              if [[ ! "$EXPLICIT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo '::error::Explicit version must be X.Y.Z without a v prefix'
+                exit 1
+              fi
+              npm version "$EXPLICIT_VERSION" --no-git-tag-version
+              ;;
+            *) echo "::error::Unsupported bump: $BUMP"; exit 1 ;;
+          esac
+          version=$(node -p 'require("./package.json").version')
+          tag="v$version"
+          if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
+            echo "::error::Tag $tag already exists"
+            exit 1
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json
+          git commit -m "chore(release): $tag"
+          git tag "$tag"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Push version commit and tag
+        if: ${{ !inputs.dry_run }}
+        run: git push --atomic origin HEAD:master "refs/tags/${{ steps.version.outputs.tag }}"
+      - name: Pass versioned manifests to dry run jobs
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-manifests
+          path: |
+            package.json
+            package-lock.json
+
+  gate:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.dry_run && needs.prepare.outputs.base_sha || needs.prepare.outputs.sha }}
+      - name: Apply dry run version
+        if: ${{ inputs.dry_run }}
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Build native test binding
+        run: npm rebuild better-sqlite3
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Check translations
+        run: npm run i18n:check
+      - name: Test
+        env:
+          ELECTRON_OVERRIDE_DIST_PATH: /tmp
+          REQUIRE_DB_TESTS: "1"
+        run: |
+          mkdir -p "$GITHUB_WORKSPACE/.tmp"
+          export TMPDIR="$GITHUB_WORKSPACE/.tmp"
+          npm test
+
+  build-macos:
+    needs: [prepare, gate]
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_LINK: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+      TARGET_ARCH: arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.dry_run && needs.prepare.outputs.base_sha || needs.prepare.outputs.sha }}
+      - name: Apply dry run version
+        if: ${{ inputs.dry_run }}
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifests
+      - name: Check signing requirements
+        env:
+          REQUIRE_SIGNING: ${{ inputs.require_signing }}
+        run: |
+          if [ "$REQUIRE_SIGNING" = true ] && [ -z "$CSC_LINK" ]; then
+            echo '::error::Signing required: set MAC_CERTIFICATE_BASE64 and MAC_CERTIFICATE_PASSWORD'
+            exit 1
+          fi
+          if [ -n "$CSC_LINK" ] && [ -z "$CSC_KEY_PASSWORD" ]; then
+            echo '::error::MAC_CERTIFICATE_PASSWORD is required with MAC_CERTIFICATE_BASE64'
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Compile macOS arm64 helpers
+        run: |
+          npm run compile:globe -- --arch arm64
+          npm run compile:fast-paste -- --arch arm64
+          npm run compile:media-remote -- --arch arm64
+          npm run compile:audio-tap -- --arch arm64
+      - name: Download macOS arm64 binaries
+        run: |
+          node scripts/download-whisper-cpp.js --current --platform darwin --arch arm64
+          node scripts/download-llama-server.js --current --platform darwin --arch arm64
+          node scripts/download-sherpa-onnx.js --current --platform darwin --arch arm64
+          node scripts/download-yt-dlp.js --current --platform darwin --arch arm64
+          node scripts/download-qdrant.js --current --platform darwin --arch arm64
+          node scripts/download-meeting-aec-helper.js --current --platform darwin --arch arm64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare remaining bundled resources
+        run: |
+          # build:mac:arm64 has no npm prebuild hook; this compiles the other
+          # macOS helpers and fetches models used by the packaged app.
+          npm run prebuild:mac
+          # electron-builder.json includes .env as an extraResource.
+          : > .env
+      - name: Import signing certificate
+        if: env.CSC_LINK != ''
+        run: |
+          set -euo pipefail
+          CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          printf '%s' "$CSC_LINK" | base64 --decode > "$CERTIFICATE_PATH"
+          security create-keychain -p "runner" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "runner" "$KEYCHAIN_PATH"
+          security import "$CERTIFICATE_PATH" -P "$CSC_KEY_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "runner" "$KEYCHAIN_PATH"
+          identity=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | awk '/Developer ID Application:/ {print $2; exit}')
+          if [ -z "$identity" ]; then
+            echo '::error::The p12 contains no Developer ID Application signing identity'
+            exit 1
+          fi
+          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+      - name: Create draft release
+        if: ${{ !inputs.dry_run }}
+        run: gh release create "$RELEASE_TAG" --draft --target "${{ needs.prepare.outputs.sha }}" --title "$RELEASE_TAG" --notes "OpenWhispr $RELEASE_TAG (macOS arm64)"
+      - name: Build and upload signed macOS arm64 app
+        if: env.CSC_LINK != '' && !inputs.dry_run
+        run: npm run build:mac:arm64 -- --publish always --config.mac.identity="$SIGNING_IDENTITY" --config.mac.notarize=false
+      - name: Build and upload unsigned macOS arm64 app
+        if: env.CSC_LINK == '' && !inputs.dry_run
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run build:mac:arm64 -- --publish always --config.mac.identity=null --config.mac.notarize=false
+      - name: Build signed dry run artifact
+        if: env.CSC_LINK != '' && inputs.dry_run
+        run: npm run build:mac:arm64 -- --publish never --config.mac.identity="$SIGNING_IDENTITY" --config.mac.notarize=false
+      - name: Build unsigned dry run artifact
+        if: env.CSC_LINK == '' && inputs.dry_run
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npm run build:mac:arm64 -- --publish never --config.mac.identity=null --config.mac.notarize=false
+      - name: Verify packaged macOS native binaries
+        run: |
+          APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
+          for bin in macos-audio-tap macos-globe-listener macos-fast-paste macos-mic-listener macos-calendar-listener macos-text-monitor macos-window-bounds macos-media-remote; do
+            test -x "$APP_PATH/Contents/Resources/bin/$bin" || { echo "Missing in bundle: $bin"; exit 1; }
+          done
+          node scripts/verify-macos-parakeet.js "$APP_PATH"
+      - name: Prepare arm64 update metadata
+        run: |
+          set -euo pipefail
+          cp dist/latest-mac.yml dist/latest-arm64-mac.yml
+          test -n "$(find dist -maxdepth 1 -name '*.dmg' -print -quit)"
+          test -n "$(find dist -maxdepth 1 -name '*-mac.zip' -print -quit)"
+      - name: Upload arm64 update metadata to draft
+        if: ${{ !inputs.dry_run }}
+        run: gh release upload "$RELEASE_TAG" dist/latest-arm64-mac.yml --clobber
+      - name: Upload dry run artifact
+        if: ${{ inputs.dry_run }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwhispr-${{ needs.prepare.outputs.version }}-mac-arm64
+          path: |
+            dist/*.dmg
+            dist/*-mac.zip
+            dist/latest-mac.yml
+            dist/latest-arm64-mac.yml
+          if-no-files-found: error
+      - name: Check draft release assets
+        if: ${{ !inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --json tagName,isDraft,isPrerelease,assets | node -e '
+            const fs = require("fs");
+            const release = JSON.parse(fs.readFileSync(0, "utf8"));
+            const names = release.assets.map(asset => asset.name);
+            if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(release.tagName) ||
+                release.tagName !== process.env.RELEASE_TAG ||
+                !release.isDraft || release.isPrerelease ||
+                !names.includes("latest-arm64-mac.yml") ||
+                !names.some(name => name.endsWith(".dmg")) ||
+                !names.some(name => name.endsWith("-mac.zip"))) {
+              console.error(`Invalid draft release ${release.tagName}: ${names.join(", ")}`);
+              process.exit(1);
+            }
+          '
+      - name: Publish release
+        if: ${{ !inputs.dry_run }}
+        run: gh release edit "$RELEASE_TAG" --draft=false
+      - name: Remove signing keychain
+        if: always() && env.CSC_LINK != ''
+        run: |
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/build_certificate.p12"
