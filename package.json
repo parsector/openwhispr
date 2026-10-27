@@ -1,6 +1,6 @@
 {
   "name": "open-whispr",
-  "version": "1.10.4",
+  "version": "1.10.5",
   "description": "A desktop dictation application using whisper.cpp for speech-to-text transcription",
   "main": "main.js",
   "private": true,
@@ -84,8 +84,7 @@
     "quality-check": "npm run format:check && npm run typecheck",
     "i18n:check": "node scripts/check-i18n.js",
     "preview": "cd src && vite preview",
-    "clean": "node cleanup.js",
-    "predev": "npm run compile:routine-tools"
+    "clean": "node cleanup.js"
   },
   "keywords": [
     "dictation",
