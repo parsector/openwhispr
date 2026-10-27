@@ -285,7 +285,7 @@ jobs:
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
           echo 'expected: base64 of a .p12 containing the code-signing identity and its private key (single line, no wrapping)'
-          cleaned=$(printf '%s' "$CSC_LINK" | LC_ALL=C tr -d ' \t\r\n')
+          cleaned=$(printf '%s' "$CSC_LINK" | LC_ALL=C tr -d ' \t\r\n%')
           if [ -z "$cleaned" ]; then
             echo '::error::MAC_CERTIFICATE_BASE64 is empty or whitespace-only'
             exit 1
