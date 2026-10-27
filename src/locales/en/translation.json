@@ -3628,7 +3628,11 @@
       "noTemplates": "No templates yet",
       "emptyEditorTitle": "Select a template",
       "emptyEditorDescription": "Choose a template from the list or create a new one",
-      "outputHint": "Applying a template creates or replaces the AI summary using your notes and transcript."
+      "outputHint": "Applying a template creates or replaces the AI summary using your notes and transcript.",
+      "replaceEditedTitle": "Replace edited summary?",
+      "replaceEditedDescription": "Your edits to this AI summary will be replaced.",
+      "replaceEditedConfirm": "Replace summary",
+      "replaceEditedCancel": "Cancel"
     },
     "onboarding": {
       "llm": {

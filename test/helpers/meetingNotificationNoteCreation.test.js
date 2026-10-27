@@ -51,3 +51,52 @@ test("another account owned note is never reused by a notification", (t) => {
   assert.equal(second.created, true);
   assert.notEqual(first.note.id, second.note.id);
 });
+
+function insertEvent(db, id, summary, attendees) {
+  db.db
+    .prepare(
+      "INSERT INTO calendar_events (id, calendar_id, summary, start_time, end_time, attendees) VALUES (?, 'calendar', ?, '2026-01-01', '2026-01-02', ?)"
+    )
+    .run(id, summary, JSON.stringify(attendees.map((email) => ({ email }))));
+}
+
+test("recurring notification inherits the latest matching title and attendee set", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertEvent(db, "first", " Weekly   Review ", ["A@EXAMPLE.COM", "b@example.com"]);
+  insertEvent(db, "next", "weekly review", ["b@example.com", "a@example.com"]);
+  const first = db.createMeetingNoteForNotification({ ...input(db), eventId: "first" }).note;
+  db.updateNote(first.id, { enhancement_template_id: "custom-template" });
+  const next = db.createMeetingNoteForNotification({ ...input(db), eventId: "next" }).note;
+  assert.equal(next.enhancement_template_id, "custom-template");
+});
+
+test("recurring notification rejects a different attendee set and deleted notes", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  insertEvent(db, "first", "Review", ["a@example.com"]);
+  insertEvent(db, "different", "Review", ["a@example.com", "b@example.com"]);
+  insertEvent(db, "after-delete", "Review", ["a@example.com"]);
+  const first = db.createMeetingNoteForNotification({ ...input(db), eventId: "first" }).note;
+  db.updateNote(first.id, { enhancement_template_id: "custom-template" });
+  assert.equal(
+    db.createMeetingNoteForNotification({ ...input(db), eventId: "different" }).note
+      .enhancement_template_id,
+    null
+  );
+  db.db.prepare("UPDATE notes SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?").run(first.id);
+  assert.equal(
+    db.createMeetingNoteForNotification({ ...input(db), eventId: "after-delete" }).note
+      .enhancement_template_id,
+    null
+  );
+});
+
+test("a recurring lookup error leaves notification creation intact", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  db.db.exec("DROP TABLE calendar_events");
+  const created = db.createMeetingNoteForNotification({ ...input(db), eventId: "missing" });
+  assert.equal(created.created, true);
+  assert.equal(created.note.enhancement_template_id, null);
+});
