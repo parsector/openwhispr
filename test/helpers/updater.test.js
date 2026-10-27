@@ -2,6 +2,9 @@ const test = require("node:test");
 const { afterEach, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
 
 process.env.NODE_ENV = "test";
 
@@ -9,6 +12,8 @@ const updaterModulePath = require.resolve("../../src/updater.js");
 const originalLoad = Module._load;
 const originalPlatform = process.platform;
 const originalAppImage = process.env.APPIMAGE;
+let userData;
+let packaged = true;
 
 
 function makeAutoUpdater({ offline = false } = {}) {
@@ -46,7 +51,10 @@ function createUpdateManager(autoUpdater) {
   delete require.cache[updaterModulePath];
   Module._load = function loadWithMocks(request, parent, isMain) {
     if (request === "electron-updater") return { autoUpdater };
-    if (request === "electron") return { autoUpdater: { on() {}, removeListener() {} } };
+    if (request === "electron") return {
+      app: { getPath: () => userData, get isPackaged() { return packaged; } },
+      autoUpdater: { on() {}, removeListener() {} },
+    };
     if (request === "child_process") return { execSync: () => "0" };
     return originalLoad.call(this, request, parent, isMain);
   };
@@ -59,6 +67,8 @@ function setPlatform(platform) {
 }
 
 beforeEach((t) => {
+  userData = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-updater-"));
+  packaged = true;
   t.mock.method(console, "log", () => {});
   t.mock.method(console, "error", () => {});
   // The updater is unsupported on Linux outside an AppImage, so a test that
@@ -67,22 +77,26 @@ beforeEach((t) => {
 });
 
 afterEach(() => {
+  fs.rmSync(userData, { recursive: true, force: true });
   Module._load = originalLoad;
   setPlatform(originalPlatform);
   if (originalAppImage === undefined) delete process.env.APPIMAGE;
   else process.env.APPIMAGE = originalAppImage;
 });
 
-test("packaged startup schedules no update checks; manual checks remain available", async () => {
+test("packaged startup schedules a check; manual checks remain available", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   const autoUpdater = makeAutoUpdater();
   const manager = createUpdateManager(autoUpdater);
   assert.equal(autoUpdater.calls, 0);
+  assert.equal(manager.checkTimer !== null, true);
   await manager.checkForUpdates();
   assert.equal(autoUpdater.calls, 1);
   manager.cleanup();
 });
 
-test("before the renderer syncs the preference, an available update is not downloaded", () => {
+test("a persisted disabled preference prevents automatic download", () => {
+  require("../../src/helpers/updatePreferences").writeAutoUpdatesEnabled(userData, false);
   const autoUpdater = makeAutoUpdater();
   const manager = createUpdateManager(autoUpdater);
 
@@ -148,11 +162,12 @@ test("only a macOS update that Squirrel already holds counts as staged", () => {
 });
 
 test("enabling automatic updates after a manual check found one starts the download", () => {
+  require("../../src/helpers/updatePreferences").writeAutoUpdatesEnabled(userData, false);
   const autoUpdater = makeAutoUpdater();
   const manager = createUpdateManager(autoUpdater);
 
   autoUpdater.listeners["update-available"]({ version: "9.9.9" });
-  assert.equal(autoUpdater.downloads, 0, "preference unknown, so nothing downloads yet");
+  assert.equal(autoUpdater.downloads, 0, "disabled preference prevents download");
 
   manager.setAutoUpdatesEnabled(true);
   assert.equal(autoUpdater.downloads, 1);
@@ -195,4 +210,118 @@ test("a Linux AppImage is supported, but deb/rpm/tar.gz installs never touch the
   assert.match(result.message, /package manager/);
 
   packaged.cleanup();
+});
+
+test("startup and periodic checks use 30 seconds and six hours", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const updater = makeAutoUpdater();
+  const manager = createUpdateManager(updater);
+  t.mock.timers.tick(29_999);
+  assert.equal(updater.calls, 0);
+  t.mock.timers.tick(1);
+  assert.equal(updater.calls, 1);
+  await new Promise(setImmediate);
+  t.mock.timers.tick(6 * 60 * 60 * 1000);
+  assert.equal(updater.calls, 2);
+  manager.cleanup();
+});
+
+test("disabled at startup or on a tick performs no check", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { writeAutoUpdatesEnabled } = require("../../src/helpers/updatePreferences");
+  writeAutoUpdatesEnabled(userData, false);
+  const updater = makeAutoUpdater();
+  const manager = createUpdateManager(updater);
+  t.mock.timers.tick(7 * 60 * 60 * 1000);
+  assert.equal(updater.calls, 0);
+  manager.setAutoUpdatesEnabled(true);
+  manager.setAutoUpdatesEnabled(false);
+  t.mock.timers.tick(7 * 60 * 60 * 1000);
+  assert.equal(updater.calls, 0);
+  manager.cleanup();
+});
+
+test("enabling schedules promptly and disabling cancels the startup timer", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const updater = makeAutoUpdater();
+  const manager = createUpdateManager(updater);
+  manager.setAutoUpdatesEnabled(false);
+  t.mock.timers.tick(30_000);
+  assert.equal(updater.calls, 0);
+  manager.setAutoUpdatesEnabled(true);
+  t.mock.timers.tick(2_999);
+  assert.equal(updater.calls, 0);
+  t.mock.timers.tick(1);
+  assert.equal(updater.calls, 1);
+  manager.cleanup();
+});
+
+test("in-flight checks are skipped, not queued", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let finish;
+  const updater = makeAutoUpdater();
+  updater.checkForUpdates = () => { updater.calls++; return new Promise((resolve) => { finish = resolve; }); };
+  const manager = createUpdateManager(updater);
+  t.mock.timers.tick(30_000);
+  assert.equal(updater.calls, 1);
+  t.mock.timers.tick(6 * 60 * 60 * 1000);
+  assert.equal(updater.calls, 1);
+  finish({ isUpdateAvailable: false });
+  await Promise.resolve();
+  t.mock.timers.tick(6 * 60 * 60 * 1000);
+  assert.equal(updater.calls, 2);
+  finish({ isUpdateAvailable: false });
+  manager.cleanup();
+});
+
+test("rejected background checks are silent and leave the cadence intact", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const updater = makeAutoUpdater({ offline: true });
+  const manager = createUpdateManager(updater);
+  const warn = t.mock.method(console, "warn", () => {});
+  const notify = t.mock.method(manager, "notifyRenderers", () => {});
+  t.mock.timers.tick(30_000);
+  assert.equal(updater.calls, 1);
+  await new Promise(setImmediate);
+  assert.equal(warn.mock.callCount(), 1);
+  assert.equal(notify.mock.callCount(), 0);
+  t.mock.timers.tick(6 * 60 * 60 * 1000);
+  assert.equal(updater.calls, 2);
+  await new Promise(setImmediate);
+  assert.equal(warn.mock.callCount(), 2);
+  manager.cleanup();
+});
+
+test("cleanup cancels pending checks and unpackaged or dev builds never schedule", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const updater = makeAutoUpdater();
+  const manager = createUpdateManager(updater);
+  manager.cleanup();
+  t.mock.timers.tick(7 * 60 * 60 * 1000);
+  assert.equal(updater.calls, 0);
+
+  packaged = false;
+  const unpackaged = createUpdateManager(updater);
+  assert.equal(unpackaged.checkTimer, null);
+  unpackaged.cleanup();
+
+  packaged = true;
+  process.env.NODE_ENV = "development";
+  const development = createUpdateManager(updater);
+  assert.equal(development.checkTimer, null);
+  development.cleanup();
+  process.env.NODE_ENV = "test";
+});
+
+test("stored preference round-trips and absent file uses the renderer's fresh-install default", () => {
+  const preferences = require("../../src/helpers/updatePreferences");
+  assert.equal(preferences.DEFAULT_ENABLED, true);
+  assert.equal(preferences.readAutoUpdatesEnabled(userData), true);
+  const manager = createUpdateManager(makeAutoUpdater());
+  manager.setAutoUpdatesEnabled(false);
+  assert.equal(preferences.readAutoUpdatesEnabled(userData), false);
+  manager.cleanup();
+  const restarted = createUpdateManager(makeAutoUpdater());
+  assert.equal(restarted.autoUpdatesEnabled, false);
+  restarted.cleanup();
 });
