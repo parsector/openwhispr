@@ -26,7 +26,10 @@ test("runtime updater uses the fork GitHub feed", () => {
           },
         };
       }
-      if (request === "electron") return { autoUpdater: nativeUpdater };
+      if (request === "electron") return {
+        app: { isPackaged: false, getPath: () => require("node:os").tmpdir() },
+        autoUpdater: nativeUpdater,
+      };
       return originalLoad.call(this, request, parent, isMain);
     };
 

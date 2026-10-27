@@ -1,4 +1,7 @@
 const { autoUpdater } = require("electron-updater");
+const { app } = require("electron");
+const { readAutoUpdatesEnabled, writeAutoUpdatesEnabled } = require("./helpers/updatePreferences");
+const { shouldSchedule, shouldCheck, delayFor } = require("./helpers/updateSchedule");
 
 // electron-updater can only replace an AppImage on Linux; deb, rpm and tar.gz
 // installs are updated by the package manager instead.
@@ -15,10 +18,14 @@ class UpdateManager {
     this.handleBeforeQuitForUpdate = null;
     this.eventListeners = [];
     this.windowManager = null;
-    // null until the renderer syncs the preference, so nothing downloads unasked.
-    this.autoUpdatesEnabled = null;
+    this.autoUpdatesEnabled = readAutoUpdatesEnabled(app.getPath("userData"));
+    this.checkTimer = null;
+    this.checkInFlight = false;
+    this.backgroundCheck = false;
+    this.stopped = false;
 
     this.setupAutoUpdater();
+    this.scheduleCheck("startup");
   }
 
   setWindowManager(windowManager) {
@@ -101,6 +108,7 @@ class UpdateManager {
         this.notifyRenderers("update-not-available", info);
       },
       error: (err) => {
+        if (this.backgroundCheck) return; // The scheduled check reports its own single log line.
         console.error("❌ Auto-updater error:", err);
         this.isDownloading = false;
         this.notifyRenderers("update-error", err);
@@ -155,7 +163,7 @@ class UpdateManager {
     }
   }
 
-  async checkForUpdates() {
+  async checkForUpdates({ background = false } = {}) {
     try {
       if (process.env.NODE_ENV === "development") {
         return {
@@ -171,8 +179,20 @@ class UpdateManager {
         };
       }
 
-      console.log("🔍 Checking for updates...");
-      const result = await autoUpdater.checkForUpdates();
+      if (this.checkInFlight || (background && !this.shouldCheck())) {
+        return { updateAvailable: false, message: "Update check skipped" };
+      }
+
+      this.checkInFlight = true;
+      this.backgroundCheck = background;
+      if (!background) console.log("🔍 Checking for updates...");
+      let result;
+      try {
+        result = await autoUpdater.checkForUpdates();
+      } finally {
+        this.checkInFlight = false;
+        this.backgroundCheck = false;
+      }
 
       if (result?.isUpdateAvailable && result?.updateInfo) {
         console.log("📋 Update available:", result.updateInfo.version);
@@ -191,6 +211,10 @@ class UpdateManager {
         };
       }
     } catch (error) {
+      if (background) {
+        console.warn("Background update check failed:", error?.message || String(error));
+        return { updateAvailable: false, message: "Background update check failed" };
+      }
       console.error("❌ Update check error:", error);
       throw error;
     }
@@ -303,9 +327,43 @@ class UpdateManager {
   }
 
   setAutoUpdatesEnabled(enabled) {
+    writeAutoUpdatesEnabled(app.getPath("userData"), enabled);
+    const wasEnabled = this.autoUpdatesEnabled;
     this.autoUpdatesEnabled = enabled;
-    // The startup check may have found an update before the renderer synced.
     if (enabled) this._autoDownloadIfEnabled();
+    if (!enabled) this.clearCheckTimer();
+    else if (!wasEnabled) this.scheduleCheck("enabled");
+  }
+
+  scheduleState() {
+    return {
+      enabled: this.autoUpdatesEnabled,
+      packaged: app.isPackaged,
+      supported: isUpdaterSupported,
+      development: process.env.NODE_ENV === "development",
+      stopped: this.stopped,
+      inFlight: this.checkInFlight,
+      downloaded: this.updateDownloaded,
+    };
+  }
+
+  shouldCheck() {
+    return shouldCheck(this.scheduleState());
+  }
+
+  clearCheckTimer() {
+    if (this.checkTimer !== null) clearTimeout(this.checkTimer);
+    this.checkTimer = null;
+  }
+
+  scheduleCheck(reason) {
+    this.clearCheckTimer();
+    if (!shouldSchedule(this.scheduleState())) return;
+    this.checkTimer = setTimeout(() => {
+      this.checkTimer = null;
+      if (this.shouldCheck()) void this.checkForUpdates({ background: true });
+      this.scheduleCheck("periodic");
+    }, delayFor(reason));
   }
 
   // NSIS and AppImage install a downloaded update from their quit handler, which would
@@ -329,6 +387,8 @@ class UpdateManager {
   }
 
   cleanup() {
+    this.stopped = true;
+    this.clearCheckTimer();
     this.eventListeners.forEach(({ event, handler }) => {
       autoUpdater.removeListener(event, handler);
     });
