@@ -11,6 +11,10 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,8 +27,24 @@ jobs:
         run: npm ci
       - name: Rebuild native modules for the runner's Node
         run: npm rebuild better-sqlite3
-      - name: Run full suite
+      - name: Run full test suite shard
+        shell: bash
         run: |
+          set -uo pipefail
           mkdir -p "$RUNNER_TEMP/tmp"
           export TMPDIR="$RUNNER_TEMP/tmp"
-          npm test
+          log="$RUNNER_TEMP/test-shard-${{ matrix.shard }}.tap"
+          node --import tsx --test --test-shard=${{ matrix.shard }}/4 --test-reporter=tap "test/**/*.test.js" 2>&1 | tee "$log"
+          test_status=${PIPESTATUS[0]}
+          read -r tests passed failed < <(awk '
+            /^# tests [0-9]+$/ { tests = $3 }
+            /^# pass [0-9]+$/ { passed = $3 }
+            /^# fail [0-9]+$/ { failed = $3 }
+            END { printf "%d %d %d\n", tests, passed, failed }
+          ' "$log")
+          echo "Shard ${{ matrix.shard }}/4: $tests tests, $passed passed, $failed failed (exit $test_status)" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$tests" -eq 0 ]; then
+            echo '::error::Test runner produced no test count'
+            exit 1
+          fi
+          exit "$test_status"

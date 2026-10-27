@@ -97,6 +97,10 @@ jobs:
   gate:
     needs: prepare
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -115,43 +119,46 @@ jobs:
         run: npm ci
       - name: Rebuild native modules for the runner's Node
         run: npm rebuild better-sqlite3
-      - name: Test affected files for dry run
-        if: ${{ inputs.dry_run }}
+      - name: Run full test suite shard
+        shell: bash
         run: |
+          set -uo pipefail
           mkdir -p "$RUNNER_TEMP/tmp"
           export TMPDIR="$RUNNER_TEMP/tmp"
-          if base=$(git merge-base HEAD origin/master); then
-            if [ "$base" = "$(git rev-parse HEAD)" ]; then
-              if git rev-parse --verify --quiet HEAD~1 >/dev/null; then
-                base=HEAD~1
-                echo "::warning::merge-base is HEAD; using --base $base ($(git rev-parse "$base"))"
-              else
-                base=
-              fi
-            fi
-            if [ -n "$base" ]; then
-              echo "Diff tested: $(git rev-parse "$base")..HEAD (base: $base)"
-              npm run test:affected -- --base "$base" --no-include-uncommitted
-            else
-              count=$(rg --files test -g '*.test.js' | wc -l)
-              echo '::warning::No dry-run diff base available; running the full suite'
-              echo "selected $count/$count test files: no preceding commit; full suite" >> "$GITHUB_STEP_SUMMARY"
-              npm test
-            fi
-          else
-            count=$(rg --files test -g '*.test.js' | wc -l)
-            echo '::warning::Cannot resolve dry-run merge-base; running the full suite'
-            echo "selected $count/$count test files: cannot resolve dry-run base; full suite" >> "$GITHUB_STEP_SUMMARY"
-            npm test
+          log="$RUNNER_TEMP/test-shard-${{ matrix.shard }}.tap"
+          node --import tsx --test --test-shard=${{ matrix.shard }}/4 --test-reporter=tap "test/**/*.test.js" 2>&1 | tee "$log"
+          test_status=${PIPESTATUS[0]}
+          read -r tests passed failed < <(awk '
+            /^# tests [0-9]+$/ { tests = $3 }
+            /^# pass [0-9]+$/ { passed = $3 }
+            /^# fail [0-9]+$/ { failed = $3 }
+            END { printf "%d %d %d\n", tests, passed, failed }
+          ' "$log")
+          echo "Shard ${{ matrix.shard }}/4: $tests tests, $passed passed, $failed failed (exit $test_status)" | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$tests" -eq 0 ]; then
+            echo '::error::Test runner produced no test count'
+            exit 1
           fi
-      - name: Test full release suite
-        if: ${{ !inputs.dry_run }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/tmp"
-          export TMPDIR="$RUNNER_TEMP/tmp"
-          count=$(rg --files test -g '*.test.js' | wc -l)
-          echo "selected $count/$count test files: real release; full suite" >> "$GITHUB_STEP_SUMMARY"
-          npm test
+          exit "$test_status"
+
+  static-checks:
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.dry_run && needs.prepare.outputs.base_sha || needs.prepare.outputs.sha }}
+      - name: Apply dry run version
+        if: ${{ inputs.dry_run }}
+        uses: actions/download-artifact@v4
+        with:
+          name: release-manifests
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
       - name: Typecheck
         run: npm run typecheck
       - name: Lint
@@ -160,7 +167,7 @@ jobs:
         run: npm run i18n:check
 
   build-macos:
-    needs: [prepare, gate]
+    needs: [prepare, gate, static-checks]
     runs-on: macos-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
