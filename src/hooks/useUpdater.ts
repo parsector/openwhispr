@@ -3,6 +3,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 interface UpdateStatus {
   updateAvailable: boolean;
   updateDownloaded: boolean;
+  isDownloading: boolean;
+  downloadProgress: number;
+  logPath: string;
   isDevelopment: boolean;
   isSupported: boolean;
 }
@@ -27,6 +30,9 @@ let globalState: UpdateState = {
   status: {
     updateAvailable: false,
     updateDownloaded: false,
+    isDownloading: false,
+    downloadProgress: 0,
+    logPath: "",
     isDevelopment: false,
     isSupported: true,
   },
@@ -87,11 +93,22 @@ function registerEventListeners() {
   if (window.electronAPI.onUpdateDownloaded) {
     const dispose = window.electronAPI.onUpdateDownloaded((_event, info) => {
       updateGlobalState({
-        status: { ...globalState.status, updateDownloaded: true },
+        status: { ...globalState.status, updateDownloaded: true, isDownloading: false },
         info: info || globalState.info,
         downloadProgress: 100,
         isDownloading: false,
         isInstalling: false,
+      });
+    });
+    if (dispose) cleanupFunctions.push(dispose);
+  }
+
+  if (window.electronAPI.onUpdateDownloadStarted) {
+    const dispose = window.electronAPI.onUpdateDownloadStarted(() => {
+      updateGlobalState({
+        status: { ...globalState.status, isDownloading: true },
+        isDownloading: true,
+        downloadProgress: 0,
       });
     });
     if (dispose) cleanupFunctions.push(dispose);
@@ -102,14 +119,22 @@ function registerEventListeners() {
       updateGlobalState({
         downloadProgress: progressObj?.percent || 0,
         isDownloading: true,
+        status: { ...globalState.status, isDownloading: true },
       });
     });
     if (dispose) cleanupFunctions.push(dispose);
   }
 
   if (window.electronAPI.onUpdateError) {
-    const dispose = window.electronAPI.onUpdateError(() => {
-      updateGlobalState({ isChecking: false, isDownloading: false, isInstalling: false });
+    const dispose = window.electronAPI.onUpdateError((_event, error) => {
+      updateGlobalState({
+        isChecking: false, isDownloading: false, isInstalling: false,
+        status: {
+          ...globalState.status,
+          isDownloading: false,
+          updateDownloaded: error?.updateDownloaded ?? globalState.status.updateDownloaded,
+        },
+      });
     });
     if (dispose) cleanupFunctions.push(dispose);
   }
@@ -135,7 +160,11 @@ export function useUpdater() {
       try {
         if (window.electronAPI?.getUpdateStatus) {
           const status = await window.electronAPI.getUpdateStatus();
-          updateGlobalState({ status });
+          updateGlobalState({
+            status,
+            isDownloading: status.isDownloading,
+            downloadProgress: status.downloadProgress,
+          });
         }
 
         if (window.electronAPI?.getUpdateInfo) {
@@ -173,12 +202,19 @@ export function useUpdater() {
 
     updateGlobalState({ isDownloading: true, downloadProgress: 0 });
     try {
-      return await window.electronAPI.downloadUpdate();
+      const result = await window.electronAPI.downloadUpdate();
+      if (!result.success) {
+        throw new Error(`${result.message}\nUpdater log: ${result.logPath || state.status.logPath}`);
+      }
+      return result;
     } catch (error) {
-      updateGlobalState({ isDownloading: false });
+      updateGlobalState({
+        isDownloading: false,
+        status: { ...globalState.status, isDownloading: false },
+      });
       throw error;
     }
-  }, [state.status.updateDownloaded]);
+  }, [state.status.updateDownloaded, state.status.logPath]);
 
   const installUpdate = useCallback(async () => {
     if (!state.status.updateDownloaded) {

@@ -3731,14 +3731,12 @@ EOF`,
                             onClick={async () => {
                               try {
                                 await downloadUpdate();
-                              } catch {
+                              } catch (error) {
                                 showAlertDialog({
                                   title: t(
                                     "settingsPage.general.updates.dialogs.downloadFailed.title"
                                   ),
-                                  description: t(
-                                    "settingsPage.general.updates.dialogs.downloadFailed.description"
-                                  ),
+                                  description: `${t("settingsPage.general.updates.dialogs.downloadFailed.description")} ${error instanceof Error ? error.message : String(error)}`,
                                 });
                               }
                             }}

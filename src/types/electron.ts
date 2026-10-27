@@ -1083,6 +1083,9 @@ export interface UpdateCheckResult {
 export interface UpdateStatusResult {
   updateAvailable: boolean;
   updateDownloaded: boolean;
+  isDownloading: boolean;
+  downloadProgress: number;
+  logPath: string;
   isDevelopment: boolean;
   isSupported: boolean;
 }
@@ -1097,6 +1100,8 @@ export interface UpdateInfoResult {
 export interface UpdateResult {
   success: boolean;
   message: string;
+  status?: "started" | "in-progress" | "downloaded";
+  logPath?: string;
 }
 
 export interface AppVersionResult {
@@ -2620,6 +2625,7 @@ declare global {
       onUpdateAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateNotAvailable: (callback: (event: any, info: any) => void) => () => void;
       onUpdateDownloaded: (callback: (event: any, info: any) => void) => () => void;
+      onUpdateDownloadStarted: (callback: (event: any, info: any) => void) => () => void;
       onUpdateDownloadProgress: (callback: (event: any, progressObj: any) => void) => () => void;
       onUpdateError: (callback: (event: any, error: any) => void) => () => void;
 

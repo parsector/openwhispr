@@ -877,7 +877,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
       } catch (error) {
         toast({
           title: t("controlPanel.update.couldNotDownloadTitle"),
-          description: t("controlPanel.update.couldNotDownloadDescription"),
+          description: `${t("controlPanel.update.couldNotDownloadDescription")} ${error instanceof Error ? error.message : String(error)}`,
           variant: "destructive",
         });
       }

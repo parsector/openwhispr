@@ -11479,7 +11479,15 @@ class IPCHandlers {
     });
 
     ipcMain.handle("download-update", async () => {
-      return this.updateManager.downloadUpdate();
+      try {
+        return await this.updateManager.downloadUpdate();
+      } catch (error) {
+        return {
+          success: false,
+          message: error?.message || String(error),
+          logPath: (await this.updateManager.getUpdateStatus()).logPath,
+        };
+      }
     });
 
     ipcMain.handle("install-update", async () => {
