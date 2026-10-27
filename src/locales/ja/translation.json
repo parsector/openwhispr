@@ -2903,7 +2903,11 @@
       "noTemplates": "テンプレートはまだありません",
       "emptyEditorTitle": "テンプレートを選択",
       "emptyEditorDescription": "リストからテンプレートを選択するか、新しく作成してください",
-      "outputHint": "テンプレートを適用すると、ノートと文字起こしをもとにAI要約を作成、または置き換えます。"
+      "outputHint": "テンプレートを適用すると、ノートと文字起こしをもとにAI要約を作成、または置き換えます。",
+      "replaceEditedTitle": "編集した要約を置き換えますか？",
+      "replaceEditedDescription": "この AI 要約への編集内容が置き換えられます。",
+      "replaceEditedConfirm": "要約を置き換える",
+      "replaceEditedCancel": "キャンセル"
     },
     "empty": {
       "title": "まだノートがありません",

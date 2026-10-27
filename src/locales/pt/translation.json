@@ -3122,7 +3122,11 @@
       "noTemplates": "Nenhum modelo ainda",
       "emptyEditorTitle": "Selecionar modelo",
       "emptyEditorDescription": "Escolha um modelo da lista ou crie um novo",
-      "outputHint": "Aplicar um modelo cria ou substitui o resumo de IA usando suas notas e a transcrição."
+      "outputHint": "Aplicar um modelo cria ou substitui o resumo de IA usando suas notas e a transcrição.",
+      "replaceEditedTitle": "Substituir o resumo editado?",
+      "replaceEditedDescription": "As suas alterações a este resumo de IA serão substituídas.",
+      "replaceEditedConfirm": "Substituir resumo",
+      "replaceEditedCancel": "Cancelar"
     },
     "empty": {
       "title": "Ainda não há notas aqui",

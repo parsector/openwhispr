@@ -1,3 +1,4 @@
+import { withSummaryHash } from "../lib/noteSummaryHash";
 import { create } from "zustand";
 import { NOTE_OUTPUT_MAX_TOKENS, NOTHING_TO_SUMMARIZE } from "../helpers/builtinActions";
 import { stripThinkingTags } from "../helpers/stripThinking";
@@ -625,7 +626,7 @@ export function runBackgroundAction(
             enhanced_content: enhancedContent,
             enhancement_prompt: instructions,
             enhancement_template_id: action.client_id,
-            enhanced_at_content_hash: contentHash,
+            enhanced_at_content_hash: withSummaryHash(contentHash, enhancedContent),
           }
         : options.fromSummary
           ? { enhanced_content: enhancedContent }

@@ -5599,6 +5599,60 @@ class DatabaseManager {
     }
   }
 
+  findRecurringMeetingTemplate(eventId) {
+    try {
+      const current = this.db
+        .prepare("SELECT summary, attendees FROM calendar_events WHERE id = ?")
+        .get(eventId);
+      if (!current) return null;
+      const normalizeTitle = (value) => (value || "").trim().replace(/\s+/g, " ").toLowerCase();
+      const attendeeSet = (raw) => {
+        const entries = JSON.parse(raw || "[]");
+        return [
+          ...new Set(
+            entries
+              .map((entry) =>
+                (typeof entry === "string"
+                  ? entry
+                  : entry.email || entry.identifier || entry.id || ""
+                )
+                  .trim()
+                  .toLowerCase()
+              )
+              .filter(Boolean)
+          ),
+        ]
+          .sort()
+          .join("\n");
+      };
+      const title = normalizeTitle(current.summary);
+      const attendees = attendeeSet(current.attendees);
+      const scope = this._accountScopeCondition("notes");
+      const candidates = this.db
+        .prepare(
+          `SELECT notes.enhancement_template_id, events.summary, events.attendees
+           FROM notes JOIN calendar_events AS events ON events.id = notes.calendar_event_id
+          WHERE notes.calendar_event_id IS NOT NULL AND notes.calendar_event_id <> ?
+            AND notes.deleted_at IS NULL AND ${scope.sql}
+          ORDER BY datetime(notes.created_at) DESC, notes.id DESC`
+        )
+        .all(eventId, ...scope.params);
+      const match = candidates.find(
+        (candidate) =>
+          normalizeTitle(candidate.summary) === title &&
+          attendeeSet(candidate.attendees) === attendees
+      );
+      return match?.enhancement_template_id || null;
+    } catch (error) {
+      debugLogger.error(
+        "Error looking up recurring meeting template",
+        { error: error.message },
+        "notes"
+      );
+      return null;
+    }
+  }
+
   createMeetingNoteForNotification({ title, folderId, spaceId, eventId, participants }) {
     return this.db.transaction(() => {
       const existing = eventId
@@ -5608,8 +5662,10 @@ class DatabaseManager {
       const { note } = this.saveNote(title, "", "meeting", null, null, folderId, spaceId);
       if (!note) throw new Error("Meeting note not saved");
       if (!eventId) return { created: true, note };
+      const inheritedTemplateId = this.findRecurringMeetingTemplate(eventId);
       const result = this.updateNote(note.id, {
         calendar_event_id: eventId,
+        ...(inheritedTemplateId ? { enhancement_template_id: inheritedTemplateId } : {}),
         ...(participants ? { participants } : {}),
       });
       if (!result.success || !result.note) throw new Error("Meeting metadata not saved");

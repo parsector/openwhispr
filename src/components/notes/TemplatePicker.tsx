@@ -22,7 +22,8 @@ interface TemplatePickerProps {
   onManage: () => void;
   disabled?: boolean;
   /** The menu opens under this element's start edge instead of the trigger's. */
-  alignTo: React.RefObject<HTMLElement | null>;
+  alignTo?: React.RefObject<HTMLElement | null>;
+  selectionMode?: boolean;
   /** The trigger, rendered as is. */
   children: React.ReactNode;
 }
@@ -35,6 +36,7 @@ export default function TemplatePicker({
   onManage,
   disabled,
   alignTo,
+  selectionMode = false,
   children,
 }: TemplatePickerProps) {
   const { t } = useTranslation();
@@ -44,7 +46,7 @@ export default function TemplatePicker({
   // Radix only aligns a menu with its trigger, so shift it by the distance between the two
   // start edges (Radix mirrors the offset in right-to-left layouts).
   const handleOpenChange = (open: boolean) => {
-    const anchor = alignTo.current?.getBoundingClientRect();
+    const anchor = alignTo?.current?.getBoundingClientRect();
     const trigger = triggerRef.current;
     if (!open || !anchor || !trigger) return;
     const bounds = trigger.getBoundingClientRect();
@@ -63,6 +65,8 @@ export default function TemplatePicker({
       <DropdownMenuContent
         align="start"
         alignOffset={alignOffset}
+        side="bottom"
+        avoidCollisions
         sideOffset={6}
         className="min-w-56"
       >
@@ -80,7 +84,7 @@ export default function TemplatePicker({
               <span dir="auto" className="min-w-0 flex-1 truncate font-medium">
                 {getActionName(template, t)}
               </span>
-              {isCurrent && (
+              {isCurrent && !selectionMode && (
                 <Tooltip content={t("notes.templates.regenerate")}>
                   <RefreshCw size={12} className="shrink-0 text-foreground/50" />
                 </Tooltip>
