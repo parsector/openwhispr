@@ -88,6 +88,11 @@ test("pre-summary picker shows the resolved default, lists templates, and passes
     container.querySelector('[aria-label="Choose template"]')?.textContent,
     "AI Summary"
   );
+  const cta = [...container.querySelectorAll("button")].find((el) =>
+    el.textContent.includes("Generate AI Summary")
+  );
+  await React.act(async () => cta.click());
+  assert.equal(runs[0].client_id, "default");
   const trigger = container.querySelector('[aria-label="Choose template"]');
   await React.act(async () =>
     trigger.dispatchEvent(
@@ -102,11 +107,8 @@ test("pre-summary picker shows the resolved default, lists templates, and passes
   assert.ok(sales);
   await React.act(async () => sales.dispatchEvent(new dom.MouseEvent("click", { bubbles: true })));
   assert.equal(trigger.textContent, "Sales call");
-  const cta = [...container.querySelectorAll("button")].find((el) =>
-    el.textContent.includes("Generate AI Summary")
-  );
   await React.act(async () => cta.click());
-  assert.equal(runs[0].client_id, "sales");
+  assert.equal(runs[1].client_id, "sales");
   await render(false);
   assert.equal(container.querySelector('[aria-label="Choose template"]'), null);
 });

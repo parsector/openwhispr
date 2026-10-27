@@ -388,7 +388,7 @@ test("hides the highlight instead of freezing it when no tab matches the selecti
   await unmount();
 });
 
-test("a typed note without a summary offers one with the default template", async (t) => {
+test("a typed note without a summary wires the default template to the callout", async (t) => {
   const { render, latest, unmount } = await loadNoteEditor(t);
   const ran = [];
 
@@ -398,7 +398,12 @@ test("a typed note without a summary offers one with the default template", asyn
     if (!callout && "onAskSubmit" in node.props) callout = node.props.callout;
   });
   assert.ok(callout, "notes with no transcript still offer a summary");
-  callout.props.onClick();
+  assert.equal(callout.props.savedTemplateId ?? null, null);
+  const defaultTemplate = callout.props.templates.find(
+    (template) => template.client_id === DEFAULT_TEMPLATE.client_id
+  );
+  assert.ok(defaultTemplate, "the callout receives the default template");
+  callout.props.onRun(defaultTemplate);
   assert.deepEqual(ran, [DEFAULT_TEMPLATE.client_id]);
 
   await unmount();
