@@ -58,6 +58,7 @@ const MOCKS = {
     }`,
   "./SpacesTree": `export default () => null;`,
   "/overview/ContainerOverview": `export const ContainerOverview = () => null;`,
+  "/ui/dialog": `export const ConfirmDialog = () => null;`,
   "./NotesStructureIntroDialog": `export default () => null;`,
   "./ActionManagerDialog": `export default () => null;`,
   "./AddNotesToFolderDialog": `export default () => null;`,
