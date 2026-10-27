@@ -325,3 +325,58 @@ test("stored preference round-trips and absent file uses the renderer's fresh-in
   assert.equal(restarted.autoUpdatesEnabled, false);
   restarted.cleanup();
 });
+
+test("an automatic download is visible to main status and a manual click returns in-progress", async () => {
+  const updater = makeAutoUpdater();
+  let finish;
+  updater.downloadUpdate = () => {
+    updater.downloads++;
+    return new Promise((resolve) => { finish = resolve; });
+  };
+  const manager = createUpdateManager(updater);
+  updater.listeners["update-available"]({ version: "1.10.6", files: [{ url: "OpenWhispr-1.10.6-arm64-mac.zip" }] });
+  assert.equal(updater.downloads, 1);
+  assert.equal((await manager.getUpdateStatus()).isDownloading, true);
+  assert.equal((await manager.downloadUpdate()).status, "in-progress");
+  assert.equal(updater.downloads, 1);
+  finish([]);
+  await new Promise(setImmediate);
+  manager.cleanup();
+});
+
+test("native Squirrel error after ZIP hand-off clears downloaded state and records the stack", async () => {
+  const updater = makeAutoUpdater();
+  updater.downloadUpdate = () => {
+    updater.listeners["update-downloaded"]({ version: "1.10.6" });
+    const error = new Error("SQRLCodeSignatureErrorDomain: code signature did not pass validation");
+    updater.listeners.error(error);
+    return Promise.reject(error);
+  };
+  const manager = createUpdateManager(updater);
+  await assert.rejects(manager.downloadUpdate(), /code signature did not pass validation/);
+  const status = await manager.getUpdateStatus();
+  assert.equal(status.isDownloading, false);
+  assert.equal(status.updateDownloaded, false);
+  assert.match(fs.readFileSync(status.logPath, "utf8"), /SQRLCodeSignatureErrorDomain/);
+  assert.match(fs.readFileSync(status.logPath, "utf8"), /at updater\.downloadUpdate/);
+  manager.cleanup();
+});
+
+test("updater log strips URL queries and credentials", () => {
+  const { createUpdaterLog } = require("../../src/helpers/updaterLog");
+  const log = createUpdaterLog(userData);
+  log.write("ERROR", "https://example.com/file.zip?token=secret Authorization: Bearer very-secret");
+  const contents = fs.readFileSync(log.file, "utf8");
+  assert.match(contents, /https:\/\/example.com\/file.zip/);
+  assert.doesNotMatch(contents, /very-secret|token=secret/);
+});
+
+test("updater log rotates at one MiB", () => {
+  const { createUpdaterLog } = require("../../src/helpers/updaterLog");
+  const log = createUpdaterLog(userData);
+  log.write("INFO", "x".repeat(1024 * 1024));
+  log.write("INFO", "next entry");
+  assert.equal(fs.existsSync(`${log.file}.1`), true);
+  assert.ok(fs.statSync(log.file).size < 1024 * 1024);
+  assert.ok(fs.statSync(`${log.file}.1`).size <= 1024 * 1024);
+});

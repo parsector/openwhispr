@@ -660,6 +660,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onUpdateAvailable: registerListener("update-available"),
   onUpdateNotAvailable: registerListener("update-not-available"),
   onUpdateDownloaded: registerListener("update-downloaded"),
+  onUpdateDownloadStarted: registerListener("update-download-started"),
   onUpdateDownloadProgress: registerListener("update-download-progress"),
   onUpdateError: registerListener("update-error"),
 
