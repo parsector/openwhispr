@@ -3174,7 +3174,11 @@
       "noTemplates": "Aún no hay plantillas",
       "emptyEditorTitle": "Seleccionar plantilla",
       "emptyEditorDescription": "Elige una plantilla de la lista o crea una nueva",
-      "outputHint": "Al aplicar una plantilla, se crea o reemplaza el resumen de IA a partir de tus notas y la transcripción."
+      "outputHint": "Al aplicar una plantilla, se crea o reemplaza el resumen de IA a partir de tus notas y la transcripción.",
+      "replaceEditedTitle": "¿Reemplazar el resumen editado?",
+      "replaceEditedDescription": "Se reemplazarán los cambios que hizo en este resumen de IA.",
+      "replaceEditedConfirm": "Reemplazar resumen",
+      "replaceEditedCancel": "Cancelar"
     },
     "empty": {
       "title": "Todavía no hay notas aquí",

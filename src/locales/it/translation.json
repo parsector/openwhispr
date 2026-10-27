@@ -3122,7 +3122,11 @@
       "noTemplates": "Nessun modello ancora",
       "emptyEditorTitle": "Seleziona un modello",
       "emptyEditorDescription": "Scegli un modello dall'elenco o creane uno nuovo",
-      "outputHint": "Applicare un modello crea o sostituisce il riepilogo IA usando le tue note e la trascrizione."
+      "outputHint": "Applicare un modello crea o sostituisce il riepilogo IA usando le tue note e la trascrizione.",
+      "replaceEditedTitle": "Sostituire il riepilogo modificato?",
+      "replaceEditedDescription": "Le modifiche apportate a questo riepilogo AI verranno sostituite.",
+      "replaceEditedConfirm": "Sostituisci riepilogo",
+      "replaceEditedCancel": "Annulla"
     },
     "empty": {
       "title": "Ancora nessuna nota qui",

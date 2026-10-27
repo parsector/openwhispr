@@ -290,7 +290,10 @@ test("a template writes the summary and records which template produced it", asy
   assert.match(calls[0].config.systemPrompt, /\n## Objections\nEach objection and the answer\./);
   const { payload } = updates[0];
   assert.equal(payload.enhancement_template_id, template.client_id);
-  assert.equal(payload.enhanced_at_content_hash, "hash-11");
+  assert.equal(
+    payload.enhanced_at_content_hash,
+    `hash-11\n#summary-hash:${payload.enhanced_content.length}-${payload.enhanced_content.slice(0, 50)}`
+  );
   assert.match(payload.enhancement_prompt, /## Objections/);
 });
 

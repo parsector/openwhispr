@@ -5,6 +5,9 @@ import { Plus, Sparkles } from "../icons";
 import { useToast } from "../ui/useToast";
 import { PanelResizeHandle } from "../ui/PanelResizeHandle";
 import NoteEditor from "./NoteEditor";
+import { ConfirmDialog } from "../ui/dialog";
+import { makeContentHash, materialHashOf } from "../../lib/noteSummaryHash";
+import { prepareNoteTemplateRun } from "../../lib/prepareNoteTemplateRun";
 import SpacesTree from "./SpacesTree";
 import { ContainerOverview } from "./overview/ContainerOverview";
 import NotesStructureIntroDialog from "./NotesStructureIntroDialog";
@@ -89,10 +92,6 @@ import {
   type PendingNoteWrite,
 } from "../../lib/noteEditorPendingSave";
 
-function makeContentHash(content: string): string {
-  return String(content.length) + "-" + content.slice(0, 50);
-}
-
 function parseNoteParticipants(raw: string | null | undefined): CalendarAttendee[] {
   if (!raw) return [];
   try {
@@ -169,6 +168,8 @@ export default function PersonalNotesView({
   const [showAddNotesDialog, setShowAddNotesDialog] = useState(false);
   const pendingDocumentRef = useRef<PendingDocumentSave | null>(null);
   const pendingEnhancedRef = useRef<PendingEnhancedSave | null>(null);
+  const [pendingTemplateAction, setPendingTemplateAction] = useState<ActionItem | null>(null);
+  useEffect(() => setPendingTemplateAction(null), [activeNoteId]);
 
   const commitDraft = useCallback((next: NoteEditorDraft | null) => {
     draftRef.current = next;
@@ -682,7 +683,7 @@ export default function PersonalNotesView({
   const isEnhancementStale = useMemo(() => {
     if (!editorEnhancedContent || !activeNote?.enhanced_at_content_hash) return false;
     const currentHash = makeContentHash(`${editorNote?.content ?? ""}\n${activeNoteRawTranscript}`);
-    return currentHash !== activeNote.enhanced_at_content_hash;
+    return currentHash !== materialHashOf(activeNote.enhanced_at_content_hash);
   }, [
     activeNote?.enhanced_at_content_hash,
     activeNoteRawTranscript,
@@ -742,8 +743,24 @@ export default function PersonalNotesView({
   // the store — this view can be unmounted when an auto-end stop fires.
   const isActiveNoteRecording = isTranscribing && recordingNoteId === activeNote?.id;
 
-  const runNoteAction = async (action: ActionItem) => {
+  const runNoteAction = async (action: ActionItem, handEditConfirmed = false) => {
     if (!editorNote) return;
+    const noteId = editorNote.id;
+    const mayRun = await prepareNoteTemplateRun({
+      flush: () => savePendingNow(noteId),
+      isTemplate: action.kind === "template",
+      summary: editorEnhancedContent,
+      storedHash: activeNote?.enhanced_at_content_hash,
+      handEditConfirmed,
+      requestConfirmation: () => setPendingTemplateAction(action),
+      reportSaveError: (error) =>
+        toast({
+          title: t("notes.actions.errors.saveFailed"),
+          description: error instanceof Error ? error.message : String(error),
+          variant: "destructive",
+        }),
+    });
+    if (!mayRun) return;
     const {
       recordingNoteId: liveNoteId,
       transcript: liveTranscript,
@@ -921,8 +938,21 @@ export default function PersonalNotesView({
               actionName={actionName}
               actionProgress={actionProgress}
               onCancelAction={cancelAction}
-              onRunNoteAction={runNoteAction}
+              onRunNoteAction={(action) => void runNoteAction(action)}
               onManageActions={setManagerKind}
+            />
+            <ConfirmDialog
+              open={pendingTemplateAction !== null}
+              onOpenChange={(open) => !open && setPendingTemplateAction(null)}
+              title={t("notes.templates.replaceEditedTitle")}
+              description={t("notes.templates.replaceEditedDescription")}
+              confirmText={t("notes.templates.replaceEditedConfirm")}
+              cancelText={t("notes.templates.replaceEditedCancel")}
+              onConfirm={() => {
+                const action = pendingTemplateAction;
+                setPendingTemplateAction(null);
+                if (action) void runNoteAction(action, true);
+              }}
             />
             <ActionManagerDialog
               open={managerKind !== null}

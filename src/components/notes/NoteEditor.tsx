@@ -78,6 +78,7 @@ import ActionChips from "./ActionChips";
 import ActionPicker from "./ActionPicker";
 import { getActionIcon } from "./actionIcons";
 import TemplatePicker from "./TemplatePicker";
+import PreSummaryTemplateCallout from "./PreSummaryTemplateCallout";
 import {
   getActionCta,
   getActionDescription,
@@ -1530,15 +1531,16 @@ export default function NoteEditor({
             slashCommands={actionCommands}
             callout={
               showSummaryCallout &&
-              noteTemplate &&
               selectedSegmentIds.size === 0 && (
-                <Button
-                  className="h-9 gap-2 px-4 text-sm"
-                  onClick={() => onRunNoteAction?.(noteTemplate)}
-                >
-                  <AlignLeft size={16} />
-                  {t("notes.editor.generateSummary")}
-                </Button>
+                <PreSummaryTemplateCallout
+                  visible
+                  noteId={note.id}
+                  savedTemplateId={note.enhancement_template_id}
+                  templates={templates}
+                  disabled={isActionRunning}
+                  onRun={(template) => onRunNoteAction?.(template)}
+                  onManage={() => onManageActions?.("template")}
+                />
               )
             }
             footnote={

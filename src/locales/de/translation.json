@@ -3483,7 +3483,11 @@
       "noTemplates": "Noch keine Vorlagen",
       "emptyEditorTitle": "Vorlage auswählen",
       "emptyEditorDescription": "Wählen Sie eine Vorlage aus der Liste oder erstellen Sie eine neue",
-      "outputHint": "Eine Vorlage erstellt oder ersetzt die KI-Zusammenfassung anhand deiner Notizen und des Transkripts."
+      "outputHint": "Eine Vorlage erstellt oder ersetzt die KI-Zusammenfassung anhand deiner Notizen und des Transkripts.",
+      "replaceEditedTitle": "Bearbeitete Zusammenfassung ersetzen?",
+      "replaceEditedDescription": "Ihre Änderungen an dieser KI-Zusammenfassung werden ersetzt.",
+      "replaceEditedConfirm": "Zusammenfassung ersetzen",
+      "replaceEditedCancel": "Abbrechen"
     },
     "onboarding": {
       "llm": {
