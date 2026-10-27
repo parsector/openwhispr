@@ -364,32 +364,61 @@ jobs:
           }
           report_imported_materials
           if [ "$identity_count" -eq 0 ]; then
-            echo 'No valid identity after direct import; retrying with modern PKCS#12 encryption'
-            MODERN_CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate_modern.p12"
-            conversion_error="$RUNNER_TEMP/pkcs12-conversion-error.log"
-            # OpenSSL export cannot read both items reliably from a one-pass pipe.
-            PEM_PATH=$(mktemp "$RUNNER_TEMP/signing-conversion.XXXXXX.pem")
-            trap 'rm -f "$PEM_PATH"' EXIT
-            if ! openssl pkcs12 -legacy -in "$CERTIFICATE_PATH" -passin "pass:$CSC_KEY_PASSWORD" -nodes -out "$PEM_PATH" >/dev/null 2> "$conversion_error" ||
-               ! openssl pkcs12 -export -in "$PEM_PATH" -out "$MODERN_CERTIFICATE_PATH" -passout "pass:$CSC_KEY_PASSWORD" >/dev/null 2>> "$conversion_error"; then
-              echo '::error::OpenSSL could not re-encrypt the PKCS#12 file'
-              cat "$conversion_error"
+            SIGNING_CERT_PATH="$RUNNER_TEMP/signing-cert.pem"
+            cert_error="$RUNNER_TEMP/pkcs12-cert-error.log"
+            if ! openssl pkcs12 -legacy -clcerts -nokeys -in "$CERTIFICATE_PATH" -passin "pass:$CSC_KEY_PASSWORD" -out "$SIGNING_CERT_PATH" >/dev/null 2> "$cert_error"; then
+              echo '::error::Could not extract the signing certificate from the PKCS#12 file'
+              cat "$cert_error"
               exit 1
             fi
-            rm -f "$PEM_PATH"
-            trap - EXIT
-            if ! security import "$MODERN_CERTIFICATE_PATH" -P "$CSC_KEY_PASSWORD" -A -t agg -f pkcs12 -k "$KEYCHAIN_PATH" >/dev/null 2> "$import_error"; then
-              echo '::error::security import failed for the re-encrypted PKCS#12 file'
-              cat "$import_error"
+            leaf_count=$(grep -c '^-----BEGIN CERTIFICATE-----' "$SIGNING_CERT_PATH" || true)
+            if [ "$leaf_count" -ne 1 ]; then
+              echo "::error::Expected one leaf certificate in the PKCS#12 file; found $leaf_count"
               exit 1
             fi
+            LOGIN_KEYCHAIN="$HOME/Library/Keychains/login.keychain-db"
+            user_trust_error="$RUNNER_TEMP/user-trust-error.log"
+            admin_trust_error="$RUNNER_TEMP/admin-trust-error.log"
+            run_noninteractive_trust() {
+              node -e '
+                const { spawnSync } = require("node:child_process");
+                const result = spawnSync(process.argv[1], process.argv.slice(2), { timeout: 30000, stdio: ["ignore", "ignore", "inherit"] });
+                if (result.error?.code === "ETIMEDOUT") {
+                  console.error("Trust command timed out waiting for authorization");
+                  process.exit(124);
+                }
+                process.exit(result.status ?? 1);
+              ' "$@"
+            }
+            if run_noninteractive_trust security add-trusted-cert -r trustRoot -k "$LOGIN_KEYCHAIN" "$SIGNING_CERT_PATH" >/dev/null 2> "$user_trust_error"; then
+              echo 'Signing certificate trust: user login keychain'
+            elif run_noninteractive_trust sudo -n security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "$SIGNING_CERT_PATH" >/dev/null 2> "$admin_trust_error"; then
+              echo 'Signing certificate trust: admin System keychain'
+            else
+              echo '::error::The self-signed signing certificate could not be marked trusted on this runner; signed build stopped.'
+              echo 'User trust attempt:'
+              cat "$user_trust_error"
+              echo 'Admin trust attempt:'
+              cat "$admin_trust_error"
+              exit 1
+            fi
+            security list-keychain -d user -s "$KEYCHAIN_PATH" "$LOGIN_KEYCHAIN" /Library/Keychains/System.keychain
             report_imported_materials
           fi
           if [ "$identity_count" -eq 0 ]; then
-            echo '::error::The p12 has a private key but macOS will not import it as an identity; re-export it from Keychain Access as .p12 with a modern password and try again.'
+            echo '::error::The self-signed signing certificate could not be marked trusted as a valid code signing identity on this runner; signed build stopped.'
             exit 1
           fi
-          security set-key-partition-list -S apple-tool:,apple: -s -k "runner" "$KEYCHAIN_PATH"
+          if [ "$identity_count" -ne 1 ]; then
+            echo "::error::Expected exactly one valid code signing identity after import and trust; found $identity_count. Signed build stopped."
+            exit 1
+          fi
+          partition_error="$RUNNER_TEMP/key-partition-error.log"
+          if ! security set-key-partition-list -S apple-tool:,apple: -s -k "runner" "$KEYCHAIN_PATH" >/dev/null 2> "$partition_error"; then
+            echo '::error::Could not grant codesign access to the imported private key'
+            cat "$partition_error"
+            exit 1
+          fi
           preferred_identity=$(printf '%s\n' "$identities" | awk '/Developer ID Application:/ {print $2; exit}')
           first_identity=$(printf '%s\n' "$identities" | awk '/^[[:space:]]*[0-9]+\) [A-Fa-f0-9]+ "/ {print $2; exit}')
           identity=${preferred_identity:-$first_identity}
