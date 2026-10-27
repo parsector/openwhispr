@@ -196,8 +196,8 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CSC_LINK: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
-      CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+      SIGNING_CERT_BASE64: ${{ secrets.MAC_CERTIFICATE_BASE64 }}
+      SIGNING_CERT_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
       RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
       TARGET_ARCH: arm64
     steps:
@@ -213,11 +213,11 @@ jobs:
         env:
           REQUIRE_SIGNING: ${{ inputs.require_signing }}
         run: |
-          if [ "$REQUIRE_SIGNING" = true ] && [ -z "$CSC_LINK" ]; then
+          if [ "$REQUIRE_SIGNING" = true ] && [ -z "$SIGNING_CERT_BASE64" ]; then
             echo '::error::Signing required: set MAC_CERTIFICATE_BASE64 and MAC_CERTIFICATE_PASSWORD'
             exit 1
           fi
-          if [ -n "$CSC_LINK" ] && [ -z "$CSC_KEY_PASSWORD" ]; then
+          if [ -n "$SIGNING_CERT_BASE64" ] && [ -z "$SIGNING_CERT_PASSWORD" ]; then
             echo '::error::MAC_CERTIFICATE_PASSWORD is required with MAC_CERTIFICATE_BASE64'
             exit 1
           fi
@@ -265,12 +265,12 @@ jobs:
       - name: Configure fork signing mode
         run: |
           # Change only the runner's copy. A null identity skips signing before
-          # certificate lookup; signed builds discover the imported identity.
+          # certificate lookup; signed builds use the imported CSC_NAME identity.
           node -e '
             const fs = require("node:fs");
             const file = "electron-builder.json";
             const config = JSON.parse(fs.readFileSync(file, "utf8"));
-            const signed = Boolean(process.env.CSC_LINK);
+            const signed = Boolean(process.env.SIGNING_CERT_BASE64);
             if (signed) delete config.mac.identity;
             else config.mac.identity = null;
             delete config.mac.notarize;
@@ -279,14 +279,14 @@ jobs:
             console.log(`fork mac signing mode: ${signed ? "signed" : "unsigned"}; identity=${String(config.mac.identity)}; forceCodeSigning=${config.mac.forceCodeSigning}`);
           '
       - name: Import signing certificate
-        if: env.CSC_LINK != ''
+        if: env.SIGNING_CERT_BASE64 != ''
         run: |
           set -euo pipefail
           umask 077
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
           echo 'expected: base64 of a .p12 containing the code-signing identity and its private key (single line, no wrapping)'
-          cleaned=$(printf '%s' "$CSC_LINK" | LC_ALL=C tr -d ' \t\r\n%')
+          cleaned=$(printf '%s' "$SIGNING_CERT_BASE64" | LC_ALL=C tr -d ' \t\r\n%')
           if [ -z "$cleaned" ]; then
             echo '::error::MAC_CERTIFICATE_BASE64 is empty or whitespace-only'
             exit 1
@@ -307,7 +307,7 @@ jobs:
             fi
           else
             echo 'signing certificate secret shape: raw'
-            printf '%s' "$CSC_LINK" > "$CERTIFICATE_PATH"
+            printf '%s' "$SIGNING_CERT_BASE64" > "$CERTIFICATE_PATH"
           fi
           certificate_bytes=$(wc -c < "$CERTIFICATE_PATH" | tr -d ' ')
           echo "certificate bytes: $certificate_bytes"
@@ -318,9 +318,9 @@ jobs:
           fi
           openssl_error="$RUNNER_TEMP/pkcs12-error.log"
           legacy_error="$RUNNER_TEMP/pkcs12-legacy-error.log"
-          if openssl pkcs12 -in "$CERTIFICATE_PATH" -noout -passin "pass:$CSC_KEY_PASSWORD" >/dev/null 2> "$openssl_error"; then
+          if openssl pkcs12 -in "$CERTIFICATE_PATH" -noout -passin "pass:$SIGNING_CERT_PASSWORD" >/dev/null 2> "$openssl_error"; then
             echo 'PKCS#12 validation passed'
-          elif openssl pkcs12 -legacy -in "$CERTIFICATE_PATH" -noout -passin "pass:$CSC_KEY_PASSWORD" >/dev/null 2> "$legacy_error"; then
+          elif openssl pkcs12 -legacy -in "$CERTIFICATE_PATH" -noout -passin "pass:$SIGNING_CERT_PASSWORD" >/dev/null 2> "$legacy_error"; then
             echo 'PKCS#12 validation passed with legacy ciphers'
           else
             if grep -Eiq 'Mac verify error|mac verify failure|invalid password|bad decrypt|wrong password' "$openssl_error" "$legacy_error"; then
@@ -335,7 +335,7 @@ jobs:
             exit 1
           fi
           key_error="$RUNNER_TEMP/pkcs12-key-error.log"
-          if ! private_key_count=$(openssl pkcs12 -legacy -nocerts -nodes -in "$CERTIFICATE_PATH" -passin "pass:$CSC_KEY_PASSWORD" 2> "$key_error" | { grep -c 'BEGIN.*PRIVATE KEY' || [ "$?" -eq 1 ]; }); then
+          if ! private_key_count=$(openssl pkcs12 -legacy -nocerts -nodes -in "$CERTIFICATE_PATH" -passin "pass:$SIGNING_CERT_PASSWORD" 2> "$key_error" | { grep -c 'BEGIN.*PRIVATE KEY' || [ "$?" -eq 1 ]; }); then
             echo '::error::OpenSSL could not inspect the PKCS#12 private keys'
             cat "$key_error"
             exit 1
@@ -349,7 +349,7 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "runner" "$KEYCHAIN_PATH"
           import_error="$RUNNER_TEMP/security-import-error.log"
-          if ! security import "$CERTIFICATE_PATH" -P "$CSC_KEY_PASSWORD" -A -t agg -f pkcs12 -k "$KEYCHAIN_PATH" >/dev/null 2> "$import_error"; then
+          if ! security import "$CERTIFICATE_PATH" -P "$SIGNING_CERT_PASSWORD" -A -t agg -f pkcs12 -k "$KEYCHAIN_PATH" >/dev/null 2> "$import_error"; then
             echo '::error::security import failed for the PKCS#12 file'
             cat "$import_error"
             exit 1
@@ -366,7 +366,7 @@ jobs:
           if [ "$identity_count" -eq 0 ]; then
             SIGNING_CERT_PATH="$RUNNER_TEMP/signing-cert.pem"
             cert_error="$RUNNER_TEMP/pkcs12-cert-error.log"
-            if ! openssl pkcs12 -legacy -clcerts -nokeys -in "$CERTIFICATE_PATH" -passin "pass:$CSC_KEY_PASSWORD" -out "$SIGNING_CERT_PATH" >/dev/null 2> "$cert_error"; then
+            if ! openssl pkcs12 -legacy -clcerts -nokeys -in "$CERTIFICATE_PATH" -passin "pass:$SIGNING_CERT_PASSWORD" -out "$SIGNING_CERT_PATH" >/dev/null 2> "$cert_error"; then
               echo '::error::Could not extract the signing certificate from the PKCS#12 file'
               cat "$cert_error"
               exit 1
@@ -430,28 +430,34 @@ jobs:
           echo "Selected certificate CN: $identity_cn"
           echo "Selected certificate SHA-1: $identity"
           security find-certificate -c "$identity_cn" -p "$KEYCHAIN_PATH" | openssl x509 -noout -subject -enddate
+          csc_name="$identity_cn"
+          case "$csc_name" in
+            'Developer ID Application:'*|'Developer ID Installer:'*|'3rd Party Mac Developer Application:'*|'3rd Party Mac Developer Installer:'*)
+              csc_name="${csc_name#*: }"
+              ;;
+          esac
+          echo "CSC_NAME=$csc_name" >> "$GITHUB_ENV"
       - name: Create draft release
         if: ${{ !inputs.dry_run }}
         run: gh release create "$RELEASE_TAG" --draft --target "${{ needs.prepare.outputs.sha }}" --title "$RELEASE_TAG" --notes "OpenWhispr $RELEASE_TAG (macOS arm64)"
       - name: Configure unsigned build
-        if: env.CSC_LINK == ''
+        if: env.SIGNING_CERT_BASE64 == ''
         run: echo 'CSC_IDENTITY_AUTO_DISCOVERY=false' >> "$GITHUB_ENV"
       - name: Build and upload macOS arm64 app
         if: ${{ !inputs.dry_run }}
         run: |
-          # An empty CSC_LINK is treated as a certificate path by electron-builder.
-          if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          unset SIGNING_CERT_BASE64 SIGNING_CERT_PASSWORD
           npm run build:mac:arm64 -- --publish always
       - name: Build dry run artifact
         if: ${{ inputs.dry_run }}
         run: |
-          if [ -z "$CSC_LINK" ]; then unset CSC_LINK CSC_KEY_PASSWORD; fi
+          unset SIGNING_CERT_BASE64 SIGNING_CERT_PASSWORD
           npm run build:mac:arm64 -- --publish never
       - name: Verify signing outcome
         run: |
           set -euo pipefail
           APP_PATH=$(ls -d dist/mac*/OpenWhispr.app | head -n1)
-          if [ -n "$CSC_LINK" ]; then
+          if [ -n "$SIGNING_CERT_BASE64" ]; then
             codesign --verify --deep --strict "$APP_PATH"
             echo "packaged signed: $APP_PATH"
           else
@@ -506,7 +512,7 @@ jobs:
         if: ${{ !inputs.dry_run }}
         run: gh release edit "$RELEASE_TAG" --draft=false
       - name: Remove signing keychain
-        if: always() && env.CSC_LINK != ''
+        if: always() && env.SIGNING_CERT_BASE64 != ''
         run: |
           security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" || true
           rm -f "$RUNNER_TEMP/build_certificate.p12"
