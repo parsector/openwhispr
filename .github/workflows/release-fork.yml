@@ -252,7 +252,55 @@ jobs:
           set -euo pipefail
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
-          printf '%s' "$CSC_LINK" | base64 --decode > "$CERTIFICATE_PATH"
+          echo 'expected: base64 of a .p12 containing the code-signing identity and its private key (single line, no wrapping)'
+          cleaned=$(printf '%s' "$CSC_LINK" | LC_ALL=C tr -d ' \t\r\n')
+          if [ -z "$cleaned" ]; then
+            echo '::error::MAC_CERTIFICATE_BASE64 is empty or whitespace-only'
+            exit 1
+          fi
+          if [[ "$cleaned" =~ ^[A-Za-z0-9+/=]+$ ]]; then
+            echo 'signing certificate secret shape: base64'
+            if printf 'YQ==' | base64 --decode >/dev/null 2>&1; then
+              decode_flag=--decode
+            elif printf 'YQ==' | base64 -D >/dev/null 2>&1; then
+              decode_flag=-D
+            else
+              echo '::error::The runner base64 command supports neither --decode nor -D'
+              exit 1
+            fi
+            if ! printf '%s' "$cleaned" | base64 "$decode_flag" > "$CERTIFICATE_PATH" 2>/dev/null; then
+              echo '::error::MAC_CERTIFICATE_BASE64 uses base64 characters but has invalid padding or is truncated'
+              exit 1
+            fi
+          else
+            echo 'signing certificate secret shape: raw'
+            printf '%s' "$CSC_LINK" > "$CERTIFICATE_PATH"
+          fi
+          certificate_bytes=$(wc -c < "$CERTIFICATE_PATH" | tr -d ' ')
+          echo "certificate bytes: $certificate_bytes"
+          file -b "$CERTIFICATE_PATH"
+          if [ "$certificate_bytes" -eq 0 ]; then
+            echo '::error::MAC_CERTIFICATE_BASE64 decoded to an empty file'
+            exit 1
+          fi
+          openssl_error="$RUNNER_TEMP/pkcs12-error.log"
+          legacy_error="$RUNNER_TEMP/pkcs12-legacy-error.log"
+          if openssl pkcs12 -in "$CERTIFICATE_PATH" -noout -passin "pass:$CSC_KEY_PASSWORD" 2> "$openssl_error"; then
+            echo 'PKCS#12 validation passed'
+          elif openssl pkcs12 -legacy -in "$CERTIFICATE_PATH" -noout -passin "pass:$CSC_KEY_PASSWORD" 2> "$legacy_error"; then
+            echo 'PKCS#12 validation passed with legacy ciphers'
+          else
+            if grep -Eiq 'Mac verify error|mac verify failure|invalid password|bad decrypt|wrong password' "$openssl_error" "$legacy_error"; then
+              echo '::error::MAC_CERTIFICATE_PASSWORD is wrong for this PKCS#12 certificate (OpenSSL MAC verification failed)'
+            elif grep -Eiq 'asn1|wrong tag|header too long|not enough data|Expecting: PKCS12|unable to load PKCS12' "$openssl_error" "$legacy_error"; then
+              echo '::error::MAC_CERTIFICATE_BASE64 is not a PKCS#12 file after decoding or raw import'
+            else
+              echo '::error::OpenSSL could not validate the PKCS#12 file; check its format, encryption, and password'
+            fi
+            echo 'OpenSSL diagnostics:'
+            cat "$openssl_error" "$legacy_error"
+            exit 1
+          fi
           security create-keychain -p "runner" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "runner" "$KEYCHAIN_PATH"
@@ -269,6 +317,8 @@ jobs:
             exit 1
           fi
           echo "Selected code signing identity: $identity"
+          identity_cn=$(printf '%s\n' "$identities" | awk -v hash="$identity" '$2 == hash {sub(/^[^\"]*\"/, ""); sub(/\".*$/, ""); print; exit}')
+          security find-certificate -c "$identity_cn" -p "$KEYCHAIN_PATH" | openssl x509 -noout -subject -enddate
       - name: Create draft release
         if: ${{ !inputs.dry_run }}
         run: gh release create "$RELEASE_TAG" --draft --target "${{ needs.prepare.outputs.sha }}" --title "$RELEASE_TAG" --notes "OpenWhispr $RELEASE_TAG (macOS arm64)"
