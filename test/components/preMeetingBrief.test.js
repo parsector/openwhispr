@@ -7,7 +7,7 @@ const i18next = require("i18next");
 const { initReactI18next } = require("react-i18next");
 const fs = require("node:fs");
 const path = require("node:path");
-const { buildPreMeetingBrief, matchesBriefPerson, parseBriefAttendees, personNames } = require("../../src/components/todos/preMeetingBrief.ts");
+const { buildPreMeetingBrief, matchesBriefPerson, parseBriefAttendees, personNames } = require("../../src/components/todos/preMeetingBriefModel.ts");
 const PreMeetingBrief = require("../../src/components/todos/PreMeetingBrief.tsx").default;
 const { MeetingNotificationCard } = require("../../src/components/MeetingNotificationCard.tsx");
 

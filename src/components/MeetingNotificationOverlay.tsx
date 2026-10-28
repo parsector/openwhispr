@@ -23,7 +23,7 @@ import { meetingFolderLabel } from "./meetingFolderLabel";
 import { Check, ChevronDown, X } from "./icons";
 import ProposalsBanner from "./todos/ProposalsBanner";
 import PreMeetingBrief from "./todos/PreMeetingBrief";
-import { buildPreMeetingBrief, parseBriefAttendees } from "./todos/preMeetingBrief";
+import { buildPreMeetingBrief, parseBriefAttendees } from "./todos/preMeetingBriefModel";
 import "../styles/meeting-notification.css";
 import {
   getMeetingNotificationPresentation,

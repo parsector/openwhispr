@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Commitment } from "../../types/electron";
-import type { BriefPerson } from "./preMeetingBrief";
+import type { BriefPerson } from "./preMeetingBriefModel";
 
 function BriefRow({ row, onComplete }: { row: Commitment; onComplete: (row: Commitment) => void }) {
   const [expanded, setExpanded] = useState(false);

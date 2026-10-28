@@ -1,5 +1,5 @@
 import type { Commitment } from "../../types/electron";
-import { matchesBriefPerson } from "./preMeetingBrief";
+import { matchesBriefPerson } from "./preMeetingBriefModel";
 
 export type TodoFilter = { kind: "note" | "person"; value: string; email?: string | null } | null;
 
