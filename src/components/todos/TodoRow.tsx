@@ -68,7 +68,10 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "push" })} type="button">{t("todos.pushDay")}</button>
             <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "clear" })} type="button">{t("todos.clearDate")}</button>
             {!archived && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onComplete(row)} type="button">{t("todos.complete")}</button>}
-            {!archived && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => onReject(row, window.prompt(t("todos.rejectReason")) || null)} type="button">{t("todos.reject")}</button>}
+            {!archived && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => {
+              const reason = window.prompt(t("todos.rejectReason"));
+              if (reason !== null) onReject(row, reason || null);
+            }} type="button">{t("todos.reject")}</button>}
           </div>
         </details>
       </div>

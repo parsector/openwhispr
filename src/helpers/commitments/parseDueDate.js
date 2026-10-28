@@ -16,8 +16,8 @@ function parseDueDate(raw, now = new Date()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let date = null;
   let confidence = 1;
-  if (phrase === "tonight" || phrase === "today") date = today;
-  else if (phrase === "tomorrow") date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  if (/^(?:(?:by|on) )?(?:tonight|today)$/.test(phrase)) date = today;
+  else if (/^(?:(?:by|on) )?tomorrow$/.test(phrase)) date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
   else if (phrase === "end of month" || phrase === "by the end of the month")
     date = new Date(today.getFullYear(), today.getMonth() + 1, 0);
   else {

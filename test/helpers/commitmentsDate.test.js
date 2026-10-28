@@ -6,6 +6,7 @@ const wed = new Date(2026, 9, 28, 15);
 for (const [raw, expected] of [
   ["today", "2026-10-28"], ["tonight", "2026-10-28"],
   ["tomorrow", "2026-10-29"], ["Friday", "2026-10-30"],
+  ["by tomorrow", "2026-10-29"], ["on Thursday", "2026-10-29"],
   ["this Friday", "2026-10-30"], ["next Friday", "2026-10-30"],
   ["by Friday", "2026-10-30"], ["Monday", "2026-11-02"],
   ["Tuesday", "2026-11-03"], ["Wednesday", "2026-11-04"],

@@ -50,6 +50,12 @@ test("extractor persists three todos, restatement and completion proposal", asyn
   assert.equal(db.db.prepare("SELECT count(*) AS n FROM commitment_mentions").get().n, 5);
   assert.equal(store.proposals(42).length, 1);
   assert.equal(db.db.prepare("SELECT mention_count FROM commitments WHERE person='Alex' AND direction='owe'").get().mention_count, 2);
+  const proposalId = store.proposals(42)[0].id;
+  await extractCommitments({ note, database: db, model: { mode: "local", model: "mock" }, infer });
+  assert.equal(db.db.prepare("SELECT count(*) AS n FROM commitments").get().n, 3);
+  assert.equal(db.db.prepare("SELECT count(*) AS n FROM commitment_mentions").get().n, 5);
+  assert.equal(store.proposals(42).length, 1);
+  assert.equal(store.proposals(42)[0].id, proposalId);
 });
 
 test("malformed later model window persists zero rows", async (t) => {
@@ -71,6 +77,13 @@ test("cloud response requires completion marker", () => {
 });
 
 test("windows overlap one segment and preserve source indexes", () => {
-  const parts = windows([{ text: "a".repeat(6) }, { text: "b".repeat(6) }, { text: "c".repeat(6) }], 10);
-  assert.deepEqual(parts.map((part) => part.map((entry) => entry.segment_index)), [[0], [1], [2]]);
+  const parts = windows([{ text: "a".repeat(4) }, { text: "b".repeat(4) }, { text: "c".repeat(4) }], 10);
+  assert.deepEqual(parts.map((part) => part.map((entry) => entry.segment_index)), [[0, 1], [1, 2]]);
+});
+
+test("parseable segments retain indexes across malformed entries", () => {
+  const { parseSegments } = require("../../src/helpers/commitments/extract");
+  const parsed = parseSegments(JSON.stringify([{ text: "First" }, null, { text: "Third" }]));
+  assert.equal(parsed.length, 3);
+  assert.equal(parsed[2].text, "Third");
 });

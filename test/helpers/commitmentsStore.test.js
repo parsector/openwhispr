@@ -39,6 +39,8 @@ test("store handles edits, archive, history and proposals on a temp DB", (t) => 
   assert.equal(store.proposals().length, 1);
   store.resolveProposal(proposal.id, false);
   assert.equal(store.get(todo.id).status, "open");
+  assert.equal(store.propose(todo.id, { note_id: "3", segment_index: 0,
+    quote: "I sent it", strength: "explicit" }), null);
   const another = store.propose(todo.id, { note_id: "4", segment_index: 0, quote: "I sent it", strength: "explicit" });
   store.resolveProposal(another.id, true);
   assert.equal(store.get(todo.id).status, "completed");

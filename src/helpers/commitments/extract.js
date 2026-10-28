@@ -16,8 +16,8 @@ const RESPONSE_FORMAT = { type: "json_object", schema: { type: "object", propert
 function parseSegments(raw) {
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter((part) => part && typeof part.text === "string" && part.text.trim());
+    if (!Array.isArray(parsed) || !parsed.some((part) => typeof part?.text === "string" && part.text.trim())) return [];
+    return parsed.map((part) => part && typeof part.text === "string" ? part : { text: "" });
   } catch { return []; }
 }
 
@@ -96,14 +96,24 @@ async function extractCommitments({ note, database, model, infer }) {
       if (!["open", "proposed"].includes(row.status)) continue;
       const external = database.db.prepare("SELECT 1 FROM commitment_mentions WHERE commitment_id=? AND note_id IS NOT ? LIMIT 1")
         .get(row.id, String(note.id));
-      if (external) continue;
+      const pending = database.db.prepare("SELECT 1 FROM commitment_proposals WHERE commitment_id=? AND status='pending' LIMIT 1")
+        .get(row.id);
+      if (external || pending) continue;
       database.db.prepare("DELETE FROM commitment_proposals WHERE commitment_id=?").run(row.id);
       database.db.prepare("DELETE FROM commitment_mentions WHERE commitment_id=?").run(row.id);
       database.db.prepare("DELETE FROM commitments WHERE id=?").run(row.id);
     }
+    // Rows retained because of edits, other meetings or a pending review keep
+    // their evidence and original expiry when this note is processed again.
+    const preservedMentions = database.db.prepare(`SELECT m.* FROM commitment_mentions m
+      JOIN commitments c ON c.id=m.commitment_id WHERE m.note_id=? AND c.account_id IS ?
+      `).all(String(note.id), store.scope());
+    const preservedKeys = new Set(preservedMentions.map((mention) =>
+      `${mention.kind === "completion_proposed" ? "completion" : "new"}:${mention.segment_index}:${mention.quote}`));
     let created = 0, proposals = 0;
     const anchored = new Date(note.created_at || Date.now());
     for (const item of items) {
+      if (preservedKeys.has(`${item.kind}:${item.segment_index}:${item.quote}`)) continue;
       const text = normaliseText(item.text);
       const person = item.person || null;
       const rows = store.list();
@@ -127,7 +137,7 @@ async function extractCommitments({ note, database, model, infer }) {
       store.create({ ...candidate, ...date, due_raw: item.due_raw || null,
         quote: item.quote, quote_segment_index: item.segment_index,
         source_note_id: note.id, source_note_title: note.title,
-        space_id: note.space_id, speaker_confidence: segment.speaker === "you" ? "attributed" : "unattributed",
+        space_id: note.space_id, speaker_confidence: segment.speaker === "you" && segment.source === "mic" ? "attributed" : "unattributed",
         extraction_version: VERSION });
       created++;
     }

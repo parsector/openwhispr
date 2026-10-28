@@ -43,12 +43,12 @@ class RoutineScheduler {
   }
 
   sweepCommitments(now = new Date()) {
-    const day = localToday(now);
-    if (day === this.lastCommitmentsSweep) return;
+    const scopeDay = `${localToday(now)}:${this.database.activeAccountId || ""}`;
+    if (scopeDay === this.lastCommitmentsSweep) return;
     try {
       const store = new CommitmentStore(this.database);
       const changed = store.sweepExpired(now) + store.sweepRemovedSources();
-      this.lastCommitmentsSweep = day;
+      this.lastCommitmentsSweep = scopeDay;
       if (changed) this.onCommitmentsUpdated();
     } catch (error) {
       debugLogger.error("Commitments sweep failed", { error: error.message }, "commitments");

@@ -101,9 +101,9 @@ class CommitmentStore {
   propose(id, fields) {
     const row = this.get(id);
     if (!row || row.status !== "open" || pinned(row).has("status")) return null;
-    const existing = this.db.prepare("SELECT * FROM commitment_proposals WHERE commitment_id=? AND note_id=? AND status='pending'")
+    const existing = this.db.prepare("SELECT * FROM commitment_proposals WHERE commitment_id=? AND note_id=? ORDER BY created_at DESC LIMIT 1")
       .get(id, String(fields.note_id));
-    if (existing) return existing;
+    if (existing) return existing.status === "pending" ? existing : null;
     const created = new Date();
     const proposal = { id: randomUUID(), commitment_id: id, note_id: String(fields.note_id),
       segment_index: fields.segment_index, quote: fields.quote, strength: fields.strength,

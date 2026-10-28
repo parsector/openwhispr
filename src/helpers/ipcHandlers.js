@@ -1065,6 +1065,7 @@ class IPCHandlers {
       mcpApi: this.mcpClientManager ? routineMcpApi(this.mcpClientManager) : null,
     });
     const recordingSources = new Set();
+    const shownCommitmentCards = new Set();
     const recordingSenders = new WeakSet();
     const isRecording = () => Boolean(this._activeRecordingPipeline || recordingSources.size);
     const queue = new RoutineQueue({ run: (job) => runner.run(job), isRecording });
@@ -1112,7 +1113,8 @@ class IPCHandlers {
             .then(async (result) => {
               if (result.skipped) return;
               broadcastToWindows("commitments-updated");
-              if (result.proposals > 0) {
+              if (result.proposals > 0 && !shownCommitmentCards.has(data.noteId)) {
+                shownCommitmentCards.add(data.noteId);
                 await this.windowManager.showMeetingNotification({
                   detectionId: `commitments:${data.noteId}`, source: "commitments",
                   key: `commitments:${data.noteId}`, event: null, variant: "commitments",
