@@ -9,6 +9,7 @@ const i18next = require("i18next");
 const { I18nextProvider } = require("react-i18next");
 const { groupTodos } = require("../../src/components/todos/TodoGroups.ts");
 const TodoRow = require("../../src/components/todos/TodoRow.tsx").default;
+const { boundedDateLabel } = require("../../src/components/todos/todoDateLabel.ts");
 const TodosView = require("../../src/components/todos/TodosView.tsx").default;
 const ProposalsBanner = require("../../src/components/todos/ProposalsBanner.tsx").default;
 const { useTodosStore } = require("../../src/stores/todosStore.ts");
@@ -43,8 +44,9 @@ test("todo date pills use short local labels and a full accessible date", async 
     static now() { return fixedNow.getTime(); }
   };
   const i18n = i18next.createInstance();
-  await i18n.init({ lng: "en", fallbackLng: "en", resources: { en: { translation: JSON.parse(
-    fs.readFileSync(path.join(__dirname, "../../src/locales/en/translation.json"), "utf8")) } } });
+  const translations = Object.fromEntries(["en", "ar"].map((locale) => [locale, { translation: JSON.parse(
+    fs.readFileSync(path.join(__dirname, `../../src/locales/${locale}/translation.json`), "utf8")) }]));
+  await i18n.init({ lng: "en", fallbackLng: "en", resources: translations });
   const renderPill = (dueDate) => {
     const html = renderToStaticMarkup(React.createElement(I18nextProvider, { i18n },
       React.createElement(TodoRow, { row: row("date", dueDate),
@@ -52,7 +54,7 @@ test("todo date pills use short local labels and a full accessible date", async 
     const pill = html.match(/data-todo-date-column[^>]*><span([^>]*)>([^<]*)<\/span>/);
     assert.ok(pill, `date pill missing for ${dueDate}`);
     assert.doesNotMatch(pill[2], /^\d{4}-\d{2}-\d{2}$/);
-    assert.ok([...pill[2]].length <= 8, `${dueDate}: ${pill[2]}`);
+    assert.ok([...pill[2]].length <= 12, `${dueDate}: ${pill[2]}`);
     const title = pill[1].match(/title="([^"]+)"/)?.[1];
     const ariaLabel = pill[1].match(/aria-label="([^"]+)"/)?.[1];
     assert.ok(title);
@@ -63,12 +65,11 @@ test("todo date pills use short local labels and a full accessible date", async 
   };
   try {
     const today = renderPill("2026-10-28");
-    assert.equal(today.label, new Intl.DateTimeFormat("en", { day: "2-digit", month: "2-digit" }).format(new OriginalDate(2026, 9, 28)));
+    assert.equal(today.label, "Due today");
     assert.match(today.attributes, /Due today/);
     const tomorrow = renderPill("2026-10-29");
-    assert.equal(tomorrow.label, "Thu 29");
-    i18n.addResource("en", "translation", "todos.tomorrow", "Tomorrow");
-    assert.equal(renderPill("2026-10-29").label, "Tomorrow");
+    assert.equal(tomorrow.label, "Tomorrow");
+    assert.match(tomorrow.attributes, /Tomorrow/);
     assert.equal(renderPill("2026-10-31").label, "Sat 31");
     assert.equal(renderPill("2026-11-10").label, "10 Nov");
     assert.equal(renderPill("2027-10-31").label, "10/31");
@@ -76,13 +77,21 @@ test("todo date pills use short local labels and a full accessible date", async 
     assert.match(overdue.html, /data-overdue="true"[^>]*before:bg-destructive/);
     assert.match(overdue.attributes, /Overdue/);
     assert.match(overdue.attributes, /text-destructive/);
-    await i18n.changeLanguage("el");
-    const greek = renderPill("2027-10-31");
-    assert.equal(greek.label, new Intl.DateTimeFormat("el", { day: "2-digit", month: "2-digit" }).format(new OriginalDate(2027, 9, 31)));
-    assert.match(greek.attributes, /Οκτωβρίου|October/);
+    await i18n.changeLanguage("ar");
+    const arabic = renderPill("2027-10-31");
+    assert.equal(arabic.label, new Intl.DateTimeFormat("ar", { day: "2-digit", month: "2-digit" }).format(new OriginalDate(2027, 9, 31)));
+    assert.match(arabic.attributes, /أكتوبر/);
   } finally {
     global.Date = OriginalDate;
   }
+});
+
+test("semantic date labels bypass the composed-date limit but remain bounded", () => {
+  assert.equal(boundedDateLabel("Due today", "10/28", "semantic"), "Due today");
+  assert.equal(boundedDateLabel("Tomorrow", "10/29", "semantic"), "Tomorrow");
+  assert.equal(boundedDateLabel("123456789012", "10/29", "semantic"), "123456789012");
+  assert.equal(boundedDateLabel("1234567890123", "10/29", "semantic"), "10/29");
+  assert.equal(boundedDateLabel("123456789", "10/31", "composed"), "10/31");
 });
 
 test("every todo date state keeps the fixed right-hand column", () => {

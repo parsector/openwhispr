@@ -5231,6 +5231,7 @@
     "add": "Add",
     "complete": "Complete",
     "noDate": "No date",
+    "tomorrow": "Tomorrow",
     "saidCount_one": "said {{count}}×",
     "saidCount_few": "said {{count}}×",
     "saidCount_many": "said {{count}}×",

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, MoreHorizontal } from "../icons";
 import type { Commitment } from "../../types/electron";
 import { groupFor, localDate } from "./TodoGroups";
+import { boundedDateLabel } from "./todoDateLabel";
 
 function peopleLabel(person: string | null): string {
   if (!person) return "";
@@ -31,19 +32,22 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   const locale = i18n.language;
   const fullDate = due ? new Intl.DateTimeFormat(locale, { dateStyle: "full" }).format(due) : undefined;
   let dateLabel = t("todos.noDate");
+  let dateStatus: string | undefined;
   if (due) {
     const day = new Intl.DateTimeFormat(locale, { day: "numeric" }).format(due);
     const weekday = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(due);
     const month = new Intl.DateTimeFormat(locale, { month: "short" }).format(due);
     const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const sixDaysAway = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 6);
-    if (today) dateLabel = t("todos.groups.today");
-    else if (row.due_date === localDate(tomorrow) && i18n.exists("todos.tomorrow")) dateLabel = t("todos.tomorrow");
-    else if (row.due_date > localDate(now) && row.due_date <= localDate(sixDaysAway)) dateLabel = `${weekday} ${day}`;
-    else dateLabel = `${day} ${month}${due.getFullYear() === now.getFullYear() ? "" : ` ${due.getFullYear()}`}`;
-    if ([...dateLabel].length > 8) dateLabel = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" }).format(due);
+    const numericDate = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" }).format(due);
+    if (today) dateStatus = t("todos.groups.today");
+    else if (row.due_date === localDate(tomorrow)) dateStatus = t("todos.tomorrow");
+    if (dateStatus) dateLabel = boundedDateLabel(dateStatus, numericDate, "semantic");
+    else if (row.due_date > localDate(now) && row.due_date <= localDate(sixDaysAway))
+      dateLabel = boundedDateLabel(`${weekday} ${day}`, numericDate, "composed");
+    else dateLabel = boundedDateLabel(`${day} ${month}${due.getFullYear() === now.getFullYear() ? "" : ` ${due.getFullYear()}`}`, numericDate, "composed");
   }
-  const dateDescription = due ? `${overdue ? `${t("todos.groups.overdue")} · ` : today ? `${t("todos.groups.today")} · ` : ""}${fullDate}` : undefined;
+  const dateDescription = due ? `${overdue ? `${t("todos.groups.overdue")} · ` : dateStatus ? `${dateStatus} · ` : ""}${fullDate}` : undefined;
   const archived = row.status === "completed" || row.status === "rejected";
   return (
     <article data-overdue={overdue ? "true" : undefined} className={`group relative grid min-h-[46px] grid-cols-[22px_minmax(0,1fr)_76px] items-start gap-x-2.5 border-b border-border py-2.5 transition-colors duration-150 ease-out hover:bg-surface-1 motion-reduce:transition-none last:border-0 ${overdue ? "ps-[9px] before:absolute before:inset-y-[9px] before:start-0 before:w-px before:bg-destructive" : ""}`}>
