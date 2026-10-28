@@ -1694,13 +1694,13 @@ declare global {
       localMcpState: () => Promise<{
         enabled: boolean;
         url: string | null;
-        tokens: Array<{ id: string; label: string; createdAt: string; lastUsedAt: string | null }>;
+        tokens: Array<{ id: string; label: string; createdAt: string; lastUsedAt: string | null; scopes: string[] }>;
         activity: Array<{ clientName: string; tool: string; timestamp: string }>;
       }>;
       localMcpEnable: (enabled: boolean) => Promise<{ enabled: boolean; url: string | null }>;
       localMcpCreateToken: (
-        label: string
-      ) => Promise<{ id: string; label: string; plaintext: string }>;
+        label: string, scopes: string[]
+      ) => Promise<{ id: string; label: string; plaintext: string; scopes: string[] }>;
       localMcpRevokeToken: (id: string) => Promise<boolean>;
       // Basic window operations
       setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;

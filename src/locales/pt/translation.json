@@ -3763,11 +3763,13 @@
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "Permita que aplicativos neste computador leiam suas notas locais enquanto o OpenWhispr estiver em execução.",
+        "description": "Permita que aplicativos neste computador acessem suas notas e tarefas locais enquanto o OpenWhispr estiver em execução. Alterar tarefas exige um token com acesso de escrita.",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
         "tokenLabel": "Token name",
+        "allowTodoWrites": "Permitir que este token crie e atualize tarefas",
+        "todoWrites": "Acesso de escrita a tarefas",
         "create": "Create token",
         "shownOnce": "Copy this token now. It will not be shown again.",
         "copyToken": "Copy token",
@@ -3776,8 +3778,8 @@
         "created": "Created",
         "lastUsed": "Last used",
         "revoke": "Revoke",
-        "activity": "Recent reads",
-        "noActivity": "No external reads yet."
+        "activity": "Atividade recente",
+        "noActivity": "Ainda não há atividade externa."
       },
       "description": "Converse, pesquise e trabalhe com suas notas no Claude, ChatGPT e Cursor.",
       "step1": "Na sua ferramenta de IA, adicione OpenWhispr MCP usando a URL pública",

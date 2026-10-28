@@ -3934,11 +3934,13 @@
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "Erlaube Apps auf diesem Computer, deine lokalen Notizen zu lesen, während OpenWhispr läuft.",
+        "description": "Erlaube Apps auf diesem Computer, während OpenWhispr läuft auf deine lokalen Notizen und Aufgaben zuzugreifen. Änderungen an Aufgaben erfordern ein Token mit Schreibzugriff.",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
         "tokenLabel": "Token name",
+        "allowTodoWrites": "Diesem Token das Erstellen und Aktualisieren von Aufgaben erlauben",
+        "todoWrites": "Schreibzugriff auf Aufgaben",
         "create": "Create token",
         "shownOnce": "Copy this token now. It will not be shown again.",
         "copyToken": "Copy token",
@@ -3947,8 +3949,8 @@
         "created": "Created",
         "lastUsed": "Last used",
         "revoke": "Revoke",
-        "activity": "Recent reads",
-        "noActivity": "No external reads yet."
+        "activity": "Letzte Aktivitäten",
+        "noActivity": "Noch keine externen Aktivitäten."
       },
       "description": "Chatte, suche und arbeite mit deinen Notizen in Claude, ChatGPT und Cursor.",
       "step1": "Füge OpenWhispr MCP in deinem KI-Tool mit der öffentlichen URL hinzu",

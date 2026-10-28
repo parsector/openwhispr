@@ -3801,11 +3801,13 @@
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "Разрешить приложениям на этом компьютере читать локальные заметки, пока работает OpenWhispr.",
+        "description": "Разрешить приложениям на этом компьютере доступ к локальным заметкам и задачам, пока работает OpenWhispr. Для изменения задач нужен токен с правом записи.",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
         "tokenLabel": "Token name",
+        "allowTodoWrites": "Разрешить этому токену создавать и обновлять задачи",
+        "todoWrites": "Право записи задач",
         "create": "Create token",
         "shownOnce": "Copy this token now. It will not be shown again.",
         "copyToken": "Copy token",
@@ -3814,8 +3816,8 @@
         "created": "Created",
         "lastUsed": "Last used",
         "revoke": "Revoke",
-        "activity": "Recent reads",
-        "noActivity": "No external reads yet."
+        "activity": "Недавние действия",
+        "noActivity": "Внешних действий пока нет."
       },
       "description": "Общайтесь, ищите и работайте с заметками в Claude, ChatGPT и Cursor.",
       "step1": "В вашем инструменте ИИ добавьте OpenWhispr MCP, используя публичный URL",

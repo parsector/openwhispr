@@ -145,9 +145,15 @@ function createMcpHttpServer({ tokens, tools, port = DEFAULT_PORT }) {
         if (method === "ping") result = {};
         else if (method === "tools/list") result = { tools: tools.definitions };
         else if (method === "tools/call") {
-          if (!tools.definitions.some((tool) => tool.name === params.name))
+          const definition = tools.definitions.find((tool) => tool.name === params.name);
+          if (!definition)
             throw Object.assign(new Error("Unknown tool"), { code: -32602 });
-          result = await tools.call(params.name, params.arguments);
+          if (definition.scope !== null && !token.scopes.includes(definition.scope)) {
+            tokens.record(session.clientName, params.name);
+            const requirement = definition.scope ? `requires ${definition.scope} scope` : "has no declared scope";
+            throw Object.assign(new Error(`Permission denied: ${params.name} ${requirement}`), { code: -32003 });
+          }
+          result = await tools.call(params.name, params.arguments, { clientName: session.clientName });
           tokens.record(session.clientName, params.name);
         } else throw Object.assign(new Error("Method not found"), { code: -32601 });
       }

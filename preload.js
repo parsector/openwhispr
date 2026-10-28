@@ -102,7 +102,7 @@ contextBridge.exposeInMainWorld("agentJobs", {
 contextBridge.exposeInMainWorld("electronAPI", {
   localMcpState: () => ipcRenderer.invoke("local-mcp-state"),
   localMcpEnable: (enabled) => ipcRenderer.invoke("local-mcp-enable", enabled),
-  localMcpCreateToken: (label) => ipcRenderer.invoke("local-mcp-create-token", label),
+  localMcpCreateToken: (label, scopes) => ipcRenderer.invoke("local-mcp-create-token", label, scopes),
   localMcpRevokeToken: (id) => ipcRenderer.invoke("local-mcp-revoke-token", id),
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),

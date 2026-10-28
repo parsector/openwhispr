@@ -702,11 +702,13 @@
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "اسمح للتطبيقات على هذا الكمبيوتر بقراءة ملاحظاتك المحلية أثناء تشغيل OpenWhispr.",
+        "description": "اسمح للتطبيقات على هذا الكمبيوتر بالوصول إلى ملاحظاتك ومهامك المحلية أثناء تشغيل OpenWhispr. يتطلب تعديل المهام رمز وصول بصلاحية الكتابة.",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
         "tokenLabel": "Token name",
+        "allowTodoWrites": "السماح لهذا الرمز بإنشاء المهام وتحديثها",
+        "todoWrites": "صلاحية كتابة المهام",
         "create": "Create token",
         "shownOnce": "Copy this token now. It will not be shown again.",
         "copyToken": "Copy token",
@@ -715,8 +717,8 @@
         "created": "Created",
         "lastUsed": "Last used",
         "revoke": "Revoke",
-        "activity": "Recent reads",
-        "noActivity": "No external reads yet."
+        "activity": "النشاط الأخير",
+        "noActivity": "لا يوجد نشاط خارجي بعد."
       },
       "description": "الدردشة والبحث والعمل مع ملاحظاتك داخل Claude وChatGPT وCursor.",
       "step1": "في أداة الذكاء الاصطناعي الخاصة بك، أضف OpenWhispr MCP باستخدام عنوان URL العام",

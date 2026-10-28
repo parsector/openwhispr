@@ -3763,11 +3763,13 @@
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "允許此電腦上的應用程式在 OpenWhispr 執行時讀取本機筆記。",
+        "description": "允許此電腦上的應用程式在 OpenWhispr 執行時存取本機筆記和待辦事項。變更待辦事項需要具有寫入權限的權杖。",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
         "tokenLabel": "Token name",
+        "allowTodoWrites": "允許此權杖建立和更新待辦事項",
+        "todoWrites": "待辦事項寫入權限",
         "create": "Create token",
         "shownOnce": "Copy this token now. It will not be shown again.",
         "copyToken": "Copy token",
@@ -3776,8 +3778,8 @@
         "created": "Created",
         "lastUsed": "Last used",
         "revoke": "Revoke",
-        "activity": "Recent reads",
-        "noActivity": "No external reads yet."
+        "activity": "最近活動",
+        "noActivity": "尚無外部活動。"
       },
       "description": "在 Claude、ChatGPT 和 Cursor 中與你的筆記一起聊天、搜尋和工作。",
       "step1": "在你的 AI 工具中，使用公開 URL 新增 OpenWhispr MCP",
