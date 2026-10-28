@@ -2790,6 +2790,7 @@
     },
     "createMenu": {
       "note": "笔记",
+      "todo": "新建待办事项",
       "assistantChat": "助手聊天",
       "chooseType": "选择要创建的内容"
     },

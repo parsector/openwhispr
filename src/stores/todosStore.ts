@@ -14,6 +14,8 @@ type TodosState = {
   loading: boolean;
   error: string | null;
   filter: { kind: "note" | "person"; value: string; email?: string | null } | null;
+  composerRequestAt: number;
+  requestComposer: () => void;
   setFilter: (filter: TodosState["filter"]) => void;
   refresh: () => Promise<void>;
   setShowArchived: (show: boolean) => void;
@@ -21,7 +23,8 @@ type TodosState = {
 
 export const useTodosStore = create<TodosState>((set, get) => ({
   rows: [], proposals: [], overdueCount: 0, showArchived: savedArchivePreference(),
-  loading: false, error: null, filter: null,
+  loading: false, error: null, filter: null, composerRequestAt: 0,
+  requestComposer: () => set({ composerRequestAt: Date.now() }),
   setFilter: (filter) => set({ filter }),
   refresh: async () => {
     set({ loading: true });

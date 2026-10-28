@@ -2790,6 +2790,7 @@
     },
     "createMenu": {
       "note": "筆記",
+      "todo": "新增待辦事項",
       "assistantChat": "助理聊天",
       "chooseType": "選擇要建立的內容"
     },

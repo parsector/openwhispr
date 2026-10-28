@@ -3135,6 +3135,7 @@
     },
     "createMenu": {
       "note": "Note",
+      "todo": "Nouvelle tâche",
       "assistantChat": "Chat avec l'assistant",
       "chooseType": "Choisir quoi créer"
     },

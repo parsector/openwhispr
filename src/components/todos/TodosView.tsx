@@ -10,11 +10,12 @@ import { filterTodos } from "./todoFilters";
 
 export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => void }) {
   const { t } = useTranslation();
-  const { rows, showArchived, setShowArchived, refresh, loading, error, filter, setFilter } = useTodosStore();
+  const { rows, showArchived, setShowArchived, refresh, loading, error, filter, setFilter, composerRequestAt } = useTodosStore();
   const [draft, setDraft] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
   const [dueDate, setDueDate] = useState("");
   const draftRef = useRef<HTMLInputElement>(null);
+  const lastHandledComposerRequestAt = useRef(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [direction, setDirection] = useState<"owe" | "waiting">("owe");
   const [undo, setUndo] = useState<Commitment | null>(null);
@@ -24,6 +25,15 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
     const off = window.electronAPI.onCommitmentsUpdated(refresh);
     return () => { off(); if (undoTimer.current) clearTimeout(undoTimer.current); };
   }, [refresh]);
+  useEffect(() => {
+    if (!composerRequestAt || composerRequestAt === lastHandledComposerRequestAt.current) return;
+    if (!composerOpen) {
+      setComposerOpen(true);
+      return;
+    }
+    lastHandledComposerRequestAt.current = composerRequestAt;
+    draftRef.current?.focus();
+  }, [composerRequestAt, composerOpen]);
   const changeStatus = async (row: Commitment, status: "completed" | "rejected", reason: string | null = null) => {
     await window.electronAPI.commitmentsUpdate(row.id, { status, rejected_reason: reason });
     setUndo(row);

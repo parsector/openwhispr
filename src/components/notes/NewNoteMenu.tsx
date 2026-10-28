@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, MessageSquare, NotebookPen, Plus } from "../icons";
+import { CheckCircle, ChevronDown, MessageSquare, NotebookPen, Plus } from "../icons";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,18 +26,19 @@ const SOFT_DIVIDER_CLASS = "bg-foreground/8";
 
 interface NewNoteMenuProps {
   onNewNote: () => void;
+  onNewTodo?: () => void;
   /** Opens a new chat in the Chat tab; omitted when policy turns the assistant off. */
   onNewChat?: () => void;
 }
 
 /** The topbar's split "New note" button; the chevron offers the other things to create. */
-export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) {
+export default function NewNoteMenu({ onNewNote, onNewTodo, onNewChat }: NewNoteMenuProps) {
   const { t } = useTranslation();
   const itemChosenRef = useRef(false);
 
-  // The chat input takes focus itself, so selecting chat keeps it. A new note
-  // focuses nothing (the editor mounts fresh), and dismissing the menu returns
-  // focus to the chevron, as Radix does by default.
+  // Chat and todo inputs take focus themselves, so selecting either keeps it.
+  // A new note focuses nothing (the editor mounts fresh), and dismissing the
+  // menu returns focus to the chevron, as Radix does by default.
   const keepFocus = (action: () => void) => () => {
     itemChosenRef.current = true;
     action();
@@ -82,6 +83,12 @@ export default function NewNoteMenu({ onNewNote, onNewChat }: NewNoteMenuProps) 
             <NotebookPen className="h-4 w-4" />
             {t("notes.createMenu.note")}
           </DropdownMenuItem>
+          {onNewTodo && (
+            <DropdownMenuItem onSelect={keepFocus(onNewTodo)} className="gap-2.5">
+              <CheckCircle className="h-4 w-4" />
+              {t("notes.createMenu.todo")}
+            </DropdownMenuItem>
+          )}
           {onNewChat && (
             <>
               <DropdownMenuSeparator />

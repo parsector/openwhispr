@@ -1091,6 +1091,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <div className="flex items-center gap-2">
                   <NewNoteMenu
                     onNewNote={handleNewNote}
+                    onNewTodo={() => { useTodosStore.getState().requestComposer(); setActiveView("todos"); }}
                     onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
                   />
                   <ProfileMenu

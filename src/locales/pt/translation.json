@@ -2790,6 +2790,7 @@
     },
     "createMenu": {
       "note": "Nota",
+      "todo": "Nova tarefa",
       "assistantChat": "Chat com o assistente",
       "chooseType": "Escolher o que criar"
     },

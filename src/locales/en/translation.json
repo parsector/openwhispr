@@ -3283,6 +3283,7 @@
     },
     "createMenu": {
       "note": "Note",
+      "todo": "New todo",
       "assistantChat": "Assistant chat",
       "chooseType": "Choose what to create"
     },

@@ -338,6 +338,52 @@ test("composer opens, saves with Enter, and closes with Escape", async () => {
   }
 });
 
+test("composer requests open and focus the draft once without replacing typed text", async () => {
+  const { Window } = await import("happy-dom");
+  const browser = new Window();
+  const previous = { window: global.window, document: global.document, navigator: global.navigator,
+    IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  const previousRequest = useTodosStore.getState().composerRequestAt;
+  global.window = browser;
+  global.document = browser.document;
+  global.navigator = browser.navigator;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  browser.electronAPI = { commitmentsList: async () => [], commitmentsProposalsList: async () => [],
+    commitmentsOverdueCount: async () => 0, onCommitmentsUpdated: () => () => {} };
+  const { createRoot } = require("react-dom/client");
+  const host = browser.document.createElement("div");
+  browser.document.body.append(host);
+  const root = createRoot(host);
+  const render = () => React.createElement(TodosView, { onOpenNote() {} });
+  try {
+    useTodosStore.setState({ composerRequestAt: previousRequest + 1 });
+    await React.act(async () => root.render(render()));
+    const input = host.querySelector('input[aria-label="todos.addPlaceholder"]');
+    assert.ok(input, "the request opens the composer on initial mount");
+    assert.equal(browser.document.activeElement, input);
+
+    const trigger = host.querySelector('button[aria-expanded="true"]');
+    trigger.focus();
+    await React.act(async () => root.render(render()));
+    assert.equal(browser.document.activeElement, trigger, "the same request does not steal focus again");
+
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value").set.call(input, "Keep this draft");
+      input.dispatchEvent(new browser.Event("input", { bubbles: true }));
+    });
+    await React.act(async () => useTodosStore.setState({ composerRequestAt: previousRequest + 2 }));
+    assert.equal(input.value, "Keep this draft");
+    assert.equal(browser.document.activeElement, input);
+  } finally {
+    await React.act(async () => root.unmount());
+    useTodosStore.setState({ composerRequestAt: previousRequest });
+    browser.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete global[key]; else global[key] = value;
+    }
+  }
+});
+
 test("Todos person filter includes the attendee email alias", () => {
   const rows = [{ ...row("alice", null), person: "asmith", source_note_id: "42" },
     { ...row("bob", null), person: "Bob", source_note_id: "24" }];
@@ -353,6 +399,19 @@ test("todos store refreshes list, proposals and overdue badge", async () => {
   assert.equal(useTodosStore.getState().rows.length, 1);
   assert.equal(useTodosStore.getState().overdueCount, 2);
   delete global.window;
+});
+
+test("todos store requestComposer advances the request timestamp", () => {
+  const previous = useTodosStore.getState().composerRequestAt;
+  const originalNow = Date.now;
+  try {
+    Date.now = () => previous + 1000;
+    useTodosStore.getState().requestComposer();
+    assert.equal(useTodosStore.getState().composerRequestAt, previous + 1000);
+  } finally {
+    Date.now = originalNow;
+    useTodosStore.setState({ composerRequestAt: previous });
+  }
 });
 
 test("proposal banner keeps evidence and separate review actions", () => {

@@ -2955,6 +2955,7 @@
     },
     "createMenu": {
       "note": "ノート",
+      "todo": "新しいタスク",
       "assistantChat": "アシスタントとのチャット",
       "chooseType": "作成する項目を選択"
     },
