@@ -10,6 +10,7 @@ interface MeetingNotificationCardProps {
   onStart?: () => void;
   picker?: ReactNode;
   prepAction?: ReactNode;
+  prepCommitments?: ReactNode;
   busy?: boolean;
   dismissLabel?: string;
   onDismiss?: () => void;
@@ -33,6 +34,7 @@ export function MeetingNotificationCard({
   onStart,
   picker,
   prepAction,
+  prepCommitments,
   busy = false,
   dismissLabel,
   onDismiss,
@@ -110,6 +112,7 @@ export function MeetingNotificationCard({
         </div>
       </div>
       {prepAction && <div className="mt-2 text-right">{prepAction}</div>}
+      {prepCommitments}
     </div>
   );
 }

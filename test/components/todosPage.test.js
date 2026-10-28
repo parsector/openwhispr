@@ -8,6 +8,7 @@ const TodoRow = require("../../src/components/todos/TodoRow.tsx").default;
 const TodosView = require("../../src/components/todos/TodosView.tsx").default;
 const ProposalsBanner = require("../../src/components/todos/ProposalsBanner.tsx").default;
 const { useTodosStore } = require("../../src/stores/todosStore.ts");
+const { filterTodos } = require("../../src/components/todos/todoFilters.ts");
 
 const row = (id, due_date, direction = "owe") => ({ id, text: `Send report ${id}`, status: "open",
   direction, due_date, created_at: "2026-10-28", person: null, quote: null,
@@ -32,6 +33,14 @@ test("todos view renders manual input and archive filter", () => {
   const html = renderToStaticMarkup(React.createElement(TodosView, { onOpenNote() {} }));
   assert.match(html, /type="checkbox"/);
   assert.match(html, /<form/);
+});
+
+test("Todos person filter includes the attendee email alias", () => {
+  const rows = [{ ...row("alice", null), person: "asmith", source_note_id: "42" },
+    { ...row("bob", null), person: "Bob", source_note_id: "24" }];
+  assert.deepEqual(filterTodos(rows, { kind: "person", value: "Alice Smith", email: "asmith@example.com" }).map((item) => item.id), ["alice"]);
+  assert.deepEqual(filterTodos(rows, { kind: "note", value: "24" }).map((item) => item.id), ["bob"]);
+  assert.equal(filterTodos(rows, null), rows);
 });
 
 test("todos store refreshes list, proposals and overdue badge", async () => {

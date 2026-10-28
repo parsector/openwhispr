@@ -5212,6 +5212,13 @@
     }
   },
   "todos": {
+    "clearFilter": "Clear filter",
+    "briefTitle": "Commitments",
+    "briefOwe": "You owe",
+    "briefWaiting": "Waiting on",
+    "briefMore": "+{{count}} more",
+    "briefNoDate": "no date",
+    "briefComplete": "Complete {{text}}",
     "title": "Todos",
     "subtitle": "Commitments from your meetings and the ones you add.",
     "showArchived": "Show archived",

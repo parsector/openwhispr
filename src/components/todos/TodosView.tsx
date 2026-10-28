@@ -6,6 +6,7 @@ import { useTodosStore } from "../../stores/todosStore";
 import { groupTodos } from "./TodoGroups";
 import TodoRow from "./TodoRow";
 import ProposalsBanner from "./ProposalsBanner";
+import { filterTodos } from "./todoFilters";
 
 export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => void }) {
   const { t } = useTranslation();
@@ -26,7 +27,7 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
     undoTimer.current = setTimeout(() => setUndo(null), 5000);
     await refresh();
   };
-  const visibleRows = filter?.kind === "note" ? rows.filter((row) => row.source_note_id === filter.value) : rows;
+  const visibleRows = filterTodos(rows, filter);
   const groups = groupTodos(visibleRows);
   return (
     <div className="h-full overflow-y-auto px-5 pb-12 pt-8 sm:px-8">
@@ -40,8 +41,8 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
           </label>
         </div>
         {filter && <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{filter.kind === "note" ? "Source meeting" : "Person"}: {filter.value}</span>
-          <button type="button" className="text-primary underline" onClick={() => setFilter(null)}>Clear filter</button>
+          <span>{filter.kind === "note" ? t("todos.sourceMeeting") : t("todos.person")}: {filter.value}</span>
+          <button type="button" className="text-primary underline" onClick={() => setFilter(null)}>{t("todos.clearFilter")}</button>
         </div>}
         <form className="mb-6 flex items-center gap-2 rounded-xl border border-border bg-background p-2 focus-within:ring-2 focus-within:ring-primary/25"
           onSubmit={async (event) => { event.preventDefault(); if (!draft.trim()) return;
