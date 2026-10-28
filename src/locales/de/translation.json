@@ -5175,6 +5175,9 @@
     }
   },
   "todos": {
+    "delete": "Löschen",
+    "deleteConfirm": "Diese Aufgabe dauerhaft löschen? Dies kann nicht rückgängig gemacht werden.",
+    "deletePermanently": "Dauerhaft löschen",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

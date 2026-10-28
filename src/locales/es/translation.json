@@ -5175,6 +5175,9 @@
     }
   },
   "todos": {
+    "delete": "Eliminar",
+    "deleteConfirm": "¿Eliminar esta tarea permanentemente? Esta acción no se puede deshacer.",
+    "deletePermanently": "Eliminar permanentemente",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

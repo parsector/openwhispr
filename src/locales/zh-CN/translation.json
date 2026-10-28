@@ -5175,6 +5175,9 @@
     }
   },
   "todos": {
+    "delete": "删除",
+    "deleteConfirm": "永久删除此待办事项？此操作无法撤销。",
+    "deletePermanently": "永久删除",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

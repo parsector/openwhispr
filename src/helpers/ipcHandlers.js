@@ -1130,6 +1130,11 @@ class IPCHandlers {
     const commitments = () => new CommitmentStore(this.databaseManager);
     const changed = (value) => { if (value) broadcastToWindows("commitments-updated"); return value; };
     ipcMain.handle("commitments-list", (_event, includeArchived = false) => commitments().list(includeArchived === true));
+    ipcMain.handle("is-debug-enabled", () => debugLogger.isDebugEnabled());
+    ipcMain.handle("commitments-delete", (_event, id) =>
+      require("./commitments/delete").deleteCommitment({
+        store: commitments(), debugLogger, broadcast: broadcastToWindows,
+      }, id));
     ipcMain.handle("todos-tool-list", (_event, args) => require("./commitments/toolRead").listTodos(this.databaseManager, args));
     ipcMain.handle("todos-tool-get", (_event, args) => require("./commitments/toolRead").getTodo(this.databaseManager, args));
     ipcMain.handle("todos-tool-create", (_event, args) => changed(require("./commitments/toolWrite").createTodo(this.databaseManager, args, "Assistant")));

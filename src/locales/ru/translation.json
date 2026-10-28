@@ -5215,6 +5215,9 @@
     }
   },
   "todos": {
+    "delete": "Удалить",
+    "deleteConfirm": "Удалить эту задачу навсегда? Это действие нельзя отменить.",
+    "deletePermanently": "Удалить навсегда",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

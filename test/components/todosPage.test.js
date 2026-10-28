@@ -221,7 +221,7 @@ test("todo group headings have the same section top offset with and without over
   global.document = browser.document;
   global.navigator = browser.navigator;
   global.IS_REACT_ACT_ENVIRONMENT = true;
-  browser.electronAPI = { commitmentsList: async () => rows, commitmentsProposalsList: async () => [],
+  browser.electronAPI = { isDebugEnabled: async () => false, commitmentsList: async () => rows, commitmentsProposalsList: async () => [],
     commitmentsOverdueCount: async () => 1, onCommitmentsUpdated: () => () => {} };
   const { createRoot } = require("react-dom/client");
   const host = browser.document.createElement("div");
@@ -265,6 +265,102 @@ test("Todo components do not use browser prompt, confirm, or alert dialogs", () 
     if (!/\.(tsx?|jsx?)$/.test(filename)) continue;
     const source = fs.readFileSync(path.join(directory, filename), "utf8");
     assert.doesNotMatch(source, /window\.(?:prompt|confirm|alert)\b/, filename);
+  }
+});
+
+test("debug delete stays in the overflow menu until a second confirmation click, including archived rows", async () => {
+  const props = { row: row("delete-me", null), onComplete() {}, onReject() {}, onDue() {},
+    onPerson() {}, onOpenNote() {}, onDelete() {} };
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(TodoRow, { ...props, debugEnabled: false })), />todos\.delete<\/button>/);
+  assert.match(renderToStaticMarkup(React.createElement(TodoRow, { ...props, row: { ...props.row, status: "completed" }, debugEnabled: true })), />todos\.delete<\/button>/);
+  assert.match(renderToStaticMarkup(React.createElement(TodoRow, { ...props, row: { ...props.row, status: "rejected" }, debugEnabled: true })), />todos\.delete<\/button>/);
+
+  const { Window } = await import("happy-dom");
+  const browser = new Window();
+  const previous = { window: global.window, document: global.document, navigator: global.navigator,
+    IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  global.window = browser;
+  global.document = browser.document;
+  global.navigator = browser.navigator;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const { createRoot } = require("react-dom/client");
+  const host = browser.document.createElement("div");
+  browser.document.body.append(host);
+  const root = createRoot(host);
+  const deleted = [];
+  const button = (label) => [...host.querySelectorAll("button")].find((item) => item.textContent === label);
+  try {
+    await React.act(async () => root.render(React.createElement(TodoRow, { ...props,
+      debugEnabled: true, onDelete: (item) => deleted.push(item.id) })));
+    await React.act(async () => button("todos.delete").click());
+    assert.deepEqual(deleted, []);
+    assert.ok(button("todos.deletePermanently"));
+    assert.equal(button("todos.delete"), undefined, "menu content is replaced by confirmation");
+    await React.act(async () => button("common.cancel").click());
+    assert.deepEqual(deleted, []);
+    assert.ok(button("todos.delete"));
+    await React.act(async () => button("todos.delete").click());
+    await React.act(async () => button("todos.deletePermanently").click());
+    assert.deepEqual(deleted, ["delete-me"]);
+  } finally {
+    await React.act(async () => root.unmount());
+    browser.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete global[key]; else global[key] = value;
+    }
+  }
+});
+
+test("TodosView reads debug mode once and refreshes archived rows and counts after deletion", async () => {
+  const { Window } = await import("happy-dom");
+  const browser = new Window();
+  const previous = { window: global.window, document: global.document, navigator: global.navigator,
+    IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  const priorStore = useTodosStore.getState();
+  global.window = browser;
+  global.document = browser.document;
+  global.navigator = browser.navigator;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  let rows = [{ ...row("archived-test", null), status: "rejected" }, row("keep", null)];
+  let flagReads = 0;
+  let deleteCalls = 0;
+  let updated;
+  browser.electronAPI = {
+    isDebugEnabled: async () => { flagReads++; return true; },
+    commitmentsList: async () => rows,
+    commitmentsProposalsList: async () => [],
+    commitmentsOverdueCount: async () => rows.length,
+    onCommitmentsUpdated: (callback) => { updated = callback; return () => {}; },
+    commitmentsDelete: async (id) => { deleteCalls++; rows = rows.filter((item) => item.id !== id);
+      updated(); return { success: true }; },
+  };
+  useTodosStore.setState({ showArchived: true, filter: null });
+  const { createRoot } = require("react-dom/client");
+  const host = browser.document.createElement("div");
+  browser.document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await React.act(async () => root.render(React.createElement(TodosView, { onOpenNote() {} })));
+    assert.equal(flagReads, 1);
+    const target = [...host.querySelectorAll("article")].find((item) => item.textContent.includes("archived-test"));
+    assert.ok(target);
+    const menu = target.querySelector("details");
+    const button = (label) => [...menu.querySelectorAll("button")].find((item) => item.textContent === label);
+    await React.act(async () => button("todos.delete").click());
+    assert.equal(deleteCalls, 0);
+    await React.act(async () => button("todos.deletePermanently").click());
+    assert.equal(deleteCalls, 1);
+    assert.doesNotMatch(host.textContent, /archived-test/);
+    assert.match(host.textContent, /Send report keep/);
+    assert.equal(useTodosStore.getState().overdueCount, 1);
+  } finally {
+    await React.act(async () => root.unmount());
+    useTodosStore.setState({ rows: priorStore.rows, proposals: priorStore.proposals,
+      overdueCount: priorStore.overdueCount, showArchived: priorStore.showArchived, filter: priorStore.filter });
+    browser.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete global[key]; else global[key] = value;
+    }
   }
 });
 
@@ -347,6 +443,7 @@ test("composer opens, saves with Enter, and closes with Escape", async () => {
   global.IS_REACT_ACT_ENVIRONMENT = true;
   const created = [];
   browser.electronAPI = {
+    isDebugEnabled: async () => false,
     commitmentsList: async () => [], commitmentsProposalsList: async () => [], commitmentsOverdueCount: async () => 0,
     onCommitmentsUpdated: () => () => {}, commitmentsCreate: async (input) => { created.push(input); return row("created", null); },
   };
@@ -398,7 +495,7 @@ test("composer requests open and focus the draft once without replacing typed te
   global.document = browser.document;
   global.navigator = browser.navigator;
   global.IS_REACT_ACT_ENVIRONMENT = true;
-  browser.electronAPI = { commitmentsList: async () => [], commitmentsProposalsList: async () => [],
+  browser.electronAPI = { isDebugEnabled: async () => false, commitmentsList: async () => [], commitmentsProposalsList: async () => [],
     commitmentsOverdueCount: async () => 0, onCommitmentsUpdated: () => () => {} };
   const { createRoot } = require("react-dom/client");
   const host = browser.document.createElement("div");

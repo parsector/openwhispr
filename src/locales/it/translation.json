@@ -5175,6 +5175,9 @@
     }
   },
   "todos": {
+    "delete": "Elimina",
+    "deleteConfirm": "Eliminare definitivamente questa attività? Non è possibile annullare.",
+    "deletePermanently": "Elimina definitivamente",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

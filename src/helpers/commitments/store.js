@@ -19,6 +19,15 @@ class CommitmentStore {
   constructor(database) { this.database = database; this.db = database.db || database; }
   scope() { return this.database.activeAccountId || null; }
   get(id) { return this.db.prepare("SELECT * FROM commitments WHERE id=? AND account_id IS ?").get(id, this.scope()) || null; }
+  remove(id) {
+    return this.db.transaction(() => {
+      if (!this.get(id)) return false;
+      this.db.prepare("DELETE FROM commitment_mentions WHERE commitment_id=?").run(id);
+      this.db.prepare("DELETE FROM commitment_proposals WHERE commitment_id=?").run(id);
+      return this.db.prepare("DELETE FROM commitments WHERE id=? AND account_id IS ?")
+        .run(id, this.scope()).changes === 1;
+    })();
+  }
   list(includeArchived = false) {
     return this.db.prepare(`SELECT commitments.*, (SELECT COUNT(*) FROM commitment_mentions m
       WHERE m.commitment_id=commitments.id AND m.kind='date_moved') AS date_move_count

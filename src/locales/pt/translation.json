@@ -5175,6 +5175,9 @@
     }
   },
   "todos": {
+    "delete": "Excluir",
+    "deleteConfirm": "Excluir esta tarefa permanentemente? Não é possível desfazer.",
+    "deletePermanently": "Excluir permanentemente",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

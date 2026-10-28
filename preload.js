@@ -257,6 +257,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Note functions
   commitmentsList: (includeArchived = false) => ipcRenderer.invoke("commitments-list", includeArchived),
+  isDebugEnabled: () => ipcRenderer.invoke("is-debug-enabled"),
+  commitmentsDelete: (id) => ipcRenderer.invoke("commitments-delete", id),
   todosToolList: (args) => ipcRenderer.invoke("todos-tool-list", args),
   todosToolGet: (args) => ipcRenderer.invoke("todos-tool-get", args),
   todosToolCreate: (args) => ipcRenderer.invoke("todos-tool-create", args),

@@ -9,8 +9,8 @@ const english = JSON.parse(fs.readFileSync(path.join(root, "en/translation.json"
 test("all eleven locales contain the complete Todos namespace", () => {
   for (const locale of locales) {
     const value = JSON.parse(fs.readFileSync(path.join(root, locale, "translation.json"), "utf8")).todos;
-    const shared = Object.fromEntries(Object.keys(english).map((key) => [key, value[key]]));
-    assert.deepEqual(shared, english, `${locale} differs from the fallback-safe English strings`);
+    assert.deepEqual(Object.keys(english).filter((key) => !(key in value)), [], `${locale} lacks Todos keys`);
+    for (const key of Object.keys(english)) assert.ok(value[key], `${locale} lacks todos.${key}`);
   }
   assert.ok(Object.keys(english).length > 30);
 });

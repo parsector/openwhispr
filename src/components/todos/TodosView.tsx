@@ -19,7 +19,14 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [direction, setDirection] = useState<"owe" | "waiting">("owe");
   const [undo, setUndo] = useState<Commitment | null>(null);
+  const [debugEnabled, setDebugEnabled] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    let active = true;
+    void window.electronAPI.isDebugEnabled().then((enabled) => { if (active) setDebugEnabled(enabled); });
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
     void refresh();
     const off = window.electronAPI.onCommitmentsUpdated(refresh);
@@ -39,6 +46,13 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
     setUndo(row);
     if (undoTimer.current) clearTimeout(undoTimer.current);
     undoTimer.current = setTimeout(() => setUndo(null), 5000);
+    await refresh();
+  };
+  const deleteTodo = async (row: Commitment) => {
+    const result = await window.electronAPI.commitmentsDelete(row.id);
+    if ("error" in result) { setDeleteError(result.error); return; }
+    setDeleteError(null);
+    if (undo?.id === row.id) setUndo(null);
     await refresh();
   };
   const visibleRows = filterTodos(rows, filter);
@@ -87,11 +101,13 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
           }}>{t("todos.undo")}</button>
         </div>}
         {error && <p role="alert" className="mb-4 text-sm text-destructive">{t("todos.loadError")}: {error}</p>}
+        {deleteError && <p role="alert" className="mb-4 text-sm text-destructive">{deleteError}</p>}
         {!loading && !groups.length && <p className="py-16 text-center text-sm text-muted-foreground">{showArchived ? t("todos.emptyArchive") : t("todos.empty")}</p>}
         <div className="mt-5 space-y-[26px]">
         {groups.map(({ key, rows: groupRows }) => <section key={key} aria-labelledby={`${key}-heading`} className={`pt-2.5 ${key === "overdue" ? "-mx-[13px] rounded-lg bg-input px-[13px] pb-[3px]" : ""}`}>
           <h2 id={`${key}-heading`} className={`flex items-baseline gap-[7px] text-[11px] font-bold leading-[1.4] tracking-[0.1em] [font-variant-caps:all-small-caps] ${key === "overdue" ? "text-foreground" : "text-muted-foreground"}`}>{t(`todos.groups.${key}`)} <span className="font-medium tracking-normal">{groupRows.length}</span></h2>
-          {groupRows.map((row) => <TodoRow key={row.id} row={row} onOpenNote={onOpenNote}
+          {groupRows.map((row) => <TodoRow key={row.id} row={row} onOpenNote={onOpenNote} debugEnabled={debugEnabled}
+            onDelete={(item) => void deleteTodo(item)}
             onComplete={(item) => void changeStatus(item, "completed")}
             onReject={(item, reason) => void changeStatus(item, "rejected", reason)}
             onDue={(item, input) => void window.electronAPI.commitmentsSetDue(item.id, input).then(() => refresh())}

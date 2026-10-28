@@ -5285,6 +5285,9 @@
     }
   },
   "todos": {
+    "delete": "حذف",
+    "deleteConfirm": "هل تريد حذف هذه المهمة نهائيًا؟ لا يمكن التراجع عن ذلك.",
+    "deletePermanently": "حذف نهائيًا",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

@@ -5175,6 +5175,9 @@
     }
   },
   "todos": {
+    "delete": "Delete",
+    "deleteConfirm": "Delete this todo permanently? This cannot be undone.",
+    "deletePermanently": "Delete permanently",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

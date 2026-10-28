@@ -5175,6 +5175,9 @@
     }
   },
   "todos": {
+    "delete": "削除",
+    "deleteConfirm": "このタスクを完全に削除しますか？元に戻すことはできません。",
+    "deletePermanently": "完全に削除",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

@@ -5175,6 +5175,9 @@
     }
   },
   "todos": {
+    "delete": "Supprimer",
+    "deleteConfirm": "Supprimer définitivement cette tâche ? Cette action est irréversible.",
+    "deletePermanently": "Supprimer définitivement",
     "clearFilter": "Clear filter",
     "briefTitle": "Commitments",
     "briefOwe": "You owe",

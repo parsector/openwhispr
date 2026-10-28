@@ -1563,6 +1563,8 @@ declare global {
     mcpClient: import("../services/tools/mcpTools").McpClientApi;
     electronAPI: {
       commitmentsList: (includeArchived?: boolean) => Promise<Commitment[]>;
+      isDebugEnabled: () => Promise<boolean>;
+      commitmentsDelete: (id: string) => Promise<{ success: true } | { success: false; error: string }>;
       todosToolList: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
       todosToolGet: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
       todosToolCreate: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;

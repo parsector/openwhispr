@@ -12,19 +12,22 @@ function peopleLabel(person: string | null): string {
   return person;
 }
 
-export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, onOpenNote }: {
+export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, onOpenNote, onDelete, debugEnabled = false }: {
   row: Commitment;
   onComplete: (row: Commitment) => void;
   onReject: (row: Commitment, reason: string | null) => void;
   onDue: (row: Commitment, input: { action: "push" | "pick" | "clear"; date?: string }) => void;
   onPerson: (row: Commitment, person: string) => void;
   onOpenNote: (id: number) => void;
+  onDelete?: (row: Commitment) => void;
+  debugEnabled?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [editingPerson, setEditingPerson] = useState(false);
   const [person, setPerson] = useState(peopleLabel(row.person));
   const [rejecting, setRejecting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const rejectInputRef = useRef<HTMLInputElement>(null);
@@ -119,6 +122,11 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             <details ref={detailsRef} className="relative text-xs">
               <summary aria-label={t("todos.actions")} className="list-none cursor-pointer rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"><MoreHorizontal size={16} /></summary>
               <div className="absolute start-0 z-20 mt-1 w-44 rounded-lg border border-border bg-background p-1 shadow-lg text-sm">
+                {confirmingDelete ? <div className="space-y-2 p-2">
+                  <p className="text-xs text-foreground">{t("todos.deleteConfirm")}</p>
+                  <button type="button" className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => { setConfirmingDelete(false); detailsRef.current?.removeAttribute("open"); onDelete?.(row); }}>{t("todos.deletePermanently")}</button>
+                  <button type="button" className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => setConfirmingDelete(false)}>{t("common.cancel")}</button>
+                </div> : <>
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { setEditingPerson(true); }} type="button">{t("todos.editPerson")}</button>
                 <label className="block rounded px-2 py-1.5 hover:bg-muted">{t("todos.pickDate")}
                   <input type="date" className="mt-1 w-full bg-background" value={row.due_date || ""}
@@ -128,6 +136,8 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "clear" })} type="button">{t("todos.clearDate")}</button>
                 {!archived && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onComplete(row)} type="button">{t("todos.complete")}</button>}
                 {!archived && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={startReject} type="button">{t("todos.reject")}</button>}
+                {debugEnabled && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => setConfirmingDelete(true)} type="button">{t("todos.delete")}</button>}
+                </>}
               </div>
             </details>
           </div>
