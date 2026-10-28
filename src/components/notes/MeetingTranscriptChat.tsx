@@ -868,16 +868,20 @@ export function MeetingTranscriptChat({
   useEffect(() => {
     if (noteId == null) { setSourceChips(null); return; }
     let active = true;
-    const refresh = () => { void window.electronAPI.commitmentsForNote(noteId)
-      .then((rows) => { if (active) setSourceChips({ noteId, rows }); })
-      .catch(() => { if (active) setSourceChips({ noteId, rows: [] }); }); };
+    const refresh = () => {
+      const request = typeof window !== "undefined" ? window.electronAPI?.commitmentsForNote?.(noteId) : undefined;
+      if (!request) { if (active) setSourceChips({ noteId, rows: [] }); return; }
+      void request
+        .then((rows) => { if (active) setSourceChips({ noteId, rows }); })
+        .catch(() => { if (active) setSourceChips({ noteId, rows: [] }); });
+    };
     refresh();
-    const off = window.electronAPI.onCommitmentsUpdated(refresh);
-    return () => { active = false; off(); };
+    const off = typeof window !== "undefined" ? window.electronAPI?.onCommitmentsUpdated?.(refresh) : undefined;
+    return () => { active = false; off?.(); };
   }, [noteId]);
-  const chipsByIndex = useMemo(() => sourceChipsByIndex(sourceChips?.noteId === noteId ? sourceChips.rows : []), [sourceChips, noteId]);
+  const chipsByIndex = useMemo(() => sourceChipsByIndex(sourceChips && sourceChips.noteId === noteId ? sourceChips.rows : []), [sourceChips, noteId]);
   const openSourceTodos = useCallback(() => {
-    if (noteId != null) void window.electronAPI.commitmentsOpenTodos({ kind: "note", value: String(noteId) });
+    if (noteId != null && typeof window !== "undefined") void window.electronAPI?.commitmentsOpenTodos?.({ kind: "note", value: String(noteId) });
   }, [noteId]);
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
   // The scroller mounts only once content exists, and a recording opens with
