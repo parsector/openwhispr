@@ -14,6 +14,7 @@ test("commitment schema survives repeated initialization", (t) => {
     return originalLoad.call(this, request, parent, isMain);
   };
   t.after(() => { Module._load = originalLoad; });
+  delete require.cache[require.resolve("../../src/helpers/database.js")];
   const DatabaseManager = require("../../src/helpers/database.js");
   let first;
   try { first = new DatabaseManager(); }
@@ -34,4 +35,31 @@ test("commitment schema survives repeated initialization", (t) => {
   for (const name of names) {
     assert.equal(second.db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE type='table' AND name=?").get(name).n, 1);
   }
+});
+
+test("legacy commitments gain attribution columns without changing existing rows or user_version", (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-commitments-migrate-"));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const originalLoad = Module._load;
+  Module._load = function (request, parent, isMain) {
+    if (request === "electron") return { app: { getPath: () => directory, isReady: () => false } };
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  t.after(() => { Module._load = originalLoad; });
+  delete require.cache[require.resolve("../../src/helpers/database.js")];
+  const DatabaseManager = require("../../src/helpers/database.js");
+  const { CommitmentStore } = require("../../src/helpers/commitments/store.js");
+  const first = new DatabaseManager();
+  const row = new CommitmentStore(first).create({ text: "Existing meeting todo" });
+  const before = first.db.pragma("user_version", { simple: true });
+  const columns = first.db.prepare("PRAGMA table_info(commitments)").all()
+    .map((column) => column.name).filter((name) => !["source", "source_agent"].includes(name));
+  first.db.exec(`CREATE TABLE commitments_legacy AS SELECT ${columns.join(",")} FROM commitments;
+    DROP TABLE commitments; ALTER TABLE commitments_legacy RENAME TO commitments;`);
+  first.db.close();
+  const second = new DatabaseManager();
+  t.after(() => second.db.close());
+  assert.equal(second.db.pragma("user_version", { simple: true }), before);
+  assert.equal(new CommitmentStore(second).get(row.id).source, "meeting");
+  assert.equal(new CommitmentStore(second).get(row.id).source_agent, null);
 });

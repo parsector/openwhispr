@@ -47,6 +47,8 @@ test("extractor persists three todos, restatement and completion proposal", asyn
   assert.deepEqual(result, { created: 3, proposals: 1, skipped: false });
   const store = new CommitmentStore(db);
   assert.equal(db.db.prepare("SELECT count(*) AS n FROM commitments").get().n, 3);
+  assert.deepEqual([...new Set(store.list().map((row) => row.source))], ["meeting"]);
+  assert.ok(store.list().every((row) => row.source_agent === null));
   assert.equal(db.db.prepare("SELECT count(*) AS n FROM commitment_mentions").get().n, 5);
   assert.equal(store.proposals(42).length, 1);
   assert.equal(db.db.prepare("SELECT mention_count FROM commitments WHERE person='Alex' AND direction='owe'").get().mention_count, 2);

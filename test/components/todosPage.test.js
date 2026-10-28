@@ -29,6 +29,15 @@ test("todo row renders status, date and hidden quote disclosure", () => {
   assert.doesNotMatch(html, /<blockquote/);
 });
 
+test("only agent-created todos show the client attribution badge", () => {
+  const render = (source, source_agent) => renderToStaticMarkup(React.createElement(TodoRow, {
+    row: { ...row("1", null), source, source_agent }, onComplete() {}, onReject() {}, onDue() {}, onPerson() {}, onOpenNote() {},
+  }));
+  assert.match(render("agent", "Claude Desktop"), /Claude Desktop/);
+  assert.doesNotMatch(render("manual", "Claude Desktop"), /Claude Desktop/);
+  assert.doesNotMatch(render("meeting", "Claude Desktop"), /Claude Desktop/);
+});
+
 test("todos view renders manual input and archive filter", () => {
   const html = renderToStaticMarkup(React.createElement(TodosView, { onOpenNote() {} }));
   assert.match(html, /type="checkbox"/);

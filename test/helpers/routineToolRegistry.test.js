@@ -26,6 +26,8 @@ test("routine tools are drawn from the same assembly and names as chat", () => {
     allowedTools: chat.getAll().map((tool) => tool.name),
     finishRun: () => {},
   });
+  assert.equal(routine.get("create_todo"), undefined);
+  assert.equal(routine.get("update_todo"), undefined);
   assert.deepEqual(
     routine.assembly
       .getAll()
