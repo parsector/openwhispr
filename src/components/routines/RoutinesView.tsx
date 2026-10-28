@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { loadFolders, useFolders } from "../../stores/noteStore";
 import { routineEndpointSupportsTools } from "../../utils/modelCapability";
-import { defaultTitleTemplate, renderRoutineTitle } from "../../helpers/routines/routineTitleTemplate";
+import { defaultTitleTemplate, renderRoutineTitle } from "../../helpers/routines/routineTitleTemplate.mjs";
 import { customTools, defaultSelection, missingRequiredSelection, nextThreeRuns, sourceState, toggleSource, type Selection, type Source } from "./editorPolicy";
 
 type Routine = Awaited<ReturnType<Window["electronAPI"]["listRoutines"]>>[number];

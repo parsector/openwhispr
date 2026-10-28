@@ -1,28 +1,8 @@
 const { CommitmentStore } = require("./store");
 const { todoDetail } = require("./toolRead");
 
-const personSchema = { anyOf: [{ type: "string" }, { type: "array", items: { type: "string" } }] };
-const dateSchema = { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: "Real calendar date in yyyy-mm-dd format, without a time." };
-const definitions = [
-  { name: "create_todo", scope: "todos:write", description: "Create one todo explicitly requested by the user. The row is attributed to this agent.", parameters: {
-    type: "object", properties: {
-      text: { type: "string", minLength: 1, maxLength: 500, description: "Todo text; whitespace and newlines are normalized." },
-      person: personSchema,
-      direction: { type: "string", enum: ["owe", "waiting"] },
-      due_date: dateSchema,
-      quote: { type: "string", maxLength: 500, description: "The sentence the agent is acting on." },
-    }, required: ["text"], additionalProperties: false,
-  } },
-  { name: "update_todo", scope: "todos:write", description: "Change one todo's status, due date, or person. User-pinned fields stay unchanged.", parameters: {
-    type: "object", properties: {
-      id: { type: "string", minLength: 1, maxLength: 200 },
-      status: { type: "string", enum: ["open", "completed", "rejected"] },
-      rejected_reason: { type: "string", maxLength: 500 },
-      due_date: { anyOf: [dateSchema, { type: "null" }] },
-      person: personSchema,
-    }, required: ["id"], additionalProperties: false,
-  } },
-];
+const defs = require("./todoToolDefinitions.json");
+const definitions = [defs.create, defs.update];
 
 function invalid(message) { throw Object.assign(new Error(message), { code: -32602 }); }
 function objectArgs(args, allowed) {

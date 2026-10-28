@@ -1,7 +1,7 @@
 import type { ToolDefinition, ToolResult } from "./ToolRegistry";
-import { definitions } from "../../helpers/commitments/toolRead";
+import todoDefinitions from "../../helpers/commitments/todoToolDefinitions.json";
 
-const definition = definitions.find((tool) => tool.name === "get_todo")!;
+const definition = todoDefinitions.get;
 
 export const getTodoTool: ToolDefinition = {
   ...definition,

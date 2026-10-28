@@ -1,26 +1,9 @@
 const { CommitmentStore, isOverdue, localToday } = require("./store");
 
 const MAX_PAYLOAD = 8000;
-const listDefinition = {
-  name: "list_todos",
-  description: "Read the user's own commitments. 'owe' means the user owes someone; 'waiting' means someone else owes the user. Returns id, text, person, direction, due_date, status, overdue, source_meeting_title, source, source_agent, and mention_count, ordered like Todos (overdue, dated, no date, then waiting). Filters by status, direction, person, and local due date. Archived rows require include_archived. Returns at most 50 rows within an 8 KB payload, truncating large output. Read only; cannot create, edit, complete, or reject todos.",
-  parameters: {
-    type: "object", properties: {
-      status: { type: "string", enum: ["open", "proposed", "completed", "rejected", "all"], description: "Todo status; default open. 'all' includes every status." },
-      direction: { type: "string", enum: ["owe", "waiting", "both"], description: "'owe' is what the user owes; 'waiting' is what someone else owes the user; default both." },
-      person: { type: "string", description: "Case-insensitive person name or email match; optional." },
-      due: { type: "string", enum: ["overdue", "today", "week", "none", "all"], description: "Local calendar date: overdue is an open, owed todo before today; today is today's date; week is today through six days ahead; none has no due date; default all." },
-      limit: { type: "integer", minimum: 1, description: "Maximum rows, default 20; values above 50 are clamped to 50." },
-      include_archived: { type: "boolean", description: "Include archived todos as well as active todos; default false." },
-    }, additionalProperties: false,
-  },
-};
-const getDefinition = {
-  name: "get_todo",
-  description: "Read the full stored row of one of the user's own commitments by ID, including source, source_agent, quote, quote_segment_index, source_note_id, source_note_title, speaker_confidence, rejected_reason, and the last 10 mentions. 'waiting' means someone else owes the user. Archived todos return not found. Returns only stored todo fields and quotes, never note content; large fields may be truncated to keep the payload within 8 KB. Read only; cannot create, edit, complete, or reject todos.",
-  parameters: { type: "object", properties: { id: { type: "string", minLength: 1, maxLength: 200, description: "Todo ID from list_todos." } }, required: ["id"], additionalProperties: false },
-};
-const definitions = [listDefinition, getDefinition];
+const defs = require("./todoToolDefinitions.json");
+const listDefinition = defs.list;
+const definitions = [defs.list, defs.get];
 
 function validateList(args = {}) {
   if (!args || typeof args !== "object" || Array.isArray(args) || Object.keys(args).some((key) => !(key in listDefinition.parameters.properties))) throw new Error("Invalid todo filters");
