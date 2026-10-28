@@ -30,7 +30,7 @@ class CommitmentStore {
       AND archived_at IS NULL AND quote_segment_index IS NOT NULL ORDER BY created_at DESC`)
       .all(this.scope(), String(noteId));
   }
-  create(fields, { user = false } = {}) {
+  create(fields, { user = false, agent = null } = {}) {
     if (typeof fields?.text !== "string" || !fields.text.trim()) throw new Error("Todo text is required");
     if (fields.status && !STATUSES.has(fields.status)) throw new Error("Invalid status");
     const now = new Date().toISOString();
@@ -40,6 +40,8 @@ class CommitmentStore {
       quote_segment_index: fields.quote_segment_index ?? null,
       source_note_id: fields.source_note_id == null ? null : String(fields.source_note_id),
       source_note_title: fields.source_note_title || null,
+      source: agent ? "agent" : user ? "manual" : "meeting",
+      source_agent: agent ? String(agent).slice(0, 100) : null,
       person: Array.isArray(fields.person) ? JSON.stringify(fields.person) : fields.person || null,
       direction: fields.direction === "waiting" ? "waiting" : "owe",
       due_date: fields.due_date || null, due_raw: fields.due_raw || null,

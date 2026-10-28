@@ -3,7 +3,7 @@ const { CommitmentStore, isOverdue, localToday } = require("./store");
 const MAX_PAYLOAD = 8000;
 const listDefinition = {
   name: "list_todos",
-  description: "Read the user's own commitments. 'owe' means the user owes someone; 'waiting' means someone else owes the user. Returns id, text, person, direction, due_date, status, overdue, source_meeting_title, and mention_count, ordered like Todos (overdue, dated, no date, then waiting). Filters by status, direction, person, and local due date. Archived rows require include_archived. Returns at most 50 rows within an 8 KB payload, truncating large output. Read only; cannot create, edit, complete, or reject todos.",
+  description: "Read the user's own commitments. 'owe' means the user owes someone; 'waiting' means someone else owes the user. Returns id, text, person, direction, due_date, status, overdue, source_meeting_title, source, source_agent, and mention_count, ordered like Todos (overdue, dated, no date, then waiting). Filters by status, direction, person, and local due date. Archived rows require include_archived. Returns at most 50 rows within an 8 KB payload, truncating large output. Read only; cannot create, edit, complete, or reject todos.",
   parameters: {
     type: "object", properties: {
       status: { type: "string", enum: ["open", "proposed", "completed", "rejected", "all"], description: "Todo status; default open. 'all' includes every status." },
@@ -17,7 +17,7 @@ const listDefinition = {
 };
 const getDefinition = {
   name: "get_todo",
-  description: "Read the full stored row of one of the user's own commitments by ID, including quote, quote_segment_index, source_note_id, source_note_title, speaker_confidence, rejected_reason, and the last 10 mentions. 'waiting' means someone else owes the user. Archived todos return not found. Returns only stored todo fields and quotes, never note content; large fields may be truncated to keep the payload within 8 KB. Read only; cannot create, edit, complete, or reject todos.",
+  description: "Read the full stored row of one of the user's own commitments by ID, including source, source_agent, quote, quote_segment_index, source_note_id, source_note_title, speaker_confidence, rejected_reason, and the last 10 mentions. 'waiting' means someone else owes the user. Archived todos return not found. Returns only stored todo fields and quotes, never note content; large fields may be truncated to keep the payload within 8 KB. Read only; cannot create, edit, complete, or reject todos.",
   parameters: { type: "object", properties: { id: { type: "string", minLength: 1, maxLength: 200, description: "Todo ID from list_todos." } }, required: ["id"], additionalProperties: false },
 };
 const definitions = [listDefinition, getDefinition];
@@ -94,7 +94,8 @@ function listTodos(database, args = {}, now = new Date()) {
   return capTodoResult({ success: true, data: filtered.slice(0, filters.limit).map((row) => ({
     id: row.id, text: row.text, person: row.person, direction: row.direction,
     due_date: row.due_date, status: row.status, overdue: !!isOverdue(row, now),
-    source_meeting_title: row.source_note_title, mention_count: row.mention_count,
+    source_meeting_title: row.source_note_title, source: row.source, source_agent: row.source_agent,
+    mention_count: row.mention_count,
   })), displayText: `Found ${filtered.length} todo${filtered.length === 1 ? "" : "s"}` });
 }
 

@@ -449,6 +449,7 @@ class DatabaseManager {
           id TEXT PRIMARY KEY, account_id TEXT, space_id TEXT, text TEXT NOT NULL,
           quote TEXT, quote_segment_index INTEGER, source_note_id TEXT,
           source_note_title TEXT, person TEXT, direction TEXT NOT NULL DEFAULT 'owe',
+          source TEXT NOT NULL DEFAULT 'meeting', source_agent TEXT,
           due_date TEXT, due_raw TEXT, due_confidence REAL,
           status TEXT NOT NULL DEFAULT 'open', rejected_reason TEXT,
           speaker_confidence TEXT DEFAULT 'unknown', mention_count INTEGER NOT NULL DEFAULT 1,
@@ -470,6 +471,11 @@ class DatabaseManager {
           expires_at TEXT, resolved_at TEXT
         );
       `);
+
+      for (const definition of ["source TEXT NOT NULL DEFAULT 'meeting'", "source_agent TEXT"]) {
+        try { this.db.exec(`ALTER TABLE commitments ADD COLUMN ${definition}`); }
+        catch (err) { if (!err.message.includes("duplicate column")) throw err; }
+      }
 
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN enhanced_content TEXT");

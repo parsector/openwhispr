@@ -44,6 +44,8 @@ export interface Commitment {
   quote_segment_index: number | null;
   source_note_id: string | null;
   source_note_title: string | null;
+  source: "meeting" | "agent" | "manual";
+  source_agent: string | null;
   person: string | null;
   direction: "owe" | "waiting";
   due_date: string | null;

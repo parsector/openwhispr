@@ -40,6 +40,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             {row.mention_count > 1 && <span>{t("todos.saidCount", { count: row.mention_count })}</span>}
             {Boolean(row.date_move_count) && <span>{t("todos.dateMoved", { count: row.date_move_count })}</span>}
             {row.status === "proposed" && <span>{t("todos.proposed")}</span>}
+            {row.source === "agent" && row.source_agent && <span className="rounded-full bg-muted px-2 py-0.5">{row.source_agent}</span>}
             {row.source_removed ? <span>{t("todos.sourceRemoved")}</span> : row.source_note_id &&
               <button type="button" onClick={() => onOpenNote(Number(row.source_note_id))}
                 className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 underline underline-offset-2">
