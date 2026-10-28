@@ -14,21 +14,21 @@ export default function ProposalsBanner({ noteId, compact = false, items }: { no
   const source = items ?? proposals;
   const visible = noteId == null ? source : source.filter((proposal) => proposal.note_id === String(noteId));
   if (!visible.length) return null;
-  return <section className={`rounded-xl bg-primary/5 p-4 ${compact ? "max-h-96 overflow-y-auto" : "mb-6"}`}
+  return <section className={`${compact ? "max-h-96 overflow-y-auto" : ""}`}
     aria-label={t("todos.proposalsTitle")}>
-    <h2 className="text-sm font-semibold text-foreground">{t("todos.proposalsTitle")}</h2>
-    <p className="mt-1 text-xs text-muted-foreground">{t("todos.proposalsDescription")}</p>
-    <div className="mt-3 space-y-3">
-      {visible.map((proposal) => <div key={proposal.id} className="border-t border-border/60 pt-3 first:border-0 first:pt-0">
-        <p className="text-sm font-medium text-foreground">{proposal.text}</p>
-        {proposal.quote && <blockquote className="mt-1 text-xs text-muted-foreground">“{proposal.quote}”</blockquote>}
+    <div className="flex min-h-[37px] items-center gap-2 border-y border-border py-[7px] text-xs"><span aria-hidden="true" className="size-[7px] shrink-0 rotate-45 rounded-[2px] bg-agent-brand" /><h2 className="font-semibold text-foreground">{t("todos.proposalsTitle")}</h2></div>
+    <p className="mt-2 text-xs text-muted-foreground">{t("todos.proposalsDescription")}</p>
+    <div className="mt-3">
+      {visible.map((proposal) => <div key={proposal.id} className="border-t border-border py-2.5 first:border-0 first:pt-0">
+        <p className="text-xs font-semibold leading-[1.4] text-foreground">{proposal.text}</p>
+        {proposal.quote && <blockquote className="mt-1 border-s border-border-hover ps-2.5 text-xs leading-normal text-muted-foreground">“{proposal.quote}”</blockquote>}
         {proposal.strength === "second_hand" && <span className="text-xs text-muted-foreground">{t("todos.secondHand")}</span>}
-        <div className="mt-2 flex gap-3 text-xs">
-          <button type="button" className="font-medium text-primary underline underline-offset-2"
+        <div className="mt-[7px] flex gap-3 text-xs">
+          <button type="button" className="font-semibold text-foreground hover:underline"
             onClick={async () => { await window.electronAPI.commitmentsResolveProposal(proposal.id, true); await refresh(); }}>
             {t("todos.acceptCompletion")}
           </button>
-          <button type="button" className="text-muted-foreground underline underline-offset-2"
+          <button type="button" className="text-muted-foreground hover:underline"
             onClick={async () => { await window.electronAPI.commitmentsResolveProposal(proposal.id, false); await refresh(); }}>
             {t("todos.keepOpen")}
           </button>

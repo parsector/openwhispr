@@ -12,6 +12,10 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
   const { t } = useTranslation();
   const { rows, showArchived, setShowArchived, refresh, loading, error, filter, setFilter } = useTodosStore();
   const [draft, setDraft] = useState("");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [dueDate, setDueDate] = useState("");
+  const draftRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [direction, setDirection] = useState<"owe" | "waiting">("owe");
   const [undo, setUndo] = useState<Commitment | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -44,35 +48,46 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
           <span>{filter.kind === "note" ? t("todos.sourceMeeting") : t("todos.person")}: {filter.value}</span>
           <button type="button" className="text-primary underline" onClick={() => setFilter(null)}>{t("todos.clearFilter")}</button>
         </div>}
-        <form className="mb-6 flex items-center gap-2 rounded-xl border border-border bg-background p-2 focus-within:ring-2 focus-within:ring-primary/25"
-          onSubmit={async (event) => { event.preventDefault(); if (!draft.trim()) return;
-            await window.electronAPI.commitmentsCreate({ text: draft.trim(), direction }); setDraft(""); await refresh(); }}>
-          <Plus size={18} className="ms-2 shrink-0 text-muted-foreground" />
-          <input className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm outline-none" value={draft}
-            onChange={(event) => setDraft(event.target.value)} placeholder={t("todos.addPlaceholder")} aria-label={t("todos.addPlaceholder")} />
-          <select value={direction} onChange={(event) => setDirection(event.target.value as "owe" | "waiting")}
-            aria-label={t("todos.direction")} className="rounded border border-border bg-background px-2 py-1 text-xs">
-            <option value="owe">{t("todos.iOwe")}</option><option value="waiting">{t("todos.waitingOn")}</option>
-          </select>
-          <button type="submit" disabled={!draft.trim()} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">{t("todos.add")}</button>
-        </form>
+        <div className="mb-4 rounded-xl border border-border bg-background shadow-[0_3px_13px_color-mix(in_srgb,var(--color-foreground)_7%,transparent)] focus-within:ring-2 focus-within:ring-primary/25">
+          <button ref={triggerRef} type="button" aria-expanded={composerOpen} onClick={() => { setComposerOpen(true); requestAnimationFrame(() => draftRef.current?.focus()); }} className="flex min-h-[45px] w-full items-center gap-[11px] px-[13px] text-left text-sm text-muted-foreground hover:text-foreground">
+            <span aria-hidden="true" className="grid size-[21px] place-items-center rounded-full border border-border-hover text-lg font-light leading-none text-foreground"><Plus size={14} /></span>
+            {t("todos.addPlaceholder")}
+          </button>
+          {composerOpen && <form className="px-[14px] pb-3 ps-[45px]" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setComposerOpen(false); triggerRef.current?.focus(); } else if (event.key === "Enter" && event.target === draftRef.current) { event.preventDefault(); event.currentTarget.requestSubmit(); } }}
+            onSubmit={async (event) => { event.preventDefault(); if (!draft.trim()) return;
+              await window.electronAPI.commitmentsCreate({ text: draft.trim(), direction, ...(dueDate ? { due_date: dueDate } : {}) }); setDraft(""); setDueDate(""); setComposerOpen(false); triggerRef.current?.focus(); await refresh(); }}>
+            <input ref={draftRef} className="min-h-[45px] w-full bg-transparent py-1 text-sm text-foreground outline-none" value={draft}
+              onChange={(event) => setDraft(event.target.value)} placeholder={t("todos.addPlaceholder")} aria-label={t("todos.addPlaceholder")} />
+            <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
+              <input type="date" aria-label={t("todos.pickDate")} value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-md border border-border bg-surface-1 px-2 py-1 text-xs text-foreground" />
+              <select value={direction} onChange={(event) => setDirection(event.target.value as "owe" | "waiting")}
+                aria-label={t("todos.direction")} className="rounded-md border border-border bg-surface-1 px-2 py-1 text-xs text-foreground">
+                <option value="owe">{t("todos.iOwe")}</option><option value="waiting">{t("todos.waitingOn")}</option>
+              </select>
+              <span className="text-xs text-muted-foreground">Enter to save · Esc to close</span>
+              <button type="submit" disabled={!draft.trim()} className="ms-auto rounded-md bg-foreground px-3 py-1.5 text-xs text-background disabled:opacity-50">{t("todos.add")}</button>
+            </div>
+          </form>}
+        </div>
         <ProposalsBanner />
-        {undo && <div role="status" className="mb-4 flex items-center gap-3 rounded-lg bg-muted px-4 py-2 text-sm">
+        {undo && <div role="status" className="mb-4 flex items-center gap-4 rounded-xl bg-foreground px-4 py-2 text-xs text-background">
           <span>{t("todos.archived", { text: undo.text })}</span>
-          <button type="button" className="font-medium text-primary underline underline-offset-2" onClick={async () => {
+          <button type="button" className="rounded px-1 font-bold text-background hover:bg-background/10 focus-visible:outline-2 focus-visible:outline-background" onClick={async () => {
             if (undoTimer.current) clearTimeout(undoTimer.current); await window.electronAPI.commitmentsUpdate(undo.id, { status: "open", rejected_reason: null }); setUndo(null); await refresh();
           }}>{t("todos.undo")}</button>
         </div>}
         {error && <p role="alert" className="mb-4 text-sm text-destructive">{t("todos.loadError")}: {error}</p>}
         {!loading && !groups.length && <p className="py-16 text-center text-sm text-muted-foreground">{showArchived ? t("todos.emptyArchive") : t("todos.empty")}</p>}
-        {groups.map(({ key, rows: groupRows }) => <section key={key} className="mb-8">
-          <h2 className="mb-2 border-b border-border pb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{t(`todos.groups.${key}`)}</h2>
+        <div className="mt-5 space-y-[26px]">
+        {groups.map(({ key, rows: groupRows }) => <section key={key} aria-labelledby={`${key}-heading`} className={key === "overdue" ? "-mx-[13px] rounded-lg bg-input px-[13px] pb-[3px] pt-2.5" : ""}>
+          <h2 id={`${key}-heading`} className={`flex items-baseline gap-[7px] text-[11px] font-bold leading-[1.4] tracking-[0.1em] [font-variant-caps:all-small-caps] ${key === "overdue" ? "text-foreground" : "text-muted-foreground"}`}>{t(`todos.groups.${key}`)} <span className="font-medium tracking-normal">{groupRows.length}</span></h2>
           {groupRows.map((row) => <TodoRow key={row.id} row={row} onOpenNote={onOpenNote}
             onComplete={(item) => void changeStatus(item, "completed")}
             onReject={(item, reason) => void changeStatus(item, "rejected", reason)}
             onDue={(item, input) => void window.electronAPI.commitmentsSetDue(item.id, input).then(() => refresh())}
             onPerson={(item, person) => void window.electronAPI.commitmentsUpdate(item.id, { person }).then(() => refresh())} />)}
         </section>)}
+        </div>
       </div>
     </div>
   );

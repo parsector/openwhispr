@@ -462,7 +462,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
       >
         <div data-meeting-region="card">
           {isPostMeetingCommitments(data) ? (
-            <div className="relative rounded-xl border border-border/70 bg-card/95 p-4 shadow-lg">
+            <div className="relative rounded-xl bg-background p-4 shadow-[0_20px_42px_color-mix(in_srgb,var(--color-foreground)_18%,transparent)]">
               <button type="button" onClick={() => void respond("dismiss")}
                 aria-label={t("meetingNotification.folders.dismiss")}
                 className="absolute end-3 top-2 text-sm text-muted-foreground hover:text-foreground"><X size={14} /></button>
