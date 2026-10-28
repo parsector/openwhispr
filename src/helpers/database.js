@@ -444,6 +444,33 @@ class DatabaseManager {
         )
       `);
 
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS commitments (
+          id TEXT PRIMARY KEY, account_id TEXT, space_id TEXT, text TEXT NOT NULL,
+          quote TEXT, quote_segment_index INTEGER, source_note_id TEXT,
+          source_note_title TEXT, person TEXT, direction TEXT NOT NULL DEFAULT 'owe',
+          due_date TEXT, due_raw TEXT, due_confidence REAL,
+          status TEXT NOT NULL DEFAULT 'open', rejected_reason TEXT,
+          speaker_confidence TEXT DEFAULT 'unknown', mention_count INTEGER NOT NULL DEFAULT 1,
+          pinned_fields TEXT, extraction_version TEXT, source_removed INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT, updated_at TEXT, completed_at TEXT, rejected_at TEXT, archived_at TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_commitments_status_due ON commitments(status, due_date);
+        CREATE INDEX IF NOT EXISTS idx_commitments_person ON commitments(person);
+        CREATE INDEX IF NOT EXISTS idx_commitments_source ON commitments(source_note_id);
+        CREATE TABLE IF NOT EXISTS commitment_mentions (
+          id TEXT PRIMARY KEY, commitment_id TEXT NOT NULL, note_id TEXT,
+          segment_index INTEGER, quote TEXT, kind TEXT, prev_value TEXT,
+          new_value TEXT, created_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS commitment_proposals (
+          id TEXT PRIMARY KEY, commitment_id TEXT NOT NULL, note_id TEXT,
+          segment_index INTEGER, quote TEXT, strength TEXT,
+          status TEXT NOT NULL DEFAULT 'pending', created_at TEXT,
+          expires_at TEXT, resolved_at TEXT
+        );
+      `);
+
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN enhanced_content TEXT");
       } catch (err) {
