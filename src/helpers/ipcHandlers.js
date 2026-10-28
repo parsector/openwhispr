@@ -1130,6 +1130,23 @@ class IPCHandlers {
     const commitments = () => new CommitmentStore(this.databaseManager);
     const changed = (value) => { if (value) broadcastToWindows("commitments-updated"); return value; };
     ipcMain.handle("commitments-list", (_event, includeArchived = false) => commitments().list(includeArchived === true));
+    ipcMain.handle("commitments-for-note", (_event, noteId) =>
+      Number.isSafeInteger(noteId) ? commitments().forNote(noteId) : []);
+    ipcMain.handle("commitments-open-todos", async (_event, filter) => {
+      if (!filter || !["note", "person"].includes(filter.kind) ||
+          typeof filter.value !== "string" || !filter.value.trim()) return false;
+      this.windowManager._pendingTodosFilter = { kind: filter.kind, value: filter.value,
+        email: typeof filter.email === "string" ? filter.email : null };
+      await this.windowManager.createControlPanelWindow();
+      this.windowManager.showControlPanel();
+      this.windowManager.sendToControlPanel("todos-navigation-pending");
+      return true;
+    });
+    ipcMain.handle("commitments-pending-todos-filter", () => {
+      const filter = this.windowManager._pendingTodosFilter || null;
+      this.windowManager._pendingTodosFilter = null;
+      return filter;
+    });
     ipcMain.handle("commitments-create", (_event, input) => changed(commitments().create({
       text: input?.text, person: input?.person, due_date: input?.due_date,
       direction: input?.direction,

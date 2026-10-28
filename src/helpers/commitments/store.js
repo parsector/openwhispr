@@ -25,6 +25,11 @@ class CommitmentStore {
       FROM commitments WHERE account_id IS ? AND archived_at IS ${includeArchived ? "NOT NULL" : "NULL"} ORDER BY created_at DESC`)
       .all(this.scope());
   }
+  forNote(noteId) {
+    return this.db.prepare(`SELECT * FROM commitments WHERE account_id IS ? AND source_note_id=?
+      AND archived_at IS NULL AND quote_segment_index IS NOT NULL ORDER BY created_at DESC`)
+      .all(this.scope(), String(noteId));
+  }
   create(fields, { user = false } = {}) {
     if (typeof fields?.text !== "string" || !fields.text.trim()) throw new Error("Todo text is required");
     if (fields.status && !STATUSES.has(fields.status)) throw new Error("Invalid status");

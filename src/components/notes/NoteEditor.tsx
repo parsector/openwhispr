@@ -1408,6 +1408,7 @@ export default function NoteEditor({
               ) : (
                 <MeetingTranscriptChat
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                  noteId={note.id}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}

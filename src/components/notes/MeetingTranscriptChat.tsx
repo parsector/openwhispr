@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check, Loader2, Sparkles, Users, X } from "../icons";
@@ -8,6 +8,9 @@ import { Toggle } from "../ui/toggle";
 import { cn } from "../lib/utils";
 import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import type { TranscriptSegment } from "../../stores/meetingRecordingStore";
+import type { Commitment } from "../../types/electron";
+import { groupFor } from "../todos/TodoGroups";
+import { sourceChipsByIndex } from "../todos/sourceChips";
 import {
   isSelfSideSegment,
   isTranscriptSpeakerLocked,
@@ -650,6 +653,8 @@ export function SelectionBar({
 
 interface SegmentRowProps {
   segment: TranscriptSegment;
+  sourceChips?: Commitment[];
+  onOpenSourceTodos?: () => void;
   selfSide: boolean;
   sameSpeaker: boolean;
   isFirst: boolean;
@@ -680,6 +685,8 @@ interface SegmentRowProps {
 // into view, so older rows would replay their entrance.
 const SegmentRow = memo(function SegmentRow({
   segment,
+  sourceChips,
+  onOpenSourceTodos,
   selfSide,
   sameSpeaker,
   isFirst,
@@ -782,6 +789,12 @@ const SegmentRow = memo(function SegmentRow({
         >
           <span dir="auto">{segment.text}</span>
         </div>
+        {sourceChips?.map((row) => <button key={row.id} type="button"
+          title={row.text} onClick={onOpenSourceTodos}
+          className={`mt-1 flex max-w-full items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-start text-[11px] hover:bg-muted ${groupFor(row) === "overdue" ? "text-destructive" : "text-muted-foreground"}`}>
+          <span aria-hidden="true" className={`size-1.5 shrink-0 rounded-full ${groupFor(row) === "overdue" ? "bg-destructive" : "bg-primary"}`} />
+          <span className="min-w-0 truncate">{row.text}</span>
+        </button>)}
         {selectable && (
           <SelectCheckbox
             isSelected={isSelected}
@@ -796,6 +809,7 @@ const SegmentRow = memo(function SegmentRow({
 
 interface MeetingTranscriptChatProps {
   segments: TranscriptSegment[];
+  noteId?: number;
   micPartial?: string;
   systemPartial?: string;
   systemPartialSpeakerId?: string | null;
@@ -826,6 +840,7 @@ interface MeetingTranscriptChatProps {
 
 export function MeetingTranscriptChat({
   segments,
+  noteId,
   micPartial,
   systemPartial,
   systemPartialSpeakerId,
@@ -849,6 +864,21 @@ export function MeetingTranscriptChat({
   contentClassName,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
+  const [sourceChips, setSourceChips] = useState<{ noteId: number; rows: Commitment[] } | null>(null);
+  useEffect(() => {
+    if (noteId == null) { setSourceChips(null); return; }
+    let active = true;
+    const refresh = () => { void window.electronAPI.commitmentsForNote(noteId)
+      .then((rows) => { if (active) setSourceChips({ noteId, rows }); })
+      .catch(() => { if (active) setSourceChips({ noteId, rows: [] }); }); };
+    refresh();
+    const off = window.electronAPI.onCommitmentsUpdated(refresh);
+    return () => { active = false; off(); };
+  }, [noteId]);
+  const chipsByIndex = useMemo(() => sourceChipsByIndex(sourceChips?.noteId === noteId ? sourceChips.rows : []), [sourceChips, noteId]);
+  const openSourceTodos = useCallback(() => {
+    if (noteId != null) void window.electronAPI.commitmentsOpenTodos({ kind: "note", value: String(noteId) });
+  }, [noteId]);
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
   // The scroller mounts only once content exists, and a recording opens with
   // partials before its first final segment — the follow effect must re-run on
@@ -1059,6 +1089,8 @@ export function MeetingTranscriptChat({
                 >
                   <SegmentRow
                     segment={segment}
+                    sourceChips={chipsByIndex.get(i)}
+                    onOpenSourceTodos={noteId == null ? undefined : openSourceTodos}
                     selfSide={selfSide}
                     sameSpeaker={
                       i > 0 && rowMeta[i - 1].key === key && rowMeta[i - 1].selfSide === selfSide

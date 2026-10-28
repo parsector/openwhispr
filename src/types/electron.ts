@@ -199,7 +199,7 @@ export interface MeetingNotificationData {
   detectionId: string;
   source: string;
   key: string;
-  event: { summary?: string | null } | null;
+  event: { summary?: string | null; attendees?: string | null } | null;
   variant: MeetingPromptVariant;
   joinUrl: string | null;
   prepNoteId?: number;
@@ -1561,6 +1561,10 @@ declare global {
     mcpClient: import("../services/tools/mcpTools").McpClientApi;
     electronAPI: {
       commitmentsList: (includeArchived?: boolean) => Promise<Commitment[]>;
+      commitmentsForNote: (noteId: number) => Promise<Commitment[]>;
+      commitmentsOpenTodos: (filter: { kind: "note" | "person"; value: string; email?: string | null }) => Promise<boolean>;
+      commitmentsPendingTodosFilter: () => Promise<{ kind: "note" | "person"; value: string; email?: string | null } | null>;
+      onTodosNavigationPending: (callback: () => void) => () => void;
       commitmentsCreate: (input: { text: string; person?: string | string[]; due_date?: string | null; direction?: "owe" | "waiting" }) => Promise<Commitment>;
       commitmentsUpdate: (id: string, patch: Partial<Pick<Commitment, "status" | "person" | "rejected_reason" | "text">>) => Promise<Commitment | null>;
       commitmentsSetDue: (id: string, input: { action: "push" | "pick" | "clear"; date?: string }) => Promise<Commitment | null>;

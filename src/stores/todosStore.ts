@@ -13,13 +13,16 @@ type TodosState = {
   showArchived: boolean;
   loading: boolean;
   error: string | null;
+  filter: { kind: "note" | "person"; value: string; email?: string | null } | null;
+  setFilter: (filter: TodosState["filter"]) => void;
   refresh: () => Promise<void>;
   setShowArchived: (show: boolean) => void;
 };
 
 export const useTodosStore = create<TodosState>((set, get) => ({
   rows: [], proposals: [], overdueCount: 0, showArchived: savedArchivePreference(),
-  loading: false, error: null,
+  loading: false, error: null, filter: null,
+  setFilter: (filter) => set({ filter }),
   refresh: async () => {
     set({ loading: true });
     try {

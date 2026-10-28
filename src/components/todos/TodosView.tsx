@@ -9,7 +9,7 @@ import ProposalsBanner from "./ProposalsBanner";
 
 export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => void }) {
   const { t } = useTranslation();
-  const { rows, showArchived, setShowArchived, refresh, loading, error } = useTodosStore();
+  const { rows, showArchived, setShowArchived, refresh, loading, error, filter, setFilter } = useTodosStore();
   const [draft, setDraft] = useState("");
   const [direction, setDirection] = useState<"owe" | "waiting">("owe");
   const [undo, setUndo] = useState<Commitment | null>(null);
@@ -26,7 +26,8 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
     undoTimer.current = setTimeout(() => setUndo(null), 5000);
     await refresh();
   };
-  const groups = groupTodos(rows);
+  const visibleRows = filter?.kind === "note" ? rows.filter((row) => row.source_note_id === filter.value) : rows;
+  const groups = groupTodos(visibleRows);
   return (
     <div className="h-full overflow-y-auto px-5 pb-12 pt-8 sm:px-8">
       <div className="mx-auto max-w-3xl">
@@ -38,6 +39,10 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
             {t("todos.showArchived")}
           </label>
         </div>
+        {filter && <div className="mb-4 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{filter.kind === "note" ? "Source meeting" : "Person"}: {filter.value}</span>
+          <button type="button" className="text-primary underline" onClick={() => setFilter(null)}>Clear filter</button>
+        </div>}
         <form className="mb-6 flex items-center gap-2 rounded-xl border border-border bg-background p-2 focus-within:ring-2 focus-within:ring-primary/25"
           onSubmit={async (event) => { event.preventDefault(); if (!draft.trim()) return;
             await window.electronAPI.commitmentsCreate({ text: draft.trim(), direction }); setDraft(""); await refresh(); }}>

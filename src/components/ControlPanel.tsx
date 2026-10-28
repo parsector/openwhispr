@@ -57,6 +57,7 @@ import {
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
 import { navigateMeetingNotification } from "./meetingNotificationNavigation";
+import { useTodosStore } from "../stores/todosStore";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -145,6 +146,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  useEffect(() => {
+    const drain = () => { void window.electronAPI.commitmentsPendingTodosFilter().then((filter) => {
+      if (!filter) return;
+      useTodosStore.getState().setFilter(filter);
+      setActiveView("todos");
+    }); };
+    drain();
+    const off = window.electronAPI.onTodosNavigationPending(drain);
+    return () => off();
+  }, []);
   const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
     DEFAULT_INTEGRATIONS_SECTION
   );

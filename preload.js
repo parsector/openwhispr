@@ -257,6 +257,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Note functions
   commitmentsList: (includeArchived = false) => ipcRenderer.invoke("commitments-list", includeArchived),
+  commitmentsForNote: (noteId) => ipcRenderer.invoke("commitments-for-note", noteId),
+  commitmentsOpenTodos: (filter) => ipcRenderer.invoke("commitments-open-todos", filter),
+  commitmentsPendingTodosFilter: () => ipcRenderer.invoke("commitments-pending-todos-filter"),
+  onTodosNavigationPending: registerListener("todos-navigation-pending", (callback) => () => callback()),
   commitmentsCreate: (input) => ipcRenderer.invoke("commitments-create", input),
   commitmentsUpdate: (id, patch) => ipcRenderer.invoke("commitments-update", id, patch),
   commitmentsSetDue: (id, input) => ipcRenderer.invoke("commitments-set-due", id, input),
