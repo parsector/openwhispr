@@ -79,7 +79,7 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
         {error && <p role="alert" className="mb-4 text-sm text-destructive">{t("todos.loadError")}: {error}</p>}
         {!loading && !groups.length && <p className="py-16 text-center text-sm text-muted-foreground">{showArchived ? t("todos.emptyArchive") : t("todos.empty")}</p>}
         <div className="mt-5 space-y-[26px]">
-        {groups.map(({ key, rows: groupRows }) => <section key={key} aria-labelledby={`${key}-heading`} className={key === "overdue" ? "-mx-[13px] rounded-lg bg-input px-[13px] pb-[3px] pt-2.5" : ""}>
+        {groups.map(({ key, rows: groupRows }) => <section key={key} aria-labelledby={`${key}-heading`} className={`pt-2.5 ${key === "overdue" ? "-mx-[13px] rounded-lg bg-input px-[13px] pb-[3px]" : ""}`}>
           <h2 id={`${key}-heading`} className={`flex items-baseline gap-[7px] text-[11px] font-bold leading-[1.4] tracking-[0.1em] [font-variant-caps:all-small-caps] ${key === "overdue" ? "text-foreground" : "text-muted-foreground"}`}>{t(`todos.groups.${key}`)} <span className="font-medium tracking-normal">{groupRows.length}</span></h2>
           {groupRows.map((row) => <TodoRow key={row.id} row={row} onOpenNote={onOpenNote}
             onComplete={(item) => void changeStatus(item, "completed")}

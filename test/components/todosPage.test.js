@@ -160,6 +160,48 @@ test("todos view renders manual input and archive filter", () => {
   assert.match(html, /shadow-\[0_3px_13px/);
 });
 
+test("todo group headings have the same section top offset with and without overdue", async () => {
+  const { Window } = await import("happy-dom");
+  const browser = new Window();
+  const previous = { window: global.window, document: global.document, navigator: global.navigator,
+    IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  const originalRows = useTodosStore.getState().rows;
+  const rows = [row("late", "2020-01-01"), row("none", null), row("waiting", null, "waiting")];
+  global.window = browser;
+  global.document = browser.document;
+  global.navigator = browser.navigator;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  browser.electronAPI = { commitmentsList: async () => rows, commitmentsProposalsList: async () => [],
+    commitmentsOverdueCount: async () => 1, onCommitmentsUpdated: () => () => {} };
+  const { createRoot } = require("react-dom/client");
+  const host = browser.document.createElement("div");
+  browser.document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await React.act(async () => root.render(React.createElement(TodosView, { onOpenNote() {} })));
+    const sections = [...host.querySelectorAll("section[aria-labelledby]")];
+    assert.equal(sections.length, 3);
+    const offsets = sections.map((section) => {
+      const heading = section.querySelector("h2");
+      assert.equal(section.firstElementChild, heading);
+      const topPadding = [...section.classList].filter((name) => name.startsWith("pt-"));
+      assert.deepEqual(topPadding, ["pt-2.5"]);
+      return Number(topPadding[0].slice(3)) * 4; // Tailwind spacing units are 4px.
+    });
+    assert.ok(Math.max(...offsets) - Math.min(...offsets) <= 0.5);
+    const overdue = host.querySelector('section[aria-labelledby="overdue-heading"]');
+    for (const className of ["-mx-[13px]", "px-[13px]", "bg-input"]) assert.ok(overdue.classList.contains(className));
+    assert.ok(host.querySelector(".space-y-\\[26px\\]"));
+  } finally {
+    await React.act(async () => root.unmount());
+    useTodosStore.setState({ rows: originalRows });
+    browser.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete global[key]; else global[key] = value;
+    }
+  }
+});
+
 test("Todo components contain no literal hex colors", () => {
   for (const filename of ["todos/TodosView.tsx", "todos/TodoRow.tsx", "todos/TodoGroups.ts", "todos/ProposalsBanner.tsx", "MeetingNotificationOverlay.tsx", "ControlPanelSidebar.tsx"]) {
     const source = fs.readFileSync(path.join(__dirname, "../../src/components", filename), "utf8");
