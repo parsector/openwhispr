@@ -6,6 +6,7 @@ const { renderToStaticMarkup } = require("react-dom/server");
 const { groupTodos } = require("../../src/components/todos/TodoGroups.ts");
 const TodoRow = require("../../src/components/todos/TodoRow.tsx").default;
 const TodosView = require("../../src/components/todos/TodosView.tsx").default;
+const ProposalsBanner = require("../../src/components/todos/ProposalsBanner.tsx").default;
 const { useTodosStore } = require("../../src/stores/todosStore.ts");
 
 const row = (id, due_date, direction = "owe") => ({ id, text: `Send report ${id}`, status: "open",
@@ -40,4 +41,13 @@ test("todos store refreshes list, proposals and overdue badge", async () => {
   assert.equal(useTodosStore.getState().rows.length, 1);
   assert.equal(useTodosStore.getState().overdueCount, 2);
   delete global.window;
+});
+
+test("proposal banner keeps evidence and separate review actions", () => {
+  const items = [{ id: "p1", note_id: "42", commitment_id: "c1",
+    text: "Send the deck", quote: "I sent the deck", strength: "second_hand", expires_at: "2026-11-04" }];
+  const html = renderToStaticMarkup(React.createElement(ProposalsBanner, { noteId: 42, items }));
+  assert.match(html, /I sent the deck/);
+  assert.match(html, /<button/g);
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(ProposalsBanner, { noteId: 7, items })), /I sent the deck/);
 });

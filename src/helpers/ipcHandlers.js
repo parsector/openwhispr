@@ -1108,7 +1108,17 @@ class IPCHandlers {
             return extractCommitments({ note, database: this.databaseManager,
               model: this._routineModelChoice, infer: (options) => infer({ ...options, toolsAvailable: false }) });
           })
-            .then((result) => { if (!result.skipped) broadcastToWindows("commitments-updated"); })
+            .then(async (result) => {
+              if (result.skipped) return;
+              broadcastToWindows("commitments-updated");
+              if (result.proposals > 0) {
+                await this.windowManager.showMeetingNotification({
+                  detectionId: `commitments:${data.noteId}`, source: "commitments",
+                  key: `commitments:${data.noteId}`, event: null, variant: "commitments",
+                  joinUrl: null, commitmentsNoteId: data.noteId,
+                }, { autoDismiss: false });
+              }
+            })
             .catch((error) => debugLogger.error("Commitment extraction failed", { error: error.message }, "commitments"));
         });
       }
@@ -12822,6 +12832,11 @@ class IPCHandlers {
 
     ipcMain.handle("meeting-notification-ready", async (event) => {
       this.windowManager?.showNotificationWindow(event.sender);
+    });
+    ipcMain.handle("meeting-notification-dismiss-commitments", async (event) => {
+      if (this.windowManager?.notificationWindow?.webContents !== event.sender) return;
+      if (this.windowManager?._pendingNotificationData?.variant !== "commitments") return;
+      this.windowManager.dismissMeetingNotification();
     });
 
     // Note files (markdown mirror) handlers

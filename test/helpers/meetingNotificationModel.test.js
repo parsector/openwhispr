@@ -3,6 +3,12 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/components/meetingNotificationModel.ts");
 
+test("commitment notification is recognized as a post-meeting card", async () => {
+  const { isPostMeetingCommitments } = await load();
+  assert.equal(isPostMeetingCommitments({ variant: "commitments", commitmentsNoteId: 42 }), true);
+  assert.equal(isPostMeetingCommitments({ variant: "starting", commitmentsNoteId: 42 }), false);
+});
+
 test("detection presentation preserves event title, join action, and dismissal", async () => {
   const { getMeetingNotificationPresentation } = await load();
 

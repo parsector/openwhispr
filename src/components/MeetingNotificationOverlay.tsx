@@ -19,12 +19,14 @@ import type {
 import { MeetingNotificationCard } from "./MeetingNotificationCard";
 import { MeetingNotificationFolderPicker } from "./MeetingNotificationFolderPicker";
 import { meetingFolderLabel } from "./meetingFolderLabel";
-import { Check, ChevronDown } from "./icons";
+import { Check, ChevronDown, X } from "./icons";
+import ProposalsBanner from "./todos/ProposalsBanner";
 import "../styles/meeting-notification.css";
 import {
   getMeetingNotificationPresentation,
   initializeMeetingNotificationOverlay,
   shouldDismissMeetingNotificationSwipe,
+  isPostMeetingCommitments,
 } from "./meetingNotificationModel";
 
 interface PointerSwipe {
@@ -109,7 +111,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
         onData: (incoming) => {
           dataRef.current = incoming;
           setData(incoming);
-          void loadContext();
+          if (!isPostMeetingCommitments(incoming)) void loadContext();
         },
         onVisible: () => setIsVisible(true),
         onReady: () => {
@@ -278,6 +280,11 @@ export default function MeetingNotificationOverlay(): ReactElement {
       setBusy(true);
       loadGeneration.current++;
       try {
+        if (isPostMeetingCommitments(current) && action === "dismiss") {
+          setIsVisible(false);
+          await window.electronAPI.meetingNotificationDismissCommitments?.();
+          return;
+        }
         if (action === "dismiss") {
           // Main closes the window as soon as it handles a dismiss: slide out first.
           setIsVisible(false);
@@ -437,6 +444,14 @@ export default function MeetingNotificationOverlay(): ReactElement {
         style={motionStyle}
       >
         <div data-meeting-region="card">
+          {isPostMeetingCommitments(data) ? (
+            <div className="relative rounded-xl border border-border/70 bg-card/95 p-4 shadow-lg">
+              <button type="button" onClick={() => void respond("dismiss")}
+                aria-label={t("meetingNotification.folders.dismiss")}
+                className="absolute end-3 top-2 text-sm text-muted-foreground hover:text-foreground"><X size={14} /></button>
+              <ProposalsBanner noteId={data!.commitmentsNoteId} compact />
+            </div>
+          ) : (
           <MeetingNotificationCard
             title={title}
             body={body}
@@ -475,8 +490,9 @@ export default function MeetingNotificationOverlay(): ReactElement {
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           />
+          )}
         </div>
-        {mode !== "closed" && (
+        {mode !== "closed" && !isPostMeetingCommitments(data) && (
           <MeetingNotificationFolderPicker
             context={context}
             mode={mode}

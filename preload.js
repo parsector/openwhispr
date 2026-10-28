@@ -1516,6 +1516,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),
   meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
+  meetingNotificationDismissCommitments: () => ipcRenderer.invoke("meeting-notification-dismiss-commitments"),
   meetingNotificationOpenPrep: (noteId) => ipcRenderer.invoke("meeting-notification-open-prep", noteId),
   meetingNotificationRespond: (detectionId, action, options) =>
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action, options),

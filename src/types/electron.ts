@@ -193,7 +193,7 @@ export type TranscriptionErrorCode =
   | "CRASH_RECOVERY"
   | null;
 
-export type MeetingPromptVariant = "detected" | "starting" | "underway";
+export type MeetingPromptVariant = "detected" | "starting" | "underway" | "commitments";
 
 export interface MeetingNotificationData {
   detectionId: string;
@@ -203,6 +203,7 @@ export interface MeetingNotificationData {
   variant: MeetingPromptVariant;
   joinUrl: string | null;
   prepNoteId?: number;
+  commitmentsNoteId?: number;
 }
 
 export interface MeetingFolderRef {
@@ -3896,6 +3897,7 @@ declare global {
       ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
+      meetingNotificationDismissCommitments?: () => Promise<void>;
       meetingNotificationOpenPrep?: (noteId: number) => Promise<boolean>;
       meetingNotificationRespond?: (
         detectionId: string,

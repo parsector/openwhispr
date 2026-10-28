@@ -5,6 +5,7 @@ import type { Commitment } from "../../types/electron";
 import { useTodosStore } from "../../stores/todosStore";
 import { groupTodos } from "./TodoGroups";
 import TodoRow from "./TodoRow";
+import ProposalsBanner from "./ProposalsBanner";
 
 export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => void }) {
   const { t } = useTranslation();
@@ -49,6 +50,7 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
           </select>
           <button type="submit" disabled={!draft.trim()} className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground disabled:opacity-50">{t("todos.add")}</button>
         </form>
+        <ProposalsBanner />
         {undo && <div role="status" className="mb-4 flex items-center gap-3 rounded-lg bg-muted px-4 py-2 text-sm">
           <span>{t("todos.archived", { text: undo.text })}</span>
           <button type="button" className="font-medium text-primary underline underline-offset-2" onClick={async () => {
