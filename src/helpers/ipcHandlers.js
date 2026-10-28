@@ -757,7 +757,7 @@ class IPCHandlers {
     } catch {
       this._routineModelChoice = null;
     }
-    const infer = async ({ model, prompt, toolsAvailable, registry, context }) => {
+    const infer = async ({ model, prompt, toolsAvailable, registry, context, systemPrompt, responseFormat, maxTokens = 1800 }) => {
       if (!model?.model) throw new Error("Choose a chat model before running a routine");
       let localRoute = null;
       if (model.mode === "local" && toolsAvailable) {
@@ -771,9 +771,10 @@ class IPCHandlers {
         const bridge = require("../services/localReasoningBridge").default;
         return {
           text: await bridge.processText(prompt, model.model, {
-            maxTokens: 1800,
+            maxTokens,
             temperature: 0.3,
-            systemPrompt: "Write a concise, factual routine note in Markdown.",
+            systemPrompt: systemPrompt || "Write a concise, factual routine note in Markdown.",
+            responseFormat,
           }),
         };
       }
@@ -802,7 +803,7 @@ class IPCHandlers {
             model: model.model,
             requestPurpose: "assistant",
             purpose: "assistant",
-            systemPrompt: "Write a concise, factual routine note in Markdown.",
+            systemPrompt: systemPrompt || "Write a concise, factual routine note in Markdown.",
             sessionId: this.sessionId,
             clientType: "desktop",
             appVersion: app.getVersion(),
@@ -837,7 +838,7 @@ class IPCHandlers {
             },
             body: JSON.stringify({
               model: model.model,
-              max_tokens: 1800,
+              max_tokens: maxTokens,
               messages,
               ...(toolsAvailable && !confirmed
                 ? {
@@ -936,7 +937,7 @@ class IPCHandlers {
         const data = await complete({
           model: model.model,
           messages,
-          max_tokens: 1800,
+          max_tokens: maxTokens,
           ...(toolsAvailable && !confirmed
             ? {
                 tools: registry.list().map((tool) => ({
@@ -1097,8 +1098,20 @@ class IPCHandlers {
     });
     ipcMain.on("meeting-note-finalized", (_event, data) => {
       if (Number.isSafeInteger(data?.noteId) && data.noteId > 0 &&
-        [true, false, "skipped"].includes(data.diarized))
+        [true, false, "skipped"].includes(data.diarized)) {
         this.routineScheduler.meetingFinalized(data.noteId, data.diarized);
+        setImmediate(() => {
+          Promise.resolve().then(() => {
+            const note = this.databaseManager.getNote(data.noteId);
+            if (!note || note.deleted_at) return { skipped: true };
+            const { extractCommitments } = require("./commitments/extract");
+            return extractCommitments({ note, database: this.databaseManager,
+              model: this._routineModelChoice, infer: (options) => infer({ ...options, toolsAvailable: false }) });
+          })
+            .then((result) => { if (!result.skipped) broadcastToWindows("commitments-updated"); })
+            .catch((error) => debugLogger.error("Commitment extraction failed", { error: error.message }, "commitments"));
+        });
+      }
     });
     ipcMain.handle("routines-list", () => this.databaseManager.listRoutines());
     ipcMain.handle("routines-people", () => this.databaseManager.listRoutinePeople());
