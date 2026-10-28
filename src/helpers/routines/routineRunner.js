@@ -1,4 +1,4 @@
-const { localDate } = require("./routineSchedulePolicy");
+const { renderRoutineTitle } = require("./routineTitleTemplate");
 const { routineEndpointSupportsTools } = require("../../utils/modelCapability.ts");
 const { createToolRegistry } = require("./routineToolRegistry");
 const { loadRoutineMcpTools } = require("../../services/tools/mcpTools.ts");
@@ -126,7 +126,7 @@ function meetingContext(database, noteId) {
   const note = database.getNote(noteId);
   if (!note || note.deleted_at) throw new Error("Source meeting note unavailable");
   const event = note.calendar_event_id ? database.getCalendarEventById(note.calendar_event_id) : null;
-  return `Meeting note: [${note.title}](note:${note.id})\nNote content:\n${note.content || "none"}\nTranscript (including speaker labels when available):\n${note.transcript || "none"}\nAttendees: ${note.participants || "none"}\nCalendar event: ${event ? `${event.summary} — ${event.start_time}` : "none"}\nsummary: ${note.enhanced_content || "not yet generated"}`;
+  return { eventSummary: event?.summary || "", text: `Meeting note: [${note.title}](note:${note.id})\nNote content:\n${note.content || "none"}\nTranscript (including speaker labels when available):\n${note.transcript || "none"}\nAttendees: ${note.participants || "none"}\nCalendar event: ${event ? `${event.summary} — ${event.start_time}` : "none"}\nsummary: ${note.enhanced_content || "not yet generated"}` };
 }
 
 function eventContext(database, eventId) {
@@ -149,12 +149,12 @@ function eventContext(database, eventId) {
       status = "unavailable";
     }
   }
-  return { text: `Upcoming meeting: ${event.summary} — ${event.start_time}\nAttendees: ${event.attendees || "none"}\nMeeting link: ${event.web_link || event.hangout_link || "none"}\nHistory with these attendees:\n${history}`, status };
+  return { eventSummary: event.summary || "", text: `Upcoming meeting: ${event.summary} — ${event.start_time}\nAttendees: ${event.attendees || "none"}\nMeeting link: ${event.web_link || event.hangout_link || "none"}\nHistory with these attendees:\n${history}`, status };
 }
 
-function noteTitle(database, routine, now) {
-  const date = localDate(new Date(now));
-  const base = `${routine.name} — ${date}`;
+function noteTitle(database, routine, now, eventSummary) {
+  const base = renderRoutineTitle({ name: routine.name, triggerType: routine.trigger_type,
+    titleTemplate: routine.trigger_config?.title_template, event: eventSummary, now });
   const scope = database._accountScopeCondition("notes");
   const exists = database.db
     .prepare(`SELECT 1 FROM notes WHERE title=? AND ${scope.sql} LIMIT 1`)
@@ -272,7 +272,9 @@ class RoutineRunner {
       };
       const prep = job.trigger === "before_event" ? eventContext(database, job.eventId) : null;
       if (prep?.status === "unavailable") sourceStatus.event_history = "unavailable";
-      const triggerContext = job.trigger === "meeting_ended" ? meetingContext(database, job.sourceNoteId) : prep?.text || "";
+      const meeting = job.trigger === "meeting_ended" ? meetingContext(database, job.sourceNoteId) : null;
+      const triggerContext = meeting?.text || prep?.text || "";
+      const eventSummary = meeting?.eventSummary || prep?.eventSummary || "";
       const prompt = `${routine.prompt}\n\n${triggerContext ? `${triggerContext}\n\n` : ""}${calendar ? `Today's calendar:\n${calendar.text}\n\n` : ""}${actions ? `Last seven days' checkbox action items:\n${actions.text}\n\n` : ""}${selectedNotes ? `Selected notes (deterministically filtered):\n${selectedNotes.text}\n\n` : ""}Cite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
       const response = await this.infer({ model, prompt, toolsAvailable, registry, context });
       if (toolsAvailable && !response.toolsAvailable) {
@@ -314,7 +316,7 @@ class RoutineRunner {
       ];
       const sourceLine = sourceParts.length ? `Sources: ${sourceParts.join("; ")}` : "";
       const note = database.saveNote(
-        noteTitle(database, routine, now),
+        noteTitle(database, routine, now, eventSummary),
         `${linkNoteReferences(result.text)}${sourceLine ? `\n\n${sourceLine}` : ""}`,
         "personal",
         null,

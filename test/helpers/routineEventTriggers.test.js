@@ -145,7 +145,7 @@ test('preview uses the trigger matcher on the same calendar fixture', () => {
 test('meeting prep preset has specified defaults and source guidance', () => {
   const preset = PRESETS.find((item) => item.id === 'meeting-prep');
   assert.equal(preset.trigger_type, 'before_event');
-  assert.deepEqual(preset.trigger_config, { ...before, has_attendees: true });
+  assert.deepEqual(preset.trigger_config, { ...before, has_attendees: true, title_template: 'Prep - {event} - {date}' });
   assert.match(preset.prompt, /agenda|history|open items/);
   assert.ok(preset.needs.length);
 });
@@ -216,6 +216,11 @@ test('meeting-ended run without calendar writes only its own note and reads opti
   assert.equal(second.status, 'done', second.error);
   assert.match(prompts[1], /summary: Existing summary/);
   assert.equal(database.getNote(source.id).content, original.content);
+  database.db.prepare('UPDATE notes SET calendar_event_id=? WHERE id=?').run('linked-event', source.id);
+  database.getCalendarEventById = () => ({ id: 'linked-event', summary: 'Linked planning', start_time: new Date().toISOString() });
+  const third = await runOnce('note:third', 'ok');
+  assert.equal(third.status, 'done', third.error);
+  assert.match(third.note.title, /^Follow-up — Linked planning — \d{4}-\d\d-\d\d$/);
   const forbidden = database.claimRoutineRun(saved.routine.id, `note:${first.note.id}`, 'meeting_ended');
   const rejected = await runner.run({ id: forbidden.id, routineId: saved.routine.id, trigger: 'meeting_ended',
     sourceNoteId: first.note.id, model: { mode: 'local', provider: 'local', model: 'test' } });

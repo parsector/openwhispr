@@ -5143,6 +5143,9 @@
     "keepFolder": "保留文件夹和备注",
     "deleteFailed": "无法删除例程",
     "editor": {
+      "titleTemplate": "标题",
+      "titleTemplateHelp": "可使用 {name}、{event} 和 {date}。标题最多 200 个字符。",
+      "titlePreview": "下一个标题：{{title}}",
       "notes": "Notes",
       "calendar": "Calendar",
       "every": "Every",

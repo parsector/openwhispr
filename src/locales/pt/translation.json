@@ -5143,6 +5143,9 @@
     "keepFolder": "Manter pasta e notas",
     "deleteFailed": "Não foi possível eliminar a rotina",
     "editor": {
+      "titleTemplate": "Título",
+      "titleTemplateHelp": "Use {name}, {event} e {date}. Os títulos têm limite de 200 caracteres.",
+      "titlePreview": "Próximo título: {{title}}",
       "notes": "Notes",
       "calendar": "Calendar",
       "every": "Every",
