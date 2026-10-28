@@ -2764,6 +2764,9 @@
       }
     },
     "editor": {
+      "titleTemplate": "Title",
+      "titleTemplateHelp": "Use {name}, {event}, and {date}. Titles are limited to 200 characters.",
+      "titlePreview": "Next title: {{title}}",
       "notes": "Notes",
       "calendar": "Calendar",
       "every": "Every",

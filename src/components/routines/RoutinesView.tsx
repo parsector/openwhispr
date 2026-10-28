@@ -3,12 +3,13 @@ import { useTranslation } from "react-i18next";
 import { Button } from "../ui/button";
 import { loadFolders, useFolders } from "../../stores/noteStore";
 import { routineEndpointSupportsTools } from "../../utils/modelCapability";
+import { defaultTitleTemplate, renderRoutineTitle } from "../../helpers/routines/routineTitleTemplate";
 import { customTools, defaultSelection, missingRequiredSelection, nextThreeRuns, sourceState, toggleSource, type Selection, type Source } from "./editorPolicy";
 
 type Routine = Awaited<ReturnType<Window["electronAPI"]["listRoutines"]>>[number];
 type Preset = Awaited<ReturnType<Window["electronAPI"]["routinePresets"]>>[number];
 type Slot = { days: number[]; time: string };
-type TriggerConfig = { schema_version: number; slots?: Slot[]; minutes_before?: number; title_pattern?: string; has_attendees?: boolean; has_meeting_link?: boolean; skip_declined?: boolean; folder_ids?: number[] };
+type TriggerConfig = { schema_version: number; slots?: Slot[]; minutes_before?: number; title_pattern?: string; title_template?: string; has_attendees?: boolean; has_meeting_link?: boolean; skip_declined?: boolean; folder_ids?: number[] };
 type ModelChoice = { mode: string; provider: string; model: string; remoteUrl: string };
 type Draft = {
   id?: string;
@@ -116,6 +117,7 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
   const [scopeModel, setScopeModel] = useState<ModelChoice | null>(null);
   const [overrideUsable, setOverrideUsable] = useState(true);
   const [meetingPreview, setMeetingPreview] = useState<number | null>(null);
+  const [previewEvents, setPreviewEvents] = useState<Awaited<ReturnType<NonNullable<Window["electronAPI"]["calendarGetLinkableEvents"]>>>["events"]>([]);
   const refresh = useCallback(async () => {
     setRoutines(await window.electronAPI.listRoutines());
     if (historyId) setHistory(await window.electronAPI.routineHistory(historyId));
@@ -162,6 +164,14 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
       .catch(() => { if (active) setMeetingPreview(null); });
     return () => { active = false; };
   }, [draft?.trigger_type, draft?.trigger_config]);
+  useEffect(() => {
+    if (draft?.trigger_type !== "before_event" || !window.electronAPI.calendarGetLinkableEvents) return;
+    let active = true;
+    void window.electronAPI.calendarGetLinkableEvents().then((result) => {
+      if (active) setPreviewEvents(result.success ? result.events : []);
+    }).catch(() => { if (active) setPreviewEvents([]); });
+    return () => { active = false; };
+  }, [draft?.trigger_type]);
   const edit = (routine: Routine) => {
     setDraft({
       id: routine.id,
@@ -258,6 +268,20 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
           ...(draft.trigger_config.title_pattern ? [`${t("routines.titlePattern")} ${draft.trigger_config.title_pattern}`] : []),
         ].map((filter) => ` · ${filter}`).join("") })
       : t("routines.meetingEnded");
+  const previewEvent = draft?.trigger_type === "before_event" ? previewEvents
+    .filter((event) => event.status !== "cancelled" && !event.is_all_day &&
+      Date.parse(event.start_time) - (draft.trigger_config.minutes_before ?? 10) * 60000 > previewNow.getTime() &&
+      (!draft.trigger_config.skip_declined || event.self_response_status !== "declined") &&
+      (!draft.trigger_config.has_attendees || event.attendees_count > 0) &&
+      (!draft.trigger_config.has_meeting_link || Boolean(event.web_link || event.hangout_link)) &&
+      (!draft.trigger_config.title_pattern || event.summary?.toLocaleLowerCase().includes(draft.trigger_config.title_pattern.toLocaleLowerCase())))
+    .sort((a, b) => Date.parse(a.start_time) - Date.parse(b.start_time))[0] : undefined;
+  const titlePreview = draft ? renderRoutineTitle({
+    name: draft.name || t("routines.name"), triggerType: draft.trigger_type,
+    titleTemplate: draft.trigger_config.title_template,
+    event: previewEvent?.summary,
+    now: nextRuns[0] || (previewEvent ? new Date(Date.parse(previewEvent.start_time) - (draft.trigger_config.minutes_before ?? 10) * 60000) : previewNow),
+  }) : "";
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-6 p-6 text-foreground">
@@ -305,10 +329,10 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
                   onChange={(event) => {
                     const type = event.target.value;
                     setDraft({ ...draft, trigger_type: type, trigger_config: type === "time"
-                      ? { schema_version: 1, slots: [{ days: [1, 2, 3, 4, 5], time: "09:00" }] }
+                      ? { schema_version: 1, title_template: draft.trigger_config.title_template, slots: [{ days: [1, 2, 3, 4, 5], time: "09:00" }] }
                       : type === "before_event"
-                        ? { schema_version: 1, minutes_before: 10, title_pattern: "", has_attendees: false, has_meeting_link: false, skip_declined: true }
-                        : { schema_version: 1, folder_ids: [], title_pattern: "" } });
+                        ? { schema_version: 1, title_template: draft.trigger_config.title_template, minutes_before: 10, title_pattern: "", has_attendees: false, has_meeting_link: false, skip_declined: true }
+                        : { schema_version: 1, title_template: draft.trigger_config.title_template, folder_ids: [], title_pattern: "" } });
                   }}>
                   <option value="time">{t("routines.timeTrigger")}</option>
                   <option value="before_event">{t("routines.beforeEvent")}</option>
@@ -537,6 +561,15 @@ export default function RoutinesView({ onOpenNote }: { onOpenNote: (id: number) 
           </div>
           <details open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)} className="space-y-3">
             <summary className="cursor-pointer text-sm font-medium">{t("routines.editor.advanced")}</summary>
+            <div className="space-y-1 text-sm">
+              <label className="block" htmlFor="routine-title-template">{t("routines.editor.titleTemplate")}</label>
+              <input id="routine-title-template" dir="auto" className="w-full rounded-md border border-border bg-background px-3 py-2"
+                value={draft.trigger_config.title_template ?? ""}
+                placeholder={defaultTitleTemplate(draft.trigger_type)}
+                onChange={(event) => setDraft({ ...draft, trigger_config: { ...draft.trigger_config, title_template: event.target.value } })} />
+              <p className="text-xs text-muted-foreground">{t("routines.editor.titleTemplateHelp")}</p>
+              <p className="text-xs text-muted-foreground">{t("routines.editor.titlePreview", { title: titlePreview })}</p>
+            </div>
             <div className="space-y-2">
               <p className="text-sm font-medium">{t("routines.allowedTools")}</p>
               {[...sources.flatMap((source) => source.tools.map((name) => ({ name, description: source.label }))),

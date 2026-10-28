@@ -5143,6 +5143,9 @@
     "keepFolder": "Ordner und Notizen aufbewahren",
     "deleteFailed": "Routine konnte nicht gelöscht werden",
     "editor": {
+      "titleTemplate": "Titel",
+      "titleTemplateHelp": "Verwende {name}, {event} und {date}. Titel sind auf 200 Zeichen begrenzt.",
+      "titlePreview": "Nächster Titel: {{title}}",
       "notes": "Notes",
       "calendar": "Calendar",
       "every": "Every",

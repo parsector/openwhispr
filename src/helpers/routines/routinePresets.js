@@ -15,7 +15,7 @@ const PRESETS = [
     descriptionKey: "routines.presets.meetingPrep.description",
     prompt: "Prepare me for this meeting. Give a concise agenda, relevant history with these attendees, and open items between us. Cite related notes. If there is nothing useful to report, answer NOTHING_TO_REPORT.",
     trigger_type: "before_event",
-    trigger_config: { schema_version: 1, minutes_before: 10, title_pattern: "", has_attendees: true, has_meeting_link: false, skip_declined: true },
+    trigger_config: { schema_version: 1, minutes_before: 10, title_pattern: "", title_template: "Prep - {event} - {date}", has_attendees: true, has_meeting_link: false, skip_declined: true },
     suggested_tools: ["search_notes", "get_note", "get_calendar_events"],
     needs: ["routines.presets.meetingPrep.reviewSources"],
   },

@@ -5183,6 +5183,9 @@
     "keepFolder": "Хранить папку и заметки",
     "deleteFailed": "Не удалось удалить процедуру",
     "editor": {
+      "titleTemplate": "Название",
+      "titleTemplateHelp": "Используйте {name}, {event} и {date}. Максимум 200 символов.",
+      "titlePreview": "Следующее название: {{title}}",
       "notes": "Notes",
       "calendar": "Calendar",
       "every": "Every",
