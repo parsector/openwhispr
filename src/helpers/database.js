@@ -454,7 +454,8 @@ class DatabaseManager {
           status TEXT NOT NULL DEFAULT 'open', rejected_reason TEXT,
           speaker_confidence TEXT DEFAULT 'unknown', mention_count INTEGER NOT NULL DEFAULT 1,
           pinned_fields TEXT, extraction_version TEXT, source_removed INTEGER NOT NULL DEFAULT 0,
-          created_at TEXT, updated_at TEXT, completed_at TEXT, rejected_at TEXT, archived_at TEXT
+          created_at TEXT, updated_at TEXT, completed_at TEXT, rejected_at TEXT, archived_at TEXT,
+          agent_job_id TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_commitments_status_due ON commitments(status, due_date);
         CREATE INDEX IF NOT EXISTS idx_commitments_person ON commitments(person);
@@ -472,7 +473,7 @@ class DatabaseManager {
         );
       `);
 
-      for (const definition of ["source TEXT NOT NULL DEFAULT 'meeting'", "source_agent TEXT"]) {
+      for (const definition of ["source TEXT NOT NULL DEFAULT 'meeting'", "source_agent TEXT", "agent_job_id TEXT"]) {
         try { this.db.exec(`ALTER TABLE commitments ADD COLUMN ${definition}`); }
         catch (err) { if (!err.message.includes("duplicate column")) throw err; }
       }

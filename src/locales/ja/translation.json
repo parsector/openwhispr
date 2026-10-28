@@ -5179,6 +5179,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "エージェントに送る",
+    "agentProject": "エージェントのプロジェクト",
+    "handedOff": "引き継ぎ済み",
+    "openAgentJob": "エージェントのジョブを開く",
+    "handoffCancelled": "エージェントのジョブはキャンセルされました",
+    "handoffFailed": "エージェントのジョブは失敗しました",
+    "handoffUnavailable": "このタスクは引き継げません",
     "delete": "削除",
     "deleteConfirm": "このタスクを完全に削除しますか？元に戻すことはできません。",
     "deletePermanently": "完全に削除",

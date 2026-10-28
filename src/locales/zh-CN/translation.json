@@ -5179,6 +5179,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "发送给代理",
+    "agentProject": "代理项目",
+    "handedOff": "已移交",
+    "openAgentJob": "打开代理任务",
+    "handoffCancelled": "代理任务已取消",
+    "handoffFailed": "代理任务失败",
+    "handoffUnavailable": "此待办已无法移交",
     "delete": "删除",
     "deleteConfirm": "永久删除此待办事项？此操作无法撤销。",
     "deletePermanently": "永久删除",

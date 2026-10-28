@@ -5219,6 +5219,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "Передать агенту",
+    "agentProject": "Проект агента",
+    "handedOff": "Передано",
+    "openAgentJob": "Открыть задачу агента",
+    "handoffCancelled": "Задача агента отменена",
+    "handoffFailed": "Задача агента не выполнена",
+    "handoffUnavailable": "Задача больше недоступна для передачи",
     "delete": "Удалить",
     "deleteConfirm": "Удалить эту задачу навсегда? Это действие нельзя отменить.",
     "deletePermanently": "Удалить навсегда",

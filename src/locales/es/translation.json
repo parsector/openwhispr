@@ -5179,6 +5179,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "Enviar al agente",
+    "agentProject": "Proyecto del agente",
+    "handedOff": "Delegada",
+    "openAgentJob": "Abrir tarea del agente",
+    "handoffCancelled": "Tarea del agente cancelada",
+    "handoffFailed": "Tarea del agente fallida",
+    "handoffUnavailable": "La tarea ya no se puede delegar",
     "delete": "Eliminar",
     "deleteConfirm": "¿Eliminar esta tarea permanentemente? Esta acción no se puede deshacer.",
     "deletePermanently": "Eliminar permanentemente",

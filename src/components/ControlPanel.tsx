@@ -1276,7 +1276,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               {activeView === "todos" && (
                 <Suspense fallback={null}>
-                  <TodosView onOpenNote={(id) => {
+                  <TodosView onOpenAgentJob={() => { setIntegrationsSection("agents"); setActiveView("integrations"); }} onOpenNote={(id) => {
                     void window.electronAPI.getNote(id).then((note) => {
                       if (!note) return;
                       if (note.folder_id) {

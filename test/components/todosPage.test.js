@@ -14,6 +14,7 @@ const TodosView = require("../../src/components/todos/TodosView.tsx").default;
 const ProposalsBanner = require("../../src/components/todos/ProposalsBanner.tsx").default;
 const { useTodosStore } = require("../../src/stores/todosStore.ts");
 const { filterTodos } = require("../../src/components/todos/todoFilters.ts");
+const { useLocalApprovalStore } = require("../../src/stores/localApprovalStore.ts");
 
 const row = (id, due_date, direction = "owe") => ({ id, text: `Send report ${id}`, status: "open",
   direction, due_date, created_at: "2026-10-28", person: null, quote: null,
@@ -56,6 +57,85 @@ test("todo row renders status, date and hidden quote disclosure", () => {
   assert.doesNotMatch(html, /<blockquote/);
   assert.match(html, /data-todo-date-column/);
   assert.match(html, /w-\[76px\]/);
+});
+
+test("handoff is hidden without projects and a cancelled linked job keeps its todo open", async () => {
+  const plain = renderToStaticMarkup(React.createElement(TodoRow, { row: row("no-project", null),
+    onComplete() {}, onReject() {}, onDue() {}, onPerson() {}, onOpenNote() {}, projects: [] }));
+  assert.doesNotMatch(plain, /todos\.sendToAgent/);
+  const failed = renderToStaticMarkup(React.createElement(TodoRow, { row: { ...row("failed", null), agent_job_id: "job-failed" },
+    jobStatus: "failed", onComplete() {}, onReject() {}, onDue() {}, onPerson() {}, onOpenNote() {}, projects: [] }));
+  assert.match(failed, /title="todos.handoffFailed"/);
+  assert.doesNotMatch(failed, /title="todos.openAgentJob"/);
+
+  const { Window } = await import("happy-dom");
+  const browser = new Window();
+  const previous = { window: global.window, document: global.document, navigator: global.navigator,
+    IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  const priorStore = useTodosStore.getState();
+  global.window = browser;
+  global.document = browser.document;
+  global.navigator = browser.navigator;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  let rows = [row("handoff", null)];
+  let jobStatus = "pending";
+  const prepared = [];
+  const linked = [];
+  const opened = [];
+  browser.agentJobs = {
+    projectsList: async () => ({ projects: [{ name: "Alpha" }, { name: "Beta" }] }),
+    prepare: async (input) => { prepared.push(input); return { jobId: "job-123", prompt: input.task,
+      harness: "claude", project: { name: input.project }, status: "pending" }; },
+    get: async () => ({ status: jobStatus }),
+    onUpdated: () => () => {},
+    cancel: async () => { jobStatus = "cancelled"; },
+  };
+  browser.electronAPI = {
+    isDebugEnabled: async () => false,
+    commitmentsList: async () => rows,
+    commitmentsProposalsList: async () => [],
+    commitmentsOverdueCount: async () => 0,
+    onCommitmentsUpdated: () => () => {},
+    commitmentsSetAgentJob: async (id, jobId) => {
+      linked.push([id, jobId]);
+      rows = rows.map((item) => item.id === id ? { ...item, agent_job_id: jobId } : item);
+      return rows[0];
+    },
+    getNotes: async () => [],
+  };
+  const { createRoot } = require("react-dom/client");
+  const host = browser.document.createElement("div");
+  browser.document.body.append(host);
+  const root = createRoot(host);
+  try {
+    await React.act(async () => root.render(React.createElement(TodosView, { onOpenNote() {}, onOpenAgentJob(id) { opened.push(id); } })));
+    const article = host.querySelector("article");
+    const project = article.querySelector('select[aria-label="todos.agentProject"]');
+    assert.equal(project.value, "Alpha");
+    await React.act(async () => { project.value = "Beta"; project.dispatchEvent(new browser.Event("change", { bubbles: true })); });
+    await React.act(async () => article.querySelector("details button:last-child").click());
+    assert.deepEqual(prepared, [{ project: "Beta", task: "Send report handoff" }]);
+    assert.deepEqual(linked, [["handoff", "job-123"]]);
+    assert.equal(rows[0].status, "open");
+    assert.ok(article.querySelector('button[title="todos.openAgentJob"]'));
+    await React.act(async () => article.querySelector('button[title="todos.openAgentJob"]').click());
+    assert.deepEqual(opened, ["job-123"]);
+    assert.ok(article.querySelector('section[aria-label="agentJobs.card.title"]'));
+    await React.act(async () => [...article.querySelectorAll("button")]
+      .find((button) => button.textContent === "agentJobs.card.cancel").click());
+    assert.equal(rows[0].status, "open");
+    assert.ok(article.querySelector('span[title="todos.handoffCancelled"]'));
+    assert.equal(article.querySelector('button[title="todos.openAgentJob"]'), null);
+  } finally {
+    await React.act(async () => root.unmount());
+    useTodosStore.setState({ rows: priorStore.rows, proposals: priorStore.proposals,
+      overdueCount: priorStore.overdueCount, showArchived: priorStore.showArchived, filter: priorStore.filter });
+    useLocalApprovalStore.setState({ entries: {}, receipts: {} });
+    browser.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete global[key]; else global[key] = value;
+    }
+  }
 });
 
 test("completed todo shows a visible check and completion status", async () => {

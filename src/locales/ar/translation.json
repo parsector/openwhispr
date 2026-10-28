@@ -5289,6 +5289,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "إرسال إلى الوكيل",
+    "agentProject": "مشروع الوكيل",
+    "handedOff": "تم التسليم",
+    "openAgentJob": "فتح مهمة الوكيل",
+    "handoffCancelled": "أُلغيت مهمة الوكيل",
+    "handoffFailed": "فشلت مهمة الوكيل",
+    "handoffUnavailable": "لم تعد المهمة متاحة للتسليم",
     "delete": "حذف",
     "deleteConfirm": "هل تريد حذف هذه المهمة نهائيًا؟ لا يمكن التراجع عن ذلك.",
     "deletePermanently": "حذف نهائيًا",

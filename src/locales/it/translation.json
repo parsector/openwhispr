@@ -5179,6 +5179,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "Invia all’agente",
+    "agentProject": "Progetto dell’agente",
+    "handedOff": "Affidata",
+    "openAgentJob": "Apri il lavoro dell’agente",
+    "handoffCancelled": "Lavoro dell’agente annullato",
+    "handoffFailed": "Lavoro dell’agente non riuscito",
+    "handoffUnavailable": "L’attività non può più essere affidata",
     "delete": "Elimina",
     "deleteConfirm": "Eliminare definitivamente questa attività? Non è possibile annullare.",
     "deletePermanently": "Elimina definitivamente",

@@ -46,6 +46,7 @@ export interface Commitment {
   source_note_title: string | null;
   source: "meeting" | "agent" | "manual";
   source_agent: string | null;
+  agent_job_id: string | null;
   person: string | null;
   direction: "owe" | "waiting";
   due_date: string | null;
@@ -1575,6 +1576,7 @@ declare global {
       onTodosNavigationPending: (callback: () => void) => () => void;
       commitmentsCreate: (input: { text: string; person?: string | string[]; due_date?: string | null; direction?: "owe" | "waiting" }) => Promise<Commitment>;
       commitmentsUpdate: (id: string, patch: Partial<Pick<Commitment, "status" | "person" | "rejected_reason" | "text">>) => Promise<Commitment | null>;
+      commitmentsSetAgentJob: (id: string, jobId: string) => Promise<Commitment | null>;
       commitmentsSetDue: (id: string, input: { action: "push" | "pick" | "clear"; date?: string }) => Promise<Commitment | null>;
       commitmentsProposalsList: (noteId?: number) => Promise<CommitmentProposal[]>;
       commitmentsResolveProposal: (id: string, accept: boolean) => Promise<Commitment | null>;

@@ -5179,6 +5179,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "Send to agent",
+    "agentProject": "Agent project",
+    "handedOff": "Handed off",
+    "openAgentJob": "Open agent job",
+    "handoffCancelled": "Agent job cancelled",
+    "handoffFailed": "Agent job failed",
+    "handoffUnavailable": "Todo is no longer available for handoff",
     "delete": "Delete",
     "deleteConfirm": "Delete this todo permanently? This cannot be undone.",
     "deletePermanently": "Delete permanently",

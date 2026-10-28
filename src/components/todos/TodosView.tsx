@@ -5,10 +5,12 @@ import type { Commitment } from "../../types/electron";
 import { useTodosStore } from "../../stores/todosStore";
 import { groupTodos } from "./TodoGroups";
 import TodoRow from "./TodoRow";
+import type { AgentJob } from "../../types/electron";
+import { addLocalApproval } from "../../stores/localApprovalStore";
 import ProposalsBanner from "./ProposalsBanner";
 import { filterTodos } from "./todoFilters";
 
-export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => void }) {
+export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: (id: number) => void; onOpenAgentJob: (id: string) => void }) {
   const { t } = useTranslation();
   const { rows, showArchived, setShowArchived, refresh, loading, error, filter, setFilter, composerRequestAt } = useTodosStore();
   const [draft, setDraft] = useState("");
@@ -21,12 +23,26 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
   const [undo, setUndo] = useState<Commitment | null>(null);
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Awaited<ReturnType<typeof window.agentJobs.projectsList>>["projects"]>([]);
+  const [jobStatuses, setJobStatuses] = useState<Record<string, AgentJob["status"]>>({});
+  const [handoffError, setHandoffError] = useState<string | null>(null);
+  const [preparingId, setPreparingId] = useState<string | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     let active = true;
     void window.electronAPI.isDebugEnabled().then((enabled) => { if (active) setDebugEnabled(enabled); });
-    return () => { active = false; };
+    void window.agentJobs?.projectsList().then((result) => { if (active) setProjects(result.projects); }).catch(() => {});
+    const off = window.agentJobs?.onUpdated((job) => setJobStatuses((current) => ({ ...current, [job.jobId]: job.status })));
+    return () => { active = false; off?.(); };
   }, []);
+  useEffect(() => {
+    const ids = [...new Set(rows.map((row) => row.agent_job_id).filter((id): id is string => Boolean(id)))];
+    let active = true;
+    void Promise.all(ids.map(async (id) => [id, (await window.agentJobs?.get(id))?.status ?? "failed"] as const))
+      .then((items) => { if (active) setJobStatuses((current) => ({ ...current, ...Object.fromEntries(items) })); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [rows]);
   useEffect(() => {
     void refresh();
     const off = window.electronAPI.onCommitmentsUpdated(refresh);
@@ -54,6 +70,30 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
     setDeleteError(null);
     if (undo?.id === row.id) setUndo(null);
     await refresh();
+  };
+  const handoff = async (row: Commitment, project: string) => {
+    if (preparingId) return;
+    setPreparingId(row.id);
+    setHandoffError(null);
+    let jobId: string | null = null;
+    try {
+      const job = await window.agentJobs.prepare({ project, task: row.text });
+      jobId = job.jobId;
+      const linked = await window.electronAPI.commitmentsSetAgentJob(row.id, job.jobId);
+      if (!linked) throw new Error(t("todos.handoffUnavailable"));
+      const context = {
+        messageId: `todo-${row.id}-${job.jobId}`, toolCallId: "row",
+        signal: new AbortController().signal, onApprovalRequested: () => {}, onHoldDelivery: () => {},
+        claimTurnSlot: () => true, releaseTurnSlot: () => {},
+      };
+      const action = job.prompt.replace(/\s+/g, " ").slice(0, 120);
+      addLocalApproval(context, job, `harness ${job.harness} on repo ${job.project.name} with model ${job.model || "default"} for action ${action}`);
+      setJobStatuses((current) => ({ ...current, [job.jobId]: "pending" }));
+      await refresh();
+    } catch (cause) {
+      if (jobId) await window.agentJobs.cancel(jobId).catch(() => {});
+      setHandoffError(cause instanceof Error ? cause.message : String(cause));
+    } finally { setPreparingId(null); }
   };
   const visibleRows = filterTodos(rows, filter);
   const groups = groupTodos(visibleRows);
@@ -102,11 +142,14 @@ export default function TodosView({ onOpenNote }: { onOpenNote: (id: number) => 
         </div>}
         {error && <p role="alert" className="mb-4 text-sm text-destructive">{t("todos.loadError")}: {error}</p>}
         {deleteError && <p role="alert" className="mb-4 text-sm text-destructive">{deleteError}</p>}
+        {handoffError && <p role="alert" className="mb-4 text-sm text-destructive">{handoffError}</p>}
         {!loading && !groups.length && <p className="py-16 text-center text-sm text-muted-foreground">{showArchived ? t("todos.emptyArchive") : t("todos.empty")}</p>}
         <div className="mt-5 space-y-[26px]">
         {groups.map(({ key, rows: groupRows }) => <section key={key} aria-labelledby={`${key}-heading`} className={`pt-2.5 ${key === "overdue" ? "-mx-[13px] rounded-lg bg-input px-[13px] pb-[3px]" : ""}`}>
           <h2 id={`${key}-heading`} className={`flex items-baseline gap-[7px] text-[11px] font-bold leading-[1.4] tracking-[0.1em] [font-variant-caps:all-small-caps] ${key === "overdue" ? "text-foreground" : "text-muted-foreground"}`}>{t(`todos.groups.${key}`)} <span className="font-medium tracking-normal">{groupRows.length}</span></h2>
           {groupRows.map((row) => <TodoRow key={row.id} row={row} onOpenNote={onOpenNote} debugEnabled={debugEnabled}
+            projects={projects.map((project) => project.name)} jobStatus={row.agent_job_id ? jobStatuses[row.agent_job_id] : undefined}
+            preparing={preparingId === row.id} onHandoff={(item, project) => void handoff(item, project)} onOpenAgentJob={onOpenAgentJob}
             onDelete={(item) => void deleteTodo(item)}
             onComplete={(item) => void changeStatus(item, "completed")}
             onReject={(item, reason) => void changeStatus(item, "rejected", reason)}

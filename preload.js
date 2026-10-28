@@ -269,6 +269,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   onTodosNavigationPending: registerListener("todos-navigation-pending", (callback) => () => callback()),
   commitmentsCreate: (input) => ipcRenderer.invoke("commitments-create", input),
   commitmentsUpdate: (id, patch) => ipcRenderer.invoke("commitments-update", id, patch),
+  commitmentsSetAgentJob: (id, jobId) => ipcRenderer.invoke("commitments-set-agent-job", id, jobId),
   commitmentsSetDue: (id, input) => ipcRenderer.invoke("commitments-set-due", id, input),
   commitmentsProposalsList: (noteId) => ipcRenderer.invoke("commitments-proposals-list", noteId),
   commitmentsResolveProposal: (id, accept) => ipcRenderer.invoke("commitments-resolve-proposal", id, accept),

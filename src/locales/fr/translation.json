@@ -5179,6 +5179,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "Envoyer à l’agent",
+    "agentProject": "Projet de l’agent",
+    "handedOff": "Transmise",
+    "openAgentJob": "Ouvrir la tâche de l’agent",
+    "handoffCancelled": "Tâche de l’agent annulée",
+    "handoffFailed": "Échec de la tâche de l’agent",
+    "handoffUnavailable": "La tâche ne peut plus être transmise",
     "delete": "Supprimer",
     "deleteConfirm": "Supprimer définitivement cette tâche ? Cette action est irréversible.",
     "deletePermanently": "Supprimer définitivement",

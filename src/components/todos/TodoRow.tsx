@@ -4,6 +4,8 @@ import { Check, MoreHorizontal, X } from "../icons";
 import type { Commitment } from "../../types/electron";
 import { groupFor, localDate } from "./TodoGroups";
 import { boundedDateLabel } from "./todoDateLabel";
+import { LocalApprovalCard } from "../chat/LocalApprovalCard";
+import { useLocalApprovalStore } from "../../stores/localApprovalStore";
 
 function peopleLabel(person: string | null): string {
   if (!person) return "";
@@ -12,7 +14,7 @@ function peopleLabel(person: string | null): string {
   return person;
 }
 
-export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, onOpenNote, onDelete, debugEnabled = false }: {
+export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, onOpenNote, onDelete, onHandoff, onOpenAgentJob, projects = [], jobStatus, preparing = false, debugEnabled = false }: {
   row: Commitment;
   onComplete: (row: Commitment) => void;
   onReject: (row: Commitment, reason: string | null) => void;
@@ -20,6 +22,11 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   onPerson: (row: Commitment, person: string) => void;
   onOpenNote: (id: number) => void;
   onDelete?: (row: Commitment) => void;
+  onHandoff?: (row: Commitment, project: string) => void;
+  onOpenAgentJob?: (id: string) => void;
+  projects?: string[];
+  jobStatus?: "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
+  preparing?: boolean;
   debugEnabled?: boolean;
 }) {
   const { t, i18n } = useTranslation();
@@ -29,6 +36,12 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   const [rejecting, setRejecting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [project, setProject] = useState(projects[0] || "");
+  const approval = useLocalApprovalStore((state) => Object.values(state.entries).find((entry) => entry.messageId.startsWith(`todo-${row.id}-`) && entry.jobId === row.agent_job_id));
+  const receipt = useLocalApprovalStore((state) => Object.values(state.receipts).find((entry) => entry.messageId.startsWith(`todo-${row.id}-`) && entry.jobId === row.agent_job_id));
+  const effectiveStatus = receipt?.state === "failed" || receipt?.state === "cancelled" ? receipt.state : jobStatus;
+  const inactiveJob = effectiveStatus === "failed" || effectiveStatus === "cancelled";
+  const actionableJob = Boolean(effectiveStatus) && !inactiveJob;
   const detailsRef = useRef<HTMLDetailsElement>(null);
   const rejectInputRef = useRef<HTMLInputElement>(null);
   const startReject = () => {
@@ -83,6 +96,9 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             {row.status === "proposed" && <span>{t("todos.proposed")}</span>}
             {archived && <span>{t(`todos.${row.status}`)}</span>}
             {row.source === "agent" && row.source_agent && <span className="inline-flex items-center gap-1 rounded-full bg-surface-3 px-[7px] py-0.5 text-muted-foreground"><span aria-hidden="true" className="size-[7px] rotate-45 rounded-[2px] bg-agent-brand" />{row.source_agent}</span>}
+            {row.agent_job_id && (!actionableJob ?
+              <span title={inactiveJob ? t(effectiveStatus === "cancelled" ? "todos.handoffCancelled" : "todos.handoffFailed") : undefined} className="rounded-full bg-surface-3 px-[7px] py-0.5 text-muted-foreground opacity-70">{t("todos.handedOff")}</span> :
+              <button type="button" title={t("todos.openAgentJob")} onClick={() => onOpenAgentJob?.(row.agent_job_id!)} className="rounded-full bg-surface-3 px-[7px] py-0.5 text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary">{t("todos.handedOff")}</button>)}
             {row.source_removed ? <span>{t("todos.sourceRemoved")}</span> : row.source_note_id &&
               <button type="button" onClick={() => onOpenNote(Number(row.source_note_id))}
                 className="hover:underline focus-visible:underline underline-offset-2">
@@ -110,6 +126,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             <button type="submit" className="text-sm text-destructive">{t("todos.reject")}</button>
             <button type="button" onClick={() => setRejecting(false)} className="text-sm text-muted-foreground hover:text-foreground">{t("common.cancel")}</button>
           </form>}
+          {approval && <div className="mt-2"><LocalApprovalCard entry={approval} compact /></div>}
           {row.quote && <button type="button" onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded} className="mt-1 text-xs text-muted-foreground underline underline-offset-2">
             {expanded ? t("todos.hideQuote") : t("todos.showQuote")}
@@ -134,6 +151,14 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
                 </label>
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "push" })} type="button">{t("todos.pushDay")}</button>
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "clear" })} type="button">{t("todos.clearDate")}</button>
+                {!archived && projects.length > 0 && (!row.agent_job_id || inactiveJob) && <div className="border-t border-border pt-1">
+                  {projects.length > 1 && <label className="block px-2 py-1 text-xs text-muted-foreground">{t("todos.agentProject")}
+                    <select aria-label={t("todos.agentProject")} className="mt-1 w-full rounded border border-border bg-background px-1 py-1 text-foreground" value={projects.includes(project) ? project : projects[0]} onChange={(event) => setProject(event.target.value)}>
+                      {projects.map((name) => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                  </label>}
+                  <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted disabled:opacity-50" disabled={preparing} onClick={() => { detailsRef.current?.removeAttribute("open"); onHandoff?.(row, projects.includes(project) ? project : projects[0]); }} type="button">{t("todos.sendToAgent")}</button>
+                </div>}
                 {!archived && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onComplete(row)} type="button">{t("todos.complete")}</button>}
                 {!archived && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={startReject} type="button">{t("todos.reject")}</button>}
                 {debugEnabled && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => setConfirmingDelete(true)} type="button">{t("todos.delete")}</button>}

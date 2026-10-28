@@ -90,6 +90,13 @@ class CommitmentStore {
       .run(...Object.values(values), id);
     return this.get(id);
   }
+  setAgentJob(id, jobId) {
+    const row = this.get(id);
+    if (!row || !["open", "proposed"].includes(row.status)) return null;
+    this.db.prepare("UPDATE commitments SET agent_job_id=?, updated_at=? WHERE id=? AND account_id IS ?")
+      .run(jobId, new Date().toISOString(), id, this.scope());
+    return this.get(id);
+  }
   setDue(id, dueDate, { user = true } = {}) {
     const before = this.get(id);
     if (!before) return null;

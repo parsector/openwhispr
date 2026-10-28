@@ -5179,6 +5179,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "Enviar ao agente",
+    "agentProject": "Projeto do agente",
+    "handedOff": "Delegada",
+    "openAgentJob": "Abrir tarefa do agente",
+    "handoffCancelled": "Tarefa do agente cancelada",
+    "handoffFailed": "Tarefa do agente falhou",
+    "handoffUnavailable": "A tarefa não pode mais ser delegada",
     "delete": "Excluir",
     "deleteConfirm": "Excluir esta tarefa permanentemente? Não é possível desfazer.",
     "deletePermanently": "Excluir permanentemente",

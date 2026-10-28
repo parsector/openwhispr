@@ -37,7 +37,7 @@ test("commitment schema survives repeated initialization", (t) => {
   }
 });
 
-test("legacy commitments gain attribution columns without changing existing rows or user_version", (t) => {
+test("legacy commitments gain attribution and agent job columns without changing existing rows or user_version", (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-commitments-migrate-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const originalLoad = Module._load;
@@ -53,13 +53,21 @@ test("legacy commitments gain attribution columns without changing existing rows
   const row = new CommitmentStore(first).create({ text: "Existing meeting todo" });
   const before = first.db.pragma("user_version", { simple: true });
   const columns = first.db.prepare("PRAGMA table_info(commitments)").all()
-    .map((column) => column.name).filter((name) => !["source", "source_agent"].includes(name));
+    .map((column) => column.name).filter((name) => !["source", "source_agent", "agent_job_id"].includes(name));
   first.db.exec(`CREATE TABLE commitments_legacy AS SELECT ${columns.join(",")} FROM commitments;
     DROP TABLE commitments; ALTER TABLE commitments_legacy RENAME TO commitments;`);
   first.db.close();
   const second = new DatabaseManager();
-  t.after(() => second.db.close());
   assert.equal(second.db.pragma("user_version", { simple: true }), before);
   assert.equal(new CommitmentStore(second).get(row.id).source, "meeting");
   assert.equal(new CommitmentStore(second).get(row.id).source_agent, null);
+  assert.equal(new CommitmentStore(second).get(row.id).agent_job_id, null);
+  assert.ok(second.db.prepare("PRAGMA table_info(commitments)").all().some((column) => column.name === "agent_job_id"));
+  const linked = new CommitmentStore(second).setAgentJob(row.id, "job-123");
+  assert.equal(linked.agent_job_id, "job-123");
+  assert.equal(linked.status, "open");
+  second.db.close();
+  const third = new DatabaseManager();
+  t.after(() => third.db.close());
+  assert.equal(new CommitmentStore(third).get(row.id).agent_job_id, "job-123");
 });

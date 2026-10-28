@@ -1166,6 +1166,10 @@ class IPCHandlers {
       const selected = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)));
       return changed(commitments().update(id, selected, { user: true }));
     });
+    ipcMain.handle("commitments-set-agent-job", (_event, id, jobId) => {
+      if (typeof id !== "string" || typeof jobId !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(jobId)) return null;
+      return changed(commitments().setAgentJob(id, jobId));
+    });
     ipcMain.handle("commitments-set-due", (_event, id, input) => {
       const store = commitments();
       const row = typeof id === "string" && store.get(id);

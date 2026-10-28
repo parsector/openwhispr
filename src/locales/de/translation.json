@@ -5179,6 +5179,13 @@
     }
   },
   "todos": {
+    "sendToAgent": "An Agenten senden",
+    "agentProject": "Agentenprojekt",
+    "handedOff": "Übergeben",
+    "openAgentJob": "Agentenauftrag öffnen",
+    "handoffCancelled": "Agentenauftrag abgebrochen",
+    "handoffFailed": "Agentenauftrag fehlgeschlagen",
+    "handoffUnavailable": "Aufgabe kann nicht mehr übergeben werden",
     "delete": "Löschen",
     "deleteConfirm": "Diese Aufgabe dauerhaft löschen? Dies kann nicht rückgängig gemacht werden.",
     "deletePermanently": "Dauerhaft löschen",
