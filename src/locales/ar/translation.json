@@ -5301,6 +5301,8 @@
     "waitingOn": "Waiting on",
     "add": "Add",
     "complete": "Complete",
+    "completed": "Completed",
+    "rejected": "Rejected",
     "noDate": "No date",
     "tomorrow": "Tomorrow",
     "saidCount_zero": "said {{count}}×",

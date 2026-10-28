@@ -58,6 +58,56 @@ test("todo row renders status, date and hidden quote disclosure", () => {
   assert.match(html, /w-\[76px\]/);
 });
 
+test("completed todo shows a visible check and completion status", async () => {
+  const i18n = i18next.createInstance();
+  await i18n.init({ lng: "en", resources: { en: { translation: { todos: { completed: "Completed" } } } } });
+  const html = renderToStaticMarkup(React.createElement(I18nextProvider, { i18n },
+    React.createElement(TodoRow, { row: { ...row("done", null), status: "completed" },
+      onComplete() {}, onReject() {}, onDue() {}, onPerson() {}, onOpenNote() {} })));
+  const status = html.match(/<article[^>]*>\s*<button([^>]*)>(.*?)<\/button>/s);
+  assert.ok(status);
+  assert.match(status[1], /disabled=""/);
+  assert.match(status[1], /aria-label="Completed"/);
+  assert.match(status[1], /bg-primary\/10/);
+  assert.match(status[1], /\btext-primary\b/);
+  assert.doesNotMatch(status[1], /text-transparent|hover:/);
+  assert.match(status[2], /data-icon="check"/);
+  assert.match(html, />Completed<\/span>/);
+});
+
+test("rejected todo shows a visible X, status, and stored reason", async () => {
+  const i18n = i18next.createInstance();
+  await i18n.init({ lng: "en", resources: { en: { translation: { todos: { rejected: "Rejected" } } } } });
+  const html = renderToStaticMarkup(React.createElement(I18nextProvider, { i18n },
+    React.createElement(TodoRow, { row: { ...row("rejected", null), status: "rejected", rejected_reason: "Already handled" },
+      onComplete() {}, onReject() {}, onDue() {}, onPerson() {}, onOpenNote() {} })));
+  const status = html.match(/<article[^>]*>\s*<button([^>]*)>(.*?)<\/button>/s);
+  assert.ok(status);
+  assert.match(status[1], /disabled=""/);
+  assert.match(status[1], /aria-label="Rejected"/);
+  assert.match(status[1], /title="Already handled"/);
+  assert.match(status[1], /bg-destructive\/10/);
+  assert.match(status[1], /\btext-destructive\b/);
+  assert.doesNotMatch(status[1], /text-transparent|hover:/);
+  assert.match(status[2], /data-icon="x"/);
+  assert.doesNotMatch(status[2], /data-icon="check"/);
+  assert.match(html, />Rejected<\/span>/);
+});
+
+test("open todo keeps its empty idle circle and overdue accent", () => {
+  const html = renderToStaticMarkup(React.createElement(TodoRow, { row: row("late", "2020-01-01"),
+    onComplete() {}, onReject() {}, onDue() {}, onPerson() {}, onOpenNote() {} }));
+  const status = html.match(/<article[^>]*>\s*<button([^>]*)>(.*?)<\/button>/s);
+  assert.ok(status);
+  assert.match(status[1], /aria-label="todos.complete"/);
+  assert.doesNotMatch(status[1], /disabled=""/);
+  assert.match(status[1], /text-transparent/);
+  assert.ok(!status[1].match(/class="([^"]+)"/)[1].split(" ").includes("text-primary"));
+  assert.doesNotMatch(status[1], /text-destructive/);
+  assert.doesNotMatch(status[2], /data-icon=/);
+  assert.match(html, /data-overdue="true"[^>]*before:bg-destructive/);
+});
+
 test("todo date pills use short local labels and a full accessible date", async () => {
   const OriginalDate = global.Date;
   const fixedNow = new OriginalDate(2026, 9, 28, 10);

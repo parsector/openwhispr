@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, MoreHorizontal } from "../icons";
+import { Check, MoreHorizontal, X } from "../icons";
 import type { Commitment } from "../../types/electron";
 import { groupFor, localDate } from "./TodoGroups";
 import { boundedDateLabel } from "./todoDateLabel";
@@ -57,11 +57,19 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   }
   const dateDescription = due ? `${overdue ? `${t("todos.groups.overdue")} · ` : dateStatus ? `${dateStatus} · ` : ""}${fullDate}` : undefined;
   const archived = row.status === "completed" || row.status === "rejected";
+  const statusClass = row.status === "completed"
+    ? "border-primary/20 bg-primary/10 text-primary"
+    : row.status === "rejected"
+      ? "border-destructive/20 bg-destructive/10 text-destructive"
+      : "border-border-hover bg-background text-transparent hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-primary";
   return (
     <article data-overdue={overdue ? "true" : undefined} className={`group relative grid min-h-[46px] grid-cols-[22px_minmax(0,1fr)_76px] items-start gap-x-2.5 border-b border-border py-2.5 transition-colors duration-150 ease-out hover:bg-surface-1 motion-reduce:transition-none last:border-0 ${overdue ? "ps-[9px] before:absolute before:inset-y-[9px] before:start-0 before:w-px before:bg-destructive" : ""}`}>
         <button type="button" disabled={archived} onClick={() => onComplete(row)}
-          aria-label={t("todos.complete")} className="mt-0.5 grid size-[17px] shrink-0 place-items-center rounded-full border border-border-hover bg-background text-transparent hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-primary disabled:opacity-50">
-          {archived && <Check size={13} />}
+          aria-label={t(archived ? `todos.${row.status}` : "todos.complete")}
+          title={row.status === "rejected" ? row.rejected_reason || undefined : undefined}
+          className={`mt-0.5 grid size-[17px] shrink-0 place-items-center rounded-full border ${statusClass}`}>
+          {row.status === "completed" && <Check size={13} />}
+          {row.status === "rejected" && <X size={13} />}
         </button>
         <div className="min-w-0">
           <div className="text-[13px] font-medium leading-[1.55] text-foreground">{row.text}</div>
@@ -70,6 +78,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             {row.mention_count > 1 && <span>{t("todos.saidCount", { count: row.mention_count })}</span>}
             {Boolean(row.date_move_count) && <span>{t("todos.dateMoved", { count: row.date_move_count })}</span>}
             {row.status === "proposed" && <span>{t("todos.proposed")}</span>}
+            {archived && <span>{t(`todos.${row.status}`)}</span>}
             {row.source === "agent" && row.source_agent && <span className="inline-flex items-center gap-1 rounded-full bg-surface-3 px-[7px] py-0.5 text-muted-foreground"><span aria-hidden="true" className="size-[7px] rotate-45 rounded-[2px] bg-agent-brand" />{row.source_agent}</span>}
             {row.source_removed ? <span>{t("todos.sourceRemoved")}</span> : row.source_note_id &&
               <button type="button" onClick={() => onOpenNote(Number(row.source_note_id))}
