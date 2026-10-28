@@ -7,7 +7,7 @@ global.React = React;
 const { renderToStaticMarkup } = require("react-dom/server");
 const i18next = require("i18next");
 const { I18nextProvider } = require("react-i18next");
-const { groupTodos } = require("../../src/components/todos/TodoGroups.ts");
+const { groupFor, groupTodos } = require("../../src/components/todos/TodoGroups.ts");
 const TodoRow = require("../../src/components/todos/TodoRow.tsx").default;
 const { boundedDateLabel } = require("../../src/components/todos/todoDateLabel.ts");
 const TodosView = require("../../src/components/todos/TodosView.tsx").default;
@@ -20,10 +20,32 @@ const row = (id, due_date, direction = "owe") => ({ id, text: `Send report ${id}
   source_note_id: null, mention_count: 1, pinned_fields: "[]", source_removed: 0 });
 
 test("groups overdue, today, upcoming, no-date and waiting in fixed order", () => {
-  const grouped = groupTodos([row("waiting", "2026-10-01", "waiting"), row("none", null),
-    row("upcoming", "2026-11-01"), row("today", "2026-10-28"), row("late", "2026-10-27")],
-  new Date(2026, 9, 28, 10));
+  const now = new Date(2026, 9, 28, 10);
+  const rows = [row("waiting", "2026-10-01", "waiting"), row("none", null),
+    row("upcoming", "2026-11-01"), row("today", "2026-10-28"), row("late", "2026-10-27"),
+    { ...row("today-older", "2026-10-28"), created_at: "2026-10-27" },
+    { ...row("completed", "2026-10-26"), status: "completed" }];
+  const grouped = groupTodos(rows, now);
   assert.deepEqual(grouped.map((group) => group.key), ["overdue", "today", "upcoming", "noDate", "waiting"]);
+  assert.deepEqual(grouped.map((group) => [group.key, group.rows.map((item) => item.id)]), [
+    ["overdue", ["late"]], ["today", ["completed", "today-older", "today"]], ["upcoming", ["upcoming"]],
+    ["noDate", ["none"]], ["waiting", ["waiting"]],
+  ]);
+  const allRows = grouped.flatMap((group) => group.rows);
+  assert.equal(allRows.length, rows.length);
+  assert.deepEqual(allRows.map((item) => item.id).sort(), rows.map((item) => item.id).sort());
+  for (const group of grouped) {
+    for (const item of group.rows) assert.equal(groupFor(item, now), group.key);
+  }
+});
+
+test("grouping drops empty groups and treats yesterday's open todo as overdue at midnight", () => {
+  const midnight = new Date(2026, 9, 28, 0, 0);
+  const noDate = row("none", null);
+  assert.deepEqual(groupTodos([], midnight), []);
+  assert.deepEqual(groupTodos([noDate], midnight), [{ key: "noDate", rows: [noDate] }]);
+  assert.equal(groupFor(row("late", "2026-10-27"), midnight), "overdue");
+  assert.equal(groupFor(row("today", "2026-10-28"), midnight), "today");
 });
 
 test("todo row renders status, date and hidden quote disclosure", () => {
