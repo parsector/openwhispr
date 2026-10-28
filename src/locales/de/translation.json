@@ -5128,6 +5128,10 @@
         "description": "Heutige Besprechungen und aktuelle offene Aktionspunkte mit Links zu zugehörigen Notizen.",
         "pickTime": "Wählen Sie vor dem Speichern eine Uhrzeit"
       },
+      "weeklyTodoRollup": {
+        "name": "Wöchentliche Aufgabenübersicht",
+        "description": "Abgeschlossene und überfällige Aufgaben, ausstehende Antworten und ein Fokus für nächste Woche."
+      },
       "fridayDigest": {
         "name": "Freitagsrückblick",
         "description": "Entscheidungen, Risiken, Blocker und ein Entwurf der Statusaktualisierung der letzten sieben Tage.",

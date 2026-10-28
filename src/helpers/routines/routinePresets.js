@@ -30,6 +30,15 @@ const PRESETS = [
     suggested_tools: ["search_notes", "get_note"],
     needs: ["routines.presets.fridayDigest.pickFolders", "routines.presets.fridayDigest.pickPeople"],
   },
+  {
+    id: "weekly-todo-rollup",
+    nameKey: "routines.presets.weeklyTodoRollup.name",
+    descriptionKey: "routines.presets.weeklyTodoRollup.description",
+    prompt: "Use separate list_todos calls for completed and rejected items (include_archived=true), overdue open items, and items with direction=waiting; use limit=50 for each. Consult relevant meeting notes. Report, in this order: (1) What closed this week: completed and rejected todos whose completion or rejection date falls this week, including rejection reasons where present. (2) What is overdue right now. (3) What I am waiting on from others. (4) Exactly one suggested focus for next week, chosen from the overdue items, justified in one sentence; omit this section if there are no overdue items. Cite meeting titles for anything quoted. If every group is empty, answer exactly NOTHING_TO_REPORT.",
+    trigger_config: { schema_version: 1, slots: [{ days: [5], time: "16:00" }] },
+    suggested_tools: ["list_todos", "get_todo", "search_notes"],
+    needs: [],
+  },
 ];
 
 module.exports = { PRESETS };

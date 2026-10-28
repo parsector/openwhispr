@@ -5128,6 +5128,10 @@
         "description": "Reuniones de hoy y puntos de acción abiertos recientes, con enlaces a notas relacionadas.",
         "pickTime": "Elige una hora antes de guardar"
       },
+      "weeklyTodoRollup": {
+        "name": "Resumen semanal de tareas",
+        "description": "Tareas cerradas y vencidas, pendientes de otros y un objetivo para la próxima semana."
+      },
       "fridayDigest": {
         "name": "Resumen del viernes",
         "description": "Decisiones, riesgos, bloqueos y un borrador de actualización de estado de los últimos siete días.",

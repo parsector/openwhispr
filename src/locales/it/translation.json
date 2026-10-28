@@ -5128,6 +5128,10 @@
         "description": "Le riunioni di oggi e le recenti azioni aperte, con collegamenti alle note correlate.",
         "pickTime": "Scegli un orario prima di salvare"
       },
+      "weeklyTodoRollup": {
+        "name": "Riepilogo settimanale delle attività",
+        "description": "Attività chiuse e scadute, risposte attese e una priorità per la prossima settimana."
+      },
       "fridayDigest": {
         "name": "Digest del venerdì",
         "description": "Decisioni, rischi, bloccanti e una bozza di aggiornamento dello stato degli ultimi sette giorni.",

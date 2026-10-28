@@ -5128,6 +5128,10 @@
         "description": "今天的会议和最近开放的行动项目，并带有相关笔记的链接。",
         "pickTime": "保存前请选择时间"
       },
+      "weeklyTodoRollup": {
+        "name": "每周待办汇总",
+        "description": "汇总已关闭和逾期的待办、等待他人处理的事项，以及下周的一项重点。"
+      },
       "fridayDigest": {
         "name": "星期五摘要",
         "description": "过去七天的决策、风险、障碍和状态更新草案。",

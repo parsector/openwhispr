@@ -5128,6 +5128,10 @@
         "description": "Les réunions d'aujourd' hui et les actions ouvertes récentes, avec des liens vers des notes connexes.",
         "pickTime": "Choisissez une heure avant d’enregistrer"
       },
+      "weeklyTodoRollup": {
+        "name": "Bilan hebdomadaire des tâches",
+        "description": "Tâches terminées et en retard, attentes envers les autres et une priorité pour la semaine prochaine."
+      },
       "fridayDigest": {
         "name": "Résumé du vendredi",
         "description": "Décisions, risques, bloqueurs et un projet de mise à jour du statut des sept derniers jours.",

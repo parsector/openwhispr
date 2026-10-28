@@ -77,6 +77,7 @@ function listTodos(database, args = {}, now = new Date()) {
   return capTodoResult({ success: true, data: filtered.slice(0, filters.limit).map((row) => ({
     id: row.id, text: row.text, person: row.person, direction: row.direction,
     due_date: row.due_date, status: row.status, overdue: !!isOverdue(row, now),
+    completed_at: row.completed_at, rejected_at: row.rejected_at, rejected_reason: row.rejected_reason,
     source_meeting_title: row.source_note_title, source: row.source, source_agent: row.source_agent,
     mention_count: row.mention_count,
   })), displayText: `Found ${filtered.length} todo${filtered.length === 1 ? "" : "s"}` });
