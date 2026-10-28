@@ -106,6 +106,7 @@ const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
 const RoutinesView = React.lazy(() => import("./routines/RoutinesView"));
+const TodosView = React.lazy(() => import("./todos/TodosView"));
 const InsightsView = React.lazy(() => import("./InsightsView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
@@ -1259,6 +1260,21 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       });
                     }}
                   />
+                </Suspense>
+              )}
+              {activeView === "todos" && (
+                <Suspense fallback={null}>
+                  <TodosView onOpenNote={(id) => {
+                    void window.electronAPI.getNote(id).then((note) => {
+                      if (!note) return;
+                      if (note.folder_id) {
+                        setActiveFolderId(note.folder_id);
+                        void initializeNotes(null, 50, note.folder_id);
+                      }
+                      setActiveNoteId(id);
+                      setActiveView("personal-notes");
+                    });
+                  }} />
                 </Suspense>
               )}
               {activeView === "dictionary" && (

@@ -6,6 +6,7 @@ import { cn } from "./lib/utils";
 import SupportDropdown from "./ui/SupportDropdown";
 import WorkspaceSwitcher from "./WorkspaceSwitcher";
 import { useControlPanelNavItems, type ControlPanelView } from "./controlPanelNav";
+import { useTodosStore } from "../stores/todosStore";
 
 export type { ControlPanelView };
 
@@ -41,6 +42,12 @@ export default function ControlPanelSidebar({
 
   const navItems = useControlPanelNavItems();
   const [routineUnread, setRoutineUnread] = useState(0);
+  const overdueCount = useTodosStore((state) => state.overdueCount);
+  const refreshTodos = useTodosStore((state) => state.refresh);
+  useEffect(() => {
+    void refreshTodos();
+    return window.electronAPI?.onCommitmentsUpdated?.(refreshTodos);
+  }, [refreshTodos]);
   useEffect(() => {
     const refresh = () => {
       void window.electronAPI?.routineUnread?.().then(setRoutineUnread);
@@ -96,6 +103,9 @@ export default function ControlPanelSidebar({
                 <span className="ms-auto rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
                   {routineUnread}
                 </span>
+              )}
+              {item.id === "todos" && overdueCount > 0 && (
+                <span className="ms-auto rounded-full bg-destructive px-1.5 text-[10px] text-destructive-foreground">{overdueCount}</span>
               )}
             </button>
           );

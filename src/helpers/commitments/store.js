@@ -20,7 +20,9 @@ class CommitmentStore {
   scope() { return this.database.activeAccountId || null; }
   get(id) { return this.db.prepare("SELECT * FROM commitments WHERE id=? AND account_id IS ?").get(id, this.scope()) || null; }
   list(includeArchived = false) {
-    return this.db.prepare(`SELECT * FROM commitments WHERE account_id IS ? AND archived_at IS ${includeArchived ? "NOT NULL" : "NULL"} ORDER BY created_at DESC`)
+    return this.db.prepare(`SELECT commitments.*, (SELECT COUNT(*) FROM commitment_mentions m
+      WHERE m.commitment_id=commitments.id AND m.kind='date_moved') AS date_move_count
+      FROM commitments WHERE account_id IS ? AND archived_at IS ${includeArchived ? "NOT NULL" : "NULL"} ORDER BY created_at DESC`)
       .all(this.scope());
   }
   create(fields, { user = false } = {}) {

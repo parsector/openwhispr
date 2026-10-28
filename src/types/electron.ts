@@ -51,6 +51,7 @@ export interface Commitment {
   status: "open" | "proposed" | "completed" | "rejected";
   rejected_reason: string | null;
   mention_count: number;
+  date_move_count?: number;
   pinned_fields: string | null;
   source_removed: number;
   created_at: string;
