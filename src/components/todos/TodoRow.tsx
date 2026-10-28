@@ -19,13 +19,31 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   onPerson: (row: Commitment, person: string) => void;
   onOpenNote: (id: number) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [editingPerson, setEditingPerson] = useState(false);
   const [person, setPerson] = useState(peopleLabel(row.person));
   const detailsRef = useRef<HTMLDetailsElement>(null);
-  const overdue = groupFor(row) === "overdue";
-  const today = row.due_date === localDate(new Date()) && !overdue;
+  const now = new Date();
+  const overdue = groupFor(row, now) === "overdue";
+  const today = row.due_date === localDate(now) && !overdue;
+  const due = row.due_date ? new Date(`${row.due_date}T12:00:00`) : null;
+  const locale = i18n.language;
+  const fullDate = due ? new Intl.DateTimeFormat(locale, { dateStyle: "full" }).format(due) : undefined;
+  let dateLabel = t("todos.noDate");
+  if (due) {
+    const day = new Intl.DateTimeFormat(locale, { day: "numeric" }).format(due);
+    const weekday = new Intl.DateTimeFormat(locale, { weekday: "short" }).format(due);
+    const month = new Intl.DateTimeFormat(locale, { month: "short" }).format(due);
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const sixDaysAway = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 6);
+    if (today) dateLabel = t("todos.groups.today");
+    else if (row.due_date === localDate(tomorrow) && i18n.exists("todos.tomorrow")) dateLabel = t("todos.tomorrow");
+    else if (row.due_date > localDate(now) && row.due_date <= localDate(sixDaysAway)) dateLabel = `${weekday} ${day}`;
+    else dateLabel = `${day} ${month}${due.getFullYear() === now.getFullYear() ? "" : ` ${due.getFullYear()}`}`;
+    if ([...dateLabel].length > 8) dateLabel = new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit" }).format(due);
+  }
+  const dateDescription = due ? `${overdue ? `${t("todos.groups.overdue")} · ` : today ? `${t("todos.groups.today")} · ` : ""}${fullDate}` : undefined;
   const archived = row.status === "completed" || row.status === "rejected";
   return (
     <article data-overdue={overdue ? "true" : undefined} className={`group relative grid min-h-[46px] grid-cols-[22px_minmax(0,1fr)_76px] items-start gap-x-2.5 border-b border-border py-2.5 transition-colors duration-150 ease-out hover:bg-surface-1 motion-reduce:transition-none last:border-0 ${overdue ? "ps-[9px] before:absolute before:inset-y-[9px] before:start-0 before:w-px before:bg-destructive" : ""}`}>
@@ -80,7 +98,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             </details>
           </div>
         </div>
-        <span data-todo-date-column className="col-start-3 row-start-1 flex w-[76px] justify-end text-right"><span className={`inline-flex min-h-5 items-center justify-end whitespace-nowrap rounded-full px-1 py-px text-[11px] leading-4 tabular-nums ${overdue ? "bg-[color:color-mix(in_srgb,var(--color-destructive)_4%,var(--color-background))] text-destructive dark:text-[color:color-mix(in_srgb,var(--color-destructive)_80%,var(--color-foreground))]" : today ? "bg-[color:color-mix(in_srgb,var(--color-warning)_9%,var(--color-background))] text-foreground" : row.due_date ? "bg-surface-3 text-muted-foreground dark:text-foreground/80" : "text-muted-foreground"}`}>{row.due_date || t("todos.noDate")}</span></span>
+        <span data-todo-date-column className="col-start-3 row-start-1 flex w-[76px] justify-end text-right"><span title={dateDescription} aria-label={dateDescription} className={`inline-flex min-h-5 items-center justify-end whitespace-nowrap rounded-full px-1 py-px text-[11px] leading-4 tabular-nums ${overdue ? "bg-[color:color-mix(in_srgb,var(--color-destructive)_4%,var(--color-background))] text-destructive dark:text-[color:color-mix(in_srgb,var(--color-destructive)_80%,var(--color-foreground))]" : today ? "bg-[color:color-mix(in_srgb,var(--color-warning)_9%,var(--color-background))] text-foreground" : row.due_date ? "bg-surface-3 text-muted-foreground dark:text-foreground/80" : "text-muted-foreground"}`}>{dateLabel}</span></span>
     </article>
   );
 }
