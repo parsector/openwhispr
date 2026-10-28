@@ -24,7 +24,15 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   const [expanded, setExpanded] = useState(false);
   const [editingPerson, setEditingPerson] = useState(false);
   const [person, setPerson] = useState(peopleLabel(row.person));
+  const [rejecting, setRejecting] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const rejectInputRef = useRef<HTMLInputElement>(null);
+  const startReject = () => {
+    setRejectReason("");
+    setRejecting(true);
+    if (detailsRef.current) detailsRef.current.open = false;
+  };
   const now = new Date();
   const overdue = groupFor(row, now) === "overdue";
   const today = row.due_date === localDate(now) && !overdue;
@@ -74,6 +82,22 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
               className="rounded border border-border bg-background px-2 py-1 text-sm" />
             <button type="submit" className="text-sm text-primary">{t("todos.save")}</button>
           </form>}
+          {rejecting && <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(event) => {
+            event.preventDefault();
+            onReject(row, rejectReason || null);
+            setRejecting(false);
+          }} onKeyDown={(event) => {
+            if (event.key === "Escape") { event.preventDefault(); setRejecting(false); }
+            else if (event.key === "Enter" && event.target === rejectInputRef.current) {
+              event.preventDefault(); event.currentTarget.requestSubmit();
+            }
+          }}>
+            <input ref={rejectInputRef} autoFocus aria-label={t("todos.rejectReason")} placeholder={t("todos.rejectReason")}
+              value={rejectReason} onChange={(event) => setRejectReason(event.target.value)}
+              className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-sm" />
+            <button type="submit" className="text-sm text-destructive">{t("todos.reject")}</button>
+            <button type="button" onClick={() => setRejecting(false)} className="text-sm text-muted-foreground hover:text-foreground">{t("common.cancel")}</button>
+          </form>}
           {row.quote && <button type="button" onClick={() => setExpanded(!expanded)}
             aria-expanded={expanded} className="mt-1 text-xs text-muted-foreground underline underline-offset-2">
             {expanded ? t("todos.hideQuote") : t("todos.showQuote")}
@@ -81,7 +105,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
           {expanded && row.quote && <blockquote className="mt-2 border-s border-border ps-3 text-sm text-muted-foreground">“{row.quote}”</blockquote>}
           <div data-todo-actions className="mt-[3px] flex flex-wrap items-center gap-x-3 gap-y-1 opacity-0 transition-opacity duration-[120ms] ease-out group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
             {!archived && <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={() => onComplete(row)}>{t("todos.complete")}</button>}
-            {!archived && <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={() => { const reason = window.prompt(t("todos.rejectReason")); if (reason !== null) onReject(row, reason || null); }}>{t("todos.reject")}</button>}
+            {!archived && <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={startReject}>{t("todos.reject")}</button>}
             <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={() => { if (detailsRef.current) detailsRef.current.open = true; }}>{t("todos.pickDate")}</button>
             <details ref={detailsRef} className="relative text-xs">
               <summary aria-label={t("todos.actions")} className="list-none cursor-pointer rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"><MoreHorizontal size={16} /></summary>
@@ -94,10 +118,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "push" })} type="button">{t("todos.pushDay")}</button>
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "clear" })} type="button">{t("todos.clearDate")}</button>
                 {!archived && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onComplete(row)} type="button">{t("todos.complete")}</button>}
-                {!archived && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => {
-                  const reason = window.prompt(t("todos.rejectReason"));
-                  if (reason !== null) onReject(row, reason || null);
-                }} type="button">{t("todos.reject")}</button>}
+                {!archived && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={startReject} type="button">{t("todos.reject")}</button>}
               </div>
             </details>
           </div>

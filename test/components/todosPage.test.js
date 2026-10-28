@@ -209,6 +209,82 @@ test("Todo components contain no literal hex colors", () => {
   }
 });
 
+test("Todo components do not use browser prompt, confirm, or alert dialogs", () => {
+  const directory = path.join(__dirname, "../../src/components/todos");
+  for (const filename of fs.readdirSync(directory)) {
+    if (!/\.(tsx?|jsx?)$/.test(filename)) continue;
+    const source = fs.readFileSync(path.join(directory, filename), "utf8");
+    assert.doesNotMatch(source, /window\.(?:prompt|confirm|alert)\b/, filename);
+  }
+});
+
+test("Reject actions share an inline reason form with confirm and cancel behavior", async () => {
+  const { Window } = await import("happy-dom");
+  const browser = new Window();
+  const previous = { window: global.window, document: global.document, navigator: global.navigator,
+    IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  global.window = browser;
+  global.document = browser.document;
+  global.navigator = browser.navigator;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const { createRoot } = require("react-dom/client");
+  const host = browser.document.createElement("div");
+  browser.document.body.append(host);
+  const root = createRoot(host);
+  const rejected = [];
+  const button = (parent, label) => [...parent.querySelectorAll("button")].find((item) => item.textContent === label);
+  const reasonInput = () => host.querySelector('input[placeholder="todos.rejectReason"]');
+  try {
+    await React.act(async () => root.render(React.createElement(TodoRow, { row: row("reject", null),
+      onComplete() {}, onReject(item, reason) { rejected.push([item.id, reason]); },
+      onDue() {}, onPerson() {}, onOpenNote() {} })));
+    const actions = host.querySelector("[data-todo-actions]");
+    await React.act(async () => button(actions, "todos.reject").click());
+    assert.ok(reasonInput(), "the inline Reject action opens a reason field");
+    await React.act(async () => {
+      const input = reasonInput();
+      Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value").set.call(input, "No longer needed");
+      input.dispatchEvent(new browser.Event("input", { bubbles: true }));
+    });
+    await React.act(async () => button(reasonInput().form, "todos.reject").click());
+    assert.deepEqual(rejected, [["reject", "No longer needed"]]);
+    assert.equal(reasonInput(), null, "the form closes after confirmation");
+
+    const menu = actions.querySelector("details");
+    await React.act(async () => { menu.open = true; button(menu, "todos.reject").click(); });
+    assert.ok(reasonInput(), "the overflow Reject action opens the same form");
+    assert.equal(menu.open, false);
+    await React.act(async () => button(reasonInput().form, "todos.reject").click());
+    assert.deepEqual(rejected, [["reject", "No longer needed"], ["reject", null]]);
+    assert.equal(reasonInput(), null);
+
+    await React.act(async () => button(actions, "todos.reject").click());
+    await React.act(async () => {
+      const input = reasonInput();
+      Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value").set.call(input, "Duplicate");
+      input.dispatchEvent(new browser.Event("input", { bubbles: true }));
+    });
+    await React.act(async () => reasonInput().dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+    assert.deepEqual(rejected, [["reject", "No longer needed"], ["reject", null], ["reject", "Duplicate"]]);
+    assert.equal(reasonInput(), null, "Enter confirms and closes the form");
+
+    await React.act(async () => button(actions, "todos.reject").click());
+    await React.act(async () => reasonInput().dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    assert.equal(reasonInput(), null, "Escape closes the form");
+    assert.equal(rejected.length, 3, "Escape does not reject");
+    await React.act(async () => button(actions, "todos.reject").click());
+    await React.act(async () => button(reasonInput().form, "common.cancel").click());
+    assert.equal(reasonInput(), null, "Cancel closes the form");
+    assert.equal(rejected.length, 3, "Cancel does not reject");
+  } finally {
+    await React.act(async () => root.unmount());
+    browser.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete global[key]; else global[key] = value;
+    }
+  }
+});
+
 test("composer opens, saves with Enter, and closes with Escape", async () => {
   const { Window } = await import("happy-dom");
   const browser = new Window();
@@ -234,6 +310,10 @@ test("composer opens, saves with Enter, and closes with Escape", async () => {
     await React.act(async () => trigger.click());
     assert.equal(trigger.getAttribute("aria-expanded"), "true");
     const input = host.querySelector('input[aria-label="todos.addPlaceholder"]');
+    assert.ok(input.form.classList.contains("ps-[37px]"));
+    assert.ok(input.classList.contains("px-2"));
+    assert.ok(input.classList.contains("rounded-md"));
+    assert.ok(input.classList.contains("outline-none"));
     await React.act(async () => {
       Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value").set.call(input, "Send summary");
       input.dispatchEvent(new browser.Event("input", { bubbles: true }));
