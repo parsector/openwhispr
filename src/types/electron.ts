@@ -37,6 +37,37 @@ import type {
   NoteAttendeesRequest,
 } from "./connectors";
 
+export interface Commitment {
+  id: string;
+  text: string;
+  quote: string | null;
+  quote_segment_index: number | null;
+  source_note_id: string | null;
+  source_note_title: string | null;
+  person: string | null;
+  direction: "owe" | "waiting";
+  due_date: string | null;
+  due_raw: string | null;
+  status: "open" | "proposed" | "completed" | "rejected";
+  rejected_reason: string | null;
+  mention_count: number;
+  pinned_fields: string | null;
+  source_removed: number;
+  created_at: string;
+  archived_at: string | null;
+}
+
+export interface CommitmentProposal {
+  id: string;
+  commitment_id: string;
+  note_id: string;
+  quote: string;
+  strength: "explicit" | "second_hand";
+  text: string;
+  person: string | null;
+  expires_at: string;
+}
+
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
 export interface MainWindowInputRegion {
@@ -1527,6 +1558,14 @@ declare global {
     };
     mcpClient: import("../services/tools/mcpTools").McpClientApi;
     electronAPI: {
+      commitmentsList: (includeArchived?: boolean) => Promise<Commitment[]>;
+      commitmentsCreate: (input: { text: string; person?: string | string[]; due_date?: string | null; direction?: "owe" | "waiting" }) => Promise<Commitment>;
+      commitmentsUpdate: (id: string, patch: Partial<Pick<Commitment, "status" | "person" | "rejected_reason" | "text">>) => Promise<Commitment | null>;
+      commitmentsSetDue: (id: string, input: { action: "push" | "pick" | "clear"; date?: string }) => Promise<Commitment | null>;
+      commitmentsProposalsList: (noteId?: number) => Promise<CommitmentProposal[]>;
+      commitmentsResolveProposal: (id: string, accept: boolean) => Promise<Commitment | null>;
+      commitmentsOverdueCount: () => Promise<number>;
+      onCommitmentsUpdated: (callback: () => void) => () => void;
       listRoutines: () => Promise<
         Array<{
           id: string;

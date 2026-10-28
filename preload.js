@@ -256,6 +256,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
+  commitmentsList: (includeArchived = false) => ipcRenderer.invoke("commitments-list", includeArchived),
+  commitmentsCreate: (input) => ipcRenderer.invoke("commitments-create", input),
+  commitmentsUpdate: (id, patch) => ipcRenderer.invoke("commitments-update", id, patch),
+  commitmentsSetDue: (id, input) => ipcRenderer.invoke("commitments-set-due", id, input),
+  commitmentsProposalsList: (noteId) => ipcRenderer.invoke("commitments-proposals-list", noteId),
+  commitmentsResolveProposal: (id, accept) => ipcRenderer.invoke("commitments-resolve-proposal", id, accept),
+  commitmentsOverdueCount: () => ipcRenderer.invoke("commitments-overdue-count"),
+  onCommitmentsUpdated: registerListener("commitments-updated", (callback) => () => callback()),
   listRoutines: () => ipcRenderer.invoke("routines-list"),
   routinePeople: () => ipcRenderer.invoke("routines-people"),
   routinePresets: () => ipcRenderer.invoke("routines-presets"),

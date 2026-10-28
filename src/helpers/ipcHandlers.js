@@ -1113,6 +1113,37 @@ class IPCHandlers {
         });
       }
     });
+    const { CommitmentStore } = require("./commitments/store");
+    const commitments = () => new CommitmentStore(this.databaseManager);
+    const changed = (value) => { if (value) broadcastToWindows("commitments-updated"); return value; };
+    ipcMain.handle("commitments-list", (_event, includeArchived = false) => commitments().list(includeArchived === true));
+    ipcMain.handle("commitments-create", (_event, input) => changed(commitments().create({
+      text: input?.text, person: input?.person, due_date: input?.due_date,
+      direction: input?.direction,
+    }, { user: true })));
+    ipcMain.handle("commitments-update", (_event, id, patch) => {
+      if (typeof id !== "string" || !patch || typeof patch !== "object") return null;
+      const allowed = ["text", "person", "status", "rejected_reason"];
+      const selected = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)));
+      return changed(commitments().update(id, selected, { user: true }));
+    });
+    ipcMain.handle("commitments-set-due", (_event, id, input) => {
+      const store = commitments();
+      const row = typeof id === "string" && store.get(id);
+      if (!row) return null;
+      let date = null;
+      if (input?.action === "pick" && /^\d{4}-\d{2}-\d{2}$/.test(input.date || "")) date = input.date;
+      else if (input?.action === "push") {
+        const base = row.due_date ? new Date(`${row.due_date}T12:00:00`) : new Date();
+        base.setDate(base.getDate() + 1);
+        date = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+      } else if (input?.action !== "clear") return null;
+      return changed(store.setDue(id, date));
+    });
+    ipcMain.handle("commitments-proposals-list", (_event, noteId) => commitments().proposals(noteId));
+    ipcMain.handle("commitments-resolve-proposal", (_event, id, accept) =>
+      changed(commitments().resolveProposal(id, accept === true)));
+    ipcMain.handle("commitments-overdue-count", () => commitments().overdueCount());
     ipcMain.handle("routines-list", () => this.databaseManager.listRoutines());
     ipcMain.handle("routines-people", () => this.databaseManager.listRoutinePeople());
     ipcMain.handle("routines-meeting-preview", (_event, config) => {
