@@ -23,10 +23,23 @@ test('preexisting routine strings have non-English copy in the ten translated lo
 });
 
 test('editor v2 keys use the specified English values in every locale', () => {
-  const keys = leaves(english.routines.editor);
+  const newKeys = new Set(['titleTemplate', 'titleTemplateHelp', 'titlePreview']);
+  const keys = leaves(english.routines.editor).filter(([key]) => !newKeys.has(key[0]));
   for (const language of ['ar', 'de', 'es', 'fr', 'it', 'ja', 'pt', 'ru', 'zh-CN', 'zh-TW']) {
     const locale = JSON.parse(fs.readFileSync(path.join(root, language, 'translation.json'), 'utf8'));
     for (const [key, original] of keys)
       assert.equal(at(locale.routines.editor, key), original, `${language}: routines.editor.${key.join('.')} differs from English`);
+  }
+});
+
+test('title template editor strings are translated in every locale', () => {
+  const keys = ['titleTemplate', 'titleTemplateHelp', 'titlePreview'];
+  for (const language of ['ar', 'de', 'es', 'fr', 'it', 'ja', 'pt', 'ru', 'zh-CN', 'zh-TW']) {
+    const locale = JSON.parse(fs.readFileSync(path.join(root, language, 'translation.json'), 'utf8'));
+    for (const key of keys) {
+      const translated = locale.routines.editor[key];
+      assert.equal(typeof translated, 'string', `${language}: routines.editor.${key} missing`);
+      assert.notEqual(translated, english.routines.editor[key], `${language}: routines.editor.${key} still English`);
+    }
   }
 });

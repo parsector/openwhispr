@@ -5143,6 +5143,9 @@
     "keepFolder": "保留資料夾和備註",
     "deleteFailed": "無法刪除常規",
     "editor": {
+      "titleTemplate": "標題",
+      "titleTemplateHelp": "可使用 {name}、{event} 和 {date}。標題最多 200 個字元。",
+      "titlePreview": "下一個標題：{{title}}",
       "notes": "Notes",
       "calendar": "Calendar",
       "every": "Every",

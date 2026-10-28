@@ -5143,6 +5143,9 @@
     "keepFolder": "フォルダーとメモを保持する",
     "deleteFailed": "ルーチンを削除できませんでした",
     "editor": {
+      "titleTemplate": "タイトル",
+      "titleTemplateHelp": "{name}、{event}、{date}を使用できます。タイトルは200文字以内です。",
+      "titlePreview": "次のタイトル: {{title}}",
       "notes": "Notes",
       "calendar": "Calendar",
       "every": "Every",

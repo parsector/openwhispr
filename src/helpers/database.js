@@ -8480,8 +8480,11 @@ class DatabaseManager {
     if (!name || !prompt) return { success: false, error: "Name and prompt are required" };
     const prior = input.id ? this.getRoutine(input.id) : null;
     const triggerType = input.trigger_type || prior?.trigger_type || "time";
-    const config = input.trigger_config;
+    const config = input.trigger_config && { ...input.trigger_config };
     try {
+      const { normalizeTitleTemplate } = require("./routines/routineTitleTemplate");
+      const titleTemplate = normalizeTitleTemplate(config?.title_template);
+      if (titleTemplate !== undefined) config.title_template = titleTemplate;
       validateEventTrigger(triggerType, config);
       if (triggerType === "time") validateSchedule(config);
     } catch (error) {

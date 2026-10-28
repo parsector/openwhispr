@@ -5253,6 +5253,9 @@
     "keepFolder": "احتفظ بالمجلد والملاحظات",
     "deleteFailed": "تعذر حذف الروتين",
     "editor": {
+      "titleTemplate": "العنوان",
+      "titleTemplateHelp": "استخدم {name} و{event} و{date}. الحد الأقصى للعنوان 200 حرف.",
+      "titlePreview": "العنوان التالي: {{title}}",
       "notes": "Notes",
       "calendar": "Calendar",
       "every": "Every",

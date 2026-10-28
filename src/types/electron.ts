@@ -1538,6 +1538,7 @@ declare global {
             slots?: Array<{ days: number[]; time: string }>;
             minutes_before?: number;
             title_pattern?: string;
+            title_template?: string;
             has_attendees?: boolean;
             has_meeting_link?: boolean;
             skip_declined?: boolean;
@@ -1570,6 +1571,7 @@ declare global {
             slots?: Array<{ days: number[]; time: string }>;
             minutes_before?: number;
             title_pattern?: string;
+            title_template?: string;
             has_attendees?: boolean;
             has_meeting_link?: boolean;
             skip_declined?: boolean;
@@ -1611,7 +1613,7 @@ declare global {
         catch_up_window_hours?: number;
         voice_hint?: string;
         trigger_type?: string;
-        trigger_config: { schema_version: number; slots?: Array<{ days: number[]; time: string }>; minutes_before?: number; title_pattern?: string; has_attendees?: boolean; has_meeting_link?: boolean; skip_declined?: boolean; folder_ids?: number[] };
+        trigger_config: { schema_version: number; slots?: Array<{ days: number[]; time: string }>; minutes_before?: number; title_pattern?: string; title_template?: string; has_attendees?: boolean; has_meeting_link?: boolean; skip_declined?: boolean; folder_ids?: number[] };
       }) => Promise<{ success: boolean; error?: string }>;
       routineMeetingPreview: (config: { schema_version: number; folder_ids: number[]; title_pattern: string }) => Promise<number>;
       routineNoteLinks: (noteId: number) => Promise<{ source: { id: number; title: string } | null; event: { id: string; title: string; url: string | null } | null } | null>;
