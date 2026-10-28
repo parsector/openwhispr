@@ -1,6 +1,7 @@
 const { randomUUID } = require("crypto");
 const { nextRun, latestCatchUp, manualSlotKey } = require("./routineSchedulePolicy");
 const debugLogger = require("../debugLogger");
+const { CommitmentStore, localToday } = require("../commitments/store");
 const { matchesBeforeEvent, matchesMeetingEnded, PROVIDERS } = require("./routineEventTriggers");
 
 function storedInstant(value) {
@@ -10,11 +11,13 @@ function storedInstant(value) {
 }
 
 class RoutineScheduler {
-  constructor({ database, queue, modelChoice, onRunFinished = () => {}, meetingWaitMs = 90000 }) {
+  constructor({ database, queue, modelChoice, onRunFinished = () => {}, onCommitmentsUpdated = () => {}, meetingWaitMs = 90000 }) {
     this.database = database;
     this.queue = queue;
     this.modelChoice = modelChoice;
     this.onRunFinished = onRunFinished;
+    this.onCommitmentsUpdated = onCommitmentsUpdated;
+    this.lastCommitmentsSweep = null;
     this.meetingWaitMs = meetingWaitMs;
     this.timer = null;
     this.interval = null;
@@ -31,10 +34,25 @@ class RoutineScheduler {
       .run(new Date().toISOString());
     this.database.db.prepare("UPDATE routine_runs SET status='failed', error='App closed while waiting for meeting note', ended_at=? WHERE status='queued' AND trigger='meeting_ended'").run(new Date().toISOString());
     this.check();
+    this.sweepCommitments();
     this.interval = setInterval(() => {
       this.check();
+      this.sweepCommitments();
       this.queue.drain();
     }, 30000);
+  }
+
+  sweepCommitments(now = new Date()) {
+    const day = localToday(now);
+    if (day === this.lastCommitmentsSweep) return;
+    try {
+      const store = new CommitmentStore(this.database);
+      const changed = store.sweepExpired(now) + store.sweepRemovedSources();
+      this.lastCommitmentsSweep = day;
+      if (changed) this.onCommitmentsUpdated();
+    } catch (error) {
+      debugLogger.error("Commitments sweep failed", { error: error.message }, "commitments");
+    }
   }
 
   stop() {

@@ -21,7 +21,7 @@ export default function ProposalsBanner({ noteId, compact = false, items }: { no
     <div className="mt-3 space-y-3">
       {visible.map((proposal) => <div key={proposal.id} className="border-t border-border/60 pt-3 first:border-0 first:pt-0">
         <p className="text-sm font-medium text-foreground">{proposal.text}</p>
-        <blockquote className="mt-1 text-xs text-muted-foreground">“{proposal.quote}”</blockquote>
+        {proposal.quote && <blockquote className="mt-1 text-xs text-muted-foreground">“{proposal.quote}”</blockquote>}
         {proposal.strength === "second_hand" && <span className="text-xs text-muted-foreground">{t("todos.secondHand")}</span>}
         <div className="mt-2 flex gap-3 text-xs">
           <button type="button" className="font-medium text-primary underline underline-offset-2"

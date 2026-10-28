@@ -62,7 +62,7 @@ export interface CommitmentProposal {
   id: string;
   commitment_id: string;
   note_id: string;
-  quote: string;
+  quote: string | null;
   strength: "explicit" | "second_hand";
   text: string;
   person: string | null;

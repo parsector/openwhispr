@@ -1091,6 +1091,7 @@ class IPCHandlers {
       queue,
       modelChoice: () => this._routineModelChoice,
       onRunFinished: () => broadcastToWindows("routines-updated"),
+      onCommitmentsUpdated: () => broadcastToWindows("commitments-updated"),
     });
     this.routineScheduler.start();
     ipcMain.on("meeting-note-stopped", (_event, noteId) => {
@@ -3327,6 +3328,11 @@ class IPCHandlers {
     ipcMain.handle("db-hard-delete-note", (_, id) => {
       const result = this.databaseManager.hardDeleteNote(id);
       if (result?.success) {
+        try {
+          const { CommitmentStore } = require("./commitments/store");
+          new CommitmentStore(this.databaseManager).sourceRemoved(id);
+          broadcastToWindows("commitments-updated");
+        } catch (error) { debugLogger.error("Commitment source cleanup failed", { error: error.message }, "commitments"); }
         this.notifyVectorChanges();
         this._asyncMirrorDelete(id);
         setImmediate(() => broadcastToWindows("note-deleted", { id }));
@@ -13695,6 +13701,11 @@ class IPCHandlers {
   deleteNoteInternal(id) {
     const result = this.databaseManager.deleteNote(id);
     if (result?.success) {
+      try {
+        const { CommitmentStore } = require("./commitments/store");
+        new CommitmentStore(this.databaseManager).sourceRemoved(id);
+        broadcastToWindows("commitments-updated");
+      } catch (error) { debugLogger.error("Commitment source cleanup failed", { error: error.message }, "commitments"); }
       setImmediate(() => broadcastToWindows("note-deleted", { id }));
       this.notifyVectorChanges();
       this._asyncMirrorDelete(id);

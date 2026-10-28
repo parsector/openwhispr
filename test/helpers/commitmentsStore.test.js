@@ -53,3 +53,32 @@ test("overdue starts at 00:01 the next local day and excludes waiting", () => {
   assert.equal(Boolean(isOverdue(row, new Date(2026, 9, 29, 0, 1))), true);
   assert.equal(Boolean(isOverdue({ ...row, direction: "waiting" }, new Date(2026, 9, 29, 1))), false);
 });
+
+test("expiry reopens proposed todo and source removal scrubs evidence", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-todos-sweep-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const original = Module._load;
+  Module._load = function (request, parent, isMain) {
+    if (request === "electron") return { app: { getPath: () => dir, isReady: () => false } };
+    return original.call(this, request, parent, isMain);
+  };
+  t.after(() => { Module._load = original; });
+  delete require.cache[require.resolve("../../src/helpers/database")];
+  const db = new (require("../../src/helpers/database"))();
+  t.after(() => db.db.close());
+  const store = new CommitmentStore(db);
+  const row = store.create({ text: "Send the report to Alex", quote: "I'll send the report",
+    quote_segment_index: 0, source_note_id: 42 });
+  const proposal = store.propose(row.id, { note_id: 42, segment_index: 1,
+    quote: "I sent the report", strength: "explicit" });
+  db.db.prepare("UPDATE commitment_proposals SET expires_at=? WHERE id=?")
+    .run("2026-10-01T00:00:00Z", proposal.id);
+  assert.equal(store.sweepExpired(new Date("2026-10-28T12:00:00Z")), 1);
+  assert.equal(store.get(row.id).status, "open");
+  assert.equal(store.proposals().length, 0);
+  assert.equal(store.sourceRemoved(42), 1);
+  assert.equal(store.get(row.id).quote, null);
+  assert.equal(store.get(row.id).source_removed, 1);
+  assert.equal(store.mentions(row.id)[0].quote, null);
+  assert.equal(db.db.prepare("SELECT quote FROM commitment_proposals WHERE id=?").get(proposal.id).quote, null);
+});

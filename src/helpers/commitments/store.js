@@ -133,6 +133,42 @@ class CommitmentStore {
   }
   overdueCount(now = new Date()) { return this.list().filter((row) => isOverdue(row, now)).length; }
   mentions(id) { return this.db.prepare("SELECT * FROM commitment_mentions WHERE commitment_id=? ORDER BY created_at").all(id); }
+  sweepExpired(now = new Date()) {
+    return this.db.transaction(() => {
+      const expired = this.db.prepare(`SELECT p.* FROM commitment_proposals p JOIN commitments c ON c.id=p.commitment_id
+        WHERE c.account_id IS ? AND p.status='pending' AND p.expires_at<=?`)
+        .all(this.scope(), now.toISOString());
+      for (const proposal of expired) {
+        this.db.prepare("UPDATE commitment_proposals SET status='expired',resolved_at=? WHERE id=?")
+          .run(now.toISOString(), proposal.id);
+        const remaining = this.db.prepare("SELECT 1 FROM commitment_proposals WHERE commitment_id=? AND status='pending' LIMIT 1")
+          .get(proposal.commitment_id);
+        if (!remaining && this.get(proposal.commitment_id)?.status === "proposed")
+          this.update(proposal.commitment_id, { status: "open" });
+      }
+      return expired.length;
+    })();
+  }
+  sourceRemoved(noteId) {
+    const id = String(noteId);
+    return this.db.transaction(() => {
+      const changed = this.db.prepare(`UPDATE commitments SET quote=NULL,quote_segment_index=NULL,
+        source_removed=1,updated_at=? WHERE source_note_id=? AND account_id IS ?`)
+        .run(new Date().toISOString(), id, this.scope()).changes;
+      this.db.prepare("UPDATE commitment_mentions SET quote=NULL WHERE note_id=? AND commitment_id IN (SELECT id FROM commitments WHERE account_id IS ?)")
+        .run(id, this.scope());
+      this.db.prepare("UPDATE commitment_proposals SET quote=NULL WHERE note_id=? AND commitment_id IN (SELECT id FROM commitments WHERE account_id IS ?)")
+        .run(id, this.scope());
+      return changed;
+    })();
+  }
+  sweepRemovedSources() {
+    const ids = this.db.prepare(`SELECT DISTINCT c.source_note_id AS id FROM commitments c
+      LEFT JOIN notes n ON CAST(n.id AS TEXT)=c.source_note_id
+      WHERE c.account_id IS ? AND c.source_note_id IS NOT NULL AND c.source_removed=0
+        AND (n.id IS NULL OR n.deleted_at IS NOT NULL)`).all(this.scope());
+    return ids.reduce((total, row) => total + this.sourceRemoved(row.id), 0);
+  }
 }
 
 module.exports = { CommitmentStore, isOverdue, localToday };
