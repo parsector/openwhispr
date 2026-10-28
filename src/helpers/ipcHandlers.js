@@ -1132,6 +1132,8 @@ class IPCHandlers {
     ipcMain.handle("commitments-list", (_event, includeArchived = false) => commitments().list(includeArchived === true));
     ipcMain.handle("todos-tool-list", (_event, args) => require("./commitments/toolRead").listTodos(this.databaseManager, args));
     ipcMain.handle("todos-tool-get", (_event, args) => require("./commitments/toolRead").getTodo(this.databaseManager, args));
+    ipcMain.handle("todos-tool-create", (_event, args) => changed(require("./commitments/toolWrite").createTodo(this.databaseManager, args, "Assistant")));
+    ipcMain.handle("todos-tool-update", (_event, args) => changed(require("./commitments/toolWrite").updateTodo(this.databaseManager, args, "Assistant")));
     ipcMain.handle("commitments-for-note", (_event, noteId) =>
       Number.isSafeInteger(noteId) ? commitments().forNote(noteId) : []);
     ipcMain.handle("commitments-open-todos", async (_event, filter) => {

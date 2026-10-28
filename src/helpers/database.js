@@ -8534,7 +8534,7 @@ class DatabaseManager {
         (tool) =>
           typeof tool !== "string" ||
           !(
-            ["search_notes", "get_note", "get_calendar_events"].includes(tool) ||
+            ["search_notes", "get_note", "get_calendar_events", "list_todos"].includes(tool) ||
             /^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+$/.test(tool)
           ) ||
           tool.length > 64

@@ -105,8 +105,12 @@ function getTodo(database, args = {}) {
   const row = store.get(args.id);
   const spaces = new Set(database.getSpaces().map((space) => String(space.id)));
   if (!row || row.archived_at || !visible(row, spaces)) return { success: false, data: null, displayText: `Todo with ID ${args.id} not found` };
+  return todoDetail(store, row);
+}
+
+function todoDetail(store, row) {
   const { account_id: _accountId, ...data } = row;
   return capTodoResult({ success: true, data: { ...data, overdue: !!isOverdue(row), mentions: store.mentions(row.id).slice(-10) }, displayText: `Retrieved todo: ${row.id}` });
 }
 
-module.exports = { definitions, listTodos, getTodo, capTodoResult };
+module.exports = { definitions, listTodos, getTodo, capTodoResult, todoDetail };

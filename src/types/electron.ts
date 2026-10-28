@@ -1565,6 +1565,8 @@ declare global {
       commitmentsList: (includeArchived?: boolean) => Promise<Commitment[]>;
       todosToolList: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
       todosToolGet: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      todosToolCreate: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      todosToolUpdate: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
       commitmentsForNote: (noteId: number) => Promise<Commitment[]>;
       commitmentsOpenTodos: (filter: { kind: "note" | "person"; value: string; email?: string | null }) => Promise<boolean>;
       commitmentsPendingTodosFilter: () => Promise<{ kind: "note" | "person"; value: string; email?: string | null } | null>;

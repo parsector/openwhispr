@@ -3,10 +3,11 @@ const path = require("node:path");
 const { createTokenStore } = require("./tokenStore");
 const { createTools } = require("./tools");
 const { createMcpHttpServer } = require("./httpServer");
+const { broadcastToWindows } = require("../../../helpers/windowBroadcast");
 
 function registerLocalMcp({ ipcMain, userData, database, getSemanticSearch }) {
   const tokens = createTokenStore(userData);
-  const server = createMcpHttpServer({ tokens, tools: createTools(database, getSemanticSearch) });
+  const server = createMcpHttpServer({ tokens, tools: createTools(database, getSemanticSearch, () => broadcastToWindows("commitments-updated")) });
   const settingsFile = path.join(userData, "mcp", "settings.json");
   let enabled = false;
   let url = null;

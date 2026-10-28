@@ -4,6 +4,8 @@ import { createSearchNotesTool } from "./searchNotesTool";
 import { getNoteTool } from "./getNoteTool";
 import { listTodosTool } from "./listTodosTool";
 import { getTodoTool } from "./getTodoTool";
+import { createTodoTool } from "./createTodoTool";
+import { updateTodoTool } from "./updateTodoTool";
 import { createNoteTool } from "./createNoteTool";
 import { updateNoteTool } from "./updateNoteTool";
 import { listFoldersTool } from "./listFoldersTool";
@@ -59,6 +61,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   registry.register(getNoteTool);
   registry.register(listTodosTool);
   registry.register(getTodoTool);
+  registry.register(createTodoTool);
+  registry.register(updateTodoTool);
   registry.register(createNoteTool);
   if (!settings.keepNotesUnchanged) registry.register(updateNoteTool);
   registry.register(listFoldersTool);

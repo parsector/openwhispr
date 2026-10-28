@@ -102,6 +102,7 @@ function createToolRegistry({
   });
   const offered = new Map();
   for (const name of allowedTools) {
+    if (name === "create_todo" || name === "update_todo") continue;
     const tool = assembled.get(name);
     if (tool && (Object.hasOwn(executionOverrides, name) || mcpTools.includes(tool)))
       offered.set(name, tool);
