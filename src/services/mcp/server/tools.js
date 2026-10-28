@@ -1,4 +1,5 @@
 const { searchNotes } = require("../../../helpers/noteSearch");
+const { definitions: todoDefinitions, listTodos, getTodo } = require("../../../helpers/commitments/toolRead");
 
 const definitions = [
   {
@@ -34,6 +35,7 @@ const definitions = [
       additionalProperties: false,
     },
   },
+  ...todoDefinitions.map(({ name, description, parameters }) => ({ name, description, inputSchema: parameters })),
 ];
 
 function capResult(value) {
@@ -139,6 +141,10 @@ function createTools(database, getSemanticSearch) {
             displayText: `Retrieved note: "${note.title}"`,
           }
         : { success: false, data: null, displayText: `Note with ID ${args.id} not found` };
+    } else if (name === "list_todos") {
+      result = listTodos(database, args);
+    } else if (name === "get_todo") {
+      result = getTodo(database, args);
     } else {
       const data = database.getFolders().map((folder) => ({
         id: folder.id,

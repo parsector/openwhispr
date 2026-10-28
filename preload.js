@@ -257,6 +257,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Note functions
   commitmentsList: (includeArchived = false) => ipcRenderer.invoke("commitments-list", includeArchived),
+  todosToolList: (args) => ipcRenderer.invoke("todos-tool-list", args),
+  todosToolGet: (args) => ipcRenderer.invoke("todos-tool-get", args),
   commitmentsForNote: (noteId) => ipcRenderer.invoke("commitments-for-note", noteId),
   commitmentsOpenTodos: (filter) => ipcRenderer.invoke("commitments-open-todos", filter),
   commitmentsPendingTodosFilter: () => ipcRenderer.invoke("commitments-pending-todos-filter"),

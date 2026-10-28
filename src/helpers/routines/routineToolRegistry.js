@@ -1,5 +1,6 @@
 const assembleTools = (settings) =>
   require("./generated/toolAssembly.cjs").createToolRegistry(settings);
+const { listTodos } = require("../commitments/toolRead");
 
 // Names and schemas come from chat assembly. Main injects only local read handlers.
 function createToolRegistry({
@@ -50,6 +51,13 @@ function createToolRegistry({
       } catch {
         onUnavailable("get_note");
         return { success: false, data: null, displayText: "Note source unavailable" };
+      }
+    },
+    list_todos: async (args) => {
+      try { return listTodos(database, args); }
+      catch {
+        onUnavailable("list_todos");
+        return { success: false, data: null, displayText: "Todos unavailable" };
       }
     },
     get_calendar_events: async () => {

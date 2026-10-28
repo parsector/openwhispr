@@ -2,6 +2,8 @@ import { productHelpTools } from "./productHelpTools";
 import { ToolRegistry } from "./ToolRegistry";
 import { createSearchNotesTool } from "./searchNotesTool";
 import { getNoteTool } from "./getNoteTool";
+import { listTodosTool } from "./listTodosTool";
+import { getTodoTool } from "./getTodoTool";
 import { createNoteTool } from "./createNoteTool";
 import { updateNoteTool } from "./updateNoteTool";
 import { listFoldersTool } from "./listFoldersTool";
@@ -55,6 +57,8 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
   registry.register(createSearchNotesTool({ useCloudSearch, fixedScope: settings.searchScope }));
   registry.register(getNoteTool);
+  registry.register(listTodosTool);
+  registry.register(getTodoTool);
   registry.register(createNoteTool);
   if (!settings.keepNotesUnchanged) registry.register(updateNoteTool);
   registry.register(listFoldersTool);

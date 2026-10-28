@@ -1130,6 +1130,8 @@ class IPCHandlers {
     const commitments = () => new CommitmentStore(this.databaseManager);
     const changed = (value) => { if (value) broadcastToWindows("commitments-updated"); return value; };
     ipcMain.handle("commitments-list", (_event, includeArchived = false) => commitments().list(includeArchived === true));
+    ipcMain.handle("todos-tool-list", (_event, args) => require("./commitments/toolRead").listTodos(this.databaseManager, args));
+    ipcMain.handle("todos-tool-get", (_event, args) => require("./commitments/toolRead").getTodo(this.databaseManager, args));
     ipcMain.handle("commitments-for-note", (_event, noteId) =>
       Number.isSafeInteger(noteId) ? commitments().forNote(noteId) : []);
     ipcMain.handle("commitments-open-todos", async (_event, filter) => {
