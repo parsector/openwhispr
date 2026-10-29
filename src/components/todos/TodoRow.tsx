@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, MoreHorizontal, X } from "../icons";
 import type { Commitment } from "../../types/electron";
@@ -15,7 +15,7 @@ function peopleLabel(person: string | null): string {
   return person;
 }
 
-export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, onText, onOpenNote, onDelete, onHandoff, onOpenAgentJob, projects = [], jobStatus, preparing = false, debugEnabled = false }: {
+export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, onText, onOpenNote, onDelete, onHandoff, onOpenAgentJob, projects = [], jobStatus, preparing = false, debugEnabled = false, menuOpen, onMenuChange }: {
   row: Commitment;
   onComplete: (row: Commitment) => void;
   onReject: (row: Commitment, reason: string | null) => void;
@@ -30,6 +30,8 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   jobStatus?: "pending" | "queued" | "running" | "done" | "failed" | "cancelled";
   preparing?: boolean;
   debugEnabled?: boolean;
+  menuOpen?: boolean;
+  onMenuChange?: (open: boolean) => void;
 }) {
   const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -47,11 +49,23 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   const inactiveJob = effectiveStatus === "failed" || effectiveStatus === "cancelled";
   const actionableJob = Boolean(effectiveStatus) && !inactiveJob;
   const detailsRef = useRef<HTMLDetailsElement>(null);
+  const [localMenuOpen, setLocalMenuOpen] = useState(false);
+  const isMenuOpen = menuOpen ?? localMenuOpen;
+  const setMenuOpen = (open: boolean) => { if (onMenuChange) onMenuChange(open); else setLocalMenuOpen(open); };
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const outside = (event: PointerEvent) => { if (!detailsRef.current?.contains(event.target as Node)) setMenuOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") { event.preventDefault(); setMenuOpen(false); } };
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+    return () => { document.removeEventListener("pointerdown", outside); document.removeEventListener("keydown", escape); };
+  }, [isMenuOpen, onMenuChange]);
+  const commitMenu = (action: () => void) => { action(); setMenuOpen(false); };
   const rejectInputRef = useRef<HTMLInputElement>(null);
   const startReject = () => {
     setRejectReason("");
     setRejecting(true);
-    if (detailsRef.current) detailsRef.current.open = false;
+    setMenuOpen(false);
   };
   const now = new Date();
   const overdue = groupFor(row, now) === "overdue";
@@ -138,35 +152,35 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             {expanded ? t("todos.hideQuote") : t("todos.showQuote")}
           </button>}
           {expanded && row.quote && <blockquote className="mt-2 border-s border-border ps-3 text-sm text-muted-foreground">“{row.quote}”</blockquote>}
-          <div data-todo-actions className="mt-[3px] flex flex-wrap items-center gap-x-3 gap-y-1 opacity-0 transition-opacity duration-[120ms] ease-out group-hover:opacity-100 group-focus-within:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+          <div data-todo-actions className={`mt-[3px] flex flex-wrap items-center gap-x-3 gap-y-1 transition-opacity duration-[120ms] ease-out motion-reduce:transition-none ${isMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"}`}>
             {!archived && <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={() => onComplete(row)}>{t("todos.complete")}</button>}
             {!archived && <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={startReject}>{t("todos.reject")}</button>}
-            <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={() => { if (detailsRef.current) detailsRef.current.open = true; }}>{t("todos.pickDate")}</button>
-            <details ref={detailsRef} className="relative text-xs">
-              <summary aria-label={t("todos.actions")} className="list-none cursor-pointer rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"><MoreHorizontal size={16} /></summary>
+            <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={() => { setMenuOpen(true); }}>{t("todos.pickDate")}</button>
+            <details ref={detailsRef} className="relative text-xs" open={isMenuOpen}>
+              <summary onClick={(event) => { event.preventDefault(); setMenuOpen(!isMenuOpen); }} aria-label={t("todos.actions")} className="list-none cursor-pointer rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"><MoreHorizontal size={16} /></summary>
               <div className="absolute start-0 z-20 mt-1 w-44 rounded-lg border border-border bg-background p-1 shadow-lg text-sm">
                 {confirmingDelete ? <div className="space-y-2 p-2">
                   <p className="text-xs text-foreground">{t("todos.deleteConfirm")}</p>
-                  <button type="button" className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => { setConfirmingDelete(false); detailsRef.current?.removeAttribute("open"); onDelete?.(row); }}>{t("todos.deletePermanently")}</button>
+                  <button type="button" className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => { setConfirmingDelete(false); commitMenu(() => onDelete?.(row)); }}>{t("todos.deletePermanently")}</button>
                   <button type="button" className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => setConfirmingDelete(false)}>{t("common.cancel")}</button>
                 </div> : <>
-                {onText && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { setText(row.text); setEditingText(true); }} type="button">{t("todos.editText")}</button>}
-                <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { setEditingPerson(true); }} type="button">{t("todos.editPerson")}</button>
+                {onText && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { commitMenu(() => { setText(row.text); setEditingText(true); }); }} type="button">{t("todos.editText")}</button>}
+                <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { commitMenu(() => setEditingPerson(true)); }} type="button">{t("todos.editPerson")}</button>
                 <label className="block rounded px-2 py-1.5 hover:bg-muted">{t("todos.pickDate")}
                   <input dir="ltr" type="date" className="mt-1 w-full bg-background" value={row.due_date || ""}
-                    onChange={(event) => { if (event.target.value) onDue(row, { action: "pick", date: event.target.value }); }} />
+                    onChange={(event) => { if (event.target.value) commitMenu(() => onDue(row, { action: "pick", date: event.target.value })); }} />
                 </label>
-                <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "push" })} type="button">{t("todos.pushDay")}</button>
-                <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "clear" })} type="button">{t("todos.clearDate")}</button>
+                <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => commitMenu(() => onDue(row, { action: "push" }))} type="button">{t("todos.pushDay")}</button>
+                <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => commitMenu(() => onDue(row, { action: "clear" }))} type="button">{t("todos.clearDate")}</button>
                 {!archived && projects.length > 0 && (!row.agent_job_id || inactiveJob) && <div className="border-t border-border pt-1">
                   {projects.length > 1 && <label className="block px-2 py-1 text-xs text-muted-foreground">{t("todos.agentProject")}
                     <select aria-label={t("todos.agentProject")} className="mt-1 w-full rounded border border-border bg-background px-1 py-1 text-foreground" value={projects.includes(project) ? project : projects[0]} onChange={(event) => setProject(event.target.value)}>
                       {projects.map((name) => <option key={name} value={name}>{name}</option>)}
                     </select>
                   </label>}
-                  <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted disabled:opacity-50" disabled={preparing} onClick={() => { detailsRef.current?.removeAttribute("open"); onHandoff?.(row, projects.includes(project) ? project : projects[0]); }} type="button">{t("todos.sendToAgent")}</button>
+                  <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted disabled:opacity-50" disabled={preparing} onClick={() => { commitMenu(() => onHandoff?.(row, projects.includes(project) ? project : projects[0])); }} type="button">{t("todos.sendToAgent")}</button>
                 </div>}
-                {!archived && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onComplete(row)} type="button">{t("todos.complete")}</button>}
+                {!archived && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => commitMenu(() => onComplete(row))} type="button">{t("todos.complete")}</button>}
                 {!archived && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={startReject} type="button">{t("todos.reject")}</button>}
                 {debugEnabled && <button className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => setConfirmingDelete(true)} type="button">{t("todos.delete")}</button>}
                 </>}

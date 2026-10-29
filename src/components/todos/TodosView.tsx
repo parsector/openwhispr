@@ -21,6 +21,7 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [direction, setDirection] = useState<"owe" | "waiting">("owe");
   const [undo, setUndo] = useState<Commitment | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [debugEnabled, setDebugEnabled] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Awaited<ReturnType<typeof window.agentJobs.projectsList>>["projects"]>([]);
@@ -147,7 +148,7 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
         <div className="mt-5 space-y-[26px]">
         {groups.map(({ key, rows: groupRows }) => <section key={key} aria-labelledby={`${key}-heading`} className={`pt-2.5 ${key === "overdue" ? "-mx-[13px] rounded-lg bg-input px-[13px] pb-[3px]" : ""}`}>
           <h2 id={`${key}-heading`} className={`flex items-baseline gap-[7px] text-[11px] font-bold leading-[1.4] tracking-[0.1em] [font-variant-caps:all-small-caps] ${key === "overdue" ? "text-foreground" : "text-muted-foreground"}`}>{t(`todos.groups.${key}`)} <span className="font-medium tracking-normal">{groupRows.length}</span></h2>
-          {groupRows.map((row) => <TodoRow key={row.id} row={row} onOpenNote={onOpenNote} debugEnabled={debugEnabled}
+          {groupRows.map((row) => <TodoRow key={row.id} row={row} menuOpen={openMenuId === row.id} onMenuChange={(open) => setOpenMenuId(open ? row.id : null)} onOpenNote={onOpenNote} debugEnabled={debugEnabled}
             projects={projects.map((project) => project.name)} jobStatus={row.agent_job_id ? jobStatuses[row.agent_job_id] : undefined}
             preparing={preparingId === row.id} onHandoff={(item, project) => void handoff(item, project)} onOpenAgentJob={onOpenAgentJob}
             onDelete={(item) => void deleteTodo(item)}

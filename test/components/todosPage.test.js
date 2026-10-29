@@ -425,6 +425,14 @@ test("TodosView reads debug mode once and refreshes archived rows and counts aft
     const target = [...host.querySelectorAll("article")].find((item) => item.textContent.includes("archived-test"));
     assert.ok(target);
     const menu = target.querySelector("details");
+    const otherMenu = [...host.querySelectorAll("article")].find((item) => item !== target).querySelector("details");
+    await React.act(async () => menu.querySelector("summary").click());
+    assert.equal(menu.open, true);
+    await React.act(async () => otherMenu.querySelector("summary").click());
+    assert.equal(menu.open, false, "opening another row closes the first menu");
+    assert.equal(otherMenu.open, true);
+    await React.act(async () => menu.querySelector("summary").click());
+    assert.equal(otherMenu.open, false);
     const button = (label) => [...menu.querySelectorAll("button")].find((item) => item.textContent === label);
     await React.act(async () => button("todos.delete").click());
     assert.equal(deleteCalls, 0);
@@ -477,7 +485,8 @@ test("Reject actions share an inline reason form with confirm and cancel behavio
     assert.equal(reasonInput(), null, "the form closes after confirmation");
 
     const menu = actions.querySelector("details");
-    await React.act(async () => { menu.open = true; button(menu, "todos.reject").click(); });
+    await React.act(async () => menu.querySelector("summary").click());
+    await React.act(async () => button(menu, "todos.reject").click());
     assert.ok(reasonInput(), "the overflow Reject action opens the same form");
     assert.equal(menu.open, false);
     await React.act(async () => button(reasonInput().form, "todos.reject").click());
