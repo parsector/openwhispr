@@ -3671,6 +3671,8 @@
       "title": "Enhancement error"
     },
     "speaker": {
+      "correctionSaveFailed": "Could not save the speaker change. Try again.",
+      "laterChangeReplaced": "A later change replaced this. Undo that change first.",
       "you": "You",
       "them": "Them",
       "label": "Speaker {{n}}",

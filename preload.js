@@ -603,6 +603,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   // Speaker name mapping
   getSpeakerMappings: (noteId) => ipcRenderer.invoke("get-speaker-mappings", noteId),
+  applySpeakerCorrection: (request) => ipcRenderer.invoke("apply-speaker-correction", request),
   setSpeakerMapping: (noteId, speakerId, displayName, email, profileId) =>
     ipcRenderer.invoke("set-speaker-mapping", noteId, speakerId, displayName, email, profileId),
   removeSpeakerMapping: (noteId, speakerId) =>

@@ -3174,6 +3174,8 @@
       "title": "增强错误"
     },
     "speaker": {
+      "correctionSaveFailed": "无法保存说话人更改。请重试。",
+      "laterChangeReplaced": "后续更改已覆盖此更改。请先撤销后续更改。",
       "you": "你",
       "them": "对方",
       "label": "发言者 {{n}}",

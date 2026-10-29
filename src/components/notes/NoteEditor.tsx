@@ -45,8 +45,10 @@ import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
 import {
   useMeetingRecordingStore,
-  assignLiveSpeakerRows,
-  unlockSpeaker,
+  mergeCommittedSpeakerRows,
+  restoreSpeakerIdentityCache,
+  persistLiveTranscript,
+  setSpeakerCorrectionPending,
   type TranscriptSegment,
 } from "../../stores/meetingRecordingStore";
 import {
@@ -95,7 +97,7 @@ import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils
 import { collectKnownPeople, type MeetingIdentity } from "../../utils/llmTranscript";
 import { noteChatTranscript } from "../../utils/transcriptEvidence";
 import { parseTranscriptSegmentsWithMigration } from "../../utils/parseTranscriptSegments";
-import { correctTranscriptRows, undoTranscriptCorrection } from "../../utils/transcriptCorrections";
+
 import {
   applyTranscriptSpeakerPatch,
   lockTranscriptSpeaker,
@@ -440,6 +442,8 @@ export default function NoteEditor({
   const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
+  const [speakerCorrectionError, setSpeakerCorrectionError] = useState<string | null>(null);
+  const correctionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [speakerProfiles, setSpeakerProfiles] = useState<
     Array<{ id: number; display_name: string; email: string | null }>
   >([]);
@@ -700,46 +704,75 @@ export default function NoteEditor({
     [note.id]
   );
 
-  const handleMapSpeaker = useCallback(
-    async (
-      speakerId: string,
-      displayName: string,
-      email?: string | null,
-      profileId?: number | null
-    ) => {
-      if (isRecording) {
-        const liveRows = useMeetingRecordingStore.getState().segments;
-        setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
-        await window.electronAPI?.setSpeakerMapping?.(note.id, speakerId, displayName, email, profileId);
-        onLiveSpeakerLock?.(speakerId, displayName);
-        const runId = liveRows.find((row) => row.speaker === speakerId)?.diarizationRunId;
-        const ids = new Set(liveRows.filter((row) => row.speaker === speakerId && row.diarizationRunId === runId).map((row) => row.id));
-        const corrected = correctTranscriptRows(liveRows, ids, "cluster", displayName, profileId ?? undefined, note.id, runId, speakerId)
-          .map((row) => ids.has(row.id) ? { ...row, corrections: row.corrections?.map((record, index, list) =>
-            index === list.length - 1 ? { ...record, mappingChanged: true } : record) } : row);
-        assignLiveSpeakerRows(ids, displayName, corrected);
-        await persistDisplaySegments(corrected, false);
-        refreshSpeakerProfiles();
-        return;
+  const commitSpeakerCorrection = useCallback(async (request: {
+    type: "apply" | "undo"; id: string; scope?: "row" | "selected" | "cluster";
+    rowIds?: string[]; target?: { runId?: string; clusterId?: string };
+    name?: string | null; profileId?: number | null;
+  }) => {
+    const previousCorrection = correctionQueueRef.current;
+    let releaseCorrection!: () => void;
+    correctionQueueRef.current = new Promise<void>((resolve) => { releaseCorrection = resolve; });
+    await previousCorrection;
+    const before = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+    setSpeakerCorrectionError(null);
+    if (isRecording) setSpeakerCorrectionPending(true);
+    try {
+      const result = await window.electronAPI?.applySpeakerCorrection?.({
+        ...request, noteId: note.id, rows: before,
+      });
+      if (!result?.success || !result.rows) {
+        if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();
+        setSpeakerCorrectionError(t(result?.error === "later_change"
+          ? "notes.speaker.laterChangeReplaced" : "notes.speaker.correctionSaveFailed"));
+        return false;
       }
-
-      const runId = displaySegments.find((s) => s.speaker === speakerId)?.diarizationRunId;
-      const ids = new Set(displaySegments.filter((s) => s.speaker === speakerId && s.diarizationRunId === runId).map((s) => s.id));
-      const currentSegments = correctTranscriptRows(displaySegments, ids, "cluster", displayName, profileId ?? undefined, note.id, runId, speakerId);
-      await persistDisplaySegments(currentSegments, !!diarizedSegments || !isRecording);
-
+      const committed = result.rows;
+      if (isRecording) {
+        // Merge after the await: a transcription row may have arrived during IPC.
+        const liveNow = useMeetingRecordingStore.getState().segments;
+        const committedById = new Map(committed.map((row) => [row.id, row]));
+        mergeCommittedSpeakerRows(committed);
+        const saveDeferred = setSpeakerCorrectionPending(false);
+        if (saveDeferred || liveNow.some((row) => !committedById.has(row.id))) {
+          await persistLiveTranscript();
+        }
+      } else {
+        setDiarizedSegments(committed);
+      }
+      if (result.mapping) {
+        const { clusterId, value } = result.mapping;
+        const name = value?.display_name || value?.displayName || null;
+        if (isRecording) restoreSpeakerIdentityCache(clusterId, name);
+        setSpeakerMappings((current) => {
+          const next = { ...current };
+          if (name) next[clusterId] = name;
+          else delete next[clusterId];
+          return next;
+        });
+      }
       refreshSpeakerProfiles();
-    },
-    [
-      diarizedSegments,
-      displaySegments,
-      isRecording,
-      note.id,
-      onLiveSpeakerLock,
-      persistDisplaySegments,
-      refreshSpeakerProfiles,
-    ]
-  );
+      return true;
+    } catch {
+      if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();
+      setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
+      return false;
+    } finally {
+      releaseCorrection();
+    }
+  }, [displaySegments, isRecording, note.id, refreshSpeakerProfiles, t]);
+
+  const handleMapSpeaker = useCallback(async (
+    speakerId: string, displayName: string, _email?: string | null, profileId?: number | null
+  ) => {
+    const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+    const anchor = rows.find((row) => row.speaker === speakerId);
+    if (!anchor) return;
+    await commitSpeakerCorrection({ type: "apply", id: crypto.randomUUID(), scope: "cluster",
+      rowIds: rows.filter((row) => row.speaker === speakerId &&
+        row.diarizationRunId === anchor.diarizationRunId).map((row) => row.id),
+      target: { runId: anchor.diarizationRunId, clusterId: speakerId },
+      name: displayName, profileId });
+  }, [commitSpeakerCorrection, displaySegments, isRecording]);
 
   const handleConfirmSuggestion = useCallback(
     async (speakerId: string, suggestedName: string, profileId: number) => {
@@ -802,55 +835,35 @@ export default function NoteEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedSegmentIds.size, handleClearSelection]);
 
-  const handleAssignSpeakerScope = useCallback(
-    async (scope: "row" | "selected" | "cluster", rowId: string, displayName: string | null, profileId?: number) => {
-      const liveSegments = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
-      const row = liveSegments.find((segment) => segment.id === rowId);
-      const ids = scope === "selected" ? selectedSegmentIds : scope === "cluster"
-        ? new Set(liveSegments.filter((segment) => segment.speaker === row?.speaker && segment.diarizationRunId === row?.diarizationRunId).map((segment) => segment.id))
-        : new Set([rowId]);
-      const nextSegments = correctTranscriptRows(liveSegments, ids, scope, displayName, profileId, note.id, row?.diarizationRunId, row?.speaker);
-      const assigned = isRecording ? assignLiveSpeakerRows(ids, displayName, nextSegments) : nextSegments;
-      await persistDisplaySegments(assigned, !isRecording);
-      if (scope === "selected") handleClearSelection();
-    },
-    [displaySegments, handleClearSelection, isRecording, persistDisplaySegments, selectedSegmentIds]
-  );
+  const handleAssignSpeakerScope = useCallback(async (
+    scope: "row" | "selected" | "cluster", rowId: string, displayName: string | null, profileId?: number
+  ) => {
+    const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+    const row = rows.find((segment) => segment.id === rowId);
+    if (!row) return;
+    const rowIds = scope === "selected" ? [...selectedSegmentIds] : scope === "cluster"
+      ? rows.filter((segment) => segment.speaker === row.speaker &&
+          segment.diarizationRunId === row.diarizationRunId).map((segment) => segment.id)
+      : [rowId];
+    const ok = await commitSpeakerCorrection({ type: "apply", id: crypto.randomUUID(), scope,
+      rowIds, target: scope === "cluster"
+        ? { runId: row.diarizationRunId, clusterId: row.speaker } : undefined,
+      name: displayName, profileId });
+    if (ok && scope === "selected") handleClearSelection();
+  }, [commitSpeakerCorrection, displaySegments, handleClearSelection, isRecording, selectedSegmentIds]);
 
   const handleUndoSpeakerCorrection = useCallback(async (correctionId: string) => {
-    const current = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
-    const clusterCorrection = current.flatMap((row) => row.corrections || [])
-      .find((record) => record.id === correctionId && record.mappingChanged);
-    const restored = undoTranscriptCorrection(current, correctionId);
-    if (isRecording) {
-      assignLiveSpeakerRows(new Set(), null, restored);
-    }
-    if (clusterCorrection && current.some((row) => row.id === clusterCorrection.rowId && row.corrections?.at(-1)?.id === correctionId)) {
-      const speakerId = current.find((row) => row.id === clusterCorrection.rowId)?.speaker;
-      if (speakerId) {
-        if (isRecording) unlockSpeaker(speakerId);
-        const previousName = clusterCorrection.previous.speakerName;
-        if (previousName) {
-          await window.electronAPI?.setSpeakerMapping?.(note.id, speakerId, previousName);
-          setSpeakerMappings((map) => ({ ...map, [speakerId]: previousName }));
-        } else {
-          await window.electronAPI?.removeSpeakerMapping?.(note.id, speakerId);
-          setSpeakerMappings((map) => { const next = { ...map }; delete next[speakerId]; return next; });
-        }
-      }
-    }
-    await persistDisplaySegments(restored, !isRecording);
-  }, [displaySegments, isRecording, note.id, persistDisplaySegments]);
+    await commitSpeakerCorrection({ type: "undo", id: correctionId });
+  }, [commitSpeakerCorrection]);
 
-  const handleBulkAssignName = useCallback(
-    async (displayName: string, _email?: string | null, profileId?: number) => {
-      if (!selectedSegmentIds.size) return;
-      const nextSegments = correctTranscriptRows(displaySegments, selectedSegmentIds, "selected", displayName, profileId, note.id);
-      await persistDisplaySegments(nextSegments);
-      handleClearSelection();
-    },
-    [displaySegments, selectedSegmentIds, persistDisplaySegments, handleClearSelection]
-  );
+  const handleBulkAssignName = useCallback(async (
+    displayName: string, _email?: string | null, profileId?: number
+  ) => {
+    if (!selectedSegmentIds.size) return;
+    const ok = await commitSpeakerCorrection({ type: "apply", id: crypto.randomUUID(),
+      scope: "selected", rowIds: [...selectedSegmentIds], name: displayName, profileId });
+    if (ok) handleClearSelection();
+  }, [commitSpeakerCorrection, selectedSegmentIds, handleClearSelection]);
 
   const handleTitleInput = useCallback(() => {
     if (titleRef.current) {
@@ -1428,6 +1441,7 @@ export default function NoteEditor({
           </div>
         )}
 
+        {speakerCorrectionError && <p role="alert" className="px-4 py-2 text-sm text-destructive">{speakerCorrectionError}</p>}
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (

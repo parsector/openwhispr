@@ -3519,6 +3519,8 @@
       "title": "Verbesserungsfehler"
     },
     "speaker": {
+      "correctionSaveFailed": "Die Sprecheränderung konnte nicht gespeichert werden. Versuche es erneut.",
+      "laterChangeReplaced": "Eine spätere Änderung hat diese ersetzt. Mache zuerst die spätere Änderung rückgängig.",
       "you": "Du",
       "them": "Gegenüber",
       "label": "Sprecher {{n}}",

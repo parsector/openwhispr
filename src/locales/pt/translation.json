@@ -3174,6 +3174,8 @@
       "title": "Erro de aprimoramento"
     },
     "speaker": {
+      "correctionSaveFailed": "Não foi possível salvar a alteração do falante. Tente novamente.",
+      "laterChangeReplaced": "Uma alteração posterior substituiu esta. Desfaça primeiro a alteração posterior.",
       "you": "Você",
       "them": "Outro",
       "label": "Participante {{n}}",

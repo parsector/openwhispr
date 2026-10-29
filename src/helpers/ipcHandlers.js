@@ -13046,6 +13046,23 @@ class IPCHandlers {
       return this.databaseManager.getSpeakerMappings(noteId);
     });
 
+    ipcMain.handle("apply-speaker-correction", async (_event, request) => {
+      try {
+        const { applySpeakerCorrection } = require("./speakerCorrectionTransaction");
+        const result = applySpeakerCorrection(this.databaseManager, liveSpeakerIdentifier, request);
+        if (result.success) {
+          const note = this.databaseManager.getNote(request.noteId);
+          setImmediate(() => broadcastToWindows("note-updated", note));
+          this.notifyVectorChanges();
+          this._asyncMirrorWrite(note);
+        }
+        return result;
+      } catch (error) {
+        debugLogger.error("Speaker correction failed", { error: error.message }, "speaker");
+        return { success: false, error: "persistence_failed" };
+      }
+    });
+
     ipcMain.handle(
       "set-speaker-mapping",
       async (_event, noteId, speakerId, displayName, email, profileId) => {

@@ -3174,6 +3174,8 @@
       "title": "Errore di miglioramento"
     },
     "speaker": {
+      "correctionSaveFailed": "Impossibile salvare la modifica dell’interlocutore. Riprova.",
+      "laterChangeReplaced": "Una modifica successiva ha sostituito questa. Annulla prima la modifica successiva.",
       "you": "Tu",
       "them": "Loro",
       "label": "Partecipante {{n}}",

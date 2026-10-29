@@ -3761,6 +3761,22 @@ declare global {
         email?: string | null,
         profileId?: number | null
       ) => Promise<{ success: boolean; profileId: number | null }>;
+      applySpeakerCorrection?: (request: {
+        type: "apply" | "undo";
+        noteId: number;
+        id: string;
+        scope?: "row" | "selected" | "cluster";
+        rowIds?: string[];
+        target?: { runId?: string; clusterId?: string };
+        name?: string | null;
+        profileId?: number | null;
+        rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
+      }) => Promise<{
+        success: boolean;
+        error?: string;
+        rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
+        mapping?: { clusterId: string; value: { display_name?: string; displayName?: string } | null } | null;
+      }>;
       removeSpeakerMapping?: (noteId: number, speakerId: string) => Promise<{ success: boolean }>;
       getSpeakerProfiles?: () => Promise<
         Array<{

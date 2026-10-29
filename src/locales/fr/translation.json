@@ -3519,6 +3519,8 @@
       "title": "Erreur d'amélioration"
     },
     "speaker": {
+      "correctionSaveFailed": "Impossible d’enregistrer le changement de locuteur. Réessayez.",
+      "laterChangeReplaced": "Une modification ultérieure a remplacé celle-ci. Annulez d’abord la modification ultérieure.",
       "you": "Vous",
       "them": "Eux",
       "label": "Intervenant {{n}}",

@@ -1616,7 +1616,22 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 // flush before an unload. A no-op once a stop has begun: that
 // stop has already written the final transcript (or will write main's, for a
 // recording with no segments), and a second write could overwrite it.
+let speakerCorrectionPending = false;
+let liveSaveDeferredForCorrection = false;
+
+export function setSpeakerCorrectionPending(pending: boolean): boolean {
+  speakerCorrectionPending = pending;
+  if (pending) return false;
+  const deferred = liveSaveDeferredForCorrection;
+  liveSaveDeferredForCorrection = false;
+  return deferred;
+}
+
 export async function persistLiveTranscript(): Promise<void> {
+  if (speakerCorrectionPending) {
+    liveSaveDeferredForCorrection = true;
+    return;
+  }
   const { recordingNoteId, segments } = useMeetingRecordingStore.getState();
   if (!isRecordingFlag || recordingNoteDeleted || recordingNoteId == null) return;
   if (segments.length === 0) return;
@@ -1816,6 +1831,16 @@ export function assignLiveSpeakerRows(rowIds: ReadonlySet<string>, displayName: 
   return next;
 }
 
+export function mergeCommittedSpeakerRows(committed: TranscriptSegment[]): TranscriptSegment[] {
+  const liveNow = useMeetingRecordingStore.getState().segments;
+  const committedById = new Map(committed.map((row) => [row.id, row]));
+  const liveIds = new Set(liveNow.map((row) => row.id));
+  return assignLiveSpeakerRows(new Set(), null, [
+    ...liveNow.map((row) => committedById.get(row.id) || row),
+    ...committed.filter((row) => !liveIds.has(row.id)),
+  ]);
+}
+
 export function lockSpeaker(speakerId: string, displayName: string): void {
   if (!speakerId || !displayName) return;
   speakerLocks.set(speakerId, displayName);
@@ -1845,6 +1870,18 @@ export function lockSpeaker(speakerId: string, displayName: string): void {
 
 export function unlockSpeaker(speakerId: string): void {
   speakerLocks.delete(speakerId);
+}
+
+export function restoreSpeakerIdentityCache(speakerId: string, displayName: string | null): void {
+  if (displayName) speakerLocks.set(speakerId, displayName);
+  else speakerLocks.delete(speakerId);
+  if (recentSystemSpeaker?.speakerId === speakerId) {
+    recentSystemSpeaker = { ...recentSystemSpeaker, speakerName: displayName,
+      speakerIsPlaceholder: !displayName };
+  }
+  if (systemPartialSpeakerIdValue === speakerId) {
+    setSystemPartialSpeakerIdentity(speakerId, displayName);
+  }
 }
 
 export function cancelPreparedTranscription(): void {

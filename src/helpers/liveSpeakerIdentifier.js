@@ -397,6 +397,8 @@ class LiveSpeakerIdentifier {
 
     if (profileId != null) {
       this.transientProfileIds.set(liveId, profileId);
+    } else {
+      this.transientProfileIds.delete(liveId);
     }
 
     if (displayName) {
@@ -407,6 +409,14 @@ class LiveSpeakerIdentifier {
       this.transientNoteIds.set(liveId, noteId);
     }
 
+    return true;
+  }
+
+  unmapSpeaker(liveId, noteId) {
+    if (noteId != null && this.transientNoteIds.get(liveId) !== noteId) return false;
+    this.transientDisplayNames.delete(liveId);
+    this.transientProfileIds.delete(liveId);
+    this.transientNoteIds.delete(liveId);
     return true;
   }
 

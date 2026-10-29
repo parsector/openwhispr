@@ -1016,3 +1016,25 @@ test("relocateRevokedFolder moves or retires the folder's conversations", (t) =>
     0
   );
 });
+
+test("speaker correction rolls back a run mapping when transcript persistence fails", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  const initial = [{ id: "row-1", text: "hello", source: "system", speaker: "speaker_0", diarizationRunId: "run-1" }];
+  const note = db.saveNote("Meeting", "", "meeting", null, null, null, null, JSON.stringify(initial)).note;
+  const identifier = { mapSpeaker() { throw Error("cache should not change"); } };
+  const updateNote = db.updateNote;
+  db.updateNote = () => { throw Error("injected transcript failure"); };
+  try {
+    assert.throws(() => applySpeakerCorrection(db, identifier, {
+      type: "apply", noteId: note.id, id: "correction-1", scope: "cluster",
+      target: { runId: "run-1", clusterId: "speaker_0" }, rowIds: ["row-1"],
+      name: "Alex", rows: initial,
+    }), /injected transcript failure/);
+  } finally {
+    db.updateNote = updateNote;
+  }
+  assert.deepEqual(JSON.parse(db.getNote(note.id).transcript), initial);
+  assert.equal(db.getSpeakerRunMapping(note.id, "run-1", "speaker_0"), null);
+});

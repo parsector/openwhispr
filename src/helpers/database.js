@@ -1218,6 +1218,19 @@ class DatabaseManager {
       `);
 
       this.db.exec(`
+        CREATE TABLE IF NOT EXISTS speaker_run_mappings (
+          note_id INTEGER NOT NULL,
+          run_id TEXT NOT NULL,
+          cluster_id TEXT NOT NULL,
+          profile_id INTEGER,
+          display_name TEXT NOT NULL,
+          PRIMARY KEY (note_id, run_id, cluster_id),
+          FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE,
+          FOREIGN KEY (profile_id) REFERENCES speaker_profiles(id) ON DELETE SET NULL
+        )
+      `);
+
+      this.db.exec(`
         CREATE TABLE IF NOT EXISTS note_speaker_embeddings (
           note_id INTEGER NOT NULL,
           speaker_id TEXT NOT NULL,
@@ -6565,6 +6578,26 @@ class DatabaseManager {
       debugLogger.error("Error getting speaker mappings", { error: error.message }, "database");
       throw error;
     }
+  }
+
+  getSpeakerRunMapping(noteId, runId, clusterId) {
+    return this.db.prepare(
+      "SELECT profile_id, display_name FROM speaker_run_mappings WHERE note_id = ? AND run_id = ? AND cluster_id = ?"
+    ).get(noteId, runId || "legacy", clusterId) || null;
+  }
+
+  setSpeakerRunMapping(noteId, runId, clusterId, profileId, displayName) {
+    this.db.prepare(
+      "INSERT OR REPLACE INTO speaker_run_mappings (note_id, run_id, cluster_id, profile_id, display_name) VALUES (?, ?, ?, ?, ?)"
+    ).run(noteId, runId || "legacy", clusterId, profileId, displayName);
+    return { success: true };
+  }
+
+  removeSpeakerRunMapping(noteId, runId, clusterId) {
+    this.db.prepare(
+      "DELETE FROM speaker_run_mappings WHERE note_id = ? AND run_id = ? AND cluster_id = ?"
+    ).run(noteId, runId || "legacy", clusterId);
+    return { success: true };
   }
 
   saveNoteSpeakerEmbeddings(noteId, embeddings) {

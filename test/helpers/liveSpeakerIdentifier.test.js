@@ -509,3 +509,14 @@ test("a new meeting never inherits the previous meeting's partial resample group
 
   assert.equal(firstMismatch(afterReset, fresh), -1);
 });
+
+test("undo clears a live name and profile before the next identification", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+  const first = identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: true });
+  assert.equal(identifier.mapSpeaker(first.speakerId, 42, "Alex", 7), true);
+  assert.equal(identifier.unmapSpeaker(first.speakerId, 7), true);
+  const next = identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: true });
+  assert.equal(next.displayName, null);
+  assert.equal(identifier.transientProfileIds.has(first.speakerId), false);
+});

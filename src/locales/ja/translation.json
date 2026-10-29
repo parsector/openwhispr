@@ -3102,6 +3102,8 @@
       "title": "強化エラー"
     },
     "speaker": {
+      "correctionSaveFailed": "話者の変更を保存できませんでした。もう一度お試しください。",
+      "laterChangeReplaced": "後の変更によって上書きされています。先に後の変更を元に戻してください。",
       "you": "あなた",
       "them": "相手",
       "label": "話者 {{n}}",

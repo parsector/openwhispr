@@ -3174,6 +3174,8 @@
       "title": "增強錯誤"
     },
     "speaker": {
+      "correctionSaveFailed": "無法儲存說話者變更。請重試。",
+      "laterChangeReplaced": "後續變更已覆蓋此變更。請先復原後續變更。",
       "you": "你",
       "them": "對方",
       "label": "發言者 {{n}}",

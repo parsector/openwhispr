@@ -21,9 +21,14 @@ export interface TranscriptCorrection {
   next: SpeakerValue;
   actor: "user";
   timestamp: string;
+  sequence?: number;
   diarizationRunId?: string;
   clusterId?: string;
   mappingChanged?: boolean;
+  target?: { runId?: string; clusterId?: string } | { rowIds: string[] };
+  affectedRowIds?: string[];
+  mappingBefore?: { displayName: string; profileId: number | null } | null;
+  mappingAfter?: { displayName: string | null; profileId: number | null } | null;
 }
 const value = (row: TranscriptSegment): SpeakerValue => ({
   speakerName: row.speakerName,

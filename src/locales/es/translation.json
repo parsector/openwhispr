@@ -3226,6 +3226,8 @@
       "title": "Error de mejora"
     },
     "speaker": {
+      "correctionSaveFailed": "No se pudo guardar el cambio de hablante. Inténtalo de nuevo.",
+      "laterChangeReplaced": "Un cambio posterior reemplazó este. Deshaz primero el cambio posterior.",
       "you": "Tú",
       "them": "Ellos",
       "label": "Participante {{n}}",
