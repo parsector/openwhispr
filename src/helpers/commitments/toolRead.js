@@ -65,7 +65,7 @@ function listTodos(database, args = {}, now = new Date()) {
   const filters = validateList(args);
   const store = new CommitmentStore(database);
   const spaces = new Set(database.getSpaces().map((space) => String(space.id)));
-  const rows = store.list(false).concat(filters.include_archived ? store.list(true) : []);
+  const rows = store.list(filters.include_archived);
   const today = localToday(now);
   const filtered = rows.filter((row) => visible(row, spaces) &&
     (filters.status === "all" || row.status === filters.status) &&

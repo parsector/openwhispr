@@ -14,7 +14,7 @@ function mockDb(rows, mentions = []) {
     getSpaces: () => [{ id: 1, name: "Personal" }],
     db: { prepare(sql) {
       if (sql.includes("FROM commitments WHERE id=?")) return { get: (id, account) => rows.find((item) => item.id === id && item.account_id === account) };
-      if (sql.includes("FROM commitments WHERE account_id IS ?")) return { all: (account) => rows.filter((item) => item.account_id === account && (sql.includes("archived_at IS NOT NULL") ? !!item.archived_at : !item.archived_at)) };
+      if (sql.includes("FROM commitments WHERE account_id IS ?")) return { all: (account) => rows.filter((item) => item.account_id === account && (!sql.includes("archived_at IS NULL") || !item.archived_at)) };
       if (sql.includes("FROM commitment_mentions WHERE commitment_id=?")) return { all: (id) => mentions.filter((item) => item.commitment_id === id) };
       if (sql.includes("SELECT note_id FROM routine_runs")) return { all: () => [] };
       throw new Error(`Unexpected SQL: ${sql}`);

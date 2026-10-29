@@ -5244,6 +5244,7 @@
       "noDate": "No date",
       "waiting": "Waiting on"
     },
-    "editText": "編輯待辦事項"
+    "editText": "編輯待辦事項",
+    "archiveLabel": "已封存"
   }
 }

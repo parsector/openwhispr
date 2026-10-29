@@ -5288,6 +5288,7 @@
       "noDate": "No date",
       "waiting": "Waiting on"
     },
-    "editText": "Изменить задачу"
+    "editText": "Изменить задачу",
+    "archiveLabel": "В архиве"
   }
 }

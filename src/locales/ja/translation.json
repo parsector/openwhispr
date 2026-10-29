@@ -5244,6 +5244,7 @@
       "noDate": "No date",
       "waiting": "Waiting on"
     },
-    "editText": "タスクを編集"
+    "editText": "タスクを編集",
+    "archiveLabel": "アーカイブ済み"
   }
 }

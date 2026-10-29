@@ -5362,6 +5362,7 @@
       "noDate": "No date",
       "waiting": "Waiting on"
     },
-    "editText": "تعديل المهمة"
+    "editText": "تعديل المهمة",
+    "archiveLabel": "مؤرشف"
   }
 }

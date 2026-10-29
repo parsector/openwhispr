@@ -31,7 +31,7 @@ class CommitmentStore {
   list(includeArchived = false) {
     return this.db.prepare(`SELECT commitments.*, (SELECT COUNT(*) FROM commitment_mentions m
       WHERE m.commitment_id=commitments.id AND m.kind='date_moved') AS date_move_count
-      FROM commitments WHERE account_id IS ? AND archived_at IS ${includeArchived ? "NOT NULL" : "NULL"} ORDER BY created_at DESC`)
+      FROM commitments WHERE account_id IS ? ${includeArchived ? "" : "AND archived_at IS NULL"} ORDER BY created_at DESC`)
       .all(this.scope());
   }
   forNote(noteId) {

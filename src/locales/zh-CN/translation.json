@@ -5244,6 +5244,7 @@
       "noDate": "No date",
       "waiting": "Waiting on"
     },
-    "editText": "编辑待办事项"
+    "editText": "编辑待办事项",
+    "archiveLabel": "已归档"
   }
 }

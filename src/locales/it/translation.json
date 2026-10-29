@@ -5244,6 +5244,7 @@
       "noDate": "No date",
       "waiting": "Waiting on"
     },
-    "editText": "Modifica attività"
+    "editText": "Modifica attività",
+    "archiveLabel": "Archiviato"
   }
 }

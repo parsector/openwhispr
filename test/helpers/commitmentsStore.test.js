@@ -45,7 +45,9 @@ test("store handles edits, archive, history and proposals on a temp DB", (t) => 
   store.resolveProposal(another.id, true);
   assert.equal(store.get(todo.id).status, "completed");
   assert.equal(store.list().length, 0);
-  assert.equal(store.list(true).length, 1);
+  const pending = store.create({ text: "Pending beside archive" });
+  assert.deepEqual(store.list().map((item) => item.id), [pending.id]);
+  assert.deepEqual(store.list(true).map((item) => item.id), [pending.id, todo.id]);
   assert.equal(store.update(todo.id, { status: "open" }).status, "completed");
 });
 

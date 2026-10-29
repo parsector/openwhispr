@@ -5244,6 +5244,7 @@
       "noDate": "No date",
       "waiting": "Waiting on"
     },
-    "editText": "Modifier la tâche"
+    "editText": "Modifier la tâche",
+    "archiveLabel": "Archivé"
   }
 }

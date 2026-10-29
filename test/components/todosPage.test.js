@@ -32,6 +32,7 @@ test("groups overdue, today, upcoming, no-date and waiting in fixed order", () =
     ["overdue", ["late"]], ["today", ["completed", "today-older", "today"]], ["upcoming", ["upcoming"]],
     ["noDate", ["none"]], ["waiting", ["waiting"]],
   ]);
+  assert.deepEqual(grouped.find((group) => group.key === "today").rows.map((item) => item.id), ["completed", "today-older", "today"], "archived rows interleave without changing the date order");
   const allRows = grouped.flatMap((group) => group.rows);
   assert.equal(allRows.length, rows.length);
   assert.deepEqual(allRows.map((item) => item.id).sort(), rows.map((item) => item.id).sort());
