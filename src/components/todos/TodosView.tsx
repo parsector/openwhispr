@@ -16,7 +16,7 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
   const [draft, setDraft] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
   const [dueDate, setDueDate] = useState("");
-  const draftRef = useRef<HTMLInputElement>(null);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
   const lastHandledComposerRequestAt = useRef(0);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [direction, setDirection] = useState<"owe" | "waiting">("owe");
@@ -117,10 +117,10 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
             <span aria-hidden="true" className="grid size-[21px] place-items-center rounded-full border border-border-hover text-lg font-light leading-none text-foreground"><Plus size={14} /></span>
             {t("todos.addPlaceholder")}
           </button>
-          {composerOpen && <form className="px-[14px] pb-3 ps-[37px]" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setComposerOpen(false); triggerRef.current?.focus(); } else if (event.key === "Enter" && event.target === draftRef.current) { event.preventDefault(); event.currentTarget.requestSubmit(); } }}
+          {composerOpen && <form className="px-[14px] pb-3 ps-[37px]" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setComposerOpen(false); triggerRef.current?.focus(); } else if (event.key === "Enter" && !event.shiftKey && event.target === draftRef.current) { event.preventDefault(); event.currentTarget.requestSubmit(); } }}
             onSubmit={async (event) => { event.preventDefault(); if (!draft.trim()) return;
               await window.electronAPI.commitmentsCreate({ text: draft.trim(), direction, ...(dueDate ? { due_date: dueDate } : {}) }); setDraft(""); setDueDate(""); setComposerOpen(false); triggerRef.current?.focus(); await refresh(); }}>
-            <input dir="auto" ref={draftRef} className="min-h-[45px] w-full rounded-md bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:outline-none" value={draft}
+            <textarea dir="auto" ref={draftRef} rows={2} className="min-h-[45px] w-full resize-y rounded-md bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:outline-none" value={draft}
               onChange={(event) => setDraft(event.target.value)} placeholder={t("todos.addPlaceholder")} aria-label={t("todos.addPlaceholder")} />
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
               <input dir="ltr" type="date" aria-label={t("todos.pickDate")} value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-md border border-border bg-surface-1 px-2 py-1 text-xs text-foreground" />
@@ -154,6 +154,7 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
             onComplete={(item) => void changeStatus(item, "completed")}
             onReject={(item, reason) => void changeStatus(item, "rejected", reason)}
             onDue={(item, input) => void window.electronAPI.commitmentsSetDue(item.id, input).then(() => refresh())}
+            onText={(item, text) => void window.electronAPI.commitmentsUpdate(item.id, { text }).then(() => refresh())}
             onPerson={(item, person) => void window.electronAPI.commitmentsUpdate(item.id, { person }).then(() => refresh())} />)}
         </section>)}
         </div>

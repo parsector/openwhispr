@@ -536,26 +536,34 @@ test("composer opens, saves with Enter, and closes with Escape", async () => {
     const trigger = host.querySelector('button[aria-expanded="false"]');
     await React.act(async () => trigger.click());
     assert.equal(trigger.getAttribute("aria-expanded"), "true");
-    const input = host.querySelector('input[aria-label="todos.addPlaceholder"]');
+    const input = host.querySelector('textarea[aria-label="todos.addPlaceholder"]');
     assert.ok(input.form.classList.contains("ps-[37px]"));
     assert.ok(input.classList.contains("px-2"));
     assert.ok(input.classList.contains("rounded-md"));
     assert.ok(input.classList.contains("outline-none"));
     await React.act(async () => {
-      Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value").set.call(input, "Send summary");
+      Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, "value").set.call(input, "Send summary");
       input.dispatchEvent(new browser.Event("input", { bubbles: true }));
     });
     await React.act(async () => input.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     assert.equal(trigger.getAttribute("aria-expanded"), "false");
     await React.act(async () => trigger.click());
-    const reopened = host.querySelector('input[aria-label="todos.addPlaceholder"]');
+    const reopened = host.querySelector('textarea[aria-label="todos.addPlaceholder"]');
     await React.act(async () => {
-      Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value").set.call(reopened, "Send summary");
+      Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, "value").set.call(reopened, "Send summary");
       reopened.dispatchEvent(new browser.Event("input", { bubbles: true }));
     });
+    await React.act(async () => {
+      reopened.setSelectionRange(4, 4);
+      reopened.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Enter", shiftKey: true, bubbles: true }));
+      const value = reopened.value.slice(0, 4) + "\n" + reopened.value.slice(4);
+      Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, "value").set.call(reopened, value);
+      reopened.dispatchEvent(new browser.Event("input", { bubbles: true }));
+    });
+    assert.equal(created.length, 0, "Shift+Enter keeps the composer open");
     await React.act(async () => reopened.dispatchEvent(new browser.KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
     assert.equal(created.length, 1);
-    assert.equal(created[0].text, "Send summary");
+    assert.equal(created[0].text, "Send\n summary");
   } finally {
     await React.act(async () => root.unmount());
     browser.close();
@@ -585,7 +593,7 @@ test("composer requests open and focus the draft once without replacing typed te
   try {
     useTodosStore.setState({ composerRequestAt: previousRequest + 1 });
     await React.act(async () => root.render(render()));
-    const input = host.querySelector('input[aria-label="todos.addPlaceholder"]');
+    const input = host.querySelector('textarea[aria-label="todos.addPlaceholder"]');
     assert.ok(input, "the request opens the composer on initial mount");
     assert.equal(browser.document.activeElement, input);
 
@@ -595,7 +603,7 @@ test("composer requests open and focus the draft once without replacing typed te
     assert.equal(browser.document.activeElement, trigger, "the same request does not steal focus again");
 
     await React.act(async () => {
-      Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value").set.call(input, "Keep this draft");
+      Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, "value").set.call(input, "Keep this draft");
       input.dispatchEvent(new browser.Event("input", { bubbles: true }));
     });
     await React.act(async () => useTodosStore.setState({ composerRequestAt: previousRequest + 2 }));

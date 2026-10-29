@@ -14,12 +14,13 @@ function peopleLabel(person: string | null): string {
   return person;
 }
 
-export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, onOpenNote, onDelete, onHandoff, onOpenAgentJob, projects = [], jobStatus, preparing = false, debugEnabled = false }: {
+export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, onText, onOpenNote, onDelete, onHandoff, onOpenAgentJob, projects = [], jobStatus, preparing = false, debugEnabled = false }: {
   row: Commitment;
   onComplete: (row: Commitment) => void;
   onReject: (row: Commitment, reason: string | null) => void;
   onDue: (row: Commitment, input: { action: "push" | "pick" | "clear"; date?: string }) => void;
   onPerson: (row: Commitment, person: string) => void;
+  onText?: (row: Commitment, text: string) => void;
   onOpenNote: (id: number) => void;
   onDelete?: (row: Commitment) => void;
   onHandoff?: (row: Commitment, project: string) => void;
@@ -32,6 +33,8 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   const { t, i18n } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [editingPerson, setEditingPerson] = useState(false);
+  const [editingText, setEditingText] = useState(false);
+  const [text, setText] = useState(row.text);
   const [person, setPerson] = useState(peopleLabel(row.person));
   const [rejecting, setRejecting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -88,7 +91,10 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
           {row.status === "rejected" && <X size={13} />}
         </button>
         <div className="min-w-0">
-          <div className="text-[13px] font-medium leading-[1.55] text-foreground">{row.text}</div>
+          {editingText ? <form onSubmit={(event) => { event.preventDefault(); if (text.trim()) { onText?.(row, text.trim()); setEditingText(false); } }}>
+            <textarea dir="auto" aria-label={t("todos.editText")} value={text} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setEditingText(false); } else if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} className="w-full resize-y rounded border border-border bg-background px-2 py-1 text-sm" />
+            <button type="submit" className="text-sm text-primary">{t("todos.save")}</button>
+          </form> : <div className="whitespace-pre-wrap break-words text-[13px] font-medium leading-[1.55] text-foreground">{row.text}</div>}
           <div className="mt-[3px] flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             {row.person && <span className="inline-flex items-center gap-1 rounded-full bg-input px-2 py-[3px] text-foreground"><span aria-hidden="true" className="grid size-[14px] place-items-center rounded-full bg-border text-[9px] font-bold">{peopleLabel(row.person).charAt(0).toUpperCase()}</span>{peopleLabel(row.person)}</span>}
             {row.mention_count > 1 && <span>{t("todos.saidCount", { count: row.mention_count })}</span>}
@@ -144,6 +150,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
                   <button type="button" className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => { setConfirmingDelete(false); detailsRef.current?.removeAttribute("open"); onDelete?.(row); }}>{t("todos.deletePermanently")}</button>
                   <button type="button" className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => setConfirmingDelete(false)}>{t("common.cancel")}</button>
                 </div> : <>
+                {onText && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { setText(row.text); setEditingText(true); }} type="button">{t("todos.editText")}</button>}
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { setEditingPerson(true); }} type="button">{t("todos.editPerson")}</button>
                 <label className="block rounded px-2 py-1.5 hover:bg-muted">{t("todos.pickDate")}
                   <input dir="ltr" type="date" className="mt-1 w-full bg-background" value={row.due_date || ""}

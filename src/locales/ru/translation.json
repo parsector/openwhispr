@@ -5287,6 +5287,7 @@
       "upcoming": "Upcoming",
       "noDate": "No date",
       "waiting": "Waiting on"
-    }
+    },
+    "editText": "Изменить задачу"
   }
 }
