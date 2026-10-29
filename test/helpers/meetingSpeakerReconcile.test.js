@@ -230,13 +230,13 @@ test("speaker expectation reports cap as other-speaker count in every system-mod
   );
   assert.deepEqual(
     resolve({ observedSpeakerIds: new Set(["speaker_0", "speaker_1"]) }),
-    { numSpeakers: 2, cap: 2 },
-    "observed ids are already other-speaker ids"
+    { numSpeakers: -1, cap: null },
+    "observed live ids do not constrain final diarization"
   );
   assert.deepEqual(
     resolve({}),
-    { numSpeakers: -1, cap: 1 },
-    "the default total of 2 means a single other speaker, not 2"
+    { numSpeakers: -1, cap: null },
+    "an unknown count stays unknown"
   );
 });
 
@@ -252,8 +252,8 @@ test("mic mode counts the user among the expected speakers", () => {
   );
   assert.deepEqual(
     resolve({ diarizedSource: "mic" }),
-    { numSpeakers: -1, cap: 2 },
-    "the no-signal fallback caps at the default expected total, user included"
+    { numSpeakers: -1, cap: null },
+    "an unknown mic count stays unknown"
   );
 });
 

@@ -50,7 +50,7 @@ function speakerLabel(segment: TranscriptSegment, speakerMappings: Record<string
   // diarized on the mic, so a numbered mic speaker isn't the note taker.
   const numbered = typeof segment.speaker === "string" && /^speaker_(\d+)$/.exec(segment.speaker);
   if (numbered) return `Speaker ${Number(numbered[1]) + 1}`;
-  if (segment.source === "mic") return NOTE_TAKER_LABEL;
+  if (segment.source === "mic") return i18n.t("notes.speaker.unknown");
   if (typeof segment.speaker === "string" && segment.speaker) return segment.speaker;
   return segment.source === "system" ? "Others" : "";
 }

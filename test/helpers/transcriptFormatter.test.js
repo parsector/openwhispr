@@ -171,7 +171,7 @@ test("a single segment with speaker identity keeps the prefix on every SRT cue",
   assert.match(output, /\n2\n00:00:05,000 --> 00:00:08,000\nAda: Named reply\./);
 });
 
-test("meeting segments identified only by source keep their SRT speaker labels", () => {
+test("mic source alone does not name the owner in SRT", () => {
   const output = formatSrt(
     [
       { source: "mic", timestamp: 0, text: "Me talking." },
@@ -180,7 +180,7 @@ test("meeting segments identified only by source keep their SRT speaker labels",
     {}
   );
 
-  assert.match(output, /^1\n00:00:00,000 --> 00:00:05,000\nYou: Me talking\./);
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:05,000\nUnknown Speaker: Me talking\./);
   assert.match(output, /\n2\n00:00:05,000 --> 00:00:08,000\nOthers: Them talking\./);
 });
 
@@ -203,10 +203,10 @@ test("a manually named segment does not absorb the adjacent un-named one", () =>
   );
 
   assert.ok(txtOutput.includes("[00:00:00] Alice:\nAlice said this."));
-  assert.ok(txtOutput.includes("[00:00:01] You:\nAnd this is me talking."));
+  assert.ok(txtOutput.includes("[00:00:01] Unknown Speaker:\nAnd this is me talking."));
 });
 
-test("own-voice segments share one label whether or not diarization stamped them", (t) => {
+test("only an explicit legacy you id names the owner", (t) => {
   changeLanguage("de");
   t.after(() => changeLanguage("en"));
 
@@ -219,11 +219,11 @@ test("own-voice segments share one label whether or not diarization stamped them
 
   const txtOutput = formatTxt(note, segments, {});
   assert.ok(txtOutput.includes("[00:00:00] Du:\nGuten Morgen."));
-  assert.ok(txtOutput.includes("[00:00:03] Du:\nNoch etwas."));
+  assert.ok(txtOutput.includes("[00:00:03] Unbekannter Sprecher:\nNoch etwas."));
   assert.ok(!txtOutput.includes("You:"));
 });
 
-test("the JSON export counts both own-voice segment shapes as one speaker", (t) => {
+test("the JSON export keeps unassigned mic rows separate from the owner", (t) => {
   changeLanguage("de");
   t.after(() => changeLanguage("en"));
 
@@ -239,8 +239,8 @@ test("the JSON export counts both own-voice segment shapes as one speaker", (t) 
     )
   );
 
-  assert.deepEqual(parsed.speakers, ["Du", "Sprecher 1"]);
-  assert.equal(parsed.metadata.speaker_count, 2);
+  assert.deepEqual(parsed.speakers, ["Du", "Unbekannter Sprecher", "Sprecher 1"]);
+  assert.equal(parsed.metadata.speaker_count, 3);
 });
 
 test("diarized speaker numbers render in the UI language", (t) => {

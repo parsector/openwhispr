@@ -177,6 +177,7 @@ const {
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
+const { setSpeakerNameMapping } = require("./speakerNaming");
 const {
   buildSpeakerRenumber,
   normalizeSpeakerIndexBase,
@@ -187,7 +188,6 @@ const postMigrationDetector = require("./postMigrationDetector");
 const screenContextCapture = require("./screenContextCapture");
 const { classifyToneAppCategory } = require("./toneAppCategories");
 const {
-  DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
 } = require("../constants/speakerDetection.json");
 const { UPLOAD_AUDIO_EXTENSIONS } = require("../constants/uploadAudioFormats.json");
@@ -1742,7 +1742,7 @@ class IPCHandlers {
   }
 
   _resolveNoteExpectedSpeakerCount(note) {
-    return this._noteExpectedSpeakerCountOrNull(note) ?? DEFAULT_EXPECTED_SPEAKER_COUNT;
+    return this._noteExpectedSpeakerCountOrNull(note);
   }
 
   _resolveInitialMeetingSpeakerConfig(noteId) {
@@ -1765,17 +1765,15 @@ class IPCHandlers {
   // from the note at recording start. A count the user set via the stepper
   // (explicit) is never overridden.
   //
-  // Raise-only: lowering the cap below the clusters already discovered would make
-  // _assignOrForceCluster fold every later voice onto an existing speaker — the
-  // exact identity collapse this refresh exists to prevent. A roster that shrinks
-  // (or empties) mid-meeting therefore leaves the cap where it is.
+  // Raise-only: a shrinking roster does not erase already observed voices.
+  // A roster that empties mid-meeting leaves the requested count where it is.
   _refreshMeetingSpeakerConfigFromNote(noteId, note) {
     const config = this.activeMeetingSpeakerConfig;
     if (!config || config.explicit) return;
     if (noteId == null || this._activeMeetingNoteId !== noteId) return;
 
     const expectedCount = this._noteExpectedSpeakerCountOrNull(note);
-    if (expectedCount == null || expectedCount <= config.expectedCount) return;
+    if (expectedCount == null || (config.expectedCount != null && expectedCount <= config.expectedCount)) return;
 
     this.activeMeetingSpeakerConfig = { ...config, expectedCount };
     liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
@@ -4623,7 +4621,7 @@ class IPCHandlers {
         if (!realPath) return { success: false, error: "File path not allowed" };
         filePath = realPath;
 
-        const maxSpeakers = normalizeStoredSpeakerCount(options.numSpeakers) ?? MAX_SPEAKER_COUNT;
+        const requestedSpeakers = normalizeStoredSpeakerCount(options.numSpeakers);
 
         const { convertToWav } = require("./ffmpegUtils");
         const { getSafeTempDir } = require("./safeTempDir");
@@ -4631,7 +4629,6 @@ class IPCHandlers {
           resolveClusterThreshold,
           dropNegligibleClusters,
           isCollapsedDiarization,
-          capSpeakerClustersByVoice,
         } = require("./diarizationPolicy");
         const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
         const wavPath = path.join(getSafeTempDir(), `ow-diarize-${Date.now()}.wav`);
@@ -4658,36 +4655,16 @@ class IPCHandlers {
           // one label, or one person split off into a phantom. With no
           // segments the renderer keeps the plain transcript and shows the
           // diarization warning instead. Judged before phantoms are dropped;
-          // a request for one speaker is met by the cap below instead.
-          if (maxSpeakers > 1 && isCollapsedDiarization(segments)) {
+          // a one-speaker request does not trigger this collapsed-run check.
+          if ((requestedSpeakers ?? MAX_SPEAKER_COUNT) > 1 && isCollapsedDiarization(segments)) {
             debugLogger.warn("Discarding diarization: one cluster holds nearly all speech", {
               durationSeconds,
             });
             segments = [];
           }
-          // The meeting path caps clusters via its expectation resolver; this
-          // path fed raw sherpa output to the merge, which is how a 2-person
-          // voice memo surfaced 46 speakers.
+          // Drop only negligible phantom clusters; retain every substantial
+          // voice even when an explicit count was lower.
           segments = dropNegligibleClusters(segments);
-          if (new Set(segments.map((s) => s.speaker)).size > maxSpeakers) {
-            const speakerEmbeddings = require("./speakerEmbeddings");
-            let centroids = new Map();
-            try {
-              centroids = await speakerEmbeddings.extractClusterCentroids(wavPath, segments, {
-                signal,
-              });
-            } catch (error) {
-              debugLogger.warn("Speaker voices unavailable; extra clusters fold into the largest", {
-                error: error.message,
-              });
-            }
-            if (signal?.aborted) {
-              return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
-            }
-            segments = capSpeakerClustersByVoice(segments, maxSpeakers, centroids, (a, b) =>
-              speakerEmbeddings.cosineSimilarity(a, b)
-            );
-          }
           // Callers persist this as audio_duration_seconds: for picked files
           // the renderer has no other duration source.
           return { success: true, segments, durationSeconds };
@@ -8623,28 +8600,15 @@ class IPCHandlers {
 
     const resolveSessionMaxSpeakers = () => {
       const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      const total = count ? Math.min(count, MAX_SPEAKER_COUNT) : DEFAULT_EXPECTED_SPEAKER_COUNT;
-      return Math.max(1, total - 1);
+      return count == null ? MAX_SPEAKER_COUNT : Math.max(1, Math.min(count, MAX_SPEAKER_COUNT) - 1);
     };
 
     const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
       if (!meetingOneOnOneAttendee || meetingOneOnOneProfileBound || !speakerId) return;
       if (!resolveDiarizationEnabled()) return;
-      const embedding = liveSpeakerIdentifier.getSpeakerEmbedding(speakerId);
-      if (!embedding) return;
       try {
-        const buffer = Buffer.from(embedding.buffer, embedding.byteOffset, embedding.byteLength);
-        const profile = this.databaseManager.upsertSpeakerProfile(
-          meetingOneOnOneAttendee.displayName,
-          meetingOneOnOneAttendee.email,
-          buffer
-        );
-        liveSpeakerIdentifier.mapSpeaker(
-          speakerId,
-          profile.id,
-          meetingOneOnOneAttendee.displayName,
-          null
-        );
+        // Attendee names may label a meeting cluster, but cannot enroll its voice.
+        liveSpeakerIdentifier.mapSpeaker(speakerId, null, meetingOneOnOneAttendee.displayName, null);
         meetingOneOnOneProfileBound = true;
       } catch (error) {
         debugLogger.warn(
@@ -12774,13 +12738,7 @@ class IPCHandlers {
     ipcMain.handle("meeting-set-session-speaker-config", async (_event, payload) => {
       try {
         const enabled = payload?.enabled !== false;
-        const expectedCount = Math.max(
-          1,
-          Math.min(
-            MAX_SPEAKER_COUNT,
-            Number(payload?.expectedCount) || DEFAULT_EXPECTED_SPEAKER_COUNT
-          )
-        );
+        const expectedCount = normalizeStoredSpeakerCount(payload?.expectedCount);
         // Only a stepper-set count is explicit; the diarization toggle reuses this
         // channel and must not freeze the count against roster-driven refreshes.
         this.activeMeetingSpeakerConfig = {
@@ -12789,9 +12747,7 @@ class IPCHandlers {
           explicit: payload?.countIsExplicit === true,
         };
         liveSpeakerIdentifier.setEnabled(enabled);
-        // Live identification only labels other speakers (the mic track is "you"),
-        // so cap at expectedCount - 1 to match resolveSessionMaxSpeakers().
-        liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+        liveSpeakerIdentifier.setMaxSpeakers(expectedCount == null ? MAX_SPEAKER_COUNT : Math.max(1, expectedCount - 1));
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -13088,27 +13044,11 @@ class IPCHandlers {
     ipcMain.handle(
       "set-speaker-mapping",
       async (_event, noteId, speakerId, displayName, email, profileId) => {
-        const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
-        const noteSpeakerEmbedding = embeddings.find((e) => e.speaker_id === speakerId);
-        const liveSpeakerEmbedding = liveSpeakerIdentifier.getSpeakerEmbedding(speakerId);
-        const speakerEmbeddingBuffer =
-          noteSpeakerEmbedding?.embedding ||
-          (liveSpeakerEmbedding ? Buffer.from(liveSpeakerEmbedding.buffer) : null);
-
-        let resolvedProfileId = profileId ?? null;
-        if (speakerEmbeddingBuffer) {
-          const profile = this.databaseManager.upsertSpeakerProfile(
-            displayName,
-            email || null,
-            speakerEmbeddingBuffer,
-            resolvedProfileId
-          );
-          resolvedProfileId = profile.id;
-          this._retroactiveMapping(profile);
-        }
-
-        this.databaseManager.setSpeakerMapping(noteId, speakerId, resolvedProfileId, displayName);
-        liveSpeakerIdentifier.mapSpeaker(speakerId, resolvedProfileId, displayName, noteId);
+        // Naming is metadata only. Profile vectors are written only by a future
+        // approved-exemplar enrollment path, never by mapping handlers.
+        const resolvedProfileId = setSpeakerNameMapping(this.databaseManager, liveSpeakerIdentifier, {
+          noteId, speakerId, displayName, email, profileId,
+        });
         return { success: true, profileId: resolvedProfileId };
       }
     );
@@ -13249,16 +13189,9 @@ class IPCHandlers {
         );
         if (!unmapped.length) return;
 
-        let profile = null;
         for (const emb of unmapped) {
-          profile = this.databaseManager.upsertSpeakerProfile(
-            displayName,
-            email,
-            emb.embedding,
-            profile?.id ?? null
-          );
-          this.databaseManager.setSpeakerMapping(noteId, emb.speaker_id, profile.id, displayName);
-          liveSpeakerIdentifier.mapSpeaker(emb.speaker_id, profile.id, displayName, noteId);
+          this.databaseManager.setSpeakerMapping(noteId, emb.speaker_id, null, displayName);
+          liveSpeakerIdentifier.mapSpeaker(emb.speaker_id, null, displayName, noteId);
         }
 
         const unmappedSystemSpeakers = new Set(unmapped.map((e) => e.speaker_id));
@@ -13280,8 +13213,6 @@ class IPCHandlers {
           const updated = this.databaseManager.getNote(noteId);
           if (updated) broadcastToWindows("note-updated", updated);
         }
-
-        if (profile) this._retroactiveMapping(profile);
 
         debugLogger.info(
           "Auto-labeled 1-on-1 meeting speakers",
@@ -13455,18 +13386,8 @@ class IPCHandlers {
       return { numSpeakers, cap: numSpeakers };
     }
 
-    if (observedSpeakerIds.size >= 2) {
-      const numSpeakers = Math.min(observedSpeakerIds.size, MAX_SPEAKER_COUNT);
-      return { numSpeakers, cap: numSpeakers };
-    }
-
-    if (micMode) {
-      return { numSpeakers: -1, cap: DEFAULT_EXPECTED_SPEAKER_COUNT };
-    }
-
-    // Only system audio reaches the diarizer (the mic track is "you"), so the cap
-    // counts other speakers — same total - 1 basis as the branches above.
-    return { numSpeakers: -1, cap: Math.max(1, DEFAULT_EXPECTED_SPEAKER_COUNT - 1) };
+    // Unknown remains unknown: sherpa chooses the count, and no result is folded.
+    return { numSpeakers: -1, cap: null };
   }
 
   _startOrSkipDiarization(
@@ -13564,7 +13485,7 @@ class IPCHandlers {
     if (noteId != null) {
       this._diarizationSpeakerReservations.set(sessionId, {
         noteId,
-        ceiling: speakerIndexBase + cap,
+        ceiling: speakerIndexBase + (cap ?? MAX_SPEAKER_COUNT),
       });
     }
 
@@ -13576,12 +13497,6 @@ class IPCHandlers {
           tmpWav,
           numSpeakers > 0 ? { numSpeakers } : {}
         );
-        if (cap != null) {
-          diarizationSegments = this.diarizationManager.capSpeakerClusters(
-            diarizationSegments,
-            cap
-          );
-        }
 
         const enrichedSegments = this.diarizationManager.mergeWithTranscript(
           kept,
@@ -13600,15 +13515,10 @@ class IPCHandlers {
           });
         }
 
-        // Mirrors the mic-mode single-cluster softening in mergeWithTranscript:
-        // every segment stays "you", so persisting an embedding keyed to a
-        // cluster id that owns no segments would leave the note inconsistent.
-        const micSingleClusterSoftened = diarizedSource === "mic" && speakerSet.size === 1;
-
         let speakerEmbeddingsMap = null;
         const speakerEmb = require("./speakerEmbeddings");
         try {
-          if (!micSingleClusterSoftened && speakerEmb.isAvailable() && tmpWav) {
+          if (speakerEmb.isAvailable() && tmpWav) {
             const speakerIds = [...new Set(diarizationSegments.map((s) => s.speaker))];
             speakerEmbeddingsMap = {};
 

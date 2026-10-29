@@ -8,7 +8,7 @@ function resolveSpeaker(seg, speakerMappings) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
     if (!isNaN(num)) return i18nMain.t("notes.speaker.label", { n: num + 1 });
   }
-  if (seg.source === "mic") return i18nMain.t("transcript.speaker.you");
+  if (seg.source === "mic") return i18nMain.t("notes.speaker.unknown");
   if (seg.source === "system") return i18nMain.t("transcript.speaker.others");
   return i18nMain.t("notes.speaker.unknown");
 }

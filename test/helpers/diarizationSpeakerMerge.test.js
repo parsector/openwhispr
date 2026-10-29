@@ -66,20 +66,22 @@ test("the largest overlapping cluster still wins over the nearest one", () => {
   assert.equal(merged[0].speaker, "speaker_1");
 });
 
-test("mic segments stay owned by you and survive an empty diarization run", () => {
+test("mic segments stay provisional and survive an empty diarization run", () => {
   const manager = new DiarizationManager();
 
   const withClusters = manager.mergeWithTranscript(
     [{ source: "mic", timestamp: 1, text: "morning" }],
     [{ start: 0, end: 5, speaker: "speaker_0" }]
   );
-  assert.equal(withClusters[0].speaker, "you");
+  assert.equal(withClusters[0].speaker, "speaker_mic");
+  assert.equal(withClusters[0].speakerStatus, "provisional");
+  assert.notEqual(withClusters[0].speakerName, "You");
 
   const withoutClusters = manager.mergeWithTranscript([systemSegment(1, "morning")], []);
   assert.equal(withoutClusters[0].speaker, undefined);
 });
 
-test("mic segments stay owned by you under an explicit system diarizedSource", () => {
+test("mic segments are not confirmed as the owner under system diarization", () => {
   const manager = new DiarizationManager();
 
   const merged = manager.mergeWithTranscript(
@@ -88,7 +90,8 @@ test("mic segments stay owned by you under an explicit system diarizedSource", (
     { diarizedSource: "system" }
   );
 
-  assert.equal(merged[0].speaker, "you");
+  assert.equal(merged[0].speaker, "speaker_mic");
+  assert.equal(merged[0].speakerStatus, "provisional");
 });
 
 test("mic mode assigns mic segments to clusters by overlap and nearest distance", () => {
@@ -111,9 +114,8 @@ test("mic mode assigns mic segments to clusters by overlap and nearest distance"
   assert.equal(merged[1].speaker, "speaker_1");
 });
 
-test("mic mode with a single cluster keeps the mic track as you", () => {
-  // A call where the remote party never speaks audibly diarizes the mic track;
-  // its lone cluster is the user, not a stranger named speaker_0.
+test("mic mode with a single cluster leaves the mic identity unconfirmed", () => {
+  // A room can contain several people even if the diarizer finds one cluster.
   const manager = new DiarizationManager();
 
   const merged = manager.mergeWithTranscript(
@@ -122,8 +124,9 @@ test("mic mode with a single cluster keeps the mic track as you", () => {
     { diarizedSource: "mic" }
   );
 
-  assert.equal(merged[0].speaker, "you");
-  assert.equal(merged[1].speaker, "you");
+  assert.equal(merged[0].speaker, "speaker_0");
+  assert.equal(merged[1].speaker, "speaker_0");
+  assert.notEqual(merged[0].speakerName, "You");
 });
 
 test("mic mode leaves system segments unlabeled", () => {
@@ -181,4 +184,17 @@ test("a resumed session's clusters are numbered from its speaker index base", ()
     merged.map((segment) => segment.speaker),
     ["speaker_3", "speaker_4"]
   );
+});
+
+test("overflow diarizer clusters stay separate instead of folding into the largest", () => {
+  const manager = new DiarizationManager();
+  const merged = manager.mergeWithTranscript(
+    [systemSegment(1, "first"), systemSegment(11, "second"), systemSegment(21, "third")],
+    [
+      { start: 0, end: 9, speaker: "speaker_00" },
+      { start: 10, end: 12, speaker: "speaker_01" },
+      { start: 20, end: 22, speaker: "speaker_02" },
+    ]
+  );
+  assert.deepEqual(merged.map((segment) => segment.speaker), ["speaker_0", "speaker_1", "speaker_2"]);
 });

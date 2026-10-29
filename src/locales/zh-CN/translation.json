@@ -3209,14 +3209,22 @@
         "notLabeled": "发言者未标记",
         "finalizing": "正在完成发言者识别…",
         "justYou": "只有你",
-        "assumedHint": "默认 2 人——如有更多请调整",
+        "assumedHint": "人数未知，知道后可调整",
         "speakersLabel": "发言人数",
         "labelToggle": "标记发言者",
         "toggleAria": "切换本次录音的发言者识别",
         "incAria": "增加预计发言人数",
         "decAria": "减少预计发言人数"
       },
-      "consentNotice": "录制他人时请务必征得同意"
+      "consentNotice": "录制他人时请务必征得同意",
+      "scope": {
+        "label": "范围",
+        "row": "此行",
+        "selected": "所选行",
+        "cluster": "此聚类",
+        "changesRows": "将更改 {{n}} 行",
+        "unknown": "未知"
+      }
     },
     "overview": {
       "subtitle": {

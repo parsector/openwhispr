@@ -25,7 +25,6 @@ import {
   isRendererSystemAudioStrategy,
 } from "../utils/systemAudioAccess";
 import {
-  DEFAULT_EXPECTED_SPEAKER_COUNT,
   MAX_SPEAKER_COUNT,
 } from "../constants/speakerDetection.json";
 import logger from "../utils/logger";
@@ -106,7 +105,7 @@ interface MeetingRecordingState {
   /** Latest diarization result published for UI mirroring; consumed (nulled) by the editor that applies it. */
   completedDiarization: { noteId: number; segments: TranscriptSegment[] } | null;
   sessionDiarizationEnabled: boolean;
-  sessionExpectedCount: number;
+  sessionExpectedCount: number | null;
   userTouchedStepper: boolean;
   error: string | null;
   /** Bumped on every error report so identical repeated errors still re-notify. */
@@ -473,7 +472,7 @@ export const useMeetingRecordingStore = create<MeetingRecordingState>()(() => ({
   completedDiarization: null,
   sessionDiarizationEnabled:
     (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ?? true,
-  sessionExpectedCount: DEFAULT_EXPECTED_SPEAKER_COUNT,
+  sessionExpectedCount: null,
   userTouchedStepper: false,
   error: null,
   errorNonce: 0,
@@ -498,14 +497,14 @@ export const getMicAnalyser = (): AnalyserNode | null => micAnalyser;
 
 export const getActiveRecordingSessionId = (): string | null => activeRecordingSessionId;
 
-function pushConfig(enabled: boolean, expectedCount: number, countIsExplicit: boolean) {
+function pushConfig(enabled: boolean, expectedCount: number | null, countIsExplicit: boolean) {
   if (pushConfigTimeout) clearTimeout(pushConfigTimeout);
   pushConfigTimeout = setTimeout(() => {
     (
       window.electronAPI as unknown as {
         setMeetingSessionSpeakerConfig?: (config: {
           enabled: boolean;
-          expectedCount: number;
+          expectedCount: number | null;
           countIsExplicit: boolean;
         }) => void;
       }
@@ -552,7 +551,7 @@ export function syncSessionExpectedCountFromParticipants(
     recordingNoteId: state.recordingNoteId,
     noteId,
     userTouchedStepper: state.userTouchedStepper,
-    currentExpectedCount: state.sessionExpectedCount,
+    currentExpectedCount: state.sessionExpectedCount ?? 0,
     participants,
   });
   if (expectedCount == null) return;
@@ -633,14 +632,10 @@ function adoptSpeakerIndexBase(base: number | undefined): void {
   nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, base);
 }
 
-// Other-speaker cap is expectedCount - 1 (the mic track is "you"); mirrors the
-// backend cap so live labels can't climb past the count the user expects. The
-// cap counts this session's speakers, so it starts at the session's base.
+// Provisional labels must never recycle a speaker id when the count is unknown
+// or when more voices than requested appear.
 function mintPlaceholderSpeakerId(): string {
-  const expected = useMeetingRecordingStore.getState().sessionExpectedCount;
-  const cap = Math.max(1, expected - 1);
-  const index = Math.min(nextPlaceholderSpeakerIndex, sessionSpeakerIndexBase + cap - 1);
-  nextPlaceholderSpeakerIndex = Math.max(nextPlaceholderSpeakerIndex, index + 1);
+  const index = nextPlaceholderSpeakerIndex++;
   return `speaker_${index}`;
 }
 
@@ -830,10 +825,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       args.diarizationEnabled ??
       (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ??
       true;
-    const initialCount = Math.max(
-      1,
-      Math.min(MAX_SPEAKER_COUNT, args.expectedCount ?? DEFAULT_EXPECTED_SPEAKER_COUNT)
-    );
+    const initialCount = args.expectedCount == null ? null : Math.max(1, Math.min(MAX_SPEAKER_COUNT, args.expectedCount));
 
     logger.info("Meeting transcription starting...", {}, "meeting");
     const seed = args.seedSegments ?? [];
@@ -1173,6 +1165,11 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           }
 
           const seg = reduction.inserted;
+          if (seg.source === "mic" && !seg.speaker) {
+            seg.speaker = "speaker_mic";
+            seg.speakerIsPlaceholder = true;
+            seg.speakerStatus = "provisional";
+          }
           segmentsRefValue = reduction.state.segments;
           // Only the cleared partial goes in the payload (spreading both partial fields would add a
           // key the pre-reducer code never wrote), so derive it from the inserted segment's source.
@@ -1797,6 +1794,22 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     // reportMeetingError and must not be reported as a recording that never stopped.
     return { diarizationSessionId, stopped: true };
   });
+}
+
+export function assignLiveSpeakerRows(rowIds: ReadonlySet<string>, displayName: string): TranscriptSegment[] {
+  const next = useMeetingRecordingStore.getState().segments.map((segment) =>
+    rowIds.has(segment.id)
+      ? lockTranscriptSpeaker(segment, {
+          speakerName: displayName,
+          speakerIsPlaceholder: false,
+          suggestedName: undefined,
+          suggestedProfileId: undefined,
+        })
+      : segment
+  );
+  segmentsRefValue = next;
+  useMeetingRecordingStore.setState({ segments: next, transcript: buildTranscriptText(next) });
+  return next;
 }
 
 export function lockSpeaker(speakerId: string, displayName: string): void {

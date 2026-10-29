@@ -3209,14 +3209,22 @@
         "notLabeled": "Partecipanti non etichettati",
         "finalizing": "Finalizzazione dei partecipanti…",
         "justYou": "Solo tu",
-        "assumedHint": "si presumono 2 — modifica se sono di più",
+        "assumedHint": "Numero sconosciuto — regola se noto",
         "speakersLabel": "Partecipanti",
         "labelToggle": "Etichetta i partecipanti",
         "toggleAria": "Attiva/disattiva l'identificazione dei partecipanti per questa registrazione",
         "incAria": "Aumenta il numero di partecipanti previsti",
         "decAria": "Diminuisci il numero di partecipanti previsti"
       },
-      "consentNotice": "Ottieni sempre il consenso quando registri altre persone"
+      "consentNotice": "Ottieni sempre il consenso quando registri altre persone",
+      "scope": {
+        "label": "Ambito",
+        "row": "Questa riga",
+        "selected": "Righe selezionate",
+        "cluster": "Questo gruppo",
+        "changesRows": "modifica {{n}} righe",
+        "unknown": "Sconosciuto"
+      }
     },
     "overview": {
       "subtitle": {

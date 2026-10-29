@@ -45,6 +45,7 @@ import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
 import {
   useMeetingRecordingStore,
+  assignLiveSpeakerRows,
   type TranscriptSegment,
 } from "../../stores/meetingRecordingStore";
 import {
@@ -795,6 +796,25 @@ export default function NoteEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedSegmentIds.size, handleClearSelection]);
 
+  const handleAssignSpeakerScope = useCallback(
+    async (scope: "row" | "selected", rowId: string, displayName: string, profileId?: number) => {
+      const liveSegments = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+      const ids = scope === "selected" ? selectedSegmentIds : new Set([rowId]);
+      const nextSegments = liveSegments.map((segment) => ids.has(segment.id)
+        ? lockTranscriptSpeaker(segment, {
+            speakerName: displayName,
+            speakerIsPlaceholder: false,
+            suggestedName: undefined,
+            suggestedProfileId: profileId,
+          })
+        : segment);
+      const assigned = isRecording ? assignLiveSpeakerRows(ids, displayName) : nextSegments;
+      await persistDisplaySegments(assigned, !isRecording);
+      if (scope === "selected") handleClearSelection();
+    },
+    [displaySegments, handleClearSelection, isRecording, persistDisplaySegments, selectedSegmentIds]
+  );
+
   const handleBulkAssignName = useCallback(
     async (displayName: string, _email?: string | null, profileId?: number) => {
       if (!selectedSegmentIds.size) return;
@@ -1401,6 +1421,7 @@ export default function NoteEditor({
                   onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
                   onSetSessionExpectedCount={onSetSessionExpectedCount}
                   onMapSpeaker={handleMapSpeaker}
+                  onAssignSpeakerScope={handleAssignSpeakerScope}
                   onConfirmSuggestion={handleConfirmSuggestion}
                   onDismissSuggestion={handleDismissSuggestion}
                   onAttachSpeakerEmail={handleAttachSpeakerEmail}
@@ -1420,6 +1441,7 @@ export default function NoteEditor({
                   onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
                   onSetSessionExpectedCount={onSetSessionExpectedCount}
                   onMapSpeaker={handleMapSpeaker}
+                  onAssignSpeakerScope={handleAssignSpeakerScope}
                   onConfirmSuggestion={handleConfirmSuggestion}
                   onDismissSuggestion={handleDismissSuggestion}
                   onAttachSpeakerEmail={handleAttachSpeakerEmail}

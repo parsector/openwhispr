@@ -770,22 +770,10 @@ class LiveSpeakerIdentifier {
     const matchedProfile = this._findStoredProfileMatch(embedding);
     if (matchedProfile) {
       speakerId = this._findTransientSpeakerForProfile(matchedProfile.id);
-      let forced = false;
       if (!speakerId) {
-        ({ speakerId, forced } = this._assignOrForceCluster(embedding));
+        speakerId = this._assignCluster(embedding);
       } else if (updateCentroid) {
         this._updateCentroid(speakerId, embedding);
-      }
-
-      // A forced at-cap fold lands on someone else's cluster — retagging it
-      // with the overflow speaker's profile would erase the original identity
-      // and keep capturing this voice via the profile lookup even after the
-      // cap rises.
-      if (forced) {
-        return {
-          speakerId,
-          displayName: this.transientDisplayNames.get(speakerId) || null,
-        };
       }
 
       this.transientProfileIds.set(speakerId, matchedProfile.id);
@@ -802,7 +790,7 @@ class LiveSpeakerIdentifier {
         this._updateCentroid(speakerId, embedding);
       }
     } else {
-      ({ speakerId } = this._assignOrForceCluster(embedding));
+      speakerId = this._assignCluster(embedding);
     }
 
     return {
@@ -811,31 +799,9 @@ class LiveSpeakerIdentifier {
     };
   }
 
-  _assignOrForceCluster(embedding) {
-    if (this.transientEmbeddings.size >= this.maxSpeakers) {
-      const nearest = this._findNearestTransient(embedding);
-      if (nearest) {
-        // Label only — never fold the embedding into the centroid. At-cap
-        // overflow is usually a different voice, and a polluted centroid would
-        // keep capturing it even after the cap rises (participants added
-        // mid-meeting).
-        return { speakerId: nearest, forced: true };
-      }
-    }
-    return { speakerId: this._assignSpeakerId(embedding), forced: false };
-  }
-
-  _findNearestTransient(embedding) {
-    let bestSpeakerId = null;
-    let bestSimilarity = -Infinity;
-    for (const [speakerId, centroid] of this.transientEmbeddings.entries()) {
-      const similarity = speakerEmbeddings.cosineSimilarity(embedding, centroid);
-      if (similarity > bestSimilarity) {
-        bestSimilarity = similarity;
-        bestSpeakerId = speakerId;
-      }
-    }
-    return bestSpeakerId;
+  _assignCluster(embedding) {
+    // A count is a request, not evidence that a new voice is an old one.
+    return this._assignSpeakerId(embedding);
   }
 
   _findTransientSpeakerForProfile(profileId) {

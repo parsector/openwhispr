@@ -232,8 +232,7 @@ export const isYouSpeakerName = (name: string, youLabel: string): boolean => {
 // so a stretch the user reassigned moves with its new name. An in-person meeting
 // is diarized on the mic without knowing which voice is the note taker, so its
 // numbered clusters, the user's own included, sit with the other speakers until
-// one is named "You". A remote call stores the mic as "you". An unconfirmed
-// "You?" suggestion on the mic sits where confirming it would put it.
+// one is named "You". Mic channel alone never establishes ownership.
 export const isSelfSideSegment = (
   segment: TranscriptSegment,
   speakerMappings: Record<string, string> | undefined,
@@ -241,9 +240,8 @@ export const isSelfSideSegment = (
 ): boolean => {
   const name = resolveSegmentSpeakerName(segment, speakerMappings);
   if (name) {
-    // On a call the user is the mic, so a remote voice that recording matched to
-    // their voice profile is a misidentification; only a name the user set, which
-    // locks its rows, moves it across. Mappings also hold automatic matches.
+    // Automatic remote matches may be wrong; only a user lock moves them
+    // to the note owner's side. Mappings also hold automatic matches.
     const autoNamedRemote = segment.source === "system" && !isTranscriptSpeakerLocked(segment);
     return !autoNamedRemote && isYouSpeakerName(name, youLabel);
   }
@@ -256,5 +254,5 @@ export const isSelfSideSegment = (
   }
   if (segment.speaker === "you") return true;
   if (segment.speaker) return false;
-  return segment.source === "mic";
+  return false;
 };
