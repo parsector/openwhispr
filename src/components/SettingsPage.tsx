@@ -1313,6 +1313,10 @@ export default function SettingsPage({
     setWhisperVadSamplesOverlap,
   } = useSettings();
 
+  const meetingTranscriptionMode = useSettingsStore((state) => state.meetingTranscriptionMode);
+  const meetingLocalTranscriptionProvider = useSettingsStore(
+    (state) => state.meetingLocalTranscriptionProvider
+  );
   const meetingProcessDetection = useSettingsStore((state) => state.meetingProcessDetection);
   const voiceAgentKey = useSettingsStore((s) => s.voiceAgentKey);
   const setVoiceAgentKey = useSettingsStore((s) => s.setVoiceAgentKey);
@@ -4084,8 +4088,8 @@ EOF`,
             renderNoteRecording={() => (
               <div className="space-y-6">
                 <MeetingTranscriptionPanel />
-                {transcriptionMode === "local" &&
-                  localTranscriptionProvider === "whisper" &&
+                {meetingTranscriptionMode === "local" &&
+                  meetingLocalTranscriptionProvider === "whisper" &&
                   renderWhisperVadSettings()}
               </div>
             )}
