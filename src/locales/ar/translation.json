@@ -2598,6 +2598,16 @@
         "cluster": "هذه المجموعة",
         "changesRows": "سيغيّر {{n}} أسطر",
         "unknown": "غير معروف"
+      },
+      "unknownNumber": "متحدث غير معروف {{n}}",
+      "restore": "استعادة",
+      "reviewStretches": "راجع {{n}} مقاطع",
+      "showAll": "عرض كل المقاطع",
+      "reason": {
+        "closeMatch": "{{first}} أو {{second}}",
+        "too_short": "قصير جدًا لتحديد المتحدث",
+        "changed_after_final": "تغيّر بعد التحليل النهائي",
+        "not_sure": "غير متأكد"
       }
     },
     "overview": {

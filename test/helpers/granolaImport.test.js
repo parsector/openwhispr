@@ -187,7 +187,8 @@ test("parseTranscriptToSegments splits speaker-labeled lines into locked segment
     "Alice: Hello there\nBob: Hi Alice\nAlice: How are you?",
     1000
   );
-  assert.deepEqual(segments, [
+  assert.equal(new Set(segments.map((segment) => segment.id)).size, 3);
+  assert.deepEqual(segments.map(({ id, ...segment }) => segment), [
     {
       text: "Hello there",
       source: "system",
@@ -218,7 +219,8 @@ test("parseTranscriptToSegments splits speaker-labeled lines into locked segment
 test("parseTranscriptToSegments falls back to one segment per paragraph for free text", async () => {
   const { parseTranscriptToSegments } = await load();
   const segments = parseTranscriptToSegments("Just a flowing paragraph.\nNo speakers here.", 500);
-  assert.deepEqual(segments, [
+  assert.equal(new Set(segments.map((segment) => segment.id)).size, 2);
+  assert.deepEqual(segments.map(({ id, ...segment }) => segment), [
     { text: "Just a flowing paragraph.", source: "system", timestamp: 500 },
     { text: "No speakers here.", source: "system", timestamp: 501 },
   ]);

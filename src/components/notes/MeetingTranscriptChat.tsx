@@ -8,6 +8,7 @@ import { Toggle } from "../ui/toggle";
 import { cn } from "../lib/utils";
 import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import type { TranscriptSegment } from "../../stores/meetingRecordingStore";
+import { latestCorrection } from "../../utils/transcriptCorrections";
 import type { Commitment } from "../../types/electron";
 import { groupFor } from "../todos/TodoGroups";
 import { sourceChipsByIndex } from "../todos/sourceChips";
@@ -68,7 +69,7 @@ const getEffectiveSpeakerKey = (
 ): string => {
   const name = resolveSegmentSpeakerName(segment, speakerMappings);
   if (name) return `name:${name.toLowerCase()}`;
-  if (segment.speaker) return `id:${segment.speaker}`;
+  if (segment.speaker) return `id:${segment.diarizationRunId || "legacy"}:${segment.speaker}:${segment.unknownNumber || ""}`;
   return `src:${segment.source}`;
 };
 
@@ -512,6 +513,7 @@ function SpeakerLabel({
   self,
   onMap,
   onAssignScope,
+  onUndoCorrection,
   selectedRowIds,
   clusterRowCount,
   onConfirm,
@@ -527,7 +529,8 @@ function SpeakerLabel({
   isOriginallyYou: boolean;
   self?: "offer" | "exclude";
   onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
-  onAssignScope?: (scope: "row" | "selected", rowId: string, name: string, profileId?: number) => void;
+  onAssignScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number) => void;
+  onUndoCorrection?: (id: string) => void;
   selectedRowIds?: Set<string>;
   clusterRowCount: number;
   onConfirm?: (speakerId: string, name: string, profileId: number) => void;
@@ -577,11 +580,11 @@ function SpeakerLabel({
   const displayLabel =
     resolvedName ||
     segment.speakerName ||
-    (isOriginallyYou
+    (isOriginallyYou && !isTranscriptSpeakerLocked(segment)
       ? t("notes.speaker.you")
       : speakerId === "speaker_mic"
-        ? t("notes.speaker.unknown")
-        : t("notes.speaker.label", { n: getSpeakerNumber(speakerId) }));
+        ? t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 })
+        : t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? getSpeakerNumber(speakerId) }));
   const isUnmapped = !resolvedName && !segment.speakerName;
 
   return (
@@ -624,6 +627,17 @@ function SpeakerLabel({
           self={self}
           t={t}
         />
+        <div className="border-t border-border/70 px-2 py-1.5 flex items-center gap-2">
+          <button type="button" className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10 focus-visible:ring-1 focus-visible:ring-ring"
+            onClick={() => { onAssignScope?.(scope, segment.id, null); setOpen(false); }}>
+            {t("notes.speaker.unknown")}
+          </button>
+          {segment.corrections?.map((correction) => <button key={correction.id} type="button"
+            className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10 focus-visible:ring-1 focus-visible:ring-ring"
+            onClick={() => { onUndoCorrection?.(correction.id); setOpen(false); }}>
+            {t("notes.speaker.restore")}
+          </button>)}
+        </div>
       </PopoverContent>
     </Popover>
   );
@@ -732,7 +746,8 @@ interface SegmentRowProps {
   matchedProfile?: SpeakerProfileLite;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
-  onAssignSpeakerScope?: (scope: "row" | "selected", rowId: string, name: string, profileId?: number) => void;
+  onAssignSpeakerScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number) => void;
+  onUndoCorrection?: (id: string) => void;
   selectedRowIds?: Set<string>;
   clusterRowCount: number;
   onMapSpeaker?: (
@@ -769,6 +784,7 @@ const SegmentRow = memo(function SegmentRow({
   participants,
   onMapSpeaker,
   onAssignSpeakerScope,
+  onUndoCorrection,
   selectedRowIds,
   clusterRowCount,
   onConfirmSuggestion,
@@ -807,6 +823,7 @@ const SegmentRow = memo(function SegmentRow({
         self={self}
         onMap={onMapSpeaker}
         onAssignScope={onAssignSpeakerScope}
+        onUndoCorrection={onUndoCorrection}
         selectedRowIds={selectedRowIds}
         clusterRowCount={clusterRowCount}
         onConfirm={onConfirmSuggestion}
@@ -844,6 +861,13 @@ const SegmentRow = memo(function SegmentRow({
           <div className="overflow-hidden">{labelElement}</div>
         </div>
       )}
+      {(segment.uncertainty || latestCorrection(segment)) && <div className="flex items-center gap-2 px-1 pb-0.5 text-[11px] text-muted-foreground">
+        {segment.uncertainty && <span>{segment.uncertainty.reason === "close_match" && segment.uncertainty.candidates
+          ? t("notes.speaker.reason.closeMatch", { first: segment.uncertainty.candidates[0], second: segment.uncertainty.candidates[1] })
+          : t(`notes.speaker.reason.${segment.uncertainty.reason}`)}</span>}
+        {latestCorrection(segment) && <button type="button" className="underline underline-offset-2 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
+          onClick={() => onUndoCorrection?.(latestCorrection(segment)!.id)}>{t("notes.speaker.restore")}</button>}
+      </div>}
       <div className="relative max-w-[80%]">
         <div
           className={cn(
@@ -900,7 +924,8 @@ interface MeetingTranscriptChatProps {
   userTouchedStepper?: boolean;
   onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
   onSetSessionExpectedCount?: (count: number) => void;
-  onAssignSpeakerScope?: (scope: "row" | "selected", rowId: string, name: string, profileId?: number) => void;
+  onAssignSpeakerScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number) => void;
+  onUndoCorrection?: (id: string) => void;
   onMapSpeaker?: (
     speakerId: string,
     displayName: string,
@@ -911,6 +936,7 @@ interface MeetingTranscriptChatProps {
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
+  reviewOnly?: boolean;
   contentClassName?: string;
 }
 
@@ -934,10 +960,12 @@ export function MeetingTranscriptChat({
   onSetSessionExpectedCount,
   onMapSpeaker,
   onAssignSpeakerScope,
+  onUndoCorrection,
   onConfirmSuggestion,
   onDismissSuggestion,
   onAttachSpeakerEmail,
   onToggleSelect,
+  reviewOnly = false,
   contentClassName,
 }: MeetingTranscriptChatProps) {
   const { t } = useTranslation();
@@ -961,6 +989,18 @@ export function MeetingTranscriptChat({
     if (noteId != null && typeof window !== "undefined") void window.electronAPI?.commitmentsOpenTodos?.({ kind: "note", value: String(noteId) });
   }, [noteId]);
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
+  const reviewCount = segments.filter((segment) => segment.uncertainty).length;
+  const shownIndexes = useMemo(() => {
+    if (!reviewOnly) return segments.map((_, index) => index);
+    const indexes = new Set<number>();
+    segments.forEach((segment, index) => {
+      if (!segment.uncertainty) return;
+      if (index > 0) indexes.add(index - 1);
+      indexes.add(index);
+      if (index + 1 < segments.length) indexes.add(index + 1);
+    });
+    return [...indexes].sort((a, b) => a - b);
+  }, [segments, reviewOnly]);
   // The scroller mounts only once content exists, and a recording opens with
   // partials before its first final segment — the follow effect must re-run on
   // that mount too, or it runs against a null node and never attaches its
@@ -978,10 +1018,10 @@ export function MeetingTranscriptChat({
   // Rows are keyed by segment id, not index: segments are inserted by timestamp
   // and retracted mid-list, which would misalign an index-keyed size cache.
   const virtualizer = useVirtualizer({
-    count: segments.length,
+    count: shownIndexes.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ESTIMATED_ROW_PX,
-    getItemKey: (index) => segments[index].id,
+    getItemKey: (index) => segments[shownIndexes[index]].id,
     initialRect: INITIAL_VIEWPORT_RECT,
     overscan: 8,
   });
@@ -1150,7 +1190,7 @@ export function MeetingTranscriptChat({
         <div className={cn("px-4", contentClassName)}>
           <div style={{ height: totalSize, width: "100%", position: "relative" }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
-              const i = virtualItem.index;
+              const i = shownIndexes[virtualItem.index];
               const segment = segments[i];
               const { key, activeName, selfSide } = rowMeta[i];
               const isSystemSpeaker = !!segment.speaker && !selfSide;
@@ -1186,6 +1226,7 @@ export function MeetingTranscriptChat({
                     participants={participants}
                     onMapSpeaker={onMapSpeaker}
                     onAssignSpeakerScope={onAssignSpeakerScope}
+                    onUndoCorrection={onUndoCorrection}
                     selectedRowIds={selectedSegmentIds}
                     clusterRowCount={segments.filter((row) => row.speaker === segment.speaker).length}
                     onConfirmSuggestion={onConfirmSuggestion}

@@ -3224,6 +3224,16 @@
         "cluster": "Questo gruppo",
         "changesRows": "modifica {{n}} righe",
         "unknown": "Sconosciuto"
+      },
+      "unknownNumber": "Voce sconosciuta {{n}}",
+      "restore": "Ripristina",
+      "reviewStretches": "Rivedi {{n}} passaggi",
+      "showAll": "Mostra tutti i passaggi",
+      "reason": {
+        "closeMatch": "{{first}} o {{second}}",
+        "too_short": "Troppo breve per identificare",
+        "changed_after_final": "Modificato dopo l’analisi finale",
+        "not_sure": "Non certo"
       }
     },
     "overview": {

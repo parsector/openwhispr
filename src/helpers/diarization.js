@@ -10,6 +10,7 @@ const { getModelsDirForService } = require("./modelDirUtils");
 const { convertToWav } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
+const { shortSpanReason } = require("./speakerUncertainty");
 const { buildSpeakerRenumber } = require("./speakerIndexBase");
 const sidecarPidFile = require("./sidecarPidFile");
 const {
@@ -488,12 +489,15 @@ class DiarizationManager {
         let nearestSpeaker = null;
         let bestOverlap = 0;
         let bestDistance = Number.POSITIVE_INFINITY;
+        let overlapSpan = null;
+        let nearestSpan = null;
 
         for (const dSeg of diarizationSegments) {
           const overlap = Math.min(segEnd, dSeg.end) - Math.max(segStart, dSeg.start);
           if (overlap > bestOverlap) {
             bestOverlap = overlap;
             overlapSpeaker = dSeg.speaker;
+            overlapSpan = dSeg;
           }
 
           const distance =
@@ -506,12 +510,20 @@ class DiarizationManager {
           if (distance < bestDistance) {
             bestDistance = distance;
             nearestSpeaker = dSeg.speaker;
+            nearestSpan = dSeg;
           }
         }
 
         // Tracked separately so the between-clusters fallback compares every
         // distance instead of latching onto the first cluster it sees.
         const bestSpeaker = overlapSpeaker ?? nearestSpeaker;
+        const matchedSpan = overlapSpan ?? nearestSpan;
+
+        enriched.uncertainty = shortSpanReason(matchedSpan) || enriched.uncertainty;
+        if (enriched.uncertainty?.reason === "too_short" && !enriched.speakerLocked && enriched.speakerLockSource !== "user") {
+          enriched.speakerName = undefined;
+          enriched.speakerIsPlaceholder = true;
+        }
 
         if (bestSpeaker) {
           applyConfirmedSpeaker(enriched, {

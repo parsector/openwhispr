@@ -56,6 +56,11 @@ import { persistFinalTranscriptAroundStop } from "../helpers/meetingTranscriptPe
 
 export interface TranscriptSegment {
   id: string;
+  unknownNumber?: number;
+  unknownNumberHighWater?: number;
+  uncertainty?: { reason: string; candidates?: [string, string] };
+  diarizationRunId?: string;
+  corrections?: import("../utils/transcriptCorrections").TranscriptCorrection[];
   text: string;
   source: "mic" | "system";
   timestamp?: number;
@@ -1796,12 +1801,12 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
   });
 }
 
-export function assignLiveSpeakerRows(rowIds: ReadonlySet<string>, displayName: string): TranscriptSegment[] {
-  const next = useMeetingRecordingStore.getState().segments.map((segment) =>
+export function assignLiveSpeakerRows(rowIds: ReadonlySet<string>, displayName: string | null, corrected?: TranscriptSegment[]): TranscriptSegment[] {
+  const next = corrected ?? useMeetingRecordingStore.getState().segments.map((segment) =>
     rowIds.has(segment.id)
       ? lockTranscriptSpeaker(segment, {
-          speakerName: displayName,
-          speakerIsPlaceholder: false,
+          speakerName: displayName || undefined,
+          speakerIsPlaceholder: !displayName,
           suggestedName: undefined,
           suggestedProfileId: undefined,
         })
@@ -1837,6 +1842,10 @@ export function lockSpeaker(speakerId: string, displayName: string): void {
   if (systemPartialSpeakerIdValue === speakerId) {
     setSystemPartialSpeakerIdentity(speakerId, displayName);
   }
+}
+
+export function unlockSpeaker(speakerId: string): void {
+  speakerLocks.delete(speakerId);
 }
 
 export function cancelPreparedTranscription(): void {

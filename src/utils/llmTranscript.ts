@@ -26,13 +26,13 @@ export function resolveLlmSpeakerLabel(
 ): string {
   const resolved = resolveSegmentSpeakerName(segment, speakerMappings);
   if (resolved) return isYouSpeakerName(resolved, t("notes.speaker.you")) ? selfLabel : resolved;
-  if (segment.speaker === "you") return selfLabel;
+  if (segment.speaker === "you" && !segment.speakerLocked && segment.speakerLockSource !== "user") return selfLabel;
   if (segment.speaker) {
     const num = Number.parseInt(segment.speaker.replace("speaker_", ""), 10);
-    if (!Number.isNaN(num)) return t("notes.speaker.label", { n: num + 1 });
+    if (!Number.isNaN(num)) return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? num + 1 });
   }
-  if (segment.source === "mic") return t("notes.speaker.unknown");
-  return t("notes.speaker.them");
+  if (segment.source === "mic") return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
+  return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
 }
 
 export function buildLlmTranscript(

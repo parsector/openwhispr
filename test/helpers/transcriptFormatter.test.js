@@ -60,7 +60,7 @@ test("same-speaker merging still uses the latest segment for the rolling gap", (
     {}
   );
 
-  assert.match(output, /^1\n00:00:00,000 --> 00:00:06,000\nSpeaker 1: One\. Two\. Three\./);
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:06,000\nUnknown speaker 1: One\. Two\. Three\./);
 });
 
 test("same-speaker segments at the merge threshold remain separate cues", () => {
@@ -72,8 +72,8 @@ test("same-speaker segments at the merge threshold remain separate cues", () => 
     {}
   );
 
-  assert.match(output, /^1\n00:00:00,000 --> 00:00:02,000\nSpeaker 1: First\./);
-  assert.match(output, /\n2\n00:00:02,000 --> 00:00:05,000\nSpeaker 1: Second\./);
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:02,000\nUnknown speaker 1: First\./);
+  assert.match(output, /\n2\n00:00:02,000 --> 00:00:05,000\nUnknown speaker 1: Second\./);
 });
 
 test("the final merged SRT cue ends relative to its last segment, not its first", () => {
@@ -86,7 +86,7 @@ test("the final merged SRT cue ends relative to its last segment, not its first"
     {}
   );
 
-  assert.match(output, /^1\n00:00:00,000 --> 00:00:06,000\nSpeaker 1: One\. Two\. Three\./);
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:06,000\nUnknown speaker 1: One\. Two\. Three\./);
 });
 
 test("SRT timestamps roll sub-second rounding into the next second", () => {
@@ -95,7 +95,7 @@ test("SRT timestamps roll sub-second rounding into the next second", () => {
     {}
   );
 
-  assert.match(output, /^1\n00:00:01,000 --> 00:00:04,000\nSpeaker 1: Near boundary\./);
+  assert.match(output, /^1\n00:00:01,000 --> 00:00:04,000\nUnknown speaker 1: Near boundary\./);
 });
 
 test("every cue in a multi-cue SRT rolls its own sub-second rounding", () => {
@@ -108,8 +108,8 @@ test("every cue in a multi-cue SRT rolls its own sub-second rounding", () => {
   );
 
   assert.doesNotMatch(output, /,\d{4}/);
-  assert.match(output, /^1\n00:00:01,000 --> 00:00:02,000\nSpeaker 1: Opening\./);
-  assert.match(output, /\n2\n00:00:02,000 --> 00:00:05,000\nSpeaker 2: Reply\./);
+  assert.match(output, /^1\n00:00:01,000 --> 00:00:02,000\nUnknown speaker 1: Opening\./);
+  assert.match(output, /\n2\n00:00:02,000 --> 00:00:05,000\nUnknown speaker 2: Reply\./);
 });
 
 test("JSON duration reflects the last merged segment's timestamp", () => {
@@ -180,8 +180,8 @@ test("mic source alone does not name the owner in SRT", () => {
     {}
   );
 
-  assert.match(output, /^1\n00:00:00,000 --> 00:00:05,000\nUnknown Speaker: Me talking\./);
-  assert.match(output, /\n2\n00:00:05,000 --> 00:00:08,000\nOthers: Them talking\./);
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:05,000\nUnknown speaker 1: Me talking\./);
+  assert.match(output, /\n2\n00:00:05,000 --> 00:00:08,000\nUnknown speaker 2: Them talking\./);
 });
 
 test("a manually named segment does not absorb the adjacent un-named one", () => {
@@ -203,7 +203,7 @@ test("a manually named segment does not absorb the adjacent un-named one", () =>
   );
 
   assert.ok(txtOutput.includes("[00:00:00] Alice:\nAlice said this."));
-  assert.ok(txtOutput.includes("[00:00:01] Unknown Speaker:\nAnd this is me talking."));
+  assert.ok(txtOutput.includes("[00:00:01] Unknown speaker 2:\nAnd this is me talking."));
 });
 
 test("only an explicit legacy you id names the owner", (t) => {
@@ -219,7 +219,7 @@ test("only an explicit legacy you id names the owner", (t) => {
 
   const txtOutput = formatTxt(note, segments, {});
   assert.ok(txtOutput.includes("[00:00:00] Du:\nGuten Morgen."));
-  assert.ok(txtOutput.includes("[00:00:03] Unbekannter Sprecher:\nNoch etwas."));
+  assert.ok(txtOutput.includes("[00:00:03] Unbekannte Person 2:\nNoch etwas."));
   assert.ok(!txtOutput.includes("You:"));
 });
 
@@ -239,7 +239,7 @@ test("the JSON export keeps unassigned mic rows separate from the owner", (t) =>
     )
   );
 
-  assert.deepEqual(parsed.speakers, ["Du", "Unbekannter Sprecher", "Sprecher 1"]);
+  assert.deepEqual(parsed.speakers, ["Du", "Unbekannte Person 2", "Unbekannte Person 3"]);
   assert.equal(parsed.metadata.speaker_count, 3);
 });
 
@@ -253,8 +253,8 @@ test("diarized speaker numbers render in the UI language", (t) => {
     {}
   );
 
-  assert.ok(txtOutput.includes("[00:00:00] Sprecher 1:\nHallo."));
-  assert.ok(!txtOutput.includes("Speaker 1"));
+  assert.ok(txtOutput.includes("[00:00:00] Unbekannte Person 1:\nHallo."));
+  assert.ok(!txtOutput.includes("Unknown speaker 1"));
 });
 
 test("segments with no speaker information get a localized unknown label", (t) => {
@@ -330,4 +330,13 @@ test("untimed upload text exports without invented times or speakers", () => {
   assert.equal(json.metadata.duration_seconds, 125);
   assert.deepEqual(json.speakers, []);
   assert.equal(json.segments[0].speaker, null);
+});
+
+test('JSON export preserves durable transcript row identities', () => {
+  const rows = [
+    { id: 'row-a', source: 'system', speaker: 'speaker_0', timestamp: 0, text: 'One' },
+    { id: 'row-b', source: 'system', speaker: 'speaker_0', timestamp: 1, text: 'Two' },
+  ];
+  const exported = JSON.parse(formatJson({ title: 'Meeting', created_at: '2026-01-01T00:00:00Z' }, rows, {}));
+  assert.deepEqual(exported.transcriptRows.map((row) => row.id), ['row-a', 'row-b']);
 });

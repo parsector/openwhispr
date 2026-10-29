@@ -3238,6 +3238,16 @@
         "cluster": "Этот кластер",
         "changesRows": "изменит строк: {{n}}",
         "unknown": "Неизвестно"
+      },
+      "unknownNumber": "Неизвестный участник {{n}}",
+      "restore": "Восстановить",
+      "reviewStretches": "Проверить {{n}} фрагментов",
+      "showAll": "Показать все фрагменты",
+      "reason": {
+        "closeMatch": "{{first}} или {{second}}",
+        "too_short": "Слишком коротко для распознавания",
+        "changed_after_final": "Изменено после итогового анализа",
+        "not_sure": "Нет уверенности"
       }
     },
     "overview": {

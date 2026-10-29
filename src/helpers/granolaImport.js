@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 /**
  * Granola CSV import parsing. Pure module: no fs, no Electron.
@@ -229,7 +229,7 @@ export function parseTranscriptToSegments(text, anchorMs) {
   const useSpeakerMode =
     speakerLines.length / lines.length >= SPEAKER_LINE_RATIO && distinctSpeakers.size >= 2;
   if (!useSpeakerMode) {
-    return lines.map((line, i) => ({ text: line, source: "system", timestamp: anchorMs + i }));
+    return lines.map((line, i) => ({ id: randomUUID(), text: line, source: "system", timestamp: anchorMs + i }));
   }
 
   const segments = [];
@@ -237,6 +237,7 @@ export function parseTranscriptToSegments(text, anchorMs) {
     const parsed = parsedLines[i];
     if (parsed) {
       segments.push({
+        id: randomUUID(),
         text: parsed.text,
         source: "system",
         timestamp: anchorMs + segments.length,
@@ -247,7 +248,7 @@ export function parseTranscriptToSegments(text, anchorMs) {
     } else if (segments.length > 0) {
       segments[segments.length - 1].text += `\n${line}`;
     } else {
-      segments.push({ text: line, source: "system", timestamp: anchorMs });
+      segments.push({ id: randomUUID(), text: line, source: "system", timestamp: anchorMs });
     }
   });
   return segments;
