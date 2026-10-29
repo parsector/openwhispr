@@ -1,6 +1,6 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import type { CalendarAttendee } from "../types/calendar";
-import { isYouSpeakerName, resolveSegmentSpeakerName } from "./transcriptSpeakerState";
+import { isYouSpeakerName, normalizeTranscriptSegments, resolveSegmentSpeakerName } from "./transcriptSpeakerState";
 import type { MentionPerson } from "./mentionMarkdown";
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -41,7 +41,7 @@ export function buildLlmTranscript(
   selfLabel: string,
   t: Translate
 ): string {
-  return segments
+  return normalizeTranscriptSegments(segments)
     .map((s) => `${resolveLlmSpeakerLabel(s, speakerMappings, selfLabel, t)}: ${s.text}`)
     .join("\n");
 }
@@ -107,6 +107,8 @@ export function collectKnownPeople(
     push(p.displayName || p.email.split("@")[0], p.email);
   }
   for (const name of Object.values(speakerMappings)) push(name, null);
-  for (const segment of segments) push(segment.speakerName, null);
+  for (const segment of segments) {
+    if (!segment.speakerIsPlaceholder) push(segment.speakerName, null);
+  }
   return people;
 }

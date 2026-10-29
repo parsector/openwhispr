@@ -539,13 +539,14 @@ function SpeakerLabel({
 }) {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<"row" | "selected" | "cluster">("row");
+  const storedName = segment.speakerIsPlaceholder ? undefined : segment.speakerName;
   const speakerState =
     segment.speakerLocked || isTranscriptSpeakerLocked(segment)
       ? "locked"
       : segment.speakerStatus ||
         (segment.suggestedName && !resolvedName
           ? "suggested"
-          : segment.speakerName || resolvedName
+          : storedName || resolvedName
             ? "confirmed"
             : segment.speakerIsPlaceholder
               ? "provisional"
@@ -555,13 +556,13 @@ function SpeakerLabel({
 
   const displayLabel =
     resolvedName ||
-    segment.speakerName ||
+    storedName ||
     (isOriginallyYou && !isTranscriptSpeakerLocked(segment)
       ? t("notes.speaker.you")
       : speakerId === "speaker_mic"
         ? t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 })
         : t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? getSpeakerNumber(speakerId) }));
-  const isUnmapped = !resolvedName && !segment.speakerName;
+  const isUnmapped = !resolvedName && !storedName;
 
   return (
     <>
@@ -584,7 +585,7 @@ function SpeakerLabel({
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0">
         <div className="flex gap-1 p-2 border-b border-border/70" role="group" aria-label={t("notes.speaker.scope.label")}>
-          {(["row", ...(selectedRowIds?.size ? ["selected"] : []), "cluster"] as Array<"row" | "selected" | "cluster">).map((choice) => (
+          {(["row", ...(selectedRowIds?.size ? ["selected"] : []), ...(segment.speaker ? ["cluster"] : [])] as Array<"row" | "selected" | "cluster">).map((choice) => (
             <button key={choice} type="button" aria-pressed={scope === choice}
               onClick={() => setScope(choice)}
               className={cn("rounded px-2 py-1 text-[11px] hover:bg-foreground/10", scope === choice && "bg-foreground/10 font-medium")}>
@@ -597,8 +598,9 @@ function SpeakerLabel({
           speakerProfiles={speakerProfiles}
           participants={participants}
           onSelectName={(name, email, profileId) => {
-            if (scope === "cluster" || !onAssignScope) onMap?.(speakerId, name, email, profileId);
-            else onAssignScope(scope, segment.id, name, profileId);
+            if (scope === "cluster" || !onAssignScope) {
+              if (segment.speaker) onMap?.(speakerId, name, email, profileId);
+            } else onAssignScope(scope, segment.id, name, profileId);
             setOpen(false);
           }}
           onClose={() => setOpen(false)}
@@ -795,7 +797,7 @@ const SegmentRow = memo(function SegmentRow({
   onToggleSelect,
   t,
 }: SegmentRowProps) {
-  const hasSpeaker = !!segment.speaker;
+  const hasSpeaker = !!segment.speaker || !!segment.source;
   const isOriginallyYou = segment.speaker === "you";
   const isSystemSpeaker = hasSpeaker && !selfSide;
   // Mic location alone cannot identify the owner. A remote voice is never
@@ -815,7 +817,7 @@ const SegmentRow = memo(function SegmentRow({
   const labelElement = hasSpeaker && (
     <div className="flex items-center gap-1">
       <SpeakerLabel
-        speakerId={segment.speaker!}
+        speakerId={segment.speaker || ""}
         segment={segment}
         resolvedName={activeName}
         speakerProfiles={speakerProfiles}
@@ -1022,7 +1024,7 @@ export function MeetingTranscriptChat({
   const systemPartialSpeakerLabel =
     systemPartialSpeakerName ||
     (systemPartialSpeakerId
-      ? t("notes.speaker.label", { n: getSpeakerNumber(systemPartialSpeakerId) })
+      ? t("notes.speaker.unknownNumber", { n: getSpeakerNumber(systemPartialSpeakerId) })
       : undefined);
   const systemPartialSpeakerState = systemPartialSpeakerId
     ? systemPartialSpeakerName

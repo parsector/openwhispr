@@ -51,7 +51,8 @@ function speakerLabel(segment: TranscriptSegment, speakerMappings: Record<string
   const numbered = typeof segment.speaker === "string" && /^speaker_(\d+)$/.exec(segment.speaker);
   if (numbered) return i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? Number(numbered[1]) + 1 });
   if (segment.source === "mic") return i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
-  if (typeof segment.speaker === "string" && segment.speaker) return segment.speaker;
+  if (typeof segment.speaker === "string" && segment.speaker)
+    return i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
   return segment.source === "system" ? i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 }) : "";
 }
 

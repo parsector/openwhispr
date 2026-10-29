@@ -4,8 +4,7 @@ const assert = require("node:assert/strict");
 const load = () => import("../../src/utils/llmTranscript.ts");
 
 const t = (key, options) => {
-  if (key === "notes.speaker.label") return `Speaker ${options.n}`;
-  if (key === "notes.speaker.them") return "Them";
+  if (key === "notes.speaker.unknownNumber") return `Unknown speaker ${options.n}`;
   if (key === "notes.speaker.you") return "You";
   return key;
 };
@@ -21,7 +20,7 @@ test("mic source alone does not name the note owner", async () => {
   const { resolveLlmSpeakerLabel } = await load();
   assert.equal(
     resolveLlmSpeakerLabel({ source: "mic", text: "hi" }, {}, "Gabriel Stein", t),
-    "notes.speaker.unknown"
+    "Unknown speaker 1"
   );
   assert.equal(
     resolveLlmSpeakerLabel(
@@ -52,6 +51,12 @@ test("manual speaker corrections override the microphone's assumed note owner", 
       "Ravi Patel"
     );
   }
+  assert.equal(
+    resolveLlmSpeakerLabel({ source: "mic", speaker: "speaker_0", speakerLocked: true,
+      speakerLockSource: "user", unknownNumber: 7, text: "hi" },
+    { speaker_0: "Old name" }, "Casey", t),
+    "Unknown speaker 7"
+  );
 });
 
 test("a renamed microphone cluster reaches note generation without per-segment names", async () => {
@@ -71,7 +76,7 @@ test("a renamed microphone cluster reaches note generation without per-segment n
   );
   assert.equal(
     buildLlmTranscript([segment], {}, "Casey", t),
-    "Speaker 1: I will send the proposal."
+    "Unknown speaker 1: I will send the proposal."
   );
   assert.equal(
     buildLlmTranscript([segment], { speaker_0: " you " }, "Casey", t),
@@ -82,18 +87,19 @@ test("a renamed microphone cluster reaches note generation without per-segment n
 test("an in-person meeting's diarized mic clusters keep their speaker numbers", async () => {
   const { buildLlmTranscript, resolveLlmSpeakerLabel } = await load();
   const segments = [
-    { source: "mic", speaker: "speaker_0", text: "Can you send the proposal?" },
-    { source: "mic", speaker: "speaker_1", text: "I will send it today." },
-    { source: "mic", speaker: "you", text: "Thanks." },
-    { source: "mic", text: "Before diarization." },
+    { id: "a", source: "mic", speaker: "speaker_0", speakerName: "Speaker 1",
+      speakerIsPlaceholder: true, text: "Can you send the proposal?" },
+    { id: "b", source: "mic", speaker: "speaker_1", uncertainty: { reason: "close_match" }, text: "I will send it today." },
+    { id: "c", source: "mic", speaker: "you", text: "Thanks." },
+    { id: "d", source: "mic", text: "Before diarization." },
   ];
   assert.equal(
     buildLlmTranscript(segments, {}, "Casey", t),
     [
-      "Speaker 1: Can you send the proposal?",
-      "Speaker 2: I will send it today.",
+      "Unknown speaker 1: Can you send the proposal?",
+      "Unknown speaker 2: I will send it today.",
       "Casey: Thanks.",
-      "notes.speaker.unknown: Before diarization.",
+      "Unknown speaker 4: Before diarization.",
     ].join("\n")
   );
   assert.equal(
@@ -102,7 +108,7 @@ test("an in-person meeting's diarized mic clusters keep their speaker numbers", 
   );
 });
 
-test("system segments resolve name → mapping → Speaker N → Them", async () => {
+test("system segments resolve name → mapping → numbered unknown", async () => {
   const { resolveLlmSpeakerLabel } = await load();
   const locked = {
     source: "system",
@@ -112,6 +118,7 @@ test("system segments resolve name → mapping → Speaker N → Them", async ()
     text: "hi",
   };
   assert.equal(resolveLlmSpeakerLabel(locked, { speaker_0: "Wrong" }, "You", t), "Michael");
+  assert.equal(resolveLlmSpeakerLabel({ source: "system", speaker: "Alex", text: "hi" }, {}, "You", t), "Alex");
   assert.equal(
     resolveLlmSpeakerLabel(
       { source: "system", speaker: "speaker_1", text: "hi" },
@@ -123,9 +130,9 @@ test("system segments resolve name → mapping → Speaker N → Them", async ()
   );
   assert.equal(
     resolveLlmSpeakerLabel({ source: "system", speaker: "speaker_2", text: "hi" }, {}, "You", t),
-    "Speaker 3"
+    "Unknown speaker 3"
   );
-  assert.equal(resolveLlmSpeakerLabel({ source: "system", text: "hi" }, {}, "You", t), "Them");
+  assert.equal(resolveLlmSpeakerLabel({ source: "system", text: "hi" }, {}, "You", t), "Unknown speaker 1");
 });
 
 test("buildLlmTranscript prefixes every line with the resolved label", async () => {
@@ -136,7 +143,7 @@ test("buildLlmTranscript prefixes every line with the resolved label", async () 
   ];
   assert.equal(
     buildLlmTranscript(segments, { speaker_0: "Michael" }, "Gabriel", t),
-    "notes.speaker.unknown: Morning everyone\nMichael: Morning"
+    "Unknown speaker 1: Morning everyone\nMichael: Morning"
   );
 });
 
@@ -189,7 +196,11 @@ test("collectKnownPeople merges owner, participants, mappings, and named segment
       ],
     },
     { speaker_0: "Michael Chen", speaker_1: "Priya" },
-    [{ source: "system", speaker: "speaker_2", speakerName: "Ada", text: "hi" }]
+    [
+      { source: "system", speaker: "speaker_2", speakerName: "Ada", text: "hi" },
+      { source: "mic", speaker: "speaker_3", speakerName: "Speaker 4",
+        speakerIsPlaceholder: true, text: "hello" },
+    ]
   );
   assert.deepEqual(people, [
     { name: "Gabriel Stein", email: "gabe@openwhispr.com" },
