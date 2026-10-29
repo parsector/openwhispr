@@ -404,7 +404,8 @@ test("a user-pinned unknown never leaks a recycled cluster name into chat or ret
   const mappings = { speaker_mic: "Wrong name" };
   const expected = "Unknown speaker 7: Unidentified voice.";
   assert.equal(readableTranscript(JSON.stringify(rows), mappings).text, expected);
-  assert.equal(noteChatTranscript(rows, mappings, null).split("\n\n").at(-1), expected);
+  assert.equal(noteChatTranscript(rows, mappings, null),
+    `## Meeting Context\nSomeone other than the user took these notes.\n\n${expected}`);
 });
 
 test("a longer match cut off at the end of a passage is found by the next call", async () => {

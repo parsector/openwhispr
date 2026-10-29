@@ -58,11 +58,16 @@ const formatPerson = (name: string | null, email: string | null): string => {
  * note owner is (instead of guessing an identity from names spoken in the
  * transcript) and who was invited.
  */
-export function buildMeetingContext(identity: MeetingIdentity, selfLabel: string): string {
+export function buildMeetingContext(
+  identity: MeetingIdentity,
+  selfLabel: string,
+  selfLabelPresent = true
+): string {
   const lines: string[] = [];
   const self = formatPerson(identity.selfName, identity.selfEmail);
   if (self) {
-    lines.push(`The user taking these notes ("${selfLabel}" in the transcript) is ${self}.`);
+    const transcriptName = selfLabelPresent ? ` ("${selfLabel}" in the transcript)` : "";
+    lines.push(`The user taking these notes${transcriptName} is ${self}.`);
   }
   const invited = identity.participants
     .filter((p) => !isSelfParticipant(p, identity))

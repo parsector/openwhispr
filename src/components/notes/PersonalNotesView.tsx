@@ -36,6 +36,7 @@ import {
   buildLlmTranscript,
   buildMeetingContext,
   collectKnownPeople,
+  resolveLlmSpeakerLabel,
   type MeetingIdentity,
 } from "../../utils/llmTranscript";
 import type { MentionPerson } from "../../utils/mentionMarkdown";
@@ -800,7 +801,10 @@ export default function PersonalNotesView({
         for (const m of mappingRows) speakerMappings[m.speaker_id] = m.display_name;
 
         const selfLabel = identity.selfName || t("notes.speaker.you");
-        meetingContext = buildMeetingContext(identity, selfLabel);
+        const selfLabelPresent = segments.some(
+          (segment) => resolveLlmSpeakerLabel(segment, speakerMappings, selfLabel, t) === selfLabel
+        );
+        meetingContext = buildMeetingContext(identity, selfLabel, selfLabelPresent);
         formattedTranscript = buildLlmTranscript(segments, speakerMappings, selfLabel, t);
         knownPeople = collectKnownPeople(identity, speakerMappings, segments);
       } else {
