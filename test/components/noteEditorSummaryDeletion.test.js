@@ -511,7 +511,7 @@ test("the note's chat labels speakers as get_note does and leaves attendees to t
   await render(ENHANCEMENT, { note: { ...NOTE, transcript } });
   assert.equal(
     chatTranscript(),
-    `## Meeting Context\nThe user taking these notes ("Note taker" in the transcript) is Chad <chad@example.com>.\n\n${lines}`
+    `## Meeting Context\nThe user taking these notes is Chad <chad@example.com>.\n\n${lines}`
   );
   assert.doesNotMatch(chatTranscript(), /Dana Wu|Invited participants/);
 
@@ -521,7 +521,7 @@ test("the note's chat labels speakers as get_note does and leaves attendees to t
   });
   assert.equal(
     chatTranscript(),
-    `## Meeting Context\nSomeone other than the user took these notes ("Note taker" in the transcript).\n\n${lines}`
+    `## Meeting Context\nSomeone other than the user took these notes.\n\n${lines}`
   );
   await unmount();
 });

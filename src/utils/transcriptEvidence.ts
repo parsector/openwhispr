@@ -74,13 +74,14 @@ export function readableTranscript(
 }
 
 // Says whether the note taker is the user, so "my" questions reach the right lines.
-function noteTakerContext(owner: MeetingIdentity | null): string {
+function noteTakerContext(owner: MeetingIdentity | null, labelPresent: boolean): string {
+  const transcriptName = labelPresent ? ` ("${NOTE_TAKER_LABEL}" in the transcript)` : "";
   if (!owner) {
-    return `## Meeting Context\nSomeone other than the user took these notes ("${NOTE_TAKER_LABEL}" in the transcript).`;
+    return `## Meeting Context\nSomeone other than the user took these notes${transcriptName}.`;
   }
   return (
-    buildMeetingContext({ ...owner, participants: [] }, NOTE_TAKER_LABEL) ||
-    `## Meeting Context\nThe user took these notes ("${NOTE_TAKER_LABEL}" in the transcript).`
+    buildMeetingContext({ ...owner, participants: [] }, NOTE_TAKER_LABEL, labelPresent) ||
+    `## Meeting Context\nThe user took these notes${transcriptName}.`
   );
 }
 
@@ -96,9 +97,13 @@ export function noteChatTranscript(
   speakerMappings: Record<string, string>,
   owner: MeetingIdentity | null
 ): string | null {
-  const transcript = readableSegments(normalizeTranscriptSegments(segments), speakerMappings);
+  const normalized = normalizeTranscriptSegments(segments);
+  const transcript = readableSegments(normalized, speakerMappings);
   if (!transcript) return null;
-  return `${noteTakerContext(owner)}\n\n${transcript.text}`;
+  const labelPresent = normalized.some(
+    (segment) => speakerLabel(segment, speakerMappings) === NOTE_TAKER_LABEL
+  );
+  return `${noteTakerContext(owner, labelPresent)}\n\n${transcript.text}`;
 }
 
 // Null when no segment has text.

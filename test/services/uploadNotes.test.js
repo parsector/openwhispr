@@ -117,7 +117,7 @@ test("upload transcripts mixed with later live meeting segments export sane SRT 
   const output = formatSrt([...seeded, ...appended], {});
   assert.match(output, /^1\n00:00:00,000 --> 00:00:30,000\nUnknown Speaker: Uploaded intro\./);
   assert.match(output, /\n2\n00:00:30,000 --> 00:01:00,000\nUnknown Speaker: Uploaded detail\./);
-  assert.match(output, /\n3\n00:01:00,000 --> 00:01:03,000\nYou: Live follow-up\./);
+  assert.match(output, /\n3\n00:01:00,000 --> 00:01:03,000\nUnknown speaker 1: Live follow-up\./);
 });
 
 test("unusable segments produce no transcript at all", async () => {

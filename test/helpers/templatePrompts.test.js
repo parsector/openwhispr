@@ -120,6 +120,8 @@ test("a transcript in plain text asks for a checklist with owners and deadlines 
     SOURCE_FIDELITY_RULE + "\n\n" + MEETING_SYSTEM_PROMPT + generate.prompt,
     "speaker segments win"
   );
+  assert.match(MEETING_SYSTEM_PROMPT, /Keep unnamed speakers under exactly the numbered labels shown in the transcript/);
+  assert.doesNotMatch(MEETING_SYSTEM_PROMPT, /"Them" or "Speaker N"/);
 });
 
 test("a sectioned template puts its context before the format rules and keeps section order", async () => {

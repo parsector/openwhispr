@@ -336,11 +336,11 @@ test("a meeting with speakers keeps its Meeting Context, speaker lines and known
   assert.deepEqual(options.knownPeople, USER_AND_INVITEE);
   assert.ok(
     input.includes(
-      '## Meeting Context\nThe user taking these notes ("Sam Rivera" in the transcript) is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>.'
+      '## Meeting Context\nThe user taking these notes is Sam Rivera <sam@example.com>.\nInvited participants: Alice Ng <alice@example.com>.'
     ),
     "the owner and the invitee"
   );
-  assert.ok(input.includes("Sam Rivera: I'll send the deck.\nAlice Ng: Ship on Friday."));
+  assert.ok(input.includes("Unknown speaker 1: I'll send the deck.\nAlice Ng: Ship on Friday."));
 });
 
 test("a note without a transcript keeps the personal-note run", async (t) => {
@@ -386,7 +386,7 @@ test("an upload with timed speaker segments still runs as a meeting", async (t) 
   const { input, options } = await runSummaryOn(t, { note_type: "upload", transcript });
   assert.equal(options.isMeetingNote, true);
   assert.ok(!options.hasPlainTranscript);
-  assert.ok(input.includes("Speaker 1: Ship on Friday."));
+  assert.ok(input.includes("Unknown speaker 1: Ship on Friday."));
 });
 
 // Uploads made before the transcript held their text saved it as the note's

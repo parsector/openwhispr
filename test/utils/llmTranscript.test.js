@@ -166,6 +166,10 @@ test("buildMeetingContext names the owner and invited participants", async () =>
       "Invited participants: Michael Chen <michael@acme.com>, sean@acme.com.",
     ].join("\n")
   );
+  assert.equal(
+    buildMeetingContext(identity, "Gabriel Stein", false),
+    "## Meeting Context\nThe user taking these notes is Gabriel Stein <gabe@openwhispr.com>.\nInvited participants: Michael Chen <michael@acme.com>, sean@acme.com."
+  );
 });
 
 test("buildMeetingContext omits what it does not know", async () => {
