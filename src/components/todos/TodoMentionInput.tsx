@@ -4,9 +4,9 @@ import PersonAvatar from "../ui/PersonAvatar";
 
 interface Contact { email: string | null; display_name: string | null }
 
-export default function TodoMentionInput({ value, onChange, inputRef, label, rows = 2, placeholder, onEscape, onEnter, className }: {
+export default function TodoMentionInput({ value, onChange, inputRef, label, rows = 2, placeholder, autoFocus, onEscape, onEnter, className }: {
   value: string; onChange: (value: string) => void; inputRef: React.RefObject<HTMLTextAreaElement | null>;
-  label: string; rows?: number; placeholder?: string; onEscape: () => void; onEnter: () => void; className: string;
+  label: string; rows?: number; placeholder?: string; autoFocus?: boolean; onEscape: () => void; onEnter: () => void; className: string;
 }) {
   const [trigger, setTrigger] = useState<{ start: number; query: string } | null>(null);
   const [contacts, setContacts] = useState<Contact[]>([]);
@@ -51,7 +51,7 @@ export default function TodoMentionInput({ value, onChange, inputRef, label, row
     window.requestAnimationFrame(() => { input?.focus(); input?.setSelectionRange(trigger.start + inserted.length, trigger.start + inserted.length); });
   };
   return <div className="relative">
-    <textarea dir="auto" ref={inputRef} rows={rows} aria-label={label} placeholder={placeholder} value={value}
+    <textarea dir="auto" ref={inputRef} rows={rows} aria-label={label} placeholder={placeholder} autoFocus={autoFocus} value={value}
       onChange={(event) => { dismissed.current = null; onChange(event.target.value); scan(event.target.value, event.target.selectionStart); }}
       onClick={(event) => scan(value, event.currentTarget.selectionStart)}
       onKeyDown={(event) => {

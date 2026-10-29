@@ -62,6 +62,23 @@ test("overdue starts at 00:01 the next local day and excludes waiting", () => {
   assert.equal(Boolean(isOverdue({ ...row, direction: "waiting" }, new Date(2026, 9, 29, 1))), false);
 });
 
+test("user text edits are pinned against later extraction", () => {
+  const rows = new Map([["edit", { id: "edit", account_id: null, text: "Original", pinned_fields: "[]", status: "open" }]]);
+  const database = { activeAccountId: null, db: { prepare(sql) {
+    if (sql.startsWith("SELECT * FROM commitments")) return { get: (id) => rows.get(id) };
+    if (sql.startsWith("UPDATE commitments SET")) return { run(...values) {
+      const keys = [...sql.matchAll(/([a-z_]+)=\?/g)].map((match) => match[1]);
+      const id = values.at(-1);
+      rows.set(id, { ...rows.get(id), ...Object.fromEntries(keys.map((key, index) => [key, values[index]])) });
+    } };
+    throw new Error(sql);
+  } } };
+  const store = new CommitmentStore(database);
+  assert.equal(store.update("edit", { text: "Edited" }, { user: true }).text, "Edited");
+  assert.deepEqual(JSON.parse(store.get("edit").pinned_fields), ["text"]);
+  assert.equal(store.update("edit", { text: "Extraction" }).text, "Edited");
+});
+
 test("expiry reopens proposed todo and source removal scrubs evidence", (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-todos-sweep-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

@@ -110,7 +110,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
         </button>
         <div className="min-w-0">
           {editingText ? <form onSubmit={(event) => { event.preventDefault(); if (text.trim()) { onText?.(row, text.trim()); setEditingText(false); } }}>
-            <TodoMentionInput value={text} onChange={setText} inputRef={textRef} label={t("todos.editText")} rows={2} onEscape={() => setEditingText(false)} onEnter={() => textRef.current?.form?.requestSubmit()} className="w-full resize-y rounded border border-border bg-background px-2 py-1 text-sm" />
+            <TodoMentionInput value={text} onChange={setText} inputRef={textRef} label={t("todos.editText")} rows={2} autoFocus onEscape={() => setEditingText(false)} onEnter={() => textRef.current?.form?.requestSubmit()} className="w-full resize-y rounded border border-border bg-background px-2 py-1 text-sm" />
             <button type="submit" className="text-sm text-primary">{t("todos.save")}</button>
           </form> : <div className="whitespace-pre-wrap break-words text-[13px] font-medium leading-[1.55] text-foreground">{renderTodoText(row.text)}</div>}
           <div className="mt-[3px] flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">

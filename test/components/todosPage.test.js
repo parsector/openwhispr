@@ -677,3 +677,46 @@ test("todo menu has one native date input and one clear-date action", () => {
   assert.doesNotMatch(html, /todo-calendar|role="grid"/);
   assert.match(html, /aria-label="todos.pickDate"/);
 });
+
+test("Edit todo focuses its textarea and saves the edited text through commitmentsUpdate", async () => {
+  const { Window } = await import("happy-dom");
+  const browser = new Window();
+  const previous = { window: global.window, document: global.document, navigator: global.navigator,
+    IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  global.window = browser; global.document = browser.document; global.navigator = browser.navigator;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  let saved = row("edit", null);
+  const updates = [];
+  browser.electronAPI = {
+    isDebugEnabled: async () => false,
+    commitmentsList: async () => [saved], commitmentsProposalsList: async () => [], commitmentsOverdueCount: async () => 0,
+    onCommitmentsUpdated: () => () => {},
+    commitmentsUpdate: async (id, patch) => { updates.push([id, patch]); saved = { ...saved, ...patch, pinned_fields: '["text"]' }; return saved; },
+  };
+  const { createRoot } = require("react-dom/client");
+  const host = browser.document.createElement("div"); browser.document.body.append(host);
+  const root = createRoot(host);
+  const priorStore = useTodosStore.getState();
+  try {
+    await React.act(async () => root.render(React.createElement(TodosView, { onOpenNote() {} })));
+    const article = host.querySelector("article");
+    await React.act(async () => [...article.querySelectorAll("details button")].find((button) => button.textContent === "todos.editText").click());
+    const input = article.querySelector('textarea[aria-label="todos.editText"]');
+    assert.equal(browser.document.activeElement, input);
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(browser.HTMLTextAreaElement.prototype, "value").set.call(input, "Edited [@Alex Ng](mention:alex%40example.com) report");
+      input.dispatchEvent(new browser.Event("input", { bubbles: true }));
+    });
+    await React.act(async () => [...article.querySelectorAll("button")].find((button) => button.textContent === "todos.save").click());
+    assert.deepEqual(updates, [["edit", { text: "Edited [@Alex Ng](mention:alex%40example.com) report" }]]);
+    assert.equal(saved.text, "Edited [@Alex Ng](mention:alex%40example.com) report");
+    assert.match(host.querySelector("article [data-todo-mention]").textContent, /@Alex Ng/);
+    assert.doesNotMatch(host.querySelector("article").textContent, /mention:alex/);
+  } finally {
+    await React.act(async () => root.unmount());
+    useTodosStore.setState({ rows: priorStore.rows, proposals: priorStore.proposals,
+      overdueCount: priorStore.overdueCount, showArchived: priorStore.showArchived, filter: priorStore.filter });
+    browser.close();
+    for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete global[key]; else global[key] = value; }
+  }
+});
