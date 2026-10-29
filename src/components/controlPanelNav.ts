@@ -9,6 +9,7 @@ import {
   Upload,
   Blocks,
   Clock,
+  ClipboardCheck,
 } from "./icons";
 import { isAgentAllowed, isPolicyActionAllowed } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
@@ -19,6 +20,7 @@ export type ControlPanelView =
   | "chat"
   | "personal-notes"
   | "routines"
+  | "todos"
   | "dictionary"
   | "upload"
   | "integrations";
@@ -46,6 +48,7 @@ export function useControlPanelNavItems(): ControlPanelNavItem[] {
       ? [{ id: "chat" as const, label: t("sidebar.chat"), icon: MessageSquare }]
       : []),
     { id: "personal-notes", label: t("sidebar.notes"), icon: NotebookPen },
+    { id: "todos", label: t("todos.title"), icon: ClipboardCheck },
     ...(agentAllowed
       ? [{ id: "routines" as const, label: t("sidebar.routines"), icon: Clock }]
       : []),

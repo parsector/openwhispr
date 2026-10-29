@@ -112,7 +112,7 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
     "auto",
     "auto",
   ],
-  "src/components/integrations/LocalMcpBlock.tsx": ["inherit", "inherit"],
+  "src/components/integrations/LocalMcpBlock.tsx": ["inherit", "inherit", "inherit"],
   "src/components/integrations/McpServers.tsx": Array(11).fill("inherit"),
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto"],
   "src/components/notes/AddNotesToFolderDialog.tsx": ["auto"],
@@ -125,13 +125,15 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/notes/SpaceNameField.tsx": ["auto"],
   "src/components/notes/SpacesTree.tsx": ["auto", "auto", "auto", "auto"],
   "src/components/notes/UploadAudioView.tsx": ["ltr", "ltr", "inherit"],
-  // Routine title templates may contain names and event summaries in any script.
-  "src/components/routines/RoutinesView.tsx": ["auto"],
   "src/components/onboarding/DemoStep.tsx": ["auto"],
   "src/components/onboarding/LanguageSelectionStep.tsx": ["auto"],
   "src/components/onboarding/UseCaseStep.tsx": ["auto"],
+  // Routine title templates may contain names and event summaries in any script.
+  "src/components/routines/RoutinesView.tsx": ["auto"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
+  "src/components/todos/TodoRow.tsx": ["auto", "auto", "ltr"],
+  "src/components/todos/TodosView.tsx": ["ltr", "auto", "ltr"],
   "src/components/ui/EmojiPicker.tsx": ["auto"],
   "src/components/ui/LanguageSelector.tsx": ["auto"],
 };

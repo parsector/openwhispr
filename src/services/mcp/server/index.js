@@ -3,10 +3,11 @@ const path = require("node:path");
 const { createTokenStore } = require("./tokenStore");
 const { createTools } = require("./tools");
 const { createMcpHttpServer } = require("./httpServer");
+const { broadcastToWindows } = require("../../../helpers/windowBroadcast");
 
 function registerLocalMcp({ ipcMain, userData, database, getSemanticSearch }) {
   const tokens = createTokenStore(userData);
-  const server = createMcpHttpServer({ tokens, tools: createTools(database, getSemanticSearch) });
+  const server = createMcpHttpServer({ tokens, tools: createTools(database, getSemanticSearch, () => broadcastToWindows("commitments-updated")) });
   const settingsFile = path.join(userData, "mcp", "settings.json");
   let enabled = false;
   let url = null;
@@ -36,7 +37,7 @@ function registerLocalMcp({ ipcMain, userData, database, getSemanticSearch }) {
     activity: tokens.activity(),
   }));
   ipcMain.handle("local-mcp-enable", (_event, value) => setEnabled(value));
-  ipcMain.handle("local-mcp-create-token", (_event, label) => tokens.create(label));
+  ipcMain.handle("local-mcp-create-token", (_event, label, scopes) => tokens.create(label, scopes));
   ipcMain.handle("local-mcp-revoke-token", (_event, id) => tokens.revoke(id));
   if (enabled)
     server

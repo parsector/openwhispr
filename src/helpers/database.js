@@ -444,6 +444,40 @@ class DatabaseManager {
         )
       `);
 
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS commitments (
+          id TEXT PRIMARY KEY, account_id TEXT, space_id TEXT, text TEXT NOT NULL,
+          quote TEXT, quote_segment_index INTEGER, source_note_id TEXT,
+          source_note_title TEXT, person TEXT, direction TEXT NOT NULL DEFAULT 'owe',
+          source TEXT NOT NULL DEFAULT 'meeting', source_agent TEXT,
+          due_date TEXT, due_raw TEXT, due_confidence REAL,
+          status TEXT NOT NULL DEFAULT 'open', rejected_reason TEXT,
+          speaker_confidence TEXT DEFAULT 'unknown', mention_count INTEGER NOT NULL DEFAULT 1,
+          pinned_fields TEXT, extraction_version TEXT, source_removed INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT, updated_at TEXT, completed_at TEXT, rejected_at TEXT, archived_at TEXT,
+          agent_job_id TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_commitments_status_due ON commitments(status, due_date);
+        CREATE INDEX IF NOT EXISTS idx_commitments_person ON commitments(person);
+        CREATE INDEX IF NOT EXISTS idx_commitments_source ON commitments(source_note_id);
+        CREATE TABLE IF NOT EXISTS commitment_mentions (
+          id TEXT PRIMARY KEY, commitment_id TEXT NOT NULL, note_id TEXT,
+          segment_index INTEGER, quote TEXT, kind TEXT, prev_value TEXT,
+          new_value TEXT, created_at TEXT
+        );
+        CREATE TABLE IF NOT EXISTS commitment_proposals (
+          id TEXT PRIMARY KEY, commitment_id TEXT NOT NULL, note_id TEXT,
+          segment_index INTEGER, quote TEXT, strength TEXT,
+          status TEXT NOT NULL DEFAULT 'pending', created_at TEXT,
+          expires_at TEXT, resolved_at TEXT
+        );
+      `);
+
+      for (const definition of ["source TEXT NOT NULL DEFAULT 'meeting'", "source_agent TEXT", "agent_job_id TEXT"]) {
+        try { this.db.exec(`ALTER TABLE commitments ADD COLUMN ${definition}`); }
+        catch (err) { if (!err.message.includes("duplicate column")) throw err; }
+      }
+
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN enhanced_content TEXT");
       } catch (err) {
@@ -3237,7 +3271,8 @@ class DatabaseManager {
     sourceFile = null,
     audioDuration = null,
     folderId = null,
-    spaceId = null
+    spaceId = null,
+    transcript = null
   ) {
     try {
       if (!this.db) {
@@ -3264,7 +3299,7 @@ class DatabaseManager {
       const clientNoteId = randomUUID();
       const accountId = this._accountIdForSpace(spaceId);
       const stmt = this.db.prepare(
-        "INSERT INTO notes (title, content, content_sync_operation, note_type, source_file, audio_duration_seconds, folder_id, space_id, client_note_id, account_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO notes (title, content, content_sync_operation, note_type, source_file, audio_duration_seconds, folder_id, space_id, client_note_id, account_id, transcript) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       );
       const result = stmt.run(
         title,
@@ -3276,7 +3311,8 @@ class DatabaseManager {
         folderId,
         spaceId,
         clientNoteId,
-        accountId
+        accountId,
+        transcript
       );
 
       const fetchStmt = this.db.prepare("SELECT * FROM notes WHERE id = ?");
@@ -8499,7 +8535,7 @@ class DatabaseManager {
         (tool) =>
           typeof tool !== "string" ||
           !(
-            ["search_notes", "get_note", "get_calendar_events"].includes(tool) ||
+            ["search_notes", "get_note", "get_calendar_events", "list_todos"].includes(tool) ||
             /^[a-zA-Z0-9_-]+__[a-zA-Z0-9_-]+$/.test(tool)
           ) ||
           tool.length > 64

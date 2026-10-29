@@ -10,6 +10,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import type {
+  Commitment,
   MeetingNotificationData,
   MeetingDestinationContext,
   MeetingError,
@@ -19,12 +20,16 @@ import type {
 import { MeetingNotificationCard } from "./MeetingNotificationCard";
 import { MeetingNotificationFolderPicker } from "./MeetingNotificationFolderPicker";
 import { meetingFolderLabel } from "./meetingFolderLabel";
-import { Check, ChevronDown } from "./icons";
+import { Check, ChevronDown, X } from "./icons";
+import ProposalsBanner from "./todos/ProposalsBanner";
+import PreMeetingBrief from "./todos/PreMeetingBrief";
+import { buildPreMeetingBrief, parseBriefAttendees } from "./todos/preMeetingBriefModel";
 import "../styles/meeting-notification.css";
 import {
   getMeetingNotificationPresentation,
   initializeMeetingNotificationOverlay,
   shouldDismissMeetingNotificationSwipe,
+  isPostMeetingCommitments,
 } from "./meetingNotificationModel";
 
 interface PointerSwipe {
@@ -39,6 +44,7 @@ const SWIPE_MIN_OPACITY = 0.4;
 export default function MeetingNotificationOverlay(): ReactElement {
   const { t } = useTranslation();
   const [data, setData] = useState<MeetingNotificationData | null>(null);
+  const [briefRows, setBriefRows] = useState<Commitment[]>([]);
   const [isVisible, setIsVisible] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   // Live pointer offset while swiping; null when the card is at rest.
@@ -109,7 +115,7 @@ export default function MeetingNotificationOverlay(): ReactElement {
         onData: (incoming) => {
           dataRef.current = incoming;
           setData(incoming);
-          void loadContext();
+          if (!isPostMeetingCommitments(incoming)) void loadContext();
         },
         onVisible: () => setIsVisible(true),
         onReady: () => {
@@ -119,6 +125,19 @@ export default function MeetingNotificationOverlay(): ReactElement {
     [loadContext]
   );
   useEffect(() => () => feedbackTimers.current.forEach(clearTimeout), []);
+  useEffect(() => {
+    if (data?.variant !== "starting" || !parseBriefAttendees(data.event?.attendees).length) {
+      setBriefRows([]);
+      return;
+    }
+    let active = true;
+    const refresh = () => { void window.electronAPI.commitmentsList().then((rows) => {
+      if (active) setBriefRows(rows);
+    }).catch(() => { if (active) setBriefRows([]); }); };
+    refresh();
+    const off = window.electronAPI.onCommitmentsUpdated(refresh);
+    return () => { active = false; off(); };
+  }, [data]);
   useEffect(() => {
     const offClose = window.electronAPI.onMeetingNotificationSurfaceClosed?.((state) => {
       layoutRevision.current = Math.max(layoutRevision.current, state.revision);
@@ -278,6 +297,11 @@ export default function MeetingNotificationOverlay(): ReactElement {
       setBusy(true);
       loadGeneration.current++;
       try {
+        if (isPostMeetingCommitments(current) && action === "dismiss") {
+          setIsVisible(false);
+          await window.electronAPI.meetingNotificationDismissCommitments?.();
+          return;
+        }
         if (action === "dismiss") {
           // Main closes the window as soon as it handles a dismiss: slide out first.
           setIsVisible(false);
@@ -437,6 +461,14 @@ export default function MeetingNotificationOverlay(): ReactElement {
         style={motionStyle}
       >
         <div data-meeting-region="card">
+          {isPostMeetingCommitments(data) ? (
+            <div className="relative rounded-xl bg-background p-4 shadow-[0_20px_42px_color-mix(in_srgb,var(--color-foreground)_18%,transparent)]">
+              <button type="button" onClick={() => void respond("dismiss")}
+                aria-label={t("meetingNotification.folders.dismiss")}
+                className="absolute end-3 top-2 text-sm text-muted-foreground hover:text-foreground"><X size={14} /></button>
+              <ProposalsBanner noteId={data!.commitmentsNoteId} compact />
+            </div>
+          ) : (
           <MeetingNotificationCard
             title={title}
             body={body}
@@ -470,13 +502,21 @@ export default function MeetingNotificationOverlay(): ReactElement {
                 {t("meetingNotification.openPrep")}
               </button>
             ) : undefined}
+            prepCommitments={data?.variant === "starting" ? <PreMeetingBrief
+              people={buildPreMeetingBrief(parseBriefAttendees(data.event?.attendees), briefRows)}
+              onComplete={(row) => { void window.electronAPI.commitmentsUpdate(row.id, { status: "completed" }).then(() => {
+                setBriefRows((current) => current.filter((item) => item.id !== row.id));
+              }); }}
+              onMore={(person) => { void window.electronAPI.commitmentsOpenTodos({ kind: "person", value: person.label, email: person.email }); }}
+            /> : undefined}
             onDismiss={presentation.dismissible ? dismiss : undefined}
             closeVisible={isHovered}
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
           />
+          )}
         </div>
-        {mode !== "closed" && (
+        {mode !== "closed" && !isPostMeetingCommitments(data) && (
           <MeetingNotificationFolderPicker
             context={context}
             mode={mode}

@@ -2955,6 +2955,7 @@
     },
     "createMenu": {
       "note": "ノート",
+      "todo": "新しいタスク",
       "assistantChat": "アシスタントとのチャット",
       "chooseType": "作成する項目を選択"
     },
@@ -3763,11 +3764,13 @@
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "OpenWhispr の実行中、このコンピューターのアプリがローカルノートを読み取れるようにします。",
+        "description": "OpenWhispr の実行中、このコンピューターのアプリがローカルのノートとタスクにアクセスできるようにします。タスクの変更には書き込み権限のあるトークンが必要です。",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
         "tokenLabel": "Token name",
+        "allowTodoWrites": "このトークンにタスクの作成と更新を許可する",
+        "todoWrites": "タスクの書き込み権限",
         "create": "Create token",
         "shownOnce": "Copy this token now. It will not be shown again.",
         "copyToken": "Copy token",
@@ -3776,8 +3779,8 @@
         "created": "Created",
         "lastUsed": "Last used",
         "revoke": "Revoke",
-        "activity": "Recent reads",
-        "noActivity": "No external reads yet."
+        "activity": "最近のアクティビティ",
+        "noActivity": "外部からの操作はまだありません。"
       },
       "description": "Claude、ChatGPT、Cursor内でメモを使ってチャット、検索、作業ができます。",
       "step1": "AIツールで、公開URLを使用してOpenWhispr MCPを追加します",
@@ -5125,6 +5128,10 @@
         "description": "今日のミーティングと最近のオープンアクションアイテムには、関連するメモへのリンクがあります。",
         "pickTime": "保存する前に時間を選択してください"
       },
+      "weeklyTodoRollup": {
+        "name": "週次タスクまとめ",
+        "description": "完了・期限切れのタスク、他の人からの返答待ち、来週の重点項目をまとめます。"
+      },
       "fridayDigest": {
         "name": "金曜日のダイジェスト",
         "description": "過去7日間の意思決定、リスク、ブロッカー、およびステータス更新のドラフト。",
@@ -5169,6 +5176,73 @@
       "notConnected": "Server is not connected",
       "noTools": "No eligible tools",
       "promptPlaceholder": "Tell me what this routine should do…"
+    }
+  },
+  "todos": {
+    "sendToAgent": "エージェントに送る",
+    "agentProject": "エージェントのプロジェクト",
+    "handedOff": "引き継ぎ済み",
+    "openAgentJob": "エージェントのジョブを開く",
+    "handoffCancelled": "エージェントのジョブはキャンセルされました",
+    "handoffFailed": "エージェントのジョブは失敗しました",
+    "handoffUnavailable": "このタスクは引き継げません",
+    "delete": "削除",
+    "deleteConfirm": "このタスクを完全に削除しますか？元に戻すことはできません。",
+    "deletePermanently": "完全に削除",
+    "clearFilter": "Clear filter",
+    "briefTitle": "Commitments",
+    "briefOwe": "You owe",
+    "briefWaiting": "Waiting on",
+    "briefMore": "+{{count}} more",
+    "briefNoDate": "no date",
+    "briefComplete": "Complete {{text}}",
+    "title": "Todos",
+    "subtitle": "Commitments from your meetings and the ones you add.",
+    "showArchived": "Show archived",
+    "addPlaceholder": "Add a todo…",
+    "direction": "Commitment direction",
+    "iOwe": "I owe",
+    "waitingOn": "Waiting on",
+    "add": "Add",
+    "complete": "Complete",
+    "completed": "Completed",
+    "rejected": "Rejected",
+    "noDate": "No date",
+    "tomorrow": "Tomorrow",
+    "saidCount_one": "said {{count}}×",
+    "saidCount_other": "said {{count}}×",
+    "dateMoved_one": "moved {{count}}×",
+    "dateMoved_other": "moved {{count}}×",
+    "proposed": "Completion proposed",
+    "sourceRemoved": "Source removed",
+    "sourceMeeting": "Source meeting",
+    "person": "Person",
+    "save": "Save",
+    "hideQuote": "Hide quote",
+    "showQuote": "Show quote",
+    "actions": "Todo actions",
+    "editPerson": "Edit person",
+    "pickDate": "Pick a date",
+    "pushDay": "Push one day",
+    "clearDate": "Clear date",
+    "reject": "Reject",
+    "rejectReason": "Reason for rejecting (optional)",
+    "archived": "Archived: {{text}}",
+    "undo": "Undo",
+    "loadError": "Could not load todos",
+    "emptyArchive": "No archived todos yet.",
+    "empty": "Your meeting commitments will appear here. Add one above to get started.",
+    "proposalsTitle": "Review completion proposals",
+    "proposalsDescription": "A meeting may have said these were done. Review the quote before closing each todo.",
+    "secondHand": "Reported second hand",
+    "acceptCompletion": "Mark complete",
+    "keepOpen": "Keep open",
+    "groups": {
+      "overdue": "Overdue",
+      "today": "Due today",
+      "upcoming": "Upcoming",
+      "noDate": "No date",
+      "waiting": "Waiting on"
     }
   }
 }

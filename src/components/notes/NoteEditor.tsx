@@ -281,7 +281,15 @@ export default function NoteEditor({
     return () => { active = false; };
   }, [note.id]);
   const locale = useUiLocale();
-  const defaultViewMode: MeetingViewMode = enhancement ? "enhanced" : "raw";
+  // An upload's transcription lives in its transcript, so until the user writes
+  // notes it opens there rather than on an empty "Your notes".
+  const opensOnTranscript =
+    note.note_type === "upload" && !!note.transcript && !note.content.trim();
+  const defaultViewMode: MeetingViewMode = enhancement
+    ? "enhanced"
+    : opensOnTranscript
+      ? "transcript"
+      : "raw";
   const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
   // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
   // rendering, and a tab that no longer renders can never be the current one.
@@ -1400,6 +1408,7 @@ export default function NoteEditor({
               ) : (
                 <MeetingTranscriptChat
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
+                  noteId={note.id}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}

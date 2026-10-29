@@ -2756,6 +2756,10 @@
         "description": "Today's meetings and recent open action items, with links to related notes.",
         "pickTime": "Choose a time before saving"
       },
+      "weeklyTodoRollup": {
+        "name": "Weekly todo rollup",
+        "description": "Closed and overdue todos, items awaiting others, and one focus for next week."
+      },
       "fridayDigest": {
         "name": "Friday digest",
         "description": "Decisions, risks, blockers, and a draft status update from the past seven days.",
@@ -3283,6 +3287,7 @@
     },
     "createMenu": {
       "note": "Note",
+      "todo": "New todo",
       "assistantChat": "Assistant chat",
       "chooseType": "Choose what to create"
     },
@@ -4082,11 +4087,13 @@
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "Let apps on this computer read your local notes while OpenWhispr is running.",
+        "description": "Let apps on this computer access your local notes and todos while OpenWhispr is running. Todo changes require a token with write access.",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
         "tokenLabel": "Token name",
+        "allowTodoWrites": "Allow this token to create and update todos",
+        "todoWrites": "Todo write access",
         "create": "Create token",
         "shownOnce": "Copy this token now. It will not be shown again.",
         "copyToken": "Copy token",
@@ -4095,8 +4102,8 @@
         "created": "Created",
         "lastUsed": "Last used",
         "revoke": "Revoke",
-        "activity": "Recent reads",
-        "noActivity": "No external reads yet."
+        "activity": "Recent activity",
+        "noActivity": "No external activity yet."
       },
       "description": "Chat, search, and work with your notes inside Claude, ChatGPT, and Cursor.",
       "step1": "In your AI tool, add OpenWhispr MCP using the public URL",
@@ -5169,6 +5176,73 @@
       "reviewPrPrompt": "Review pull request {{pr}}. Summarize findings and risks.",
       "triageBugPrompt": "Triage bug report {{issue}}. Identify the likely cause and next steps.",
       "designDocPrompt": "Draft a design doc for {{topic}}."
+    }
+  },
+  "todos": {
+    "sendToAgent": "Send to agent",
+    "agentProject": "Agent project",
+    "handedOff": "Handed off",
+    "openAgentJob": "Open agent job",
+    "handoffCancelled": "Agent job cancelled",
+    "handoffFailed": "Agent job failed",
+    "handoffUnavailable": "Todo is no longer available for handoff",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this todo permanently? This cannot be undone.",
+    "deletePermanently": "Delete permanently",
+    "clearFilter": "Clear filter",
+    "briefTitle": "Commitments",
+    "briefOwe": "You owe",
+    "briefWaiting": "Waiting on",
+    "briefMore": "+{{count}} more",
+    "briefNoDate": "no date",
+    "briefComplete": "Complete {{text}}",
+    "title": "Todos",
+    "subtitle": "Commitments from your meetings and the ones you add.",
+    "showArchived": "Show archived",
+    "addPlaceholder": "Add a todo…",
+    "direction": "Commitment direction",
+    "iOwe": "I owe",
+    "waitingOn": "Waiting on",
+    "add": "Add",
+    "complete": "Complete",
+    "completed": "Completed",
+    "rejected": "Rejected",
+    "noDate": "No date",
+    "tomorrow": "Tomorrow",
+    "saidCount_one": "said {{count}}×",
+    "saidCount_other": "said {{count}}×",
+    "dateMoved_one": "moved {{count}}×",
+    "dateMoved_other": "moved {{count}}×",
+    "proposed": "Completion proposed",
+    "sourceRemoved": "Source removed",
+    "sourceMeeting": "Source meeting",
+    "person": "Person",
+    "save": "Save",
+    "hideQuote": "Hide quote",
+    "showQuote": "Show quote",
+    "actions": "Todo actions",
+    "editPerson": "Edit person",
+    "pickDate": "Pick a date",
+    "pushDay": "Push one day",
+    "clearDate": "Clear date",
+    "reject": "Reject",
+    "rejectReason": "Reason for rejecting (optional)",
+    "archived": "Archived: {{text}}",
+    "undo": "Undo",
+    "loadError": "Could not load todos",
+    "emptyArchive": "No archived todos yet.",
+    "empty": "Your meeting commitments will appear here. Add one above to get started.",
+    "proposalsTitle": "Review completion proposals",
+    "proposalsDescription": "A meeting may have said these were done. Review the quote before closing each todo.",
+    "secondHand": "Reported second hand",
+    "acceptCompletion": "Mark complete",
+    "keepOpen": "Keep open",
+    "groups": {
+      "overdue": "Overdue",
+      "today": "Due today",
+      "upcoming": "Upcoming",
+      "noDate": "No date",
+      "waiting": "Waiting on"
     }
   }
 }

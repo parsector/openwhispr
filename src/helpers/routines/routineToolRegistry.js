@@ -1,5 +1,6 @@
 const assembleTools = (settings) =>
   require("./generated/toolAssembly.cjs").createToolRegistry(settings);
+const { listTodos } = require("../commitments/toolRead");
 
 // Names and schemas come from chat assembly. Main injects only local read handlers.
 function createToolRegistry({
@@ -52,6 +53,13 @@ function createToolRegistry({
         return { success: false, data: null, displayText: "Note source unavailable" };
       }
     },
+    list_todos: async (args) => {
+      try { return listTodos(database, args); }
+      catch {
+        onUnavailable("list_todos");
+        return { success: false, data: null, displayText: "Todos unavailable" };
+      }
+    },
     get_calendar_events: async () => {
       try {
         const start = new Date();
@@ -94,6 +102,7 @@ function createToolRegistry({
   });
   const offered = new Map();
   for (const name of allowedTools) {
+    if (name === "create_todo" || name === "update_todo") continue;
     const tool = assembled.get(name);
     if (tool && (Object.hasOwn(executionOverrides, name) || mcpTools.includes(tool)))
       offered.set(name, tool);

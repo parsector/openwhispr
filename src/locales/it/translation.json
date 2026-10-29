@@ -2790,6 +2790,7 @@
     },
     "createMenu": {
       "note": "Nota",
+      "todo": "Nuova attività",
       "assistantChat": "Chat con l'assistente",
       "chooseType": "Scegli cosa creare"
     },
@@ -3763,11 +3764,13 @@
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "Consenti alle app su questo computer di leggere le note locali mentre OpenWhispr è in esecuzione.",
+        "description": "Consenti alle app su questo computer di accedere alle note e alle attività locali mentre OpenWhispr è in esecuzione. Per modificare le attività serve un token con accesso in scrittura.",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
         "tokenLabel": "Token name",
+        "allowTodoWrites": "Consenti a questo token di creare e aggiornare le attività",
+        "todoWrites": "Accesso in scrittura alle attività",
         "create": "Create token",
         "shownOnce": "Copy this token now. It will not be shown again.",
         "copyToken": "Copy token",
@@ -3776,8 +3779,8 @@
         "created": "Created",
         "lastUsed": "Last used",
         "revoke": "Revoke",
-        "activity": "Recent reads",
-        "noActivity": "No external reads yet."
+        "activity": "Attività recente",
+        "noActivity": "Nessuna attività esterna."
       },
       "description": "Chatta, cerca e lavora con le tue note in Claude, ChatGPT e Cursor.",
       "step1": "Nel tuo strumento di IA, aggiungi OpenWhispr MCP usando l'URL pubblico",
@@ -5125,6 +5128,10 @@
         "description": "Le riunioni di oggi e le recenti azioni aperte, con collegamenti alle note correlate.",
         "pickTime": "Scegli un orario prima di salvare"
       },
+      "weeklyTodoRollup": {
+        "name": "Riepilogo settimanale delle attività",
+        "description": "Attività chiuse e scadute, risposte attese e una priorità per la prossima settimana."
+      },
       "fridayDigest": {
         "name": "Digest del venerdì",
         "description": "Decisioni, rischi, bloccanti e una bozza di aggiornamento dello stato degli ultimi sette giorni.",
@@ -5169,6 +5176,73 @@
       "notConnected": "Server is not connected",
       "noTools": "No eligible tools",
       "promptPlaceholder": "Tell me what this routine should do…"
+    }
+  },
+  "todos": {
+    "sendToAgent": "Invia all’agente",
+    "agentProject": "Progetto dell’agente",
+    "handedOff": "Affidata",
+    "openAgentJob": "Apri il lavoro dell’agente",
+    "handoffCancelled": "Lavoro dell’agente annullato",
+    "handoffFailed": "Lavoro dell’agente non riuscito",
+    "handoffUnavailable": "L’attività non può più essere affidata",
+    "delete": "Elimina",
+    "deleteConfirm": "Eliminare definitivamente questa attività? Non è possibile annullare.",
+    "deletePermanently": "Elimina definitivamente",
+    "clearFilter": "Clear filter",
+    "briefTitle": "Commitments",
+    "briefOwe": "You owe",
+    "briefWaiting": "Waiting on",
+    "briefMore": "+{{count}} more",
+    "briefNoDate": "no date",
+    "briefComplete": "Complete {{text}}",
+    "title": "Todos",
+    "subtitle": "Commitments from your meetings and the ones you add.",
+    "showArchived": "Show archived",
+    "addPlaceholder": "Add a todo…",
+    "direction": "Commitment direction",
+    "iOwe": "I owe",
+    "waitingOn": "Waiting on",
+    "add": "Add",
+    "complete": "Complete",
+    "completed": "Completed",
+    "rejected": "Rejected",
+    "noDate": "No date",
+    "tomorrow": "Tomorrow",
+    "saidCount_one": "said {{count}}×",
+    "saidCount_other": "said {{count}}×",
+    "dateMoved_one": "moved {{count}}×",
+    "dateMoved_other": "moved {{count}}×",
+    "proposed": "Completion proposed",
+    "sourceRemoved": "Source removed",
+    "sourceMeeting": "Source meeting",
+    "person": "Person",
+    "save": "Save",
+    "hideQuote": "Hide quote",
+    "showQuote": "Show quote",
+    "actions": "Todo actions",
+    "editPerson": "Edit person",
+    "pickDate": "Pick a date",
+    "pushDay": "Push one day",
+    "clearDate": "Clear date",
+    "reject": "Reject",
+    "rejectReason": "Reason for rejecting (optional)",
+    "archived": "Archived: {{text}}",
+    "undo": "Undo",
+    "loadError": "Could not load todos",
+    "emptyArchive": "No archived todos yet.",
+    "empty": "Your meeting commitments will appear here. Add one above to get started.",
+    "proposalsTitle": "Review completion proposals",
+    "proposalsDescription": "A meeting may have said these were done. Review the quote before closing each todo.",
+    "secondHand": "Reported second hand",
+    "acceptCompletion": "Mark complete",
+    "keepOpen": "Keep open",
+    "groups": {
+      "overdue": "Overdue",
+      "today": "Due today",
+      "upcoming": "Upcoming",
+      "noDate": "No date",
+      "waiting": "Waiting on"
     }
   }
 }

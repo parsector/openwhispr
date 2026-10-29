@@ -57,6 +57,7 @@ import {
   type IntegrationsSection,
 } from "./integrations/integrationsSections";
 import { navigateMeetingNotification } from "./meetingNotificationNavigation";
+import { useTodosStore } from "../stores/todosStore";
 import MeetingRecordingMount from "./MeetingRecordingMount";
 import MeetingRecordingPill from "./notes/MeetingRecordingPill";
 import NewNoteMenu from "./notes/NewNoteMenu";
@@ -106,6 +107,7 @@ const SettingsModal = React.lazy(() => import("./SettingsModal"));
 const ReferralModal = React.lazy(() => import("./ReferralModal"));
 const PersonalNotesView = React.lazy(() => import("./notes/PersonalNotesView"));
 const RoutinesView = React.lazy(() => import("./routines/RoutinesView"));
+const TodosView = React.lazy(() => import("./todos/TodosView"));
 const InsightsView = React.lazy(() => import("./InsightsView"));
 const DictionaryView = React.lazy(() => import("./DictionaryView"));
 const UploadAudioView = React.lazy(() => import("./notes/UploadAudioView"));
@@ -144,6 +146,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  useEffect(() => {
+    const drain = () => { void window.electronAPI.commitmentsPendingTodosFilter().then((filter) => {
+      if (!filter) return;
+      useTodosStore.getState().setFilter(filter);
+      setActiveView("todos");
+    }); };
+    drain();
+    const off = window.electronAPI.onTodosNavigationPending(drain);
+    return () => off();
+  }, []);
   const [integrationsSection, setIntegrationsSection] = useState<IntegrationsSection>(
     DEFAULT_INTEGRATIONS_SECTION
   );
@@ -1079,6 +1091,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <div className="flex items-center gap-2">
                   <NewNoteMenu
                     onNewNote={handleNewNote}
+                    onNewTodo={() => { useTodosStore.getState().requestComposer(); setActiveView("todos"); }}
                     onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
                   />
                   <ProfileMenu
@@ -1259,6 +1272,21 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       });
                     }}
                   />
+                </Suspense>
+              )}
+              {activeView === "todos" && (
+                <Suspense fallback={null}>
+                  <TodosView onOpenAgentJob={() => { setIntegrationsSection("agents"); setActiveView("integrations"); }} onOpenNote={(id) => {
+                    void window.electronAPI.getNote(id).then((note) => {
+                      if (!note) return;
+                      if (note.folder_id) {
+                        setActiveFolderId(note.folder_id);
+                        void initializeNotes(null, 50, note.folder_id);
+                      }
+                      setActiveNoteId(id);
+                      setActiveView("personal-notes");
+                    });
+                  }} />
                 </Suspense>
               )}
               {activeView === "dictionary" && (

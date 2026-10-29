@@ -37,6 +37,41 @@ import type {
   NoteAttendeesRequest,
 } from "./connectors";
 
+export interface Commitment {
+  id: string;
+  text: string;
+  quote: string | null;
+  quote_segment_index: number | null;
+  source_note_id: string | null;
+  source_note_title: string | null;
+  source: "meeting" | "agent" | "manual";
+  source_agent: string | null;
+  agent_job_id: string | null;
+  person: string | null;
+  direction: "owe" | "waiting";
+  due_date: string | null;
+  due_raw: string | null;
+  status: "open" | "proposed" | "completed" | "rejected";
+  rejected_reason: string | null;
+  mention_count: number;
+  date_move_count?: number;
+  pinned_fields: string | null;
+  source_removed: number;
+  created_at: string;
+  archived_at: string | null;
+}
+
+export interface CommitmentProposal {
+  id: string;
+  commitment_id: string;
+  note_id: string;
+  quote: string | null;
+  strength: "explicit" | "second_hand";
+  text: string;
+  person: string | null;
+  expires_at: string;
+}
+
 export type LocalTranscriptionProvider = "whisper" | "nvidia" | "cohere";
 
 export interface MainWindowInputRegion {
@@ -161,16 +196,17 @@ export type TranscriptionErrorCode =
   | "CRASH_RECOVERY"
   | null;
 
-export type MeetingPromptVariant = "detected" | "starting" | "underway";
+export type MeetingPromptVariant = "detected" | "starting" | "underway" | "commitments";
 
 export interface MeetingNotificationData {
   detectionId: string;
   source: string;
   key: string;
-  event: { summary?: string | null } | null;
+  event: { summary?: string | null; attendees?: string | null } | null;
   variant: MeetingPromptVariant;
   joinUrl: string | null;
   prepNoteId?: number;
+  commitmentsNoteId?: number;
 }
 
 export interface MeetingFolderRef {
@@ -1527,6 +1563,25 @@ declare global {
     };
     mcpClient: import("../services/tools/mcpTools").McpClientApi;
     electronAPI: {
+      commitmentsList: (includeArchived?: boolean) => Promise<Commitment[]>;
+      isDebugEnabled: () => Promise<boolean>;
+      commitmentsDelete: (id: string) => Promise<{ success: true } | { success: false; error: string }>;
+      todosToolList: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      todosToolGet: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      todosToolCreate: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      todosToolUpdate: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      commitmentsForNote: (noteId: number) => Promise<Commitment[]>;
+      commitmentsOpenTodos: (filter: { kind: "note" | "person"; value: string; email?: string | null }) => Promise<boolean>;
+      commitmentsPendingTodosFilter: () => Promise<{ kind: "note" | "person"; value: string; email?: string | null } | null>;
+      onTodosNavigationPending: (callback: () => void) => () => void;
+      commitmentsCreate: (input: { text: string; person?: string | string[]; due_date?: string | null; direction?: "owe" | "waiting" }) => Promise<Commitment>;
+      commitmentsUpdate: (id: string, patch: Partial<Pick<Commitment, "status" | "person" | "rejected_reason" | "text">>) => Promise<Commitment | null>;
+      commitmentsSetAgentJob: (id: string, jobId: string) => Promise<Commitment | null>;
+      commitmentsSetDue: (id: string, input: { action: "push" | "pick" | "clear"; date?: string }) => Promise<Commitment | null>;
+      commitmentsProposalsList: (noteId?: number) => Promise<CommitmentProposal[]>;
+      commitmentsResolveProposal: (id: string, accept: boolean) => Promise<Commitment | null>;
+      commitmentsOverdueCount: () => Promise<number>;
+      onCommitmentsUpdated: (callback: () => void) => () => void;
       listRoutines: () => Promise<
         Array<{
           id: string;
@@ -1647,13 +1702,13 @@ declare global {
       localMcpState: () => Promise<{
         enabled: boolean;
         url: string | null;
-        tokens: Array<{ id: string; label: string; createdAt: string; lastUsedAt: string | null }>;
+        tokens: Array<{ id: string; label: string; createdAt: string; lastUsedAt: string | null; scopes: string[] }>;
         activity: Array<{ clientName: string; tool: string; timestamp: string }>;
       }>;
       localMcpEnable: (enabled: boolean) => Promise<{ enabled: boolean; url: string | null }>;
       localMcpCreateToken: (
-        label: string
-      ) => Promise<{ id: string; label: string; plaintext: string }>;
+        label: string, scopes: string[]
+      ) => Promise<{ id: string; label: string; plaintext: string; scopes: string[] }>;
       localMcpRevokeToken: (id: string) => Promise<boolean>;
       // Basic window operations
       setOnboardingWindowMode?: (mode: "compact" | "expanded" | "restore") => Promise<boolean>;
@@ -2021,7 +2076,8 @@ declare global {
         sourceFile?: string | null,
         audioDuration?: number | null,
         folderId?: number | null,
-        spaceId?: number | null
+        spaceId?: number | null,
+        transcript?: string | null
       ) => Promise<{ success: boolean; note?: NoteItem }>;
       getNote: (id: number) => Promise<NoteItem | null>;
       getNotes: (
@@ -3649,7 +3705,12 @@ declare global {
         segments: Array<{ start: number; end: number; speaker: string }>,
         text: string,
         duration: number
-      ) => Promise<{ success: boolean; text?: string; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        text?: string;
+        segments?: Array<{ text: string; start: number; end: number; speaker: string }>;
+        error?: string;
+      }>;
       diarizeAudioFile?: (
         filePath: string,
         options?: { numSpeakers?: number; threshold?: number; requestId?: string }
@@ -3850,6 +3911,7 @@ declare global {
       ) => () => void;
       getMeetingNotificationData?: () => Promise<MeetingNotificationData | null>;
       meetingNotificationReady?: () => Promise<void>;
+      meetingNotificationDismissCommitments?: () => Promise<void>;
       meetingNotificationOpenPrep?: (noteId: number) => Promise<boolean>;
       meetingNotificationRespond?: (
         detectionId: string,

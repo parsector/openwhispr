@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OpenWhispr — Todos / Preview A</title>
+  <style>
+    /* Values copied from src/index.css. Derived tints below use only these tokens. */
+    :root {
+      --color-primary: #4577e9;
+      --color-agent-brand: #8787ff;
+      --color-destructive: #dc2626;
+      --color-warning: #d97706;
+      --color-border: #e5e5e5;
+      --color-border-hover: #d4d4d4;
+      --color-background: #ffffff;
+      --color-foreground: #171717;
+      --color-muted-foreground: #525252;
+      --color-surface-0: #ffffff;
+      --color-surface-1: #fafafa;
+      --color-surface-3: #f5f5f5;
+      --color-surface-window: #f7f7f7;
+      --color-parchment-bg: #f9f6f1;
+      --color-parchment-border: #ddd4c7;
+      --color-parchment-text: #2b1f14;
+      --radius-md: 0.375rem;
+      --radius-lg: 0.5rem;
+      --radius-xl: 0.625rem;
+      --radius-shell: 0.75rem;
+      --font-family-sans: "Yowza", "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--color-surface-window); }
+    body { margin: 0; padding: 18px; color: var(--color-foreground); font: 14px/1.45 var(--font-family-sans); }
+    button, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, textarea:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+    ::selection { background: color-mix(in srgb, var(--color-primary) 18%, var(--color-background)); }
+    .panel { position: relative; margin: 0 auto; width: 100%; max-width: 1040px; min-height: 1190px; padding: 35px 38px 48px; border: 1px solid var(--color-border); border-radius: var(--radius-shell); background: var(--color-surface-0); }
+    .content { width: min(100%, 660px); }
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 26px; }
+    h1 { margin: 0; font-size: 23px; line-height: 1.2; font-weight: 650; letter-spacing: -0.025em; }
+    .subtitle { margin: 5px 0 0; color: var(--color-muted-foreground); font-size: 13px; }
+    .archive-filter { display: inline-flex; align-items: center; flex: none; gap: 8px; margin-top: 4px; padding: 4px 0; border: 0; background: none; color: var(--color-muted-foreground); font-size: 12px; }
+    .switch { width: 26px; height: 15px; padding: 2px; border: 1px solid var(--color-border-hover); border-radius: 99px; background: var(--color-surface-3); transition: background 120ms ease-out; }
+    .switch::after { content: ""; display: block; width: 9px; height: 9px; border-radius: 50%; background: var(--color-background); border: 1px solid var(--color-border-hover); transition: transform 120ms ease-out; }
+    [aria-checked="true"] .switch { background: var(--color-primary); border-color: var(--color-primary); }
+    [aria-checked="true"] .switch::after { transform: translateX(11px); border-color: var(--color-background); }
+    .composer { margin-bottom: 18px; border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-background); }
+    .composer-trigger { display: flex; align-items: center; gap: 11px; width: 100%; min-height: 45px; padding: 0 13px; border: 0; background: none; color: var(--color-muted-foreground); text-align: left; }
+    .plus { width: 21px; height: 21px; display: grid; place-items: center; border: 1px solid var(--color-border-hover); border-radius: 50%; color: var(--color-foreground); font-size: 18px; line-height: 1; font-weight: 300; }
+    .composer-trigger:hover { color: var(--color-foreground); }
+    .composer-details { display: none; padding: 0 14px 12px 45px; }
+    .composer.open .composer-details { display: block; }
+    .composer.open .composer-trigger { min-height: 40px; }
+    .composer textarea { width: 100%; min-height: 55px; resize: vertical; padding: 6px 0; border: 0; outline: 0; background: transparent; color: var(--color-foreground); }
+    .composer-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding-top: 8px; border-top: 1px solid var(--color-border); }
+    .date-button, .save-button { border-radius: var(--radius-md); font-size: 12px; }
+    .date-button { padding: 5px 8px; border: 1px solid var(--color-border); background: var(--color-surface-1); color: var(--color-foreground); }
+    .date-button svg { vertical-align: -2px; margin-right: 4px; }
+    .save-button { margin-left: auto; padding: 6px 10px; border: 0; background: var(--color-foreground); color: var(--color-background); }
+    .hint { color: var(--color-muted-foreground); font-size: 12px; }
+    .proposal-banner { display: flex; align-items: center; gap: 9px; min-height: 37px; margin-bottom: 18px; padding: 7px 0; border-top: 1px solid var(--color-border); border-bottom: 1px solid var(--color-border); font-size: 12px; }
+    .brand-mark { width: 7px; height: 7px; flex: none; border-radius: 2px; background: var(--color-agent-brand); transform: rotate(45deg); }
+    .proposal-banner strong { font-weight: 600; }
+    .proposal-banner span:not(.brand-mark) { color: var(--color-muted-foreground); }
+    .text-action { margin-left: auto; padding: 0; border: 0; background: none; color: var(--color-foreground); font-size: 12px; font-weight: 600; text-decoration: underline; text-decoration-color: var(--color-border-hover); text-underline-offset: 3px; }
+    .todo-group { margin-top: 23px; }
+    .group-title { display: flex; align-items: baseline; gap: 7px; margin: 0 0 6px; color: var(--color-muted-foreground); font-size: 11px; font-weight: 700; letter-spacing: .1em; line-height: 1.4; font-variant-caps: all-small-caps; }
+    .group-count { font-size: 11px; letter-spacing: 0; font-weight: 500; }
+    .todo-row { position: relative; display: grid; grid-template-columns: 22px minmax(0,1fr) auto; align-items: start; gap: 10px; min-height: 42px; padding: 8px 0; border-bottom: 1px solid var(--color-border); transition: background 120ms ease-out; }
+    .todo-row:last-child { border-bottom: 0; }
+    .todo-row:hover { background: var(--color-surface-1); }
+    .check { width: 17px; height: 17px; margin-top: 2px; padding: 0; display: grid; place-items: center; border: 1px solid var(--color-border-hover); border-radius: 50%; background: var(--color-background); color: transparent; }
+    .check::after { content: ""; width: 7px; height: 4px; border-left: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-1px) rotate(-45deg); }
+    .check:hover { border-color: var(--color-primary); color: var(--color-primary); }
+    .todo-main { min-width: 0; }
+    .todo-text { font-size: 13px; font-weight: 500; line-height: 1.55; }
+    .todo-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 3px; font-size: 12px; color: var(--color-muted-foreground); }
+    .person-chip, .source-chip, .date-pill { display: inline-flex; align-items: center; gap: 4px; min-height: 20px; padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
+    .person-chip { background: var(--color-parchment-bg); color: var(--color-parchment-text); }
+    .initial { display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: var(--color-parchment-border); font-size: 9px; font-weight: 700; }
+    .source-chip { background: var(--color-surface-3); color: var(--color-muted-foreground); }
+    .date-pill { align-self: start; margin-top: 1px; background: var(--color-surface-3); color: var(--color-muted-foreground); font-size: 12px; }
+    .date-pill.overdue { background: color-mix(in srgb, var(--color-destructive) 4%, var(--color-background)); color: var(--color-destructive); }
+    .date-pill.today { background: color-mix(in srgb, var(--color-warning) 9%, var(--color-background)); color: var(--color-parchment-text); }
+    .date-pill.no-date { background: transparent; color: var(--color-muted-foreground); }
+    .actions { display: flex; gap: 11px; margin-top: 3px; opacity: 0; pointer-events: none; transition: opacity 120ms ease-out; }
+    .todo-row:hover .actions, .todo-row:focus-within .actions { opacity: 1; pointer-events: auto; }
+    .actions button, .quote-toggle { padding: 0; border: 0; background: none; color: var(--color-muted-foreground); font-size: 12px; text-decoration: underline; text-decoration-color: var(--color-border-hover); text-underline-offset: 2px; }
+    .actions button:hover, .quote-toggle:hover { color: var(--color-foreground); }
+    .quote-toggle { margin-top: 4px; }
+    blockquote { margin: 6px 0 0; padding-left: 10px; border-left: 1px solid var(--color-border-hover); color: var(--color-muted-foreground); font-size: 12px; line-height: 1.5; }
+    .quote-source { display: block; margin-top: 3px; font-size: 12px; color: var(--color-muted-foreground); }
+    .meeting-card { position: absolute; top: 265px; right: 25px; width: 285px; padding: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: var(--color-background); box-shadow: 0 16px 36px color-mix(in srgb, var(--color-foreground) 14%, transparent); }
+    .meeting-overline { color: var(--color-muted-foreground); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    .meeting-card h2 { margin: 4px 0 2px; font-size: 14px; line-height: 1.35; font-weight: 650; }
+    .meeting-card > p { margin: 0 0 11px; color: var(--color-muted-foreground); font-size: 12px; }
+    .proposal-item { padding: 10px 0; border-top: 1px solid var(--color-border); }
+    .proposal-item strong { display: block; font-size: 12px; font-weight: 600; line-height: 1.4; }
+    .proposal-item blockquote { margin-top: 5px; font-size: 12px; }
+    .proposal-actions { display: flex; gap: 12px; margin-top: 7px; }
+    .proposal-actions button { padding: 0; border: 0; background: none; color: var(--color-foreground); font-size: 12px; font-weight: 600; }
+    .proposal-actions .reject { color: var(--color-muted-foreground); font-weight: 400; }
+    .proposal-item.resolved { opacity: .55; }
+    .alternate-state { margin-top: 36px; }
+    .alternate-label { margin: 0 0 8px; color: var(--color-muted-foreground); font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
+    .empty-card { display: flex; flex-direction: column; align-items: center; max-width: 460px; padding: 25px 28px; border: 1px solid var(--color-border); border-radius: var(--radius-xl); background: color-mix(in srgb, var(--color-background) 50%, var(--color-surface-1)); text-align: center; }
+    .empty-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--radius-xl); background: var(--color-surface-3); color: var(--color-muted-foreground); }
+    .empty-card h2 { margin: 12px 0 4px; font-size: 15px; font-weight: 600; }
+    .empty-card p { max-width: 31ch; margin: 0; color: var(--color-muted-foreground); font-size: 13px; line-height: 1.5; }
+    .toast { position: absolute; bottom: 18px; left: 38px; display: flex; align-items: center; gap: 18px; padding: 9px 13px; border-radius: var(--radius-lg); background: var(--color-foreground); color: var(--color-background); font-size: 12px; }
+    .toast button { padding: 0; border: 0; background: none; color: var(--color-background); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+    @media (hover: none) { .actions { opacity: 1; pointer-events: auto; } }
+    @media (max-width: 870px) { .panel { padding: 28px 24px 62px; } .content { width: 100%; } .meeting-card { position: relative; top: auto; right: auto; width: min(100%, 460px); margin-top: 28px; } .toast { left: 24px; } }
+    @media (max-width: 530px) { body { padding: 0; } .panel { border: 0; border-radius: 0; padding: 25px 18px 70px; } .page-header { flex-wrap: wrap; } .archive-filter { margin-top: 0; } .date-pill { grid-column: 2; justify-self: start; margin-top: -2px; } .todo-row { grid-template-columns: 22px 1fr; } .toast { left: 18px; right: 18px; justify-content: space-between; } }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <div class="content">
+      <header class="page-header">
+        <div><h1>Todos</h1><p class="subtitle">7 open · 3 proposed after meetings</p></div>
+        <button class="archive-filter" type="button" role="switch" aria-checked="false" aria-label="Show archived"><span class="switch" aria-hidden="true"></span>Show archived</button>
+      </header>
+
+      <section class="composer" aria-label="Add a todo">
+        <button class="composer-trigger" type="button" aria-expanded="false"><span class="plus" aria-hidden="true">+</span><span>Add a todo…</span></button>
+        <div class="composer-details">
+          <textarea aria-label="Todo text" placeholder="What needs to happen?"></textarea>
+          <div class="composer-footer">
+            <button class="date-button" type="button"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5"/><path d="M5 2v3M11 2v3M2 6.5h12"/></svg> Add date</button>
+            <span class="hint">Enter to save · Esc to close</span><button class="save-button" type="button">Add todo</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="proposal-banner" aria-label="Completion proposals"><span class="brand-mark" aria-hidden="true"></span><strong>3 completions proposed</strong><span>from today’s meetings</span><button class="text-action" type="button" id="review-button">Review</button></section>
+
+      <section class="todo-group" aria-labelledby="overdue-heading"><h2 class="group-title" id="overdue-heading">Overdue <span class="group-count">1</span></h2>
+        <article class="todo-row"><button class="check" type="button" aria-label="Complete Send revised rollout plan"></button><div class="todo-main"><div class="todo-text">Send the revised rollout plan to Maya</div><div class="todo-meta"><span class="person-chip"><span class="initial">M</span>Maya</span></div><div class="actions"><button type="button" data-action="complete">Complete</button><button type="button" data-action="reject">Reject</button><button type="button" data-action="date">Edit date</button></div></div><span class="date-pill overdue">Yesterday</span></article>
+      </section>
+      <section class="todo-group" aria-labelledby="today-heading"><h2 class="group-title" id="today-heading">Today <span class="group-count">2</span></h2>
+        <article class="todo-row"><button class="check" type="button" aria-label="Complete Confirm migration window"></button><div class="todo-main"><div class="todo-text">Confirm the migration window with the infrastructure team</div><div class="todo-meta"><span class="person-chip"><span class="initial">J</span>Jonah</span><span>From “Release readiness”</span></div><button class="quote-toggle" type="button" aria-expanded="true">Hide quote</button><blockquote>“I’ll confirm the migration window with infra by Wednesday.”<span class="quote-source">Release readiness · Oct 26</span></blockquote><div class="actions"><button type="button" data-action="complete">Complete</button><button type="button" data-action="reject">Reject</button><button type="button" data-action="date">Edit date</button></div></div><span class="date-pill today">Today</span></article>
+        <article class="todo-row"><button class="check" type="button" aria-label="Complete Share onboarding notes"></button><div class="todo-main"><div class="todo-text">Share onboarding notes with the support team</div><div class="todo-meta"><span class="source-chip"><span class="brand-mark" aria-hidden="true"></span>Agent · Follow-up</span></div><div class="actions"><button type="button" data-action="complete">Complete</button><button type="button" data-action="reject">Reject</button><button type="button" data-action="date">Edit date</button></div></div><span class="date-pill today">Today</span></article>
+      </section>
+      <section class="todo-group" aria-labelledby="upcoming-heading"><h2 class="group-title" id="upcoming-heading">Upcoming <span class="group-count">2</span></h2>
+        <article class="todo-row"><button class="check" type="button" aria-label="Complete Draft launch FAQ"></button><div class="todo-main"><div class="todo-text">Draft the launch FAQ before design review</div><div class="todo-meta"><span class="person-chip"><span class="initial">E</span>Elena</span></div><div class="actions"><button type="button" data-action="complete">Complete</button><button type="button" data-action="reject">Reject</button><button type="button" data-action="date">Edit date</button></div></div><span class="date-pill">Fri, Oct 30</span></article>
+        <article class="todo-row"><button class="check" type="button" aria-label="Complete Review renewal terms"></button><div class="todo-main"><div class="todo-text">Review renewal terms with legal</div><div class="todo-meta"><span>From “Customer planning”</span></div><div class="actions"><button type="button" data-action="complete">Complete</button><button type="button" data-action="reject">Reject</button><button type="button" data-action="date">Edit date</button></div></div><span class="date-pill">Nov 4</span></article>
+      </section>
+      <section class="todo-group" aria-labelledby="nodate-heading"><h2 class="group-title" id="nodate-heading">No date <span class="group-count">1</span></h2>
+        <article class="todo-row"><button class="check" type="button" aria-label="Complete Collect beta feedback"></button><div class="todo-main"><div class="todo-text">Collect beta feedback from the first five teams</div><div class="todo-meta"><span>From “Beta check-in”</span></div><div class="actions"><button type="button" data-action="complete">Complete</button><button type="button" data-action="reject">Reject</button><button type="button" data-action="date">Edit date</button></div></div><span class="date-pill no-date">Set date</span></article>
+      </section>
+      <section class="todo-group" aria-labelledby="waiting-heading"><h2 class="group-title" id="waiting-heading">Waiting on <span class="group-count">1</span></h2>
+        <article class="todo-row"><button class="check" type="button" aria-label="Complete Waiting on security review"></button><div class="todo-main"><div class="todo-text">Security review for the partner access change</div><div class="todo-meta"><span class="person-chip"><span class="initial">P</span>Priya</span><span>Waiting for a reply</span></div><div class="actions"><button type="button" data-action="complete">Complete</button><button type="button" data-action="reject">Reject</button><button type="button" data-action="date">Edit date</button></div></div><span class="date-pill">Thu, Oct 29</span></article>
+      </section>
+
+      <section class="alternate-state" aria-label="Empty state preview"><p class="alternate-label">When the list is empty</p><div class="empty-card"><span class="empty-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 4.5h9M6 9.5h9M6 14.5h5M2.5 4.5h1M2.5 9.5h1M2.5 14.5h1" stroke-linecap="round"/></svg></span><h2>No todos yet</h2><p>Todos appear automatically after a meeting where a commitment was made. You can add one here, too.</p></div></section>
+    </div>
+
+    <aside class="meeting-card" id="meeting-card" aria-label="Post-meeting completion review"><div class="meeting-overline">After “Weekly launch sync”</div><h2>3 completions proposed</h2><p>Review what the meeting suggests is done.</p>
+      <div class="proposal-item"><strong>Send the revised partner brief</strong><blockquote>“I sent the revised brief to the partner team this morning.”</blockquote><div class="proposal-actions"><button type="button">Accept completion</button><button class="reject" type="button">Keep open</button></div></div>
+      <div class="proposal-item"><strong>Confirm the demo schedule</strong><blockquote>“The demo schedule is confirmed for next week.”</blockquote><div class="proposal-actions"><button type="button">Accept completion</button><button class="reject" type="button">Keep open</button></div></div>
+      <div class="proposal-item"><strong>Share the updated handoff doc</strong><blockquote>“I’ve shared the handoff doc with support.”</blockquote><div class="proposal-actions"><button type="button">Accept completion</button><button class="reject" type="button">Keep open</button></div></div>
+    </aside>
+    <div class="toast" role="status" id="undo-toast"><span>Completed “Send kickoff summary”</span><button type="button">Undo</button></div>
+  </main>
+  <script>
+    const composer = document.querySelector('.composer');
+    const trigger = document.querySelector('.composer-trigger');
+    const draft = composer.querySelector('textarea');
+    const toast = document.querySelector('#undo-toast');
+    let lastCompleted = null;
+    let toastTimer = null;
+    function showToast(message) { toast.hidden = false; toast.querySelector('span').textContent = message; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, 5000); }
+    function closeComposer() { composer.classList.remove('open'); trigger.setAttribute('aria-expanded', 'false'); trigger.focus(); }
+    trigger.addEventListener('click', () => { composer.classList.add('open'); trigger.setAttribute('aria-expanded', 'true'); draft.focus(); });
+    composer.addEventListener('keydown', e => { if (e.key === 'Escape') closeComposer(); if (e.key === 'Enter' && !e.shiftKey && e.target === draft) { e.preventDefault(); composer.querySelector('.save-button').click(); } });
+    composer.querySelector('.date-button').addEventListener('click', e => { e.currentTarget.textContent = 'Today · Oct 28'; });
+    composer.querySelector('.save-button').addEventListener('click', () => { if (draft.value.trim()) { trigger.querySelector('span:last-child').textContent = 'Add a todo…'; draft.value = ''; closeComposer(); } });
+    document.querySelector('.archive-filter').addEventListener('click', e => { const button = e.currentTarget; button.setAttribute('aria-checked', button.getAttribute('aria-checked') === 'true' ? 'false' : 'true'); });
+    document.querySelectorAll('.quote-toggle').forEach(button => button.addEventListener('click', () => { const quote = button.nextElementSibling; quote.hidden = !quote.hidden; button.textContent = quote.hidden ? 'Show quote' : 'Hide quote'; button.setAttribute('aria-expanded', String(!quote.hidden)); }));
+    document.querySelectorAll('.todo-row').forEach(row => { const complete = () => { lastCompleted = row; row.hidden = true; showToast('Completed “' + row.querySelector('.todo-text').textContent + '”'); }; row.querySelector('.check').addEventListener('click', complete); row.querySelector('[data-action="complete"]').addEventListener('click', complete); row.querySelector('[data-action="reject"]').addEventListener('click', () => { row.hidden = true; showToast('Rejected “' + row.querySelector('.todo-text').textContent + '”'); lastCompleted = row; }); row.querySelector('[data-action="date"]').addEventListener('click', () => { row.querySelector('.date-pill').textContent = 'Tomorrow'; }); });
+    toast.querySelector('button').addEventListener('click', () => { if (lastCompleted) lastCompleted.hidden = false; clearTimeout(toastTimer); toast.hidden = true; });
+    document.querySelector('#review-button').addEventListener('click', () => document.querySelector('#meeting-card').scrollIntoView({ behavior: 'smooth', block: 'center' }));
+    document.querySelectorAll('.proposal-actions button').forEach(button => button.addEventListener('click', () => { button.closest('.proposal-item').classList.add('resolved'); button.closest('.proposal-actions').textContent = button.classList.contains('reject') ? 'Kept open' : 'Completion accepted'; }));
+  </script>
+</body>
+</html>

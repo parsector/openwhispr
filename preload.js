@@ -102,7 +102,7 @@ contextBridge.exposeInMainWorld("agentJobs", {
 contextBridge.exposeInMainWorld("electronAPI", {
   localMcpState: () => ipcRenderer.invoke("local-mcp-state"),
   localMcpEnable: (enabled) => ipcRenderer.invoke("local-mcp-enable", enabled),
-  localMcpCreateToken: (label) => ipcRenderer.invoke("local-mcp-create-token", label),
+  localMcpCreateToken: (label, scopes) => ipcRenderer.invoke("local-mcp-create-token", label, scopes),
   localMcpRevokeToken: (id) => ipcRenderer.invoke("local-mcp-revoke-token", id),
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
@@ -256,6 +256,25 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
+  commitmentsList: (includeArchived = false) => ipcRenderer.invoke("commitments-list", includeArchived),
+  isDebugEnabled: () => ipcRenderer.invoke("is-debug-enabled"),
+  commitmentsDelete: (id) => ipcRenderer.invoke("commitments-delete", id),
+  todosToolList: (args) => ipcRenderer.invoke("todos-tool-list", args),
+  todosToolGet: (args) => ipcRenderer.invoke("todos-tool-get", args),
+  todosToolCreate: (args) => ipcRenderer.invoke("todos-tool-create", args),
+  todosToolUpdate: (args) => ipcRenderer.invoke("todos-tool-update", args),
+  commitmentsForNote: (noteId) => ipcRenderer.invoke("commitments-for-note", noteId),
+  commitmentsOpenTodos: (filter) => ipcRenderer.invoke("commitments-open-todos", filter),
+  commitmentsPendingTodosFilter: () => ipcRenderer.invoke("commitments-pending-todos-filter"),
+  onTodosNavigationPending: registerListener("todos-navigation-pending", (callback) => () => callback()),
+  commitmentsCreate: (input) => ipcRenderer.invoke("commitments-create", input),
+  commitmentsUpdate: (id, patch) => ipcRenderer.invoke("commitments-update", id, patch),
+  commitmentsSetAgentJob: (id, jobId) => ipcRenderer.invoke("commitments-set-agent-job", id, jobId),
+  commitmentsSetDue: (id, input) => ipcRenderer.invoke("commitments-set-due", id, input),
+  commitmentsProposalsList: (noteId) => ipcRenderer.invoke("commitments-proposals-list", noteId),
+  commitmentsResolveProposal: (id, accept) => ipcRenderer.invoke("commitments-resolve-proposal", id, accept),
+  commitmentsOverdueCount: () => ipcRenderer.invoke("commitments-overdue-count"),
+  onCommitmentsUpdated: registerListener("commitments-updated", (callback) => () => callback()),
   listRoutines: () => ipcRenderer.invoke("routines-list"),
   routinePeople: () => ipcRenderer.invoke("routines-people"),
   routinePresets: () => ipcRenderer.invoke("routines-presets"),
@@ -275,7 +294,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setRoutineModelChoice: (choice) => ipcRenderer.invoke("routines-model-choice", choice),
   setRoutineRecording: (source, active) => ipcRenderer.send("routines-recording", source, active),
   onRoutinesUpdated: registerListener("routines-updated", (callback) => () => callback()),
-  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId) =>
+  saveNote: (title, content, noteType, sourceFile, audioDuration, folderId, spaceId, transcript) =>
     ipcRenderer.invoke(
       "db-save-note",
       title,
@@ -284,7 +303,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
       sourceFile,
       audioDuration,
       folderId,
-      spaceId
+      spaceId,
+      transcript
     ),
   getNote: (id) => ipcRenderer.invoke("db-get-note", id),
   getNotes: (noteType, limit, folderId, spaceId) =>
@@ -1507,6 +1527,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),
   meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
+  meetingNotificationDismissCommitments: () => ipcRenderer.invoke("meeting-notification-dismiss-commitments"),
   meetingNotificationOpenPrep: (noteId) => ipcRenderer.invoke("meeting-notification-open-prep", noteId),
   meetingNotificationRespond: (detectionId, action, options) =>
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action, options),

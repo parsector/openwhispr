@@ -757,7 +757,7 @@ class IPCHandlers {
     } catch {
       this._routineModelChoice = null;
     }
-    const infer = async ({ model, prompt, toolsAvailable, registry, context }) => {
+    const infer = async ({ model, prompt, toolsAvailable, registry, context, systemPrompt, responseFormat, maxTokens = 1800 }) => {
       if (!model?.model) throw new Error("Choose a chat model before running a routine");
       let localRoute = null;
       if (model.mode === "local" && toolsAvailable) {
@@ -771,9 +771,10 @@ class IPCHandlers {
         const bridge = require("../services/localReasoningBridge").default;
         return {
           text: await bridge.processText(prompt, model.model, {
-            maxTokens: 1800,
+            maxTokens,
             temperature: 0.3,
-            systemPrompt: "Write a concise, factual routine note in Markdown.",
+            systemPrompt: systemPrompt || "Write a concise, factual routine note in Markdown.",
+            responseFormat,
           }),
         };
       }
@@ -802,7 +803,7 @@ class IPCHandlers {
             model: model.model,
             requestPurpose: "assistant",
             purpose: "assistant",
-            systemPrompt: "Write a concise, factual routine note in Markdown.",
+            systemPrompt: systemPrompt || "Write a concise, factual routine note in Markdown.",
             sessionId: this.sessionId,
             clientType: "desktop",
             appVersion: app.getVersion(),
@@ -837,7 +838,7 @@ class IPCHandlers {
             },
             body: JSON.stringify({
               model: model.model,
-              max_tokens: 1800,
+              max_tokens: maxTokens,
               messages,
               ...(toolsAvailable && !confirmed
                 ? {
@@ -936,7 +937,7 @@ class IPCHandlers {
         const data = await complete({
           model: model.model,
           messages,
-          max_tokens: 1800,
+          max_tokens: maxTokens,
           ...(toolsAvailable && !confirmed
             ? {
                 tools: registry.list().map((tool) => ({
@@ -1064,6 +1065,7 @@ class IPCHandlers {
       mcpApi: this.mcpClientManager ? routineMcpApi(this.mcpClientManager) : null,
     });
     const recordingSources = new Set();
+    const shownCommitmentCards = new Set();
     const recordingSenders = new WeakSet();
     const isRecording = () => Boolean(this._activeRecordingPipeline || recordingSources.size);
     const queue = new RoutineQueue({ run: (job) => runner.run(job), isRecording });
@@ -1090,6 +1092,7 @@ class IPCHandlers {
       queue,
       modelChoice: () => this._routineModelChoice,
       onRunFinished: () => broadcastToWindows("routines-updated"),
+      onCommitmentsUpdated: () => broadcastToWindows("commitments-updated"),
     });
     this.routineScheduler.start();
     ipcMain.on("meeting-note-stopped", (_event, noteId) => {
@@ -1097,9 +1100,93 @@ class IPCHandlers {
     });
     ipcMain.on("meeting-note-finalized", (_event, data) => {
       if (Number.isSafeInteger(data?.noteId) && data.noteId > 0 &&
-        [true, false, "skipped"].includes(data.diarized))
+        [true, false, "skipped"].includes(data.diarized)) {
         this.routineScheduler.meetingFinalized(data.noteId, data.diarized);
+        setImmediate(() => {
+          Promise.resolve().then(() => {
+            const note = this.databaseManager.getNote(data.noteId);
+            if (!note || note.deleted_at) return { skipped: true };
+            const { extractCommitments } = require("./commitments/extract");
+            return extractCommitments({ note, database: this.databaseManager,
+              model: this._routineModelChoice, infer: (options) => infer({ ...options, toolsAvailable: false }) });
+          })
+            .then(async (result) => {
+              if (result.skipped) return;
+              broadcastToWindows("commitments-updated");
+              if (result.proposals > 0 && !shownCommitmentCards.has(data.noteId)) {
+                shownCommitmentCards.add(data.noteId);
+                await this.windowManager.showMeetingNotification({
+                  detectionId: `commitments:${data.noteId}`, source: "commitments",
+                  key: `commitments:${data.noteId}`, event: null, variant: "commitments",
+                  joinUrl: null, commitmentsNoteId: data.noteId,
+                }, { autoDismiss: false });
+              }
+            })
+            .catch((error) => debugLogger.error("Commitment extraction failed", { error: error.message }, "commitments"));
+        });
+      }
     });
+    const { CommitmentStore } = require("./commitments/store");
+    const commitments = () => new CommitmentStore(this.databaseManager);
+    const changed = (value) => { if (value) broadcastToWindows("commitments-updated"); return value; };
+    ipcMain.handle("commitments-list", (_event, includeArchived = false) => commitments().list(includeArchived === true));
+    ipcMain.handle("is-debug-enabled", () => debugLogger.isDebugEnabled());
+    ipcMain.handle("commitments-delete", (_event, id) =>
+      require("./commitments/delete").deleteCommitment({
+        store: commitments(), debugLogger, broadcast: broadcastToWindows,
+      }, id));
+    ipcMain.handle("todos-tool-list", (_event, args) => require("./commitments/toolRead").listTodos(this.databaseManager, args));
+    ipcMain.handle("todos-tool-get", (_event, args) => require("./commitments/toolRead").getTodo(this.databaseManager, args));
+    ipcMain.handle("todos-tool-create", (_event, args) => changed(require("./commitments/toolWrite").createTodo(this.databaseManager, args, "Assistant")));
+    ipcMain.handle("todos-tool-update", (_event, args) => changed(require("./commitments/toolWrite").updateTodo(this.databaseManager, args, "Assistant")));
+    ipcMain.handle("commitments-for-note", (_event, noteId) =>
+      Number.isSafeInteger(noteId) ? commitments().forNote(noteId) : []);
+    ipcMain.handle("commitments-open-todos", async (_event, filter) => {
+      if (!filter || !["note", "person"].includes(filter.kind) ||
+          typeof filter.value !== "string" || !filter.value.trim()) return false;
+      this.windowManager._pendingTodosFilter = { kind: filter.kind, value: filter.value,
+        email: typeof filter.email === "string" ? filter.email : null };
+      await this.windowManager.createControlPanelWindow();
+      this.windowManager.showControlPanel();
+      this.windowManager.sendToControlPanel("todos-navigation-pending");
+      return true;
+    });
+    ipcMain.handle("commitments-pending-todos-filter", () => {
+      const filter = this.windowManager._pendingTodosFilter || null;
+      this.windowManager._pendingTodosFilter = null;
+      return filter;
+    });
+    ipcMain.handle("commitments-create", (_event, input) => changed(commitments().create({
+      text: input?.text, person: input?.person, due_date: input?.due_date,
+      direction: input?.direction,
+    }, { user: true })));
+    ipcMain.handle("commitments-update", (_event, id, patch) => {
+      if (typeof id !== "string" || !patch || typeof patch !== "object") return null;
+      const allowed = ["text", "person", "status", "rejected_reason"];
+      const selected = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)));
+      return changed(commitments().update(id, selected, { user: true }));
+    });
+    ipcMain.handle("commitments-set-agent-job", (_event, id, jobId) => {
+      if (typeof id !== "string" || typeof jobId !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(jobId)) return null;
+      return changed(commitments().setAgentJob(id, jobId));
+    });
+    ipcMain.handle("commitments-set-due", (_event, id, input) => {
+      const store = commitments();
+      const row = typeof id === "string" && store.get(id);
+      if (!row) return null;
+      let date = null;
+      if (input?.action === "pick" && /^\d{4}-\d{2}-\d{2}$/.test(input.date || "")) date = input.date;
+      else if (input?.action === "push") {
+        const base = row.due_date ? new Date(`${row.due_date}T12:00:00`) : new Date();
+        base.setDate(base.getDate() + 1);
+        date = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+      } else if (input?.action !== "clear") return null;
+      return changed(store.setDue(id, date));
+    });
+    ipcMain.handle("commitments-proposals-list", (_event, noteId) => commitments().proposals(noteId));
+    ipcMain.handle("commitments-resolve-proposal", (_event, id, accept) =>
+      changed(commitments().resolveProposal(id, accept === true)));
+    ipcMain.handle("commitments-overdue-count", () => commitments().overdueCount());
     ipcMain.handle("routines-list", () => this.databaseManager.listRoutines());
     ipcMain.handle("routines-people", () => this.databaseManager.listRoutinePeople());
     ipcMain.handle("routines-meeting-preview", (_event, config) => {
@@ -2746,7 +2833,17 @@ class IPCHandlers {
 
     ipcMain.handle(
       "db-save-note",
-      async (event, title, content, noteType, sourceFile, audioDuration, folderId, spaceId) => {
+      async (
+        event,
+        title,
+        content,
+        noteType,
+        sourceFile,
+        audioDuration,
+        folderId,
+        spaceId,
+        transcript
+      ) => {
         const result = this.databaseManager.saveNote(
           title,
           content,
@@ -2754,7 +2851,8 @@ class IPCHandlers {
           sourceFile,
           audioDuration,
           folderId,
-          spaceId
+          spaceId,
+          transcript
         );
         if (result?.success && result?.note) {
           setImmediate(() => broadcastToWindows("note-added", result.note));
@@ -3262,6 +3360,11 @@ class IPCHandlers {
     ipcMain.handle("db-hard-delete-note", (_, id) => {
       const result = this.databaseManager.hardDeleteNote(id);
       if (result?.success) {
+        try {
+          const { CommitmentStore } = require("./commitments/store");
+          new CommitmentStore(this.databaseManager).sourceRemoved(id);
+          broadcastToWindows("commitments-updated");
+        } catch (error) { debugLogger.error("Commitment source cleanup failed", { error: error.message }, "commitments"); }
         this.notifyVectorChanges();
         this._asyncMirrorDelete(id);
         setImmediate(() => broadcastToWindows("note-deleted", { id }));
@@ -4624,7 +4727,7 @@ class IPCHandlers {
           end: typeof s.end === "number" && isFinite(s.end) ? s.end : 0,
         }));
         const merged = mergeSpeakersWithText(sanitizedSegments, text, duration);
-        return { success: true, text: formatSpeakerTranscript(merged) };
+        return { success: true, text: formatSpeakerTranscript(merged), segments: merged };
       } catch (error) {
         debugLogger.error("Speaker merge error", { error: error.message });
         return { success: false, error: error.message };
@@ -11246,6 +11349,12 @@ class IPCHandlers {
             debugLogger.warn("BYOK diarization requested but provider returned no speaker data");
           }
           const segments = timestamps ? mapVerboseSegments(data.data) : null;
+          if (timestamps && !segments) {
+            debugLogger.debug("BYOK transcription returned no usable segment timing", {
+              provider: route.provider,
+              hasSegments: Array.isArray(data.data?.segments),
+            });
+          }
           return { success: true, text: data.data.text, ...(segments ? { segments } : {}) };
         } catch (rawError) {
           const error = providerErrorContext
@@ -11408,48 +11517,8 @@ class IPCHandlers {
 
     ipcMain.handle("set-debug-logging", async (event, enabled) => {
       try {
-        const path = require("path");
-        const fs = require("fs");
-        const envPath = path.join(app.getPath("userData"), ".env");
+        await this.environmentManager.saveDebugLogging(enabled);
 
-        // Read current .env content
-        let envContent = "";
-        if (fs.existsSync(envPath)) {
-          envContent = fs.readFileSync(envPath, "utf8");
-        }
-
-        // Parse lines
-        const lines = envContent.split("\n");
-        const logLevelIndex = lines.findIndex((line) =>
-          line.trim().startsWith("OPENWHISPR_LOG_LEVEL=")
-        );
-
-        if (enabled) {
-          // Set to debug
-          if (logLevelIndex !== -1) {
-            lines[logLevelIndex] = "OPENWHISPR_LOG_LEVEL=debug";
-          } else {
-            // Add new line
-            if (lines.length > 0 && lines[lines.length - 1] !== "") {
-              lines.push("");
-            }
-            lines.push("# Debug logging setting");
-            lines.push("OPENWHISPR_LOG_LEVEL=debug");
-          }
-        } else {
-          // Remove or set to info
-          if (logLevelIndex !== -1) {
-            lines[logLevelIndex] = "OPENWHISPR_LOG_LEVEL=info";
-          }
-        }
-
-        // Write back
-        fs.writeFileSync(envPath, lines.join("\n"), "utf8");
-
-        // Update environment variable
-        process.env.OPENWHISPR_LOG_LEVEL = enabled ? "debug" : "info";
-
-        // Refresh logger state
         debugLogger.refreshLogLevel();
 
         return {
@@ -12802,6 +12871,11 @@ class IPCHandlers {
     ipcMain.handle("meeting-notification-ready", async (event) => {
       this.windowManager?.showNotificationWindow(event.sender);
     });
+    ipcMain.handle("meeting-notification-dismiss-commitments", async (event) => {
+      if (this.windowManager?.notificationWindow?.webContents !== event.sender) return;
+      if (this.windowManager?._pendingNotificationData?.variant !== "commitments") return;
+      this.windowManager.dismissMeetingNotification();
+    });
 
     // Note files (markdown mirror) handlers
     ipcMain.handle("note-files-set-enabled", async (_event, enabled, customPath, options) => {
@@ -13659,6 +13733,11 @@ class IPCHandlers {
   deleteNoteInternal(id) {
     const result = this.databaseManager.deleteNote(id);
     if (result?.success) {
+      try {
+        const { CommitmentStore } = require("./commitments/store");
+        new CommitmentStore(this.databaseManager).sourceRemoved(id);
+        broadcastToWindows("commitments-updated");
+      } catch (error) { debugLogger.error("Commitment source cleanup failed", { error: error.message }, "commitments"); }
       setImmediate(() => broadcastToWindows("note-deleted", { id }));
       this.notifyVectorChanges();
       this._asyncMirrorDelete(id);

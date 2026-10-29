@@ -1,8 +1,11 @@
 const { searchNotes } = require("../../../helpers/noteSearch");
+const { definitions: todoDefinitions, listTodos, getTodo } = require("../../../helpers/commitments/toolRead");
+const { definitions: todoWriteDefinitions, createTodo, updateTodo } = require("../../../helpers/commitments/toolWrite");
 
 const definitions = [
   {
     name: "search_notes",
+    scope: null,
     description: "Search local notes in every space available to the signed-in user.",
     inputSchema: {
       type: "object",
@@ -17,6 +20,7 @@ const definitions = [
   },
   {
     name: "get_note",
+    scope: null,
     description: "Read a local note by numeric ID.",
     inputSchema: {
       type: "object",
@@ -27,6 +31,7 @@ const definitions = [
   },
   {
     name: "list_folders",
+    scope: null,
     description: "List local note folders and their spaces.",
     inputSchema: {
       type: "object",
@@ -34,6 +39,8 @@ const definitions = [
       additionalProperties: false,
     },
   },
+  ...todoDefinitions.map(({ name, description, parameters }) => ({ name, description, inputSchema: parameters, scope: null })),
+  ...todoWriteDefinitions.map(({ name, description, parameters, scope }) => ({ name, description, inputSchema: parameters, scope })),
 ];
 
 function capResult(value) {
@@ -69,15 +76,15 @@ function capResult(value) {
   return capped;
 }
 
-function createTools(database, getSemanticSearch) {
-  async function call(name, args = {}) {
+function createTools(database, getSemanticSearch, onTodosChanged = () => {}) {
+  async function call(name, args = {}, context = {}) {
     if (!args || typeof args !== "object" || Array.isArray(args))
-      throw new Error("Invalid arguments");
+      throw Object.assign(new Error("Arguments must be an object."), { code: -32602 });
     const keys = Object.keys(args);
     const definition = definitions.find((tool) => tool.name === name);
     if (!definition) throw new Error("Unknown tool");
     if (keys.some((key) => !(key in definition.inputSchema.properties)))
-      throw new Error("Unknown argument");
+      throw Object.assign(new Error(`Unknown argument. Allowed: ${Object.keys(definition.inputSchema.properties).join(", ")}.`), { code: -32602 });
     const spaces = database.getSpaces();
     const spaceNames = new Map(spaces.map((space) => [space.id, space.name]));
     let result;
@@ -139,6 +146,16 @@ function createTools(database, getSemanticSearch) {
             displayText: `Retrieved note: "${note.title}"`,
           }
         : { success: false, data: null, displayText: `Note with ID ${args.id} not found` };
+    } else if (name === "list_todos") {
+      result = listTodos(database, args);
+    } else if (name === "get_todo") {
+      result = getTodo(database, args);
+    } else if (name === "create_todo") {
+      result = createTodo(database, args, context.clientName || "Unknown client");
+      onTodosChanged();
+    } else if (name === "update_todo") {
+      result = updateTodo(database, args, context.clientName || "Unknown client");
+      if (result.success) onTodosChanged();
     } else {
       const data = database.getFolders().map((folder) => ({
         id: folder.id,

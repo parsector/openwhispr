@@ -85,7 +85,7 @@ test("authentication, host guard, body cap, handshake, and read tools", async ()
     const unknown = await request("tools/call", 21, { name: "missing", arguments: {} }, headers);
     assert.equal((await unknown.json()).error.code, -32602);
     const listed = await request("tools/list", 3, {}, headers);
-    assert.deepEqual((await listed.json()).result.tools.map((tool) => tool.name), ["search_notes", "get_note", "list_folders"]);
+    assert.deepEqual((await listed.json()).result.tools.map((tool) => tool.name), ["search_notes", "get_note", "list_folders", "list_todos", "get_todo", "create_todo", "update_todo"]);
     const called = await request("tools/call", 4, { name: "get_note", arguments: { id: 7 } }, headers);
     assert.match((await called.json()).result.content[0].text, /A private note/);
     const searched = await request("tools/call", 5, { name: "search_notes", arguments: { query: "Plan" } }, headers);

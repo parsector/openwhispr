@@ -32,19 +32,22 @@ function createTokenStore(userData, fsImpl = fs) {
       throw error;
     }
   }
-  const publicToken = ({ id, label, createdAt, lastUsedAt }) => ({
+  const publicToken = ({ id, label, createdAt, lastUsedAt, scopes }) => ({
     id,
     label,
     createdAt,
     lastUsedAt,
+    scopes: Array.isArray(scopes) ? scopes : [],
   });
   function list() {
     return read(file).map(publicToken);
   }
-  function create(label) {
+  function create(label, scopes = []) {
     if (typeof label !== "string" || !label.trim() || label.length > 100) {
       throw new Error("Token label must be 1–100 characters");
     }
+    if (!Array.isArray(scopes) || scopes.some((scope) => scope !== "todos:write") || new Set(scopes).size !== scopes.length)
+      throw new Error('Token scopes must be an array containing only "todos:write"');
     const plaintext = `owk_${crypto.randomBytes(32).toString("base64url")}`;
     const entry = {
       id: crypto.randomUUID(),
@@ -52,6 +55,7 @@ function createTokenStore(userData, fsImpl = fs) {
       hash: crypto.createHash("sha256").update(plaintext).digest("hex"),
       createdAt: new Date().toISOString(),
       lastUsedAt: null,
+      scopes,
     };
     write(file, [...read(file), entry]);
     return { ...publicToken(entry), plaintext };

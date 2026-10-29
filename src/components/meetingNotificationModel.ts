@@ -24,7 +24,7 @@ export function shouldDismissMeetingNotificationSwipe(
 export function getMeetingNotificationPresentation(
   data: MeetingNotificationData | null
 ): MeetingNotificationPresentation {
-  const variant = data?.variant ?? "detected";
+  const variant = data?.variant === "commitments" ? "detected" : data?.variant ?? "detected";
   const eventTitle = variant !== "detected" ? data?.event?.summary : null;
   return {
     ...(eventTitle ? { title: eventTitle } : { titleKey: "meetingNotification.title" }),
@@ -33,6 +33,10 @@ export function getMeetingNotificationPresentation(
     action: data?.joinUrl ? "join" : "start",
     dismissible: true,
   };
+}
+
+export function isPostMeetingCommitments(data: MeetingNotificationData | null): boolean {
+  return data?.variant === "commitments" && Number.isSafeInteger(data.commitmentsNoteId);
 }
 
 interface MeetingNotificationInitializationOptions {

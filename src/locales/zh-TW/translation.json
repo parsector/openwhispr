@@ -2790,6 +2790,7 @@
     },
     "createMenu": {
       "note": "筆記",
+      "todo": "新增待辦事項",
       "assistantChat": "助理聊天",
       "chooseType": "選擇要建立的內容"
     },
@@ -3763,11 +3764,13 @@
     "mcp": {
       "local": {
         "title": "Local server",
-        "description": "允許此電腦上的應用程式在 OpenWhispr 執行時讀取本機筆記。",
+        "description": "允許此電腦上的應用程式在 OpenWhispr 執行時存取本機筆記和待辦事項。變更待辦事項需要具有寫入權限的權杖。",
         "enable": "Enable local server",
         "copyUrl": "Copy local MCP URL",
         "tokens": "Access tokens",
         "tokenLabel": "Token name",
+        "allowTodoWrites": "允許此權杖建立和更新待辦事項",
+        "todoWrites": "待辦事項寫入權限",
         "create": "Create token",
         "shownOnce": "Copy this token now. It will not be shown again.",
         "copyToken": "Copy token",
@@ -3776,8 +3779,8 @@
         "created": "Created",
         "lastUsed": "Last used",
         "revoke": "Revoke",
-        "activity": "Recent reads",
-        "noActivity": "No external reads yet."
+        "activity": "最近活動",
+        "noActivity": "尚無外部活動。"
       },
       "description": "在 Claude、ChatGPT 和 Cursor 中與你的筆記一起聊天、搜尋和工作。",
       "step1": "在你的 AI 工具中，使用公開 URL 新增 OpenWhispr MCP",
@@ -5125,6 +5128,10 @@
         "description": "今天的會議和最近的公開行動項目，以及相關備註的連結。",
         "pickTime": "儲存前請選擇時間"
       },
+      "weeklyTodoRollup": {
+        "name": "每週待辦彙整",
+        "description": "彙整已結束和逾期的待辦、等待他人處理的事項，以及下週的一項重點。"
+      },
       "fridayDigest": {
         "name": "星期五摘要",
         "description": "過去七天的決策、風險、障礙和狀態更新草稿。",
@@ -5169,6 +5176,73 @@
       "notConnected": "Server is not connected",
       "noTools": "No eligible tools",
       "promptPlaceholder": "Tell me what this routine should do…"
+    }
+  },
+  "todos": {
+    "sendToAgent": "傳送給代理",
+    "agentProject": "代理專案",
+    "handedOff": "已移交",
+    "openAgentJob": "開啟代理工作",
+    "handoffCancelled": "代理工作已取消",
+    "handoffFailed": "代理工作失敗",
+    "handoffUnavailable": "此待辦已無法移交",
+    "delete": "刪除",
+    "deleteConfirm": "永久刪除此待辦事項？此操作無法復原。",
+    "deletePermanently": "永久刪除",
+    "clearFilter": "Clear filter",
+    "briefTitle": "Commitments",
+    "briefOwe": "You owe",
+    "briefWaiting": "Waiting on",
+    "briefMore": "+{{count}} more",
+    "briefNoDate": "no date",
+    "briefComplete": "Complete {{text}}",
+    "title": "Todos",
+    "subtitle": "Commitments from your meetings and the ones you add.",
+    "showArchived": "Show archived",
+    "addPlaceholder": "Add a todo…",
+    "direction": "Commitment direction",
+    "iOwe": "I owe",
+    "waitingOn": "Waiting on",
+    "add": "Add",
+    "complete": "Complete",
+    "completed": "Completed",
+    "rejected": "Rejected",
+    "noDate": "No date",
+    "tomorrow": "Tomorrow",
+    "saidCount_one": "said {{count}}×",
+    "saidCount_other": "said {{count}}×",
+    "dateMoved_one": "moved {{count}}×",
+    "dateMoved_other": "moved {{count}}×",
+    "proposed": "Completion proposed",
+    "sourceRemoved": "Source removed",
+    "sourceMeeting": "Source meeting",
+    "person": "Person",
+    "save": "Save",
+    "hideQuote": "Hide quote",
+    "showQuote": "Show quote",
+    "actions": "Todo actions",
+    "editPerson": "Edit person",
+    "pickDate": "Pick a date",
+    "pushDay": "Push one day",
+    "clearDate": "Clear date",
+    "reject": "Reject",
+    "rejectReason": "Reason for rejecting (optional)",
+    "archived": "Archived: {{text}}",
+    "undo": "Undo",
+    "loadError": "Could not load todos",
+    "emptyArchive": "No archived todos yet.",
+    "empty": "Your meeting commitments will appear here. Add one above to get started.",
+    "proposalsTitle": "Review completion proposals",
+    "proposalsDescription": "A meeting may have said these were done. Review the quote before closing each todo.",
+    "secondHand": "Reported second hand",
+    "acceptCompletion": "Mark complete",
+    "keepOpen": "Keep open",
+    "groups": {
+      "overdue": "Overdue",
+      "today": "Due today",
+      "upcoming": "Upcoming",
+      "noDate": "No date",
+      "waiting": "Waiting on"
     }
   }
 }
