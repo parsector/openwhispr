@@ -106,7 +106,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
               </button>}
           </div>
           {editingPerson && <form className="mt-2 flex gap-2" onSubmit={(event) => { event.preventDefault(); onPerson(row, person); setEditingPerson(false); }}>
-            <input aria-label={t("todos.person")} value={person} onChange={(event) => setPerson(event.target.value)}
+            <input dir="auto" aria-label={t("todos.person")} value={person} onChange={(event) => setPerson(event.target.value)}
               className="rounded border border-border bg-background px-2 py-1 text-sm" />
             <button type="submit" className="text-sm text-primary">{t("todos.save")}</button>
           </form>}
@@ -120,7 +120,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
               event.preventDefault(); event.currentTarget.requestSubmit();
             }
           }}>
-            <input ref={rejectInputRef} autoFocus aria-label={t("todos.rejectReason")} placeholder={t("todos.rejectReason")}
+            <input dir="auto" ref={rejectInputRef} autoFocus aria-label={t("todos.rejectReason")} placeholder={t("todos.rejectReason")}
               value={rejectReason} onChange={(event) => setRejectReason(event.target.value)}
               className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-sm" />
             <button type="submit" className="text-sm text-destructive">{t("todos.reject")}</button>
@@ -146,7 +146,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
                 </div> : <>
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { setEditingPerson(true); }} type="button">{t("todos.editPerson")}</button>
                 <label className="block rounded px-2 py-1.5 hover:bg-muted">{t("todos.pickDate")}
-                  <input type="date" className="mt-1 w-full bg-background" value={row.due_date || ""}
+                  <input dir="ltr" type="date" className="mt-1 w-full bg-background" value={row.due_date || ""}
                     onChange={(event) => { if (event.target.value) onDue(row, { action: "pick", date: event.target.value }); }} />
                 </label>
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => onDue(row, { action: "push" })} type="button">{t("todos.pushDay")}</button>

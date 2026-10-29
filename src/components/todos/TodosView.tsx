@@ -104,7 +104,7 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
           <div><h1 className="text-2xl font-semibold tracking-tight">{t("todos.title")}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{t("todos.subtitle")}</p></div>
           <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-            <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
+            <input dir="ltr" type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
             {t("todos.showArchived")}
           </label>
         </div>
@@ -120,10 +120,10 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
           {composerOpen && <form className="px-[14px] pb-3 ps-[37px]" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setComposerOpen(false); triggerRef.current?.focus(); } else if (event.key === "Enter" && event.target === draftRef.current) { event.preventDefault(); event.currentTarget.requestSubmit(); } }}
             onSubmit={async (event) => { event.preventDefault(); if (!draft.trim()) return;
               await window.electronAPI.commitmentsCreate({ text: draft.trim(), direction, ...(dueDate ? { due_date: dueDate } : {}) }); setDraft(""); setDueDate(""); setComposerOpen(false); triggerRef.current?.focus(); await refresh(); }}>
-            <input ref={draftRef} className="min-h-[45px] w-full rounded-md bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:outline-none" value={draft}
+            <input dir="auto" ref={draftRef} className="min-h-[45px] w-full rounded-md bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:outline-none" value={draft}
               onChange={(event) => setDraft(event.target.value)} placeholder={t("todos.addPlaceholder")} aria-label={t("todos.addPlaceholder")} />
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
-              <input type="date" aria-label={t("todos.pickDate")} value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-md border border-border bg-surface-1 px-2 py-1 text-xs text-foreground" />
+              <input dir="ltr" type="date" aria-label={t("todos.pickDate")} value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-md border border-border bg-surface-1 px-2 py-1 text-xs text-foreground" />
               <select value={direction} onChange={(event) => setDirection(event.target.value as "owe" | "waiting")}
                 aria-label={t("todos.direction")} className="rounded-md border border-border bg-surface-1 px-2 py-1 text-xs text-foreground">
                 <option value="owe">{t("todos.iOwe")}</option><option value="waiting">{t("todos.waitingOn")}</option>

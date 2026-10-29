@@ -1,1 +1,1 @@
-module.exports = require("./routineTitleTemplate.mjs");
+module.exports = require("./routineTitleTemplateCore.mjs");
