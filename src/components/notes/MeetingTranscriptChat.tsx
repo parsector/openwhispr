@@ -553,30 +553,6 @@ function SpeakerLabel({
 
   const hasSuggestion = !!segment.suggestedName && !resolvedName;
 
-  if (hasSuggestion) {
-    return (
-      <span className="group inline-flex items-center gap-1 mb-0.5 px-1">
-        <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/70">
-          {segment.suggestedName}
-        </span>
-        <button
-          onClick={() =>
-            onConfirm?.(speakerId, segment.suggestedName!, segment.suggestedProfileId!)
-          }
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-emerald-500"
-        >
-          <Check size={12} />
-        </button>
-        <button
-          onClick={() => onDismiss?.(speakerId)}
-          className="opacity-0 group-hover:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-destructive"
-        >
-          <X size={12} />
-        </button>
-      </span>
-    );
-  }
-
   const displayLabel =
     resolvedName ||
     segment.speakerName ||
@@ -588,9 +564,11 @@ function SpeakerLabel({
   const isUnmapped = !resolvedName && !segment.speakerName;
 
   return (
+    <>
     <Popover open={open} onOpenChange={(next) => { setOpen(next); if (next) setScope("row"); }}>
       <PopoverTrigger asChild>
         <button
+          data-speaker-chip
           className={cn(
             "inline-flex items-center text-[11px] font-medium mb-0.5 px-1.5 py-0.5 rounded-md outline-none cursor-pointer",
             "border border-border/70 dark:border-white/20",
@@ -640,6 +618,30 @@ function SpeakerLabel({
         </div>
       </PopoverContent>
     </Popover>
+    {hasSuggestion && (
+      <span className="group inline-flex items-center gap-1 mb-0.5 px-1">
+        <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/70">
+          {segment.suggestedName}
+        </span>
+        <button
+          type="button"
+          onClick={() => onConfirm?.(speakerId, segment.suggestedName!, segment.suggestedProfileId!)}
+          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-emerald-500"
+          aria-label={t("notes.speaker.confirmed")}
+        >
+          <Check size={12} />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDismiss?.(speakerId)}
+          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-destructive"
+          aria-label={t("notes.speaker.cancel")}
+        >
+          <X size={12} />
+        </button>
+      </span>
+    )}
+    </>
   );
 }
 
@@ -850,17 +852,7 @@ const SegmentRow = memo(function SegmentRow({
       )}
       style={isNewest ? { animation: "agent-message-in 200ms ease-out both" } : undefined}
     >
-      {labelElement && !sameSpeaker && labelElement}
-      {labelElement && sameSpeaker && (
-        <div
-          className={cn(
-            "grid grid-rows-[0fr] opacity-0 pointer-events-none transition-[grid-template-rows,opacity] duration-150 ease-out",
-            "group-hover:grid-rows-[1fr] group-hover:opacity-100 group-hover:pointer-events-auto"
-          )}
-        >
-          <div className="overflow-hidden">{labelElement}</div>
-        </div>
-      )}
+      {labelElement}
       {(segment.uncertainty || latestCorrection(segment)) && <div className="flex items-center gap-2 px-1 pb-0.5 text-[11px] text-muted-foreground">
         {segment.uncertainty && <span>{segment.uncertainty.reason === "close_match" && segment.uncertainty.candidates
           ? t("notes.speaker.reason.closeMatch", { first: segment.uncertainty.candidates[0], second: segment.uncertainty.candidates[1] })

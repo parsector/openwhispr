@@ -81,6 +81,7 @@ const buttonWithText = (text) =>
 // Booleans, never the element: printing a happy-dom element in a failed assert
 // runs the test process out of memory.
 const hasButton = (text) => !!buttonWithText(text);
+const speakerChip = () => happyWindow.document.querySelector("[data-speaker-chip]");
 const pickerInput = () =>
   happyWindow.document.querySelector('input[placeholder="notes.speaker.nameOrEmailPlaceholder"]');
 const pickerOpen = () => !!pickerInput();
@@ -114,7 +115,7 @@ test("This is me names an in-person cluster You", async (t) => {
       onMapSpeaker: (...args) => calls.push(args),
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   assert.ok(hasButton(THIS_IS_ME), "the picker offers This is me");
   await act(() => buttonWithText(THIS_IS_ME).click());
   assert.deepEqual(calls, [["speaker_1", YOU, null, undefined]]);
@@ -131,7 +132,7 @@ test("a call's remote speaker can't be named after the user", async (t) => {
       ],
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   assert.ok(pickerOpen());
   assert.ok(!hasButton(THIS_IS_ME));
   assert.ok(hasButton("Alice"));
@@ -145,7 +146,7 @@ test("typing You on a call's remote speaker offers nothing to create", async (t)
       onMapSpeaker: () => {},
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   await act(() => typeInPicker(YOU));
   assert.ok(pickerOpen());
   assert.ok(!createsAny());
@@ -181,7 +182,7 @@ test("typing You and pressing Enter picks This is me", async (t) => {
       onMapSpeaker: (...args) => calls.push(args),
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   await act(() => typeInPicker(` ${YOU} `));
   assert.ok(hasButton(THIS_IS_ME));
   assert.ok(!createsAny());
@@ -198,7 +199,7 @@ test("Enter selects the matching attendee instead of creating raw typed text", a
       participants: [{ email: "nikos@company.com", displayName: null }],
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   await act(() => typeInPicker("nikos"));
   await act(() => pressEnter());
   assert.deepEqual(calls, [["speaker_1", "nikos", "nikos@company.com", undefined]]);
@@ -216,7 +217,7 @@ test("Enter selects the first matching saved profile when several rows match", a
       ],
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   await act(() => typeInPicker("Nikos"));
   await act(() => pressEnter());
   assert.deepEqual(calls, [["speaker_1", "Nikos A", "a@example.com", 3]]);
@@ -231,7 +232,7 @@ test("arrow keys select the active row and only the explicit create row creates"
       participants: [{ email: "nikos@company.com", displayName: null }],
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   await act(() => typeInPicker("nikos"));
   await act(() => pressKey("ArrowDown"));
   assert.ok(
@@ -264,7 +265,7 @@ test("Enter on a create-only search does nothing until its row is active", async
       onMapSpeaker: (...args) => calls.push(args),
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   await act(() => typeInPicker("Bob"));
   await act(() => pressEnter());
   assert.deepEqual(calls, []);
@@ -281,7 +282,7 @@ test("Escape closes the picker without changing the speaker", async (t) => {
       onMapSpeaker: (...args) => calls.push(args),
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   await act(() => typeInPicker("Bob"));
   await act(() => pressKey("Escape"));
   assert.ok(!pickerOpen());
@@ -309,7 +310,7 @@ test("the voice profile saved as You is offered as an identity choice", async (t
       ],
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   assert.ok(hasButton(THIS_IS_ME));
   assert.ok(hasButton("Alice"));
   assert.ok(!hasButton(YOU), "the You profile isn't listed twice");
@@ -329,7 +330,7 @@ test("This is me passes the existing profile identity without enrollment", async
       ],
     })
   );
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   assert.ok(!hasButton("you"));
   // Its email finds the row instead of offering to create a contact from it.
   await act(() => typeInPicker("me@example.com"));
@@ -422,7 +423,7 @@ test("speaker chip defaults to one row and does not write the cluster mapping", 
     onMapSpeaker: (...args) => clusterWrites.push(args),
     speakerProfiles: [{ id: 3, display_name: "Alice", email: null }],
   }));
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   assert.equal(buttonWithText("notes.speaker.scope.row").getAttribute("aria-pressed"), "true");
   await act(() => buttonWithText("Alice").click());
   assert.deepEqual(rowWrites, [["row", "a", "Alice", 3]]);
@@ -440,7 +441,7 @@ test("cluster scope previews the affected row count before changing the mapping"
     onMapSpeaker: (...args) => clusterWrites.push(args),
     speakerProfiles: [{ id: 3, display_name: "Alice", email: null }],
   }));
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   await act(() => buttonWithText("notes.speaker.scope.cluster").click());
   assert.equal(happyWindow.document.querySelector("[data-affected-rows]").getAttribute("data-affected-rows"), "2");
   await act(() => buttonWithText("Alice").click());
@@ -459,18 +460,32 @@ test("selected rows scope is available only with a selection", async (t) => {
     onAssignSpeakerScope: (...args) => calls.push(args),
     speakerProfiles: [{ id: 3, display_name: "Alice", email: null }],
   }));
-  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => speakerChip().click());
   assert.ok(hasButton("notes.speaker.scope.selected"));
   await act(() => buttonWithText("notes.speaker.scope.selected").click());
   await act(() => buttonWithText("Alice").click());
   assert.deepEqual(calls, [["selected", "a", "Alice", 3]]);
 });
 
-test("a provisional mic row shows an unknown speaker chip, not the owner", async (t) => {
-  await mount(t, chat([{
-    id: "mic-1", text: "room discussion", source: "mic", timestamp: 1,
-    speaker: "speaker_mic", speakerStatus: "provisional", speakerIsPlaceholder: true,
-  }]));
-  assert.ok(hasButton("notes.speaker.unknown"));
+test("adjacent, provisional, ambiguous, and suggested rows keep a clickable speaker chip", async (t) => {
+  const { act } = await mount(t, chat([
+    { id: "mic-1", text: "room discussion", source: "mic", timestamp: 1,
+      speaker: "speaker_mic", speakerStatus: "provisional", speakerIsPlaceholder: true },
+    { id: "mic-2", text: "same speaker", source: "mic", timestamp: 1.5,
+      speaker: "speaker_mic", speakerStatus: "provisional", speakerIsPlaceholder: true },
+    { id: "ambiguous", text: "maybe", source: "system", timestamp: 2,
+      speaker: "speaker_999999", unknownNumber: 1000000, uncertainty: { reason: "not_sure" } },
+    { id: "suggested", text: "perhaps Alex", source: "system", timestamp: 3,
+      speaker: "speaker_3", suggestedName: "Alex", suggestedProfileId: 9 },
+  ]));
+  const chips = [...happyWindow.document.querySelectorAll("[data-speaker-chip]")];
+  assert.equal(chips.length, 4, "every row with a speaker has a control");
+  assert.equal(chips[0].textContent.trim(), "notes.speaker.unknownNumber");
   assert.ok(!hasButton(YOU));
+  for (const chip of chips) {
+    assert.ok(!chip.closest(".pointer-events-none"), "the chip is reachable without hovering");
+    await act(() => chip.click());
+    assert.ok(pickerOpen(), "the chip opens the speaker picker");
+    await act(() => pressKey("Escape"));
+  }
 });

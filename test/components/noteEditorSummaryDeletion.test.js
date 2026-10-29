@@ -507,7 +507,7 @@ test("the note's chat labels speakers as get_note does and leaves attendees to t
   ]);
   const chatTranscript = () => globalThis.__embeddedChatOptions.noteTranscript;
 
-  const lines = "Note taker: I'll send the deck.\nOthers: Thanks.";
+  const lines = "Unknown speaker 1: I'll send the deck.\nUnknown speaker 2: Thanks.";
   await render(ENHANCEMENT, { note: { ...NOTE, transcript } });
   assert.equal(
     chatTranscript(),
