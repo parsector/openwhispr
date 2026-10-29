@@ -3224,6 +3224,16 @@
         "cluster": "此聚类",
         "changesRows": "将更改 {{n}} 行",
         "unknown": "未知"
+      },
+      "unknownNumber": "未知发言人 {{n}}",
+      "restore": "恢复",
+      "reviewStretches": "检查 {{n}} 个片段",
+      "showAll": "显示所有片段",
+      "reason": {
+        "closeMatch": "{{first}} 或 {{second}}",
+        "too_short": "太短，无法识别",
+        "changed_after_final": "最终分析后发生变化",
+        "not_sure": "不确定"
       }
     },
     "overview": {

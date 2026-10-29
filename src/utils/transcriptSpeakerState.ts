@@ -79,8 +79,23 @@ export const normalizeTranscriptSegment = (segment: TranscriptSegment): Transcri
   };
 };
 
-export const normalizeTranscriptSegments = (segments: TranscriptSegment[]) =>
-  segments.map((segment) => normalizeTranscriptSegment(segment));
+export const normalizeTranscriptSegments = (segments: TranscriptSegment[]) => {
+  const numbers = new Map<string, number>();
+  let next = Math.max(0, ...segments.map((s) => Math.max(s.unknownNumber || 0, s.unknownNumberHighWater || 0))) + 1;
+  for (const segment of segments) {
+    if (segment.speaker && segment.unknownNumber) {
+      numbers.set(`${segment.diarizationRunId || "legacy"}:${segment.speaker}`, segment.unknownNumber);
+    }
+  }
+  const assigned = segments.map((segment) => {
+    const key = segment.speaker
+      ? `${segment.diarizationRunId || "legacy"}:${segment.speaker}` : segment.id;
+    if (!numbers.has(key)) numbers.set(key, next++);
+    return normalizeTranscriptSegment({ ...segment, unknownNumber: segment.unknownNumber ?? numbers.get(key) });
+  });
+  const highWater = Math.max(next - 1, ...assigned.map((segment) => segment.unknownNumber || 0));
+  return assigned.map((segment) => ({ ...segment, unknownNumberHighWater: highWater }));
+};
 
 export const applyTranscriptSpeakerPatch = (
   segment: TranscriptSegment,
@@ -115,10 +130,10 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
     // locked label can't freeze a bucket diarization splits into multiple speakers.
     for (const field of SPEAKER_STATE_FIELDS) {
       if (field === "speaker" || field === "speakerIsPlaceholder") continue;
-      if (existingFields[field] !== undefined) {
-        mergedFields[field] = existingFields[field];
-      }
+      mergedFields[field] = existingFields[field];
     }
+    merged.speakerIsPlaceholder = existing.speakerIsPlaceholder;
+    merged.uncertainty = undefined;
   }
 
   return normalizeTranscriptSegment(merged);
@@ -132,9 +147,9 @@ export const mergeTranscriptSegments = (
     return normalizeTranscriptSegments(existingSegments);
   }
   if (existingSegments.length === 0) {
-    return incomingSegments.map((segment, index) =>
-      normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })
-    );
+    return normalizeTranscriptSegments(incomingSegments.map((segment) =>
+      ({ ...segment, id: segment.id || crypto.randomUUID() })
+    ));
   }
 
   const existingById = new Map<string, number>();
@@ -173,12 +188,31 @@ export const mergeTranscriptSegments = (
       if (fallbackIndex >= 0) matchIndex = fallbackIndex;
     }
 
+    if (matchIndex === undefined && Number.isFinite(segment.timestamp)) {
+      const candidates = existingSegments
+        .map((row, existingIndex) => ({ row, existingIndex }))
+        .filter(({ row, existingIndex }) =>
+          !usedIndexes.has(existingIndex) && row.source === segment.source &&
+          Number.isFinite(row.timestamp) &&
+          Math.abs((row.timestamp as number) - (segment.timestamp as number)) <= 0.5
+        );
+      // A time-only match is safe only when there is one possible predecessor.
+      if (candidates.length === 1) matchIndex = candidates[0].existingIndex;
+    }
+
     if (matchIndex !== undefined) {
       usedIndexes.add(matchIndex);
-      enrichedByIndex.set(matchIndex, mergeSpeakerFields(existingSegments[matchIndex], segment));
+      enrichedByIndex.set(matchIndex, mergeSpeakerFields(existingSegments[matchIndex], {
+        ...segment,
+        id: existingSegments[matchIndex].id,
+        unknownNumber: segment.speaker === existingSegments[matchIndex].speaker
+          ? existingSegments[matchIndex].unknownNumber : undefined,
+        unknownNumberHighWater: existingSegments[matchIndex].unknownNumberHighWater,
+        corrections: existingSegments[matchIndex].corrections,
+      }));
     } else {
       unmatchedIncoming.push(
-        normalizeTranscriptSegment({ ...segment, id: segment.id || `merged-${index}` })
+        normalizeTranscriptSegment({ ...segment, id: segment.id || crypto.randomUUID() })
       );
     }
   });
@@ -187,12 +221,18 @@ export const mergeTranscriptSegments = (
     (segment, index) => enrichedByIndex.get(index) ?? normalizeTranscriptSegment(segment)
   );
 
-  return [...preserved, ...unmatchedIncoming];
+  return normalizeTranscriptSegments([...preserved, ...unmatchedIncoming]);
 };
 
 export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
   JSON.stringify(
-    segments.map((segment) => ({
+    normalizeTranscriptSegments(segments).map((segment) => ({
+      id: segment.id || crypto.randomUUID(),
+      unknownNumber: segment.unknownNumber,
+      unknownNumberHighWater: segment.unknownNumberHighWater,
+      uncertainty: segment.uncertainty,
+      diarizationRunId: segment.diarizationRunId,
+      corrections: segment.corrections,
       text: segment.text,
       source: segment.source,
       timestamp: segment.timestamp,
@@ -215,7 +255,8 @@ export const resolveSegmentSpeakerName = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string | undefined => {
-  if (segment.speakerName && isTranscriptSpeakerLocked(segment)) return segment.speakerName;
+  if (isTranscriptSpeakerLocked(segment)) return segment.speakerName;
+  if (segment.diarizationRunId) return segment.speakerIsPlaceholder ? undefined : segment.speakerName;
   const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
   return mapped || segment.speakerName;
 };
@@ -252,7 +293,7 @@ export const isSelfSideSegment = (
   ) {
     return true;
   }
-  if (segment.speaker === "you") return true;
+  if (segment.speaker === "you") return !isTranscriptSpeakerLocked(segment);
   if (segment.speaker) return false;
-  return false;
+  return segment.source === "mic";
 };

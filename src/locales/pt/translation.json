@@ -3224,6 +3224,16 @@
         "cluster": "Este grupo",
         "changesRows": "altera {{n}} linhas",
         "unknown": "Desconhecido"
+      },
+      "unknownNumber": "Pessoa desconhecida {{n}}",
+      "restore": "Restaurar",
+      "reviewStretches": "Rever {{n}} trechos",
+      "showAll": "Mostrar todos os trechos",
+      "reason": {
+        "closeMatch": "{{first}} ou {{second}}",
+        "too_short": "Curto demais para identificar",
+        "changed_after_final": "Alterado após a análise final",
+        "not_sure": "Não há certeza"
       }
     },
     "overview": {

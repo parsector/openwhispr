@@ -3276,6 +3276,16 @@
         "cluster": "Este grupo",
         "changesRows": "cambia {{n}} filas",
         "unknown": "Desconocido"
+      },
+      "unknownNumber": "Hablante desconocido {{n}}",
+      "restore": "Restaurar",
+      "reviewStretches": "Revisar {{n}} fragmentos",
+      "showAll": "Mostrar todos los fragmentos",
+      "reason": {
+        "closeMatch": "{{first}} o {{second}}",
+        "too_short": "Demasiado breve para identificar",
+        "changed_after_final": "Cambió tras el análisis final",
+        "not_sure": "No es seguro"
       }
     },
     "overview": {

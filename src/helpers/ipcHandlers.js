@@ -13446,7 +13446,7 @@ class IPCHandlers {
     const sendUndiarized = () =>
       send({
         segments: transcriptSegments
-          .map((segment, index) => ({ ...segment, id: segment.id || `segment-${index}` }))
+          .map((segment) => ({ ...segment, id: segment.id || require("crypto").randomUUID() }))
           .filter((_, index) => !isEchoDuplicate(index)),
       });
 
@@ -13542,7 +13542,7 @@ class IPCHandlers {
           debugLogger.debug("Speaker embedding extraction skipped", { error: err.message });
         }
 
-        const reconciledSpeakers = this._reconcileLiveSpeakerState(
+        this._reconcileLiveSpeakerState(
           liveSpeakerState,
           speakerEmbeddingsMap,
           enrichedSegments
@@ -13554,16 +13554,15 @@ class IPCHandlers {
 
             if (profiles.length > 0) {
               for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
-                const alreadyMapped = enrichedSegments.some(
-                  (segment) => segment.speaker === mappedId && segment.speakerName
-                );
-                if (reconciledSpeakers.has(mappedId) || alreadyMapped) {
+                if (enrichedSegments.every((segment) => segment.speaker !== mappedId || isSpeakerLocked(segment))) {
                   continue;
                 }
 
                 const emb = new Float32Array(embArr);
                 let bestProfile = null;
                 let bestSim = 0;
+                let runnerUp = null;
+                let runnerUpSim = 0;
 
                 for (const profile of profiles) {
                   const profileEmb = new Float32Array(
@@ -13573,14 +13572,35 @@ class IPCHandlers {
                   );
                   const sim = speakerEmb.cosineSimilarity(emb, profileEmb);
                   if (sim > bestSim) {
+                    runnerUpSim = bestSim;
+                    runnerUp = bestProfile;
                     bestSim = sim;
                     bestProfile = profile;
+                  } else if (sim > runnerUpSim) {
+                    runnerUpSim = sim;
+                    runnerUp = profile;
                   }
+                }
+
+                const { matchReason } = require("./speakerUncertainty");
+                const reason = matchReason(
+                  bestProfile && { name: bestProfile.display_name, score: bestSim },
+                  runnerUp && { name: runnerUp.display_name, score: runnerUpSim }
+                );
+                if (reason) {
+                  for (const seg of enrichedSegments) {
+                    if (seg.speaker === mappedId && !isSpeakerLocked(seg)) {
+                      if (seg.uncertainty?.reason !== "too_short") seg.uncertainty = reason;
+                      seg.speakerName = undefined;
+                      seg.speakerIsPlaceholder = true;
+                    }
+                  }
+                  continue;
                 }
 
                 if (bestProfile && bestSim > 0.6) {
                   for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId) {
+                    if (seg.speaker === mappedId && seg.uncertainty?.reason !== "too_short") {
                       applyConfirmedSpeaker(seg, {
                         speakerName: bestProfile.display_name,
                         speakerIsPlaceholder: false,
@@ -13591,7 +13611,7 @@ class IPCHandlers {
                   }
                 } else if (bestProfile && bestSim > 0.5) {
                   for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId) {
+                    if (seg.speaker === mappedId && seg.uncertainty?.reason !== "too_short") {
                       if (isSpeakerLocked(seg)) {
                         continue;
                       }
@@ -13609,6 +13629,15 @@ class IPCHandlers {
           }
         }
 
+        for (const seg of enrichedSegments) {
+          seg.diarizationRunId = sessionId;
+          const prior = transcriptSegments.find((row) => row.id && row.id === seg.id);
+          const { changedAfterFinalReason } = require("./speakerUncertainty");
+          const changed = changedAfterFinalReason(prior?.speakerName, seg.speakerName);
+          if (changed && !isSpeakerLocked(seg)) {
+            seg.uncertainty = changed;
+          }
+        }
         send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });

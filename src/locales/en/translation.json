@@ -3721,6 +3721,16 @@
         "cluster": "This cluster",
         "changesRows": "changes {{n}} rows",
         "unknown": "Unknown"
+      },
+      "unknownNumber": "Unknown speaker {{n}}",
+      "restore": "Restore",
+      "reviewStretches": "Review {{n}} stretches",
+      "showAll": "Show all stretches",
+      "reason": {
+        "closeMatch": "{{first}} or {{second}}",
+        "too_short": "Too short to identify",
+        "changed_after_final": "Changed after final analysis",
+        "not_sure": "Not sure"
       }
     },
     "overview": {

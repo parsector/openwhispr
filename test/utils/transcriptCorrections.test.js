@@ -1,0 +1,103 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const row = (id, speaker = 'speaker_0', text = id) => ({ id, source: 'system', speaker, text, timestamp: Number(id.slice(1)) || 0 });
+
+test('row id survives save, reload, and text edit', async () => {
+  const { parseTranscriptSegments } = await import('../../src/utils/parseTranscriptSegments.ts');
+  const { serializeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const legacy = parseTranscriptSegments(JSON.stringify([{ text: 'hello', source: 'system' }]));
+  assert.ok(legacy[0].id && !legacy[0].id.startsWith('stored-'));
+  const saved = serializeTranscriptSegments([{ ...legacy[0], text: 'edited' }]);
+  assert.equal(parseTranscriptSegments(saved)[0].id, legacy[0].id);
+  assert.equal(parseTranscriptSegments(saved)[0].text, 'edited');
+});
+
+test('undo restores exactly the touched rows', async () => {
+  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../../src/utils/transcriptCorrections.ts');
+  const initial = [row('r1'), row('r2'), row('r3')];
+  const corrected = correctTranscriptRows(initial, new Set(['r1', 'r2']), 'selected', 'Alex');
+  const restored = undoTranscriptCorrection(corrected, corrected[0].corrections[0].id);
+  assert.deepEqual(restored, initial);
+});
+
+test('undo after an unrelated later correction preserves that correction', async () => {
+  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../../src/utils/transcriptCorrections.ts');
+  const initial = [row('r1'), row('r2')];
+  const first = correctTranscriptRows(initial, new Set(['r1']), 'row', 'Alex');
+  const second = correctTranscriptRows(first, new Set(['r2']), 'row', 'Sam');
+  const restored = undoTranscriptCorrection(second, first[0].corrections[0].id);
+  assert.deepEqual(restored[0], initial[0]);
+  assert.equal(restored[1].speakerName, 'Sam');
+});
+
+test('correction survives re-transcription and recycled cluster id does not inherit it', async () => {
+  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const { mergeTranscriptSegments, resolveSegmentSpeakerName } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const previous = correctTranscriptRows([row('r1')], new Set(['r1']), 'row', 'Alex');
+  const merged = mergeTranscriptSegments(previous, [{...row('new', 'speaker_0', 'changed words'), timestamp: 1, diarizationRunId: 'run2'}]);
+  assert.equal(merged.find(s => s.id === 'r1').speakerName, 'Alex');
+  assert.equal(merged.find(s => s.id === 'r1').text, 'changed words');
+  const newRow = {...row('r3', 'speaker_0'), diarizationRunId: 'run2'};
+  assert.equal(resolveSegmentSpeakerName(newRow, { speaker_0: 'Alex' }), undefined);
+});
+
+test('ambiguous time-only matches do not move a correction to another row', async () => {
+  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const { mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const existing = correctTranscriptRows([
+    { ...row('r1'), timestamp: 10 },
+    { ...row('r2'), timestamp: 10.2 },
+  ], new Set(['r1']), 'row', 'Alex');
+  const merged = mergeTranscriptSegments(existing, [{ ...row('new'), timestamp: 10.1, text: 'different words' }]);
+  assert.equal(merged.find((entry) => entry.id === 'r1').speakerName, 'Alex');
+  assert.ok(merged.some((entry) => entry.text === 'different words' && entry.id !== 'r1'));
+});
+
+test('placeholder numbers stay stable when a cluster splits', async () => {
+  const { normalizeTranscriptSegments, mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const initial = normalizeTranscriptSegments([row('r1'), row('r2'), row('r3', 'speaker_1')]);
+  const split = mergeTranscriptSegments(initial, [{...initial[1], speaker: 'speaker_2', diarizationRunId: 'run2'}]);
+  assert.equal(split.find(s => s.id === 'r1').unknownNumber, 1);
+  assert.equal(split.find(s => s.id === 'r3').unknownNumber, 2);
+  assert.equal(split.find(s => s.id === 'r2').unknownNumber, 3);
+});
+
+test('a recycled cluster id in a new run gets a new placeholder number', async () => {
+  const { normalizeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const rows = normalizeTranscriptSegments([
+    { ...row('r1'), diarizationRunId: 'run1', unknownNumber: 1 },
+    { ...row('r2'), diarizationRunId: 'run2' },
+  ]);
+  assert.deepEqual(rows.map((entry) => entry.unknownNumber), [1, 2]);
+});
+
+test('deleting the highest numbered row does not reuse its placeholder', async () => {
+  const { normalizeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const first = normalizeTranscriptSegments([row('r1'), row('r2', 'speaker_1')]);
+  const afterRemoval = normalizeTranscriptSegments([first[0], row('r3', 'speaker_2')]);
+  assert.deepEqual(afterRemoval.map((entry) => entry.unknownNumber), [1, 3]);
+  assert.equal(afterRemoval[0].unknownNumberHighWater, 3);
+});
+
+test('explicit unknown is user locked and blocks a recycled cluster mapping', async () => {
+  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const { resolveSegmentSpeakerName, mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const unknown = correctTranscriptRows([row('r1')], new Set(['r1']), 'row', null)[0];
+  assert.equal(unknown.speakerLockSource, 'user');
+  assert.equal(unknown.speakerIsPlaceholder, true);
+  assert.equal(resolveSegmentSpeakerName(unknown, { speaker_0: 'Alex' }), undefined);
+  const afterFinal = mergeTranscriptSegments([unknown], [{ ...row('r1'), speakerName: 'Sam', diarizationRunId: 'run2' }]);
+  assert.equal(afterFinal[0].speakerName, undefined);
+  assert.equal(afterFinal[0].speakerLockSource, 'user');
+});
+
+test('undoing an older correction keeps a newer correction on the same row', async () => {
+  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../../src/utils/transcriptCorrections.ts');
+  const first = correctTranscriptRows([row('r1')], new Set(['r1']), 'row', 'Alex');
+  const second = correctTranscriptRows(first, new Set(['r1']), 'row', 'Sam');
+  const result = undoTranscriptCorrection(second, first[0].corrections[0].id);
+  assert.equal(result[0].speakerName, 'Sam');
+  const restored = undoTranscriptCorrection(result, result[0].corrections[0].id);
+  assert.equal(restored[0].speakerName, undefined);
+});

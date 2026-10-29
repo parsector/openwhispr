@@ -101,9 +101,9 @@ export function mergeSessionDiarization(params: {
   const { existing, seedLength, fallbackTranscript, segments, removedSegments } = params;
   const seededCount = Math.min(seedLength, existing.length);
   const sessionRows = existing.slice(seededCount);
-  const incoming = segments.map((segment, index) => ({
+  const incoming = segments.map((segment) => ({
     ...segment,
-    id: segment.id || `diarized-${index}`,
+    id: segment.id || crypto.randomUUID(),
   }));
   if (fallbackTranscript && sessionRows[0]?.text === fallbackTranscript) {
     return {

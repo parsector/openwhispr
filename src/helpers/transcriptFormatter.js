@@ -1,15 +1,23 @@
 const { i18nMain } = require("./i18nMain");
 
 function resolveSpeaker(seg, speakerMappings) {
+  if (seg.speakerLocked || seg.speakerLockSource === "user") {
+    return seg.speakerName || i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+  }
+  if (seg.diarizationRunId) {
+    return seg.speakerName && !seg.speakerIsPlaceholder
+      ? seg.speakerName
+      : i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+  }
   if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
   if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
   if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
-    if (!isNaN(num)) return i18nMain.t("notes.speaker.label", { n: num + 1 });
+    if (!isNaN(num)) return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || num + 1 });
   }
-  if (seg.source === "mic") return i18nMain.t("notes.speaker.unknown");
-  if (seg.source === "system") return i18nMain.t("transcript.speaker.others");
+  if (seg.source === "mic") return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+  if (seg.source === "system") return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
   return i18nMain.t("notes.speaker.unknown");
 }
 
@@ -18,7 +26,7 @@ function resolveSpeaker(seg, speakerMappings) {
 // otherwise absorb the un-named one beside it.
 function speakerKey(seg) {
   const named = seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : "";
-  return [seg.speaker || "", named, seg.speaker ? "" : seg.source || ""].join("\u0000");
+  return [seg.diarizationRunId || "", seg.speaker || "", seg.unknownNumber || "", named, seg.speaker ? "" : seg.source || ""].join("\u0000");
 }
 
 function parseNoteDate(createdAt) {
@@ -72,8 +80,18 @@ function normalizeSegmentTimestamps(segments, note) {
 function mergeSegments(segments) {
   const merged = [];
   let lastTimestamp = null;
-  for (const seg of segments) {
+  const numbers = new Map();
+  let nextNumber = Math.max(0, ...segments.map((seg) => seg.unknownNumber || 0)) + 1;
+  for (const rawSeg of segments) {
+    const seg = { ...rawSeg };
     if (!seg.text?.trim()) continue;
+    if (seg.source && !seg.unknownNumber) {
+      const key = seg.speaker
+        ? `${seg.diarizationRunId || "legacy"}:${seg.speaker}`
+        : seg.id || `${seg.source}:${seg.timestamp ?? nextNumber}`;
+      if (!numbers.has(key)) numbers.set(key, nextNumber++);
+      seg.unknownNumber = numbers.get(key);
+    }
     const ts = seg.timestamp || 0;
     const last = merged[merged.length - 1];
     if (last && speakerKey(last) === speakerKey(seg) && ts - lastTimestamp < 2) {
@@ -204,7 +222,9 @@ function formatJson(note, segments, speakerMappings) {
         segment_count: merged.length,
       },
       speakers: [...speakersSet],
+      transcriptRows: segments.map((seg) => ({ ...seg })),
       segments: merged.map((seg) => ({
+        id: seg.id,
         speaker: untimed ? null : resolveSpeaker(seg, speakerMappings),
         timestamp: seg.timestamp,
         text: seg.text,

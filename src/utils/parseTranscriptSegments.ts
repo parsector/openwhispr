@@ -5,6 +5,12 @@ export function parseTranscriptSegments(raw: string): TranscriptSegment[] {
   if (!raw.startsWith("[")) return [];
   try {
     const parsed = JSON.parse(raw) as Array<{
+      id?: string;
+      unknownNumber?: number;
+      unknownNumberHighWater?: number;
+      uncertainty?: TranscriptSegment["uncertainty"];
+      diarizationRunId?: string;
+      corrections?: TranscriptSegment["corrections"];
       text: string;
       source: "mic" | "system";
       timestamp?: number;
@@ -18,8 +24,13 @@ export function parseTranscriptSegments(raw: string): TranscriptSegment[] {
       speakerLockSource?: TranscriptSegment["speakerLockSource"];
     }>;
     return normalizeTranscriptSegments(
-      parsed.map((s, i) => ({
-        id: `stored-${i}`,
+      parsed.map((s) => ({
+        id: s.id || crypto.randomUUID(),
+        unknownNumber: s.unknownNumber,
+        unknownNumberHighWater: s.unknownNumberHighWater,
+        uncertainty: s.uncertainty,
+        diarizationRunId: s.diarizationRunId,
+        corrections: s.corrections,
         text: s.text,
         source: s.source,
         timestamp: s.timestamp,
@@ -73,5 +84,5 @@ export function parseSeedSegments(raw: string | null | undefined): TranscriptSeg
   const text = raw?.trim();
   if (!text) return [];
   if (isJsonArray(text)) return parseTranscriptSegments(text);
-  return [{ id: "stored-plain", text, source: "system" }];
+  return [{ id: crypto.randomUUID(), text, source: "system" }];
 }

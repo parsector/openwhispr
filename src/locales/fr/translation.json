@@ -3569,6 +3569,16 @@
         "cluster": "Ce groupe",
         "changesRows": "modifie {{n}} lignes",
         "unknown": "Inconnu"
+      },
+      "unknownNumber": "Intervenant inconnu {{n}}",
+      "restore": "Rétablir",
+      "reviewStretches": "Examiner {{n}} passages",
+      "showAll": "Afficher tous les passages",
+      "reason": {
+        "closeMatch": "{{first}} ou {{second}}",
+        "too_short": "Trop court pour identifier",
+        "changed_after_final": "Modifié après l’analyse finale",
+        "not_sure": "Incertain"
       }
     },
     "overview": {

@@ -3152,6 +3152,16 @@
         "cluster": "このクラスタ",
         "changesRows": "{{n}}行を変更",
         "unknown": "不明"
+      },
+      "unknownNumber": "不明な話者 {{n}}",
+      "restore": "元に戻す",
+      "reviewStretches": "{{n}} 件の発話を確認",
+      "showAll": "すべての発話を表示",
+      "reason": {
+        "closeMatch": "{{first}} または {{second}}",
+        "too_short": "短すぎて識別できません",
+        "changed_after_final": "最終分析後に変更されました",
+        "not_sure": "不明確"
       }
     },
     "overview": {

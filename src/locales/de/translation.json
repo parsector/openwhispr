@@ -3569,6 +3569,16 @@
         "cluster": "Dieser Cluster",
         "changesRows": "ändert {{n}} Zeilen",
         "unknown": "Unbekannt"
+      },
+      "unknownNumber": "Unbekannte Person {{n}}",
+      "restore": "Wiederherstellen",
+      "reviewStretches": "{{n}} Abschnitte prüfen",
+      "showAll": "Alle Abschnitte anzeigen",
+      "reason": {
+        "closeMatch": "{{first}} oder {{second}}",
+        "too_short": "Zu kurz für eine Identifizierung",
+        "changed_after_final": "Nach der abschließenden Analyse geändert",
+        "not_sure": "Unsicher"
       }
     },
     "overview": {
