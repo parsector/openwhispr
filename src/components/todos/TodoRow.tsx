@@ -155,10 +155,11 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             {expanded ? t("todos.hideQuote") : t("todos.showQuote")}
           </button>}
           {expanded && row.quote && <blockquote className="mt-2 border-s border-border ps-3 text-sm text-muted-foreground">“{row.quote}”</blockquote>}
-          <div data-todo-actions className={`mt-[3px] flex flex-wrap items-center gap-x-3 gap-y-1 transition-opacity duration-[120ms] ease-out motion-reduce:transition-none ${isMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"}`}>
+          <div className="mt-[3px] flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div data-todo-actions className={`flex flex-wrap items-center gap-x-3 gap-y-1 transition-opacity duration-[120ms] ease-out motion-reduce:transition-none ${isMenuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100"}`}>
             {!archived && <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={() => onComplete(row)}>{t("todos.complete")}</button>}
             {!archived && <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={startReject}>{t("todos.reject")}</button>}
-            <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={() => { setMenuOpen(true); }}>{t("todos.pickDate")}</button>
+          </div>
             <details ref={detailsRef} className="relative text-xs" open={isMenuOpen}>
               <summary onClick={(event) => { event.preventDefault(); setMenuOpen(!isMenuOpen); }} aria-label={t("todos.actions")} className="list-none cursor-pointer rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"><MoreHorizontal size={16} /></summary>
               <div className="absolute start-0 z-20 mt-1 w-64 rounded-lg border border-border bg-background p-1 shadow-lg text-sm">

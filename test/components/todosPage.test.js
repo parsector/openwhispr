@@ -265,6 +265,12 @@ test("row actions reveal on hover and keyboard focus, with no visible links at r
   assert.match(actions, /group-focus-within:opacity-100/);
   assert.match(actions, /duration-\[120ms\]/);
   assert.match(actions, /motion-reduce:transition-none/);
+  const visibleActions = html.match(/<div data-todo-actions[^>]*>(.*?)<\/div>/)[1];
+  assert.deepEqual([...visibleActions.matchAll(/<button[^>]*>([^<]+)<\/button>/g)].map((match) => match[1]),
+    ["todos.complete", "todos.reject"]);
+  assert.match(html, /<summary[^>]*aria-label="todos.actions"/);
+  assert.equal((html.match(/aria-label="todos.pickDate"/g) || []).length, 1,
+    "the menu date input is the only date picker entry");
 });
 
 test("only overdue rows receive the inset destructive accent", () => {
@@ -485,7 +491,7 @@ test("Reject actions share an inline reason form with confirm and cancel behavio
     assert.deepEqual(rejected, [["reject", "No longer needed"]]);
     assert.equal(reasonInput(), null, "the form closes after confirmation");
 
-    const menu = actions.querySelector("details");
+    const menu = host.querySelector("details");
     await React.act(async () => menu.querySelector("summary").click());
     await React.act(async () => button(menu, "todos.reject").click());
     assert.ok(reasonInput(), "the overflow Reject action opens the same form");
