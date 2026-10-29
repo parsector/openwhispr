@@ -42,7 +42,7 @@ export default function TodoPersonPicker({ value, onChange, onSelect, onCancel }
         if (event.key === "Escape") { event.preventDefault(); onCancel(); }
         else if (event.key === "ArrowDown" && people.length) { event.preventDefault(); setSelected((index) => (index + 1) % people.length); }
         else if (event.key === "ArrowUp" && people.length) { event.preventDefault(); setSelected((index) => (index - 1 + people.length) % people.length); }
-        else if (event.key === "Enter" && people.length) { event.preventDefault(); choose(people[selected]); }
+        else if (event.key === "Enter") { event.preventDefault(); if (query && people.length) choose(people[selected]); else onSelect(value); }
       }} className="w-full rounded border border-border bg-background px-2 py-1 text-sm" />
     {people.length > 0 && <div id="todo-person-options" role="listbox" className="absolute start-0 top-full z-30 mt-1 max-h-52 w-64 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg">
       {people.map((person, index) => <button type="button" role="option" aria-selected={index === selected} key={person.id ?? person.email ?? person.display_name}

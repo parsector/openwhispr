@@ -22,7 +22,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
   onComplete: (row: Commitment) => void;
   onReject: (row: Commitment, reason: string | null) => void;
   onDue: (row: Commitment, input: { action: "push" | "pick" | "clear"; date?: string }) => void;
-  onPerson: (row: Commitment, person: string) => void;
+  onPerson: (row: Commitment, person: string | null) => void;
   onText?: (row: Commitment, text: string) => void;
   onOpenNote: (id: number) => void;
   onDelete?: (row: Commitment) => void;
@@ -129,9 +129,8 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
                 {row.source_note_title || t("todos.sourceMeeting")}
               </button>}
           </div>
-          {editingPerson && <form className="mt-2 flex gap-2" onSubmit={(event) => { event.preventDefault(); onPerson(row, person); setEditingPerson(false); }}>
-            <TodoPersonPicker value={person} onChange={setPerson} onSelect={(value) => { setPerson(value); onPerson(row, value); setEditingPerson(false); }} onCancel={() => setEditingPerson(false)} />
-            <button type="submit" className="text-sm text-primary">{t("todos.save")}</button>
+          {editingPerson && <form className="mt-2 flex gap-2" onSubmit={(event) => { event.preventDefault(); onPerson(row, person.trim() || null); setEditingPerson(false); }}>
+            <TodoPersonPicker value={person} onChange={setPerson} onSelect={(value) => { onPerson(row, value.trim() || null); setEditingPerson(false); }} onCancel={() => setEditingPerson(false)} />
           </form>}
           {rejecting && <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(event) => {
             event.preventDefault();
@@ -169,7 +168,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
                   <button type="button" className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => setConfirmingDelete(false)}>{t("common.cancel")}</button>
                 </div> : <>
                 {onText && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { commitMenu(() => { setText(row.text); setEditingText(true); }); }} type="button">{t("todos.editText")}</button>}
-                <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { commitMenu(() => setEditingPerson(true)); }} type="button">{t("todos.editPerson")}</button>
+                <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { commitMenu(() => { setPerson(peopleLabel(row.person)); setEditingPerson(true); }); }} type="button">{t("todos.editPerson")}</button>
                 <input dir="ltr" type="date" aria-label={t("todos.pickDate")} value={row.due_date || ""} onChange={(event) => { const date = event.target.value; commitMenu(() => onDue(row, date ? { action: "pick", date } : { action: "clear" })); }} className="w-full rounded px-2 py-1.5 text-foreground" />
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => commitMenu(() => onDue(row, { action: "push" }))} type="button">{t("todos.pushDay")}</button>
                 {!archived && projects.length > 0 && (!row.agent_job_id || inactiveJob) && <div className="border-t border-border pt-1">

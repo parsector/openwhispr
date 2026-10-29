@@ -714,6 +714,55 @@ test("clearing the native date input sends the clear action", async () => {
   }
 });
 
+test("person editor saves typed Enter and contact choice, clears empty Enter, and cancels Escape", async () => {
+  const { Window } = await import("happy-dom");
+  const browser = new Window();
+  const previous = { window: global.window, document: global.document, navigator: global.navigator,
+    IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  global.window = browser; global.document = browser.document; global.navigator = browser.navigator;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  browser.electronAPI = { getSpeakerProfiles: async () => [], searchContacts: async (query) => ({
+    success: true, contacts: query.toLowerCase().includes("ali") ? [{ email: "alice@example.com", display_name: "Alice" }] : [],
+  }) };
+  const { createRoot } = require("react-dom/client");
+  const host = browser.document.createElement("div"); browser.document.body.append(host);
+  const root = createRoot(host);
+  const people = [];
+  const open = async () => {
+    await React.act(async () => host.querySelector("summary").click());
+    await React.act(async () => [...host.querySelectorAll("details button")].find((item) => item.textContent === "todos.editPerson").click());
+    assert.equal(host.querySelector('input[role="combobox"]').form.querySelectorAll("button").length, 0);
+  };
+  const type = async (value) => {
+    await React.act(async () => {
+      const input = host.querySelector('input[role="combobox"]');
+      Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value").set.call(input, value);
+      input.dispatchEvent(new browser.Event("input", { bubbles: true }));
+    });
+  };
+  const key = async (value) => React.act(async () => host.querySelector('input[role="combobox"]')
+    .dispatchEvent(new browser.KeyboardEvent("keydown", { key: value, bubbles: true })));
+  try {
+    await React.act(async () => root.render(React.createElement(TodoRow, { row: { ...row("person", null), person: "Original" },
+      onComplete() {}, onReject() {}, onDue() {}, onPerson(item, person) { people.push([item.id, person]); }, onOpenNote() {} })));
+    await open(); await type("Morgan"); await key("Enter");
+    assert.deepEqual(people, [["person", "Morgan"]]);
+    await open(); await type("Ali");
+    await React.act(async () => host.querySelector('[role="option"]').click());
+    assert.deepEqual(people.at(-1), ["person", "Alice"]);
+    await open(); await type(""); await key("Enter");
+    assert.deepEqual(people.at(-1), ["person", null]);
+    await open(); await type("Cancelled"); await key("Escape");
+    assert.equal(people.length, 3);
+    assert.equal(host.querySelector('input[role="combobox"]'), null);
+  } finally {
+    await React.act(async () => root.unmount()); browser.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete global[key]; else global[key] = value;
+    }
+  }
+});
+
 test("Edit todo focuses its textarea and saves the edited text through commitmentsUpdate", async () => {
   const { Window } = await import("happy-dom");
   const browser = new Window();
