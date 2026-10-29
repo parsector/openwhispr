@@ -14,6 +14,7 @@ export interface SpeakerValue {
 }
 export interface TranscriptCorrection {
   id: string;
+  noteId?: number;
   rowId: string;
   scope: CorrectionScope;
   previous: SpeakerValue;
@@ -21,6 +22,7 @@ export interface TranscriptCorrection {
   actor: "user";
   timestamp: string;
   diarizationRunId?: string;
+  clusterId?: string;
   mappingChanged?: boolean;
 }
 const value = (row: TranscriptSegment): SpeakerValue => ({
@@ -37,12 +39,14 @@ const LIMIT = 50;
 
 export function correctTranscriptRows(
   rows: TranscriptSegment[], ids: Set<string>, scope: CorrectionScope,
-  name: string | null, profileId?: number
+  name: string | null, profileId?: number, noteId?: number,
+  runId?: string, clusterId?: string
 ): TranscriptSegment[] {
   const id = crypto.randomUUID();
   const timestamp = new Date().toISOString();
   const changed = rows.map((row) => {
-    if (!ids.has(row.id)) return row;
+    if (!ids.has(row.id) || (scope === "cluster" &&
+      (row.diarizationRunId !== runId || row.speaker !== clusterId))) return row;
     const next = { ...lockTranscriptSpeaker(row, {
       speakerName: name || undefined,
       speakerIsPlaceholder: !name,
@@ -50,8 +54,9 @@ export function correctTranscriptRows(
       suggestedProfileId: profileId,
     }), uncertainty: undefined };
     return { ...next, corrections: [...(row.corrections || []), {
-      id, rowId: row.id, scope, previous: value(row), next: value(next),
+      id, noteId, rowId: row.id, scope, previous: value(row), next: value(next),
       actor: "user" as const, timestamp, diarizationRunId: row.diarizationRunId,
+      clusterId: scope === "cluster" ? row.speaker : undefined,
     }] };
   });
   const events = [...new Map(changed.flatMap((row) => row.corrections || [])

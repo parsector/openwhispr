@@ -7798,7 +7798,10 @@ class IPCHandlers {
         .trim();
 
     const storeMeetingDiarizationSegment = (text, source, timestamp, micSuppression = null) => {
+      const id = crypto.randomUUID();
       meetingDiarizationSegments.push({
+        id,
+        diarizationRunId: sessionId,
         text,
         source,
         timestamp,
@@ -7807,6 +7810,7 @@ class IPCHandlers {
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
         likelyRenderBleed: source === "mic" ? !!micSuppression?.likelyRenderBleed : false,
       });
+      return id;
     };
 
     const sendMeetingFinalSegment = ({
@@ -7821,7 +7825,7 @@ class IPCHandlers {
         appendMeetingLocalTranscript(text);
       }
 
-      storeMeetingDiarizationSegment(text, source, timestamp, micSuppression);
+      const id = storeMeetingDiarizationSegment(text, source, timestamp, micSuppression);
 
       if (send) {
         send("meeting-transcription-segment", {
@@ -7829,6 +7833,7 @@ class IPCHandlers {
           source,
           type: "final",
           timestamp,
+          id,
         });
       }
     };

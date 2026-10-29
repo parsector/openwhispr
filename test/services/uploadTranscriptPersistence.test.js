@@ -112,6 +112,13 @@ for (const source of ["file", "url"]) {
   }
 }
 
+const withoutIds = (transcript) => {
+  const rows = JSON.parse(transcript);
+  assert.equal(new Set(rows.map((row) => row.id)).size, rows.length);
+  for (const row of rows) assert.match(row.id, /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i);
+  return rows.map(({ id, ...row }) => row);
+};
+
 test("upload transcript crosses the actual preload and save IPC handler before broadcasting", async (t) => {
   const db = createDb(t);
   assert.ok(db);
@@ -179,7 +186,7 @@ test("upload transcript crosses the actual preload and save IPC handler before b
   });
   const stored = db.getNote(saved.note.id);
   assert.equal(stored.content, "");
-  assert.deepEqual(JSON.parse(stored.transcript), [{ text: "Public fixture words" }]);
+  assert.deepEqual(withoutIds(stored.transcript), [{ text: "Public fixture words" }]);
   assert.equal(broadcasts[0][0], "note-added");
   assert.equal(broadcasts[0][1].transcript, stored.transcript);
   assert.equal(mirrored[0].transcript, stored.transcript);
@@ -204,7 +211,7 @@ test("a segment without a start keeps the complete uploaded text without invente
     diarization: { enabled: false, localModelsReady: false, numSpeakers: null },
   });
   assert.equal(saved.note.content, "");
-  assert.deepEqual(JSON.parse(db.getNote(saved.note.id).transcript), [{ text }]);
+  assert.deepEqual(withoutIds(db.getNote(saved.note.id).transcript), [{ text }]);
 });
 
 // The provider's text is formatted for reading (speaker headers) or joined
@@ -319,7 +326,7 @@ test("upload creation keeps its selected workspace and sends transcript in the r
   const { body } = calls[0];
   assert.equal(body.content, "");
   assert.equal(body.transcript, note.transcript);
-  assert.deepEqual(JSON.parse(body.transcript), [{ text }]);
+  assert.deepEqual(withoutIds(body.transcript), [{ text }]);
   assert.equal(body.folder_id, "synthetic-cloud-folder");
   assert.equal(body.space_id, "synthetic-cloud-space");
   const { buildNoteUpdatePayload } = await vite.ssrLoadModule("/helpers/cloudSyncGuards.js");

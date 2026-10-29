@@ -2,6 +2,10 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
 const os = require("node:os");
+const fs = require("node:fs");
+const vm = require("node:vm");
+const crypto = require("node:crypto");
+const ts = require("typescript");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
@@ -63,7 +67,7 @@ const START_MS = 1792414000000;
 
 // Runs main's real _startOrSkipDiarization and resolves with the payload it
 // sends. `outcome` picks the diarized, skipped or failed path.
-const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized" } = {}) =>
+const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized", finalName } = {}) =>
   new Promise((resolve) => {
     const diarizationManager = new DiarizationManager();
     diarizationManager.isAvailable = () => outcome !== "skipped";
@@ -72,6 +76,10 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
       return "/nonexistent/diarization.wav";
     };
     diarizationManager.diarize = async () => [{ start: 0, end: 120, speaker: "speaker_00" }];
+    if (finalName) {
+      const merge = diarizationManager.mergeWithTranscript.bind(diarizationManager);
+      diarizationManager.mergeWithTranscript = (...args) => merge(...args).map((seg) => ({ ...seg, speakerName: finalName }));
+    }
 
     const handlers = Object.create(IPCHandlers.prototype);
     Object.assign(handlers, {
@@ -140,6 +148,40 @@ const liveWithEcho = [
     hasBleedEvidence: true,
   },
 ];
+
+test("main final analysis finds the prior row by its ingestion id", async () => {
+  // Execute the real main-process ingestion helpers with a captured IPC send.
+  const source = ts.createSourceFile("ipcHandlers.js", fs.readFileSync(handlersModulePath, "utf8"), ts.ScriptTarget.Latest, true);
+  const arrows = new Map();
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) &&
+        ["storeMeetingDiarizationSegment", "sendMeetingFinalSegment"].includes(node.name.text)) {
+      arrows.set(node.name.text, node.initializer.getText(source));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  const stored = [];
+  const sent = [];
+  const context = { crypto, sessionId: "diar-1", meetingDiarizationSegments: stored, appendMeetingLocalTranscript() {} };
+  const store = vm.runInNewContext(`(${arrows.get("storeMeetingDiarizationSegment")})`, context);
+  const sendFinal = vm.runInNewContext(`(${arrows.get("sendMeetingFinalSegment")})`, {
+    ...context, storeMeetingDiarizationSegment: store,
+  });
+  sendFinal({ text: "hello", source: "system", timestamp: START_MS + 1000,
+    send: (channel, row) => sent.push([channel, row]) });
+  const id = stored[0].id;
+  assert.match(id, /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i);
+  assert.equal(sent[0][1].id, id);
+  stored[0].speakerName = "Alex";
+  const payload = await runMainDiarization(stored, { finalName: "Sam" });
+  assert.equal(payload.segments[0].id, id);
+  assert.deepEqual(payload.segments[0].uncertainty, { reason: "changed_after_final" });
+  const merged = runRendererCompletion([
+    { id, source: "system", text: "hello", timestamp: START_MS + 1000, speakerName: "Alex" },
+  ], payload);
+  assert.equal(merged[0].id, id);
+});
 
 test("a bleed-flagged mic segment that duplicates system text never keeps its epoch timestamp", async () => {
   const payload = await runMainDiarization(stripIds(liveWithEcho));

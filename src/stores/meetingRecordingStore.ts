@@ -409,7 +409,6 @@ const flushAndDisconnectProcessor = async (processor: AudioWorkletNode | null) =
   processor.disconnect();
 };
 
-let segmentCounter = 0;
 
 // Pipeline lives in module scope — not on React refs — so it survives
 // view changes and re-mounts of the consumer view.
@@ -1116,12 +1115,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             },
             data,
             {
-              mintSegmentId: () => `seg-${++segmentCounter}`,
+              mintSegmentId: () => crypto.randomUUID(),
               // Must not call setState: `current.segments` was snapshotted before this runs and the
               // reduction inserts into that snapshot. Reads of segmentsRefValue (assignProvisionalSpeaker)
               // still see the previous segments, exactly as before the reducer extraction.
               decorateFinal: (rawSegment) => {
-                let decorated = rawSegment;
+                let decorated: TranscriptSegment = { ...rawSegment, diarizationRunId: sessionId };
                 for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
                   decorated = applySpeakerIdentification(decorated, speakerIdentifications[i]);
                 }
@@ -1928,7 +1927,7 @@ if (typeof window !== "undefined") {
       }
 
       const existing = selectBaseSegments({
-        persistedSegments: persisted.transcript ? parseSeedSegments(persisted.transcript) : null,
+        persistedSegments: persisted.transcript ? parseSeedSegments(persisted.transcript, targetNoteId) : null,
         liveSegments,
         recordingNoteId,
         targetNoteId,

@@ -35,6 +35,7 @@ export function buildUploadTranscript(
       speakerIds.set(seg.speaker, `speaker_${speakerIds.size}`);
     }
     return {
+      id: crypto.randomUUID(),
       text: seg.text.trim(),
       timestamp: anchorMs + seg.start * 1000,
       ...(seg.speaker ? { speaker: speakerIds.get(seg.speaker) } : {}),
@@ -106,7 +107,7 @@ export async function saveUploadNote({
     audioDurationSeconds,
     folderId,
     null,
-    transcript ?? JSON.stringify([{ text }])
+    transcript ?? JSON.stringify([{ id: crypto.randomUUID(), text }])
   );
   if (res.success && res.note && noteUpdates) {
     // Best-effort: a failed metadata write must not error a saved note.

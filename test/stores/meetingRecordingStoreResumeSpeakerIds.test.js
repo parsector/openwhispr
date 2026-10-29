@@ -137,6 +137,22 @@ test("a resumed recording gives its speakers ids past the earlier session's", as
   await store.stopRecording();
 });
 
+test("restart and resume keeps old row ids distinct from a new final", async (t) => {
+  const { api, state } = createElectronAPI();
+  const store = await loadStore(t, api);
+  const { parseSeedSegments } = await import('../../src/utils/parseTranscriptSegments.ts');
+  const seeded = parseSeedSegments(JSON.stringify([{ ...earlierSession()[0], id: "seg-1" }]), START_ARGS.noteId);
+  assert.equal(await store.startRecording({ ...START_ARGS, seedSegments: seeded }), true);
+  emitSystemFinal(state, "after restart");
+  const rows = segmentsOf(store);
+  assert.equal(rows[0].id, seeded[0].id);
+  assert.notEqual(rows[0].id, "seg-1");
+  assert.match(rows[1].id, /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i);
+  assert.equal(new Set(rows.map((s) => s.id)).size, rows.length);
+  await store.stopRecording();
+  assert.equal(segmentWithText(store, "after restart").id, rows[1].id);
+});
+
 test("main can raise the base past ids only the note's stored mappings use", async (t) => {
   const { api, state } = createElectronAPI({ startResult: { speakerIndexBase: 5 } });
   const store = await loadStore(t, api);

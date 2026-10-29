@@ -94,7 +94,7 @@ import type { SlashCommand } from "../chat/slashCommands";
 import { formatNoteDate, formatRelativeTime, formatShortDate } from "../../utils/dateFormatting";
 import { collectKnownPeople, type MeetingIdentity } from "../../utils/llmTranscript";
 import { noteChatTranscript } from "../../utils/transcriptEvidence";
-import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
+import { parseTranscriptSegmentsWithMigration } from "../../utils/parseTranscriptSegments";
 import { correctTranscriptRows, undoTranscriptCorrection } from "../../utils/transcriptCorrections";
 import {
   applyTranscriptSpeakerPatch,
@@ -472,23 +472,20 @@ export default function NoteEditor({
     [folders, folderSearch, t]
   );
 
-  const displaySegments = useMemo<TranscriptSegment[]>(() => {
-    if (diarizedSegments && diarizedSegments.length > 0) return diarizedSegments;
-    return parseTranscriptSegments(note.transcript || "");
-  }, [diarizedSegments, note.transcript]);
+  const storedTranscript = useMemo(
+    () => parseTranscriptSegmentsWithMigration(note.transcript || "", note.id),
+    [note.id, note.transcript]
+  );
+  const displaySegments = diarizedSegments?.length ? diarizedSegments : storedTranscript.segments;
   const reviewCount = displaySegments.filter((segment) => segment.uncertainty).length;
 
   useEffect(() => {
-    if (!note.transcript?.startsWith("[")) return;
-    try {
-      const stored = JSON.parse(note.transcript) as Array<{ id?: string }>;
-      if (stored.some((row) => !row.id)) {
-        void window.electronAPI?.updateNote(note.id, {
-          transcript: serializeTranscriptSegments(displaySegments),
-        });
-      }
-    } catch { /* Invalid transcripts are handled by the parser. */ }
-  }, [note.id, note.transcript, displaySegments]);
+    if (storedTranscript.migrated) {
+      void window.electronAPI?.updateNote?.(note.id, {
+        transcript: serializeTranscriptSegments(storedTranscript.segments),
+      });
+    }
+  }, [note.id, storedTranscript]);
 
   const templates = useActionsOfKind("template");
   const noteActions = useActionsOfKind("action");
@@ -715,8 +712,9 @@ export default function NoteEditor({
         setSpeakerMappings((prev) => ({ ...prev, [speakerId]: displayName }));
         await window.electronAPI?.setSpeakerMapping?.(note.id, speakerId, displayName, email, profileId);
         onLiveSpeakerLock?.(speakerId, displayName);
-        const ids = new Set(liveRows.filter((row) => row.speaker === speakerId).map((row) => row.id));
-        const corrected = correctTranscriptRows(liveRows, ids, "cluster", displayName, profileId ?? undefined)
+        const runId = liveRows.find((row) => row.speaker === speakerId)?.diarizationRunId;
+        const ids = new Set(liveRows.filter((row) => row.speaker === speakerId && row.diarizationRunId === runId).map((row) => row.id));
+        const corrected = correctTranscriptRows(liveRows, ids, "cluster", displayName, profileId ?? undefined, note.id, runId, speakerId)
           .map((row) => ids.has(row.id) ? { ...row, corrections: row.corrections?.map((record, index, list) =>
             index === list.length - 1 ? { ...record, mappingChanged: true } : record) } : row);
         assignLiveSpeakerRows(ids, displayName, corrected);
@@ -725,8 +723,9 @@ export default function NoteEditor({
         return;
       }
 
-      const ids = new Set(displaySegments.filter((s) => s.speaker === speakerId).map((s) => s.id));
-      const currentSegments = correctTranscriptRows(displaySegments, ids, "cluster", displayName, profileId ?? undefined);
+      const runId = displaySegments.find((s) => s.speaker === speakerId)?.diarizationRunId;
+      const ids = new Set(displaySegments.filter((s) => s.speaker === speakerId && s.diarizationRunId === runId).map((s) => s.id));
+      const currentSegments = correctTranscriptRows(displaySegments, ids, "cluster", displayName, profileId ?? undefined, note.id, runId, speakerId);
       await persistDisplaySegments(currentSegments, !!diarizedSegments || !isRecording);
 
       refreshSpeakerProfiles();
@@ -808,9 +807,9 @@ export default function NoteEditor({
       const liveSegments = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
       const row = liveSegments.find((segment) => segment.id === rowId);
       const ids = scope === "selected" ? selectedSegmentIds : scope === "cluster"
-        ? new Set(liveSegments.filter((segment) => segment.speaker === row?.speaker).map((segment) => segment.id))
+        ? new Set(liveSegments.filter((segment) => segment.speaker === row?.speaker && segment.diarizationRunId === row?.diarizationRunId).map((segment) => segment.id))
         : new Set([rowId]);
-      const nextSegments = correctTranscriptRows(liveSegments, ids, scope, displayName, profileId);
+      const nextSegments = correctTranscriptRows(liveSegments, ids, scope, displayName, profileId, note.id, row?.diarizationRunId, row?.speaker);
       const assigned = isRecording ? assignLiveSpeakerRows(ids, displayName, nextSegments) : nextSegments;
       await persistDisplaySegments(assigned, !isRecording);
       if (scope === "selected") handleClearSelection();
@@ -846,7 +845,7 @@ export default function NoteEditor({
   const handleBulkAssignName = useCallback(
     async (displayName: string, _email?: string | null, profileId?: number) => {
       if (!selectedSegmentIds.size) return;
-      const nextSegments = correctTranscriptRows(displaySegments, selectedSegmentIds, "selected", displayName, profileId);
+      const nextSegments = correctTranscriptRows(displaySegments, selectedSegmentIds, "selected", displayName, profileId, note.id);
       await persistDisplaySegments(nextSegments);
       handleClearSelection();
     },

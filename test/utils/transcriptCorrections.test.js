@@ -37,9 +37,59 @@ test('correction survives re-transcription and recycled cluster id does not inhe
   const previous = correctTranscriptRows([row('r1')], new Set(['r1']), 'row', 'Alex');
   const merged = mergeTranscriptSegments(previous, [{...row('new', 'speaker_0', 'changed words'), timestamp: 1, diarizationRunId: 'run2'}]);
   assert.equal(merged.find(s => s.id === 'r1').speakerName, 'Alex');
-  assert.equal(merged.find(s => s.id === 'r1').text, 'changed words');
+  assert.equal(merged.find(s => s.id === 'r1').text, 'r1');
+  assert.ok(merged.some(s => s.id === 'new' && s.text === 'changed words' && !s.corrections));
   const newRow = {...row('r3', 'speaker_0'), diarizationRunId: 'run2'};
   assert.equal(resolveSegmentSpeakerName(newRow, { speaker_0: 'Alex' }), undefined);
+});
+
+test('different ids never acquire a correction from identical text or a nearby changed phrase', async () => {
+  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const { mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  for (const [text, timestamp] of [['yes', 100], ['different words', 1.3]]) {
+    const old = correctTranscriptRows([{ ...row('r1', 'speaker_0', 'yes'), timestamp: 1 }], new Set(['r1']), 'row', 'Alex');
+    const merged = mergeTranscriptSegments(old, [{ ...row('other', 'speaker_0', text), timestamp }]);
+    assert.equal(merged.find(s => s.id === 'r1').speakerName, 'Alex');
+    assert.equal(merged.find(s => s.id === 'r1').text, 'yes');
+    assert.equal(merged.some(s => s.id === 'other' && !s.corrections && !s.speakerLocked), true,
+      'a different row remains independently unassessed');
+  }
+  const correctedIncoming = correctTranscriptRows(
+    [{ ...row('incoming', 'speaker_0', 'yes'), timestamp: 1 }],
+    new Set(['incoming']), 'row', 'Alex'
+  );
+  const mergedIncoming = mergeTranscriptSegments(
+    [{ ...row('existing', 'speaker_0', 'yes'), timestamp: 1 }], correctedIncoming
+  );
+  assert.equal(mergedIncoming.find(s => s.id === 'existing').corrections, undefined);
+  assert.equal(mergedIncoming.find(s => s.id === 'incoming').speakerName, 'Alex');
+});
+
+test('counter id migration rewrites matching references and drops unresolved ones', async () => {
+  const { parseTranscriptSegmentsWithMigration } = await import('../../src/utils/parseTranscriptSegments.ts');
+  const { serializeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const correction = { id: 'c1', rowId: 'seg-1', scope: 'row', actor: 'user', timestamp: '2026-01-01', previous: {}, next: { speakerName: 'Alex' } };
+  const raw = JSON.stringify([{ id: 'seg-1', text: 'yes', source: 'system', speakerName: 'Alex', corrections: [correction, { ...correction, id: 'c2', rowId: 'missing' }] }]);
+  const first = parseTranscriptSegmentsWithMigration(raw, 42);
+  const repeated = parseTranscriptSegmentsWithMigration(raw, 42);
+  assert.equal(repeated.segments[0].id, first.segments[0].id);
+  assert.match(first.segments[0].id, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+  assert.equal(first.segments[0].corrections.length, 1);
+  assert.equal(first.segments[0].corrections[0].rowId, first.segments[0].id);
+  assert.equal(first.segments[0].speakerName, 'Alex');
+  assert.equal(first.droppedCorrections, 1);
+  const second = parseTranscriptSegmentsWithMigration(serializeTranscriptSegments(first.segments), 42);
+  assert.deepEqual(second.segments.map(s => [s.id, s.corrections?.[0]?.rowId]), first.segments.map(s => [s.id, s.corrections?.[0]?.rowId]));
+  assert.equal(second.droppedCorrections, 0);
+});
+
+test('cluster correction records carry note, run, and cluster identity', async () => {
+  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const rows = [{ ...row('r1'), diarizationRunId: 'run1' }, { ...row('r2'), diarizationRunId: 'run2' }];
+  const result = correctTranscriptRows(rows, new Set(['r1', 'r2']), 'cluster', 'Alex', undefined, 42, 'run1', 'speaker_0');
+  assert.equal(result[0].corrections[0].noteId, 42);
+  assert.equal(result[0].corrections[0].clusterId, 'speaker_0');
+  assert.equal(result[1].corrections, undefined);
 });
 
 test('ambiguous time-only matches do not move a correction to another row', async () => {

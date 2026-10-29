@@ -3,6 +3,12 @@ const assert = require("node:assert/strict");
 
 const load = () => import("../../src/services/uploadNotes.ts");
 const { MAX_SPEAKER_COUNT } = require("../../src/constants/speakerDetection.json");
+const withoutIds = (transcript) => {
+  const rows = JSON.parse(transcript);
+  assert.equal(new Set(rows.map((row) => row.id)).size, rows.length);
+  for (const row of rows) assert.match(row.id, /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i);
+  return rows.map(({ id, ...row }) => row);
+};
 
 test("maps the diarization settings onto the note columns", async () => {
   const { buildUploadNoteMetadata } = await load();
@@ -74,7 +80,7 @@ test("provider segments serialize into the meeting-path transcript shape", async
   // off the minimum (guarded by min > 1e9), and live segments appended by a
   // later meeting recording on the same note share the base instead of mixing
   // relative seconds with Date.now() values.
-  assert.deepEqual(JSON.parse(transcript), [
+  assert.deepEqual(withoutIds(transcript), [
     { text: "Hello world.", timestamp: anchorMs },
     { text: "Named part.", timestamp: anchorMs + 4200, speaker: "speaker_0" },
   ]);
@@ -146,7 +152,7 @@ test("segments persist the transcript even when diarization is off", async () =>
     anchorMs
   );
 
-  assert.equal(transcript, JSON.stringify([{ text: "Hello.", timestamp: anchorMs }]));
+  assert.deepEqual(withoutIds(transcript), [{ text: "Hello.", timestamp: anchorMs }]);
   // The transcript must not drag the diarization columns along: a null
   // diarization_enabled still defers to the global speaker setting.
   assert.equal(noteUpdates, null);
@@ -163,10 +169,8 @@ test("diarization metadata follows the insert separately from the transcript", a
     anchorMs
   );
 
-  assert.equal(
-    transcript,
-    JSON.stringify([{ text: "Hi.", timestamp: anchorMs + 1000, speaker: "speaker_0" }])
-  );
+  assert.deepEqual(withoutIds(transcript),
+    [{ text: "Hi.", timestamp: anchorMs + 1000, speaker: "speaker_0" }]);
   assert.deepEqual(noteUpdates, { diarization_enabled: 1 });
 });
 

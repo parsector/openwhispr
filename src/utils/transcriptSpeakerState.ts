@@ -206,8 +206,18 @@ export const mergeTranscriptSegments = (
     }
 
     if (matchIndex !== undefined) {
+      const existing = existingSegments[matchIndex];
+      // A text/time match is useful for display reconciliation, but it is not
+      // lineage. Keep the corrected row and show a new transcription separately.
+      if (existing.id !== segment.id && (
+        isTranscriptSpeakerLocked(existing) || existing.corrections?.length ||
+        isTranscriptSpeakerLocked(segment) || segment.corrections?.length
+      )) {
+        unmatchedIncoming.push(normalizeTranscriptSegment({ ...segment, id: segment.id || crypto.randomUUID() }));
+        return;
+      }
       usedIndexes.add(matchIndex);
-      enrichedByIndex.set(matchIndex, mergeSpeakerFields(existingSegments[matchIndex], {
+      enrichedByIndex.set(matchIndex, mergeSpeakerFields(existing, {
         ...segment,
         id: existingSegments[matchIndex].id,
         unknownNumber: segment.speaker === existingSegments[matchIndex].speaker

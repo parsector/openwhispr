@@ -14,6 +14,7 @@ export interface MeetingSegmentEvent {
   source: "mic" | "system";
   type: "partial" | "final" | "retract";
   timestamp?: number;
+  id?: string;
 }
 
 export interface MeetingSegmentState {
@@ -23,7 +24,7 @@ export interface MeetingSegmentState {
 }
 
 export interface MeetingSegmentReducerDeps {
-  /** Renderer-side id for a new final (today `seg-${++segmentCounter}`). */
+  /** Fallback for a final from an older main process that did not send an id. */
   mintSegmentId: () => string;
   /** Applies speaker identifications, provisional speaker, index reservation, locks. Must be free of store writes — the reducer inserts into the segments snapshot it was handed. */
   decorateFinal: (segment: TranscriptSegment) => TranscriptSegment;
@@ -74,7 +75,7 @@ export function reduceMeetingSegmentEvent(
   }
 
   const raw = normalizeTranscriptSegment({
-    id: deps.mintSegmentId(),
+    id: event.id || deps.mintSegmentId(),
     text: event.text,
     source: event.source,
     timestamp: event.timestamp,
