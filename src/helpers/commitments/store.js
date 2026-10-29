@@ -29,6 +29,7 @@ class CommitmentStore {
     })();
   }
   list(includeArchived = false) {
+    // true returns all rows, including archived; false returns active rows only.
     return this.db.prepare(`SELECT commitments.*, (SELECT COUNT(*) FROM commitment_mentions m
       WHERE m.commitment_id=commitments.id AND m.kind='date_moved') AS date_move_count
       FROM commitments WHERE account_id IS ? ${includeArchived ? "" : "AND archived_at IS NULL"} ORDER BY created_at DESC`)

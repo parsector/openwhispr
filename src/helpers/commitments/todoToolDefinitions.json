@@ -1,7 +1,7 @@
 {
   "list": {
     "name": "list_todos",
-    "description": "Read the user's own commitments. 'owe' means the user owes someone; 'waiting' means someone else owes the user. Returns id, text, person, direction, due_date, status, overdue, source_meeting_title, source, source_agent, and mention_count, ordered like Todos (overdue, dated, no date, then waiting). Filters by status, direction, person, and local due date. Archived rows require include_archived. Returns at most 50 rows within an 8 KB payload, truncating large output. Read only; cannot create, edit, complete, or reject todos.",
+    "description": "Read the user's own commitments. 'owe' means the user owes someone; 'waiting' means someone else owes the user. Returns id, text, person, direction, due_date, status, overdue, source_meeting_title, source, source_agent, and mention_count, ordered like Todos (overdue, dated, no date, then waiting). Filters by status, direction, person, and local due date. By default returns active rows; include_archived returns all rows, both active and archived. Returns at most 50 rows within an 8 KB payload, truncating large output. Read only; cannot create, edit, complete, or reject todos.",
     "parameters": {
       "type": "object",
       "properties": {

@@ -43,6 +43,8 @@ test("list filters, local date boundaries, UI ordering, archive and account-spac
   assert.deepEqual(listTodos(db, { status: "proposed" }, now).data.map((item) => item.id), ["proposed"]);
   assert.deepEqual(listTodos(db, { status: "completed" }, now).data, []);
   assert.deepEqual(listTodos(db, { status: "completed", include_archived: true }, now).data.map((item) => item.id), ["archived"]);
+  assert.ok(listTodos(db, { status: "all", include_archived: true }, now).data.some((item) => item.id === "none"));
+  assert.ok(listTodos(db, { status: "all", include_archived: true }, now).data.some((item) => item.id === "archived"));
   assert.equal(listTodos(db, {}, now).data[0].overdue, true);
   assert.equal(listTodos(db, { direction: "waiting" }, now).data[0].overdue, false);
   assert.deepEqual(Object.keys(listTodos(db, {}, now).data[0]), ["id", "text", "person", "direction", "due_date", "status", "overdue", "source_meeting_title", "source", "source_agent", "mention_count"]);
