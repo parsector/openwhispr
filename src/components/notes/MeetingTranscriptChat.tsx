@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check, Loader2, Sparkles, Users, X } from "../icons";
@@ -157,6 +157,7 @@ interface SpeakerPickerProps {
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
   onSelectName: (name: string, email?: string | null, profileId?: number) => void;
+  onClose: () => void;
   // "offer": a voice that may be the user's gets a "This is me" row, which the
   // user's own voice profile folds into. "exclude": a call's remote voice is
   // never the user, so it can't be named after them.
@@ -257,10 +258,13 @@ function SpeakerPicker({
   speakerProfiles,
   participants,
   onSelectName,
+  onClose,
   self,
   t,
 }: SpeakerPickerProps) {
   const [search, setSearch] = useState("");
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const lower = search.toLowerCase();
   const trimmed = search.trim();
   const trimmedLower = trimmed.toLowerCase();
@@ -334,14 +338,51 @@ function SpeakerPicker({
       selfProfile?.id
     );
 
+  const visibleParticipants = filteredParticipants.slice(0, 5);
+  const visibleProfiles = filteredProfiles.slice(0, 5);
+  const selectionRows = [
+    ...(showSelf ? [selectSelf] : []),
+    ...visibleParticipants.map(
+      (p) => () => onSelectName(p.displayName || p.email.split("@")[0], p.email)
+    ),
+    ...visibleProfiles.map((p) => () => onSelectName(p.display_name, p.email, p.id)),
+  ];
+  const createIndex = selectionRows.length;
+  const rows = canCreate ? [...selectionRows, submitCreate] : selectionRows;
+
+  useEffect(() => {
+    if (activeIndex !== null) {
+      listRef.current
+        ?.querySelector(`[data-speaker-picker-index="${activeIndex}"]`)
+        ?.scrollIntoView?.({ block: "nearest" });
+    }
+  }, [activeIndex]);
+
+  const rowClassName = (index: number) =>
+    cn(
+      "flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer",
+      activeIndex === index && "bg-foreground/10 text-foreground"
+    );
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key !== "Enter") return;
-    if (showSelf && matchesSelf) {
+    if (e.key === "Escape") {
       e.preventDefault();
-      selectSelf();
-    } else if (canCreate) {
+      onClose();
+    } else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      submitCreate();
+      if (rows.length) {
+        setActiveIndex((current) =>
+          current === null
+            ? e.key === "ArrowDown"
+              ? 0
+              : rows.length - 1
+            : (current + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % rows.length
+        );
+      }
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (activeIndex !== null) rows[activeIndex]?.();
+      else selectionRows[0]?.();
     }
   };
 
@@ -354,19 +395,23 @@ function SpeakerPicker({
         <input
           dir="auto"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setActiveIndex(null);
+          }}
           onKeyDown={handleKeyDown}
           placeholder={t("notes.speaker.nameOrEmailPlaceholder")}
           className="w-full px-2 py-1.5 rounded-md bg-transparent text-xs text-foreground placeholder:text-foreground/45 outline-none border-none appearance-none"
           autoFocus
         />
       </div>
-      <div className="max-h-52 overflow-y-auto">
+      <div ref={listRef} className="max-h-52 overflow-y-auto">
         {showSelf && (
           <div className="p-1 border-b border-border/70">
             <button
-              onClick={selectSelf}
-              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+              data-speaker-picker-index={0}
+              onClick={selectionRows[0]}
+              className={rowClassName(0)}
             >
               <span dir="auto" className="truncate flex-1 text-start">
                 {thisIsMe}
@@ -379,11 +424,12 @@ function SpeakerPicker({
             <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
               {t("notes.speaker.meetingAttendees")}
             </div>
-            {filteredParticipants.slice(0, 5).map((p) => (
+            {visibleParticipants.map((p, index) => (
               <button
                 key={p.email}
-                onClick={() => onSelectName(p.displayName || p.email.split("@")[0], p.email)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+                data-speaker-picker-index={index + (showSelf ? 1 : 0)}
+                onClick={selectionRows[index + (showSelf ? 1 : 0)]}
+                className={rowClassName(index + (showSelf ? 1 : 0))}
               >
                 <span dir="auto" className="truncate flex-1 text-start">
                   {p.displayName || p.email}
@@ -402,11 +448,12 @@ function SpeakerPicker({
             <div className="px-2 py-1 text-[11px] font-medium text-muted-foreground">
               {t("notes.speaker.knownSpeakers")}
             </div>
-            {filteredProfiles.slice(0, 5).map((p) => (
+            {visibleProfiles.map((p, index) => (
               <button
                 key={p.id ?? `name-${p.display_name}`}
-                onClick={() => onSelectName(p.display_name, p.email, p.id)}
-                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+                data-speaker-picker-index={index + (showSelf ? 1 : 0) + visibleParticipants.length}
+                onClick={selectionRows[index + (showSelf ? 1 : 0) + visibleParticipants.length]}
+                className={rowClassName(index + (showSelf ? 1 : 0) + visibleParticipants.length)}
               >
                 <span dir="auto" className="truncate flex-1 text-start">
                   {p.display_name}
@@ -423,8 +470,9 @@ function SpeakerPicker({
         {canCreate && (
           <div className="p-1">
             <button
+              data-speaker-picker-index={createIndex}
               onClick={submitCreate}
-              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-foreground/70 hover:bg-foreground/5 transition-colors cursor-pointer"
+              className={rowClassName(createIndex)}
             >
               <span className="text-foreground/50 shrink-0">
                 {t("notes.speaker.createNewPrefix")}
@@ -555,6 +603,7 @@ function SpeakerLabel({
             onMap?.(speakerId, name, email, profileId);
             setOpen(false);
           }}
+          onClose={() => setOpen(false)}
           self={self}
           t={t}
         />
@@ -636,6 +685,7 @@ export function SelectionBar({
               onAssignName(name, email, profileId);
               setOpen(false);
             }}
+            onClose={() => setOpen(false)}
             self={offerSelf ? "offer" : undefined}
             t={t}
           />

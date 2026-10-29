@@ -96,6 +96,8 @@ const pressEnter = () =>
   pickerInput().dispatchEvent(
     new happyWindow.KeyboardEvent("keydown", { key: "Enter", bubbles: true })
   );
+const pressKey = (key) =>
+  pickerInput().dispatchEvent(new happyWindow.KeyboardEvent("keydown", { key, bubbles: true }));
 const createsAny = () =>
   [...happyWindow.document.querySelectorAll("button")].some((b) =>
     b.textContent.includes("notes.speaker.createNewPrefix")
@@ -187,18 +189,103 @@ test("typing You and pressing Enter picks This is me", async (t) => {
   assert.deepEqual(calls, [["speaker_1", YOU, null, undefined]]);
 });
 
-test("Enter still creates any other typed name", async (t) => {
+test("Enter selects the matching attendee instead of creating raw typed text", async (t) => {
   const calls = [];
   const { act } = await mount(
     t,
     chat([{ id: "a", text: "hello", source: "mic", timestamp: 1, speaker: "speaker_1" }], {
+      onMapSpeaker: (...args) => calls.push(args),
+      participants: [{ email: "nikos@company.com", displayName: null }],
+    })
+  );
+  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => typeInPicker("nikos"));
+  await act(() => pressEnter());
+  assert.deepEqual(calls, [["speaker_1", "nikos", "nikos@company.com", undefined]]);
+});
+
+test("Enter selects the first matching saved profile when several rows match", async (t) => {
+  const calls = [];
+  const { act } = await mount(
+    t,
+    chat([{ id: "a", text: "hello", source: "system", timestamp: 1, speaker: "speaker_1" }], {
+      onMapSpeaker: (...args) => calls.push(args),
+      speakerProfiles: [
+        { id: 3, display_name: "Nikos A", email: "a@example.com" },
+        { id: 4, display_name: "Nikos B", email: "b@example.com" },
+      ],
+    })
+  );
+  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => typeInPicker("Nikos"));
+  await act(() => pressEnter());
+  assert.deepEqual(calls, [["speaker_1", "Nikos A", "a@example.com", 3]]);
+});
+
+test("arrow keys select the active row and only the explicit create row creates", async (t) => {
+  const calls = [];
+  const { act } = await mount(
+    t,
+    chat([{ id: "a", text: "hello", source: "system", timestamp: 1, speaker: "speaker_1" }], {
+      onMapSpeaker: (...args) => calls.push(args),
+      participants: [{ email: "nikos@company.com", displayName: null }],
+    })
+  );
+  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => typeInPicker("nikos"));
+  await act(() => pressKey("ArrowDown"));
+  assert.ok(
+    happyWindow.document
+      .querySelector('[data-speaker-picker-index="0"]')
+      .className.includes("bg-foreground/10")
+  );
+  await act(() => pressKey("ArrowDown"));
+  assert.ok(
+    happyWindow.document
+      .querySelector('[data-speaker-picker-index="1"]')
+      .className.includes("bg-foreground/10")
+  );
+  await act(() => pressKey("ArrowUp"));
+  assert.ok(
+    happyWindow.document
+      .querySelector('[data-speaker-picker-index="0"]')
+      .className.includes("bg-foreground/10")
+  );
+  await act(() => pressKey("ArrowDown"));
+  await act(() => pressEnter());
+  assert.deepEqual(calls, [["speaker_1", "nikos", null, undefined]]);
+});
+
+test("Enter on a create-only search does nothing until its row is active", async (t) => {
+  const calls = [];
+  const { act } = await mount(
+    t,
+    chat([{ id: "a", text: "hello", source: "system", timestamp: 1, speaker: "speaker_1" }], {
       onMapSpeaker: (...args) => calls.push(args),
     })
   );
   await act(() => buttonWithText("notes.speaker.label").click());
   await act(() => typeInPicker("Bob"));
   await act(() => pressEnter());
+  assert.deepEqual(calls, []);
+  await act(() => pressKey("ArrowDown"));
+  await act(() => pressEnter());
   assert.deepEqual(calls, [["speaker_1", "Bob", null, undefined]]);
+});
+
+test("Escape closes the picker without changing the speaker", async (t) => {
+  const calls = [];
+  const { act } = await mount(
+    t,
+    chat([{ id: "a", text: "hello", source: "system", timestamp: 1, speaker: "speaker_1" }], {
+      onMapSpeaker: (...args) => calls.push(args),
+    })
+  );
+  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => typeInPicker("Bob"));
+  await act(() => pressKey("Escape"));
+  assert.ok(!pickerOpen());
+  assert.deepEqual(calls, []);
 });
 
 test("a row already on the user's side doesn't offer This is me", async (t) => {
