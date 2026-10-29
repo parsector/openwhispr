@@ -87,9 +87,14 @@ export const normalizeTranscriptSegments = (segments: TranscriptSegment[]) => {
       numbers.set(`${segment.diarizationRunId || "legacy"}:${segment.speaker}`, segment.unknownNumber);
     }
   }
-  const assigned = segments.map((segment) => {
+  const assigned = segments.map((segment, index) => {
+    if (!(typeof segment.speaker === "string" && segment.speaker) &&
+        !(typeof segment.speakerName === "string" && segment.speakerName) &&
+        segment.source !== "mic" && segment.source !== "system" && !segment.speakerLocked)
+      return normalizeTranscriptSegment(segment);
     const key = segment.speaker
-      ? `${segment.diarizationRunId || "legacy"}:${segment.speaker}` : segment.id;
+      ? `${segment.diarizationRunId || "legacy"}:${segment.speaker}`
+      : segment.id ?? `${segment.source || "unknown"}:${segment.timestamp ?? index}`;
     if (!numbers.has(key)) numbers.set(key, next++);
     return normalizeTranscriptSegment({ ...segment, unknownNumber: segment.unknownNumber ?? numbers.get(key) });
   });

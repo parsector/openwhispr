@@ -134,28 +134,28 @@ test("consecutive speaker-less segments within 2s merge across SRT, TXT and Mark
   ];
 
   // SRT cues from a fully speaker-less transcript (a timestamped upload)
-  // carry bare text — an "Unknown Speaker:" prefix on every subtitle would
+  // carry bare text — a speaker prefix on every subtitle would
   // defeat the format's purpose.
   const srtOutput = formatSrt(segments, {});
   assert.match(srtOutput, /^1\n00:00:00,000 --> 00:00:05,000\nHello world, this is a test\./);
   assert.match(srtOutput, /\n2\n00:00:05,000 --> 00:00:08,000\nLater sentence\./);
-  assert.doesNotMatch(srtOutput, /Unknown Speaker/);
+  assert.doesNotMatch(srtOutput, /Unknown speaker/);
 
   const txtOutput = formatTxt(
     { title: "Test Note", created_at: "2026-01-01T00:00:00Z" },
     segments,
     {}
   );
-  assert.ok(txtOutput.includes("[00:00:00] Unknown Speaker:\nHello world, this is a test."));
-  assert.ok(txtOutput.includes("[00:00:05] Unknown Speaker:\nLater sentence."));
+  assert.ok(txtOutput.includes("[00:00:00]\nHello world, this is a test."));
+  assert.ok(txtOutput.includes("[00:00:05]\nLater sentence."));
 
   const mdOutput = formatMd(
     { title: "Test Note", created_at: "2026-01-01T00:00:00Z" },
     segments,
     {}
   );
-  assert.ok(mdOutput.includes("**Unknown Speaker** `00:00:00`\nHello world, this is a test."));
-  assert.ok(mdOutput.includes("**Unknown Speaker** `00:00:05`\nLater sentence."));
+  assert.ok(mdOutput.includes("`00:00:00`\nHello world, this is a test."));
+  assert.ok(mdOutput.includes("`00:00:05`\nLater sentence."));
 });
 
 test("a single segment with speaker identity keeps the prefix on every SRT cue", () => {
@@ -167,7 +167,7 @@ test("a single segment with speaker identity keeps the prefix on every SRT cue",
     {}
   );
 
-  assert.match(output, /^1\n00:00:00,000 --> 00:00:05,000\nUnknown Speaker: No identity here\./);
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:05,000\nNo identity here\./);
   assert.match(output, /\n2\n00:00:05,000 --> 00:00:08,000\nAda: Named reply\./);
 });
 
@@ -279,7 +279,7 @@ test("a legacy speaker stored as a name remains named in plain and Markdown expo
   }
 });
 
-test("segments with no speaker information get a localized unknown label", (t) => {
+test("segments with no speaker information have no label in localized exports", (t) => {
   changeLanguage("de");
   t.after(() => changeLanguage("en"));
 
@@ -289,8 +289,36 @@ test("segments with no speaker information get a localized unknown label", (t) =
     {}
   );
 
-  assert.ok(txtOutput.includes("[00:00:00] Unbekannter Sprecher:\nHallo."));
-  assert.ok(!txtOutput.includes("Unknown Speaker"));
+  assert.ok(txtOutput.includes("[00:00:00]\nHallo."));
+  assert.ok(!txtOutput.includes("Unknown speaker"));
+});
+
+test("speakerless rows do not consume export numbers and a note's high-water mark is respected", () => {
+  const rows = [
+    { id: "plain", timestamp: 0, text: "Metadata." },
+    { id: "voice", source: "mic", unknownNumberHighWater: 6, timestamp: 2, text: "Hello." },
+  ];
+  const note = { title: "Meeting", created_at: "2026-01-01T00:00:00Z" };
+  const txt = formatTxt(note, rows, {});
+  const md = formatMd(note, rows, {});
+  const srt = formatSrt(rows, {});
+  const json = JSON.parse(formatJson(note, rows, {}));
+  assert.match(txt, /\[00:00:00\]\nMetadata\./);
+  assert.match(txt, /\[00:00:02\] Unknown speaker 7:\nHello\./);
+  assert.match(md, /`00:00:00`\nMetadata\./);
+  assert.match(md, /\*\*Unknown speaker 7\*\* `00:00:02`/);
+  assert.match(srt, /00:00:02,000\nMetadata\./);
+  assert.match(srt, /Unknown speaker 7: Hello\./);
+  assert.deepEqual(json.speakers, ["Unknown speaker 7"]);
+  assert.equal(json.segments[0].speaker, null);
+});
+
+test("a placeholder-named row without a channel uses the numbered label in every export", () => {
+  const rows = [{ speakerName: "Speaker", speakerIsPlaceholder: true, text: "Hello.", timestamp: 0 }];
+  const note = { title: "Meeting", created_at: "2026-01-01T00:00:00Z" };
+  assert.match(formatTxt(note, rows, {}), /Unknown speaker 1:\nHello\./);
+  assert.match(formatMd(note, rows, {}), /\*\*Unknown speaker 1\*\*/);
+  assert.match(formatSrt(rows, {}), /Unknown speaker 1: Hello\./);
 });
 
 test("an explicit speaker mapping still overrides the own-voice label", () => {

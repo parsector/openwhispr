@@ -147,6 +147,30 @@ test("buildLlmTranscript prefixes every line with the resolved label", async () 
   );
 });
 
+test("speakerless rows stay unprefixed and do not consume a note's unknown numbers", async () => {
+  const { buildLlmTranscript } = await load();
+  assert.equal(
+    buildLlmTranscript([
+      { id: "plain", text: "Plain dictation." },
+      { id: "voice", source: "mic", text: "Meeting voice.", unknownNumberHighWater: 4 },
+    ], {}, "Casey", t),
+    "Plain dictation.\nUnknown speaker 5: Meeting voice."
+  );
+});
+
+test("source-only and placeholder-named rows each receive stable per-note numbers", async () => {
+  const { buildLlmTranscript } = await load();
+  assert.equal(
+    buildLlmTranscript([
+      { source: "mic", text: "First." },
+      { text: "Metadata." },
+      { source: "system", text: "Second." },
+      { speakerName: "Speaker", speakerIsPlaceholder: true, text: "Third." },
+    ], {}, "Casey", t),
+    "Unknown speaker 1: First.\nMetadata.\nUnknown speaker 2: Second.\nUnknown speaker 3: Third."
+  );
+});
+
 test("buildMeetingContext names the owner and invited participants", async () => {
   const { buildMeetingContext } = await load();
   const identity = {

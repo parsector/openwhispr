@@ -3176,7 +3176,6 @@
     "speaker": {
       "you": "Você",
       "them": "Outro",
-      "unknown": "Participante desconhecido",
       "label": "Participante {{n}}",
       "identifyingSpeakers": "Identificando participantes...",
       "liveAccuracyHint": "Ainda identificando participantes. A precisão dos rótulos melhorará quando a chamada terminar.",

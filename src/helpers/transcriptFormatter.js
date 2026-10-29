@@ -21,7 +21,9 @@ function resolveSpeaker(seg, speakerMappings) {
   }
   if (seg.source === "mic") return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
   if (seg.source === "system") return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
-  return i18nMain.t("notes.speaker.unknown");
+  return typeof seg.speakerName === "string" && seg.speakerName
+    ? i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 })
+    : "";
 }
 
 // Segments merge only when they resolve to the same display name, so the key has
@@ -84,11 +86,16 @@ function mergeSegments(segments) {
   const merged = [];
   let lastTimestamp = null;
   const numbers = new Map();
-  let nextNumber = Math.max(0, ...segments.map((seg) => seg.unknownNumber || 0)) + 1;
+  let nextNumber = Math.max(0, ...segments.map((seg) =>
+    Math.max(seg.unknownNumber || 0, seg.unknownNumberHighWater || 0))) + 1;
+  for (const seg of segments) {
+    if (seg.speaker && seg.unknownNumber)
+      numbers.set(`${seg.diarizationRunId || "legacy"}:${seg.speaker}`, seg.unknownNumber);
+  }
   for (const rawSeg of segments) {
     const seg = { ...rawSeg };
     if (!seg.text?.trim()) continue;
-    if (seg.source && !seg.unknownNumber) {
+    if ((seg.source || seg.speaker || seg.speakerName || seg.speakerLocked) && !seg.unknownNumber) {
       const key = seg.speaker
         ? `${seg.diarizationRunId || "legacy"}:${seg.speaker}`
         : seg.id || `${seg.source}:${seg.timestamp ?? nextNumber}`;
@@ -167,7 +174,8 @@ function formatTxt(note, segments, speakerMappings) {
   const untimed = isUntimed(segments);
   for (const seg of merged) {
     if (!untimed) {
-      lines.push(`[${formatTimestamp(seg.timestamp)}] ${resolveSpeaker(seg, speakerMappings)}:`);
+      const label = resolveSpeaker(seg, speakerMappings);
+      lines.push(`[${formatTimestamp(seg.timestamp)}]${label ? ` ${label}:` : ""}`);
     }
     lines.push(seg.text);
     lines.push("");
@@ -177,10 +185,7 @@ function formatTxt(note, segments, speakerMappings) {
 
 function formatSrt(segments, speakerMappings, note = {}) {
   const merged = mergeSegments(normalizeSegmentTimestamps(segments, note));
-  // Upload transcripts carry no speaker identity at all; prefixing every cue
-  // with "Unknown Speaker:" would defeat the subtitle use case. Meeting
-  // segments always serialize a source, so they keep their labels.
-  const hasSpeakerIdentity = merged.some((seg) => seg.speaker || seg.speakerName || seg.source);
+  // Each cue is labelled independently: uploads can later gain meeting rows.
   // Untimed text has one cue at 0; it spans the recording when its length is known.
   const lastEnd =
     isUntimed(segments) && note.audio_duration_seconds > 0 ? note.audio_duration_seconds : null;
@@ -191,9 +196,8 @@ function formatSrt(segments, speakerMappings, note = {}) {
       i + 1 < merged.length ? merged[i + 1].timestamp : (lastEnd ?? seg.endTimestamp + 3);
     entries.push(`${i + 1}`);
     entries.push(`${formatSrtTimestamp(seg.timestamp)} --> ${formatSrtTimestamp(nextTs)}`);
-    entries.push(
-      hasSpeakerIdentity ? `${resolveSpeaker(seg, speakerMappings)}: ${seg.text}` : seg.text
-    );
+    const label = resolveSpeaker(seg, speakerMappings);
+    entries.push(label ? `${label}: ${seg.text}` : seg.text);
     entries.push("");
   }
   return entries.join("\n");
@@ -206,7 +210,10 @@ function formatJson(note, segments, speakerMappings) {
   const untimed = isUntimed(segments);
   const speakersSet = new Set();
   if (!untimed) {
-    for (const seg of merged) speakersSet.add(resolveSpeaker(seg, speakerMappings));
+    for (const seg of merged) {
+      const label = resolveSpeaker(seg, speakerMappings);
+      if (label) speakersSet.add(label);
+    }
   }
   const lastSeg = merged[merged.length - 1];
 
@@ -228,7 +235,7 @@ function formatJson(note, segments, speakerMappings) {
       transcriptRows: segments.map((seg) => ({ ...seg })),
       segments: merged.map((seg) => ({
         id: seg.id,
-        speaker: untimed ? null : resolveSpeaker(seg, speakerMappings),
+        speaker: untimed ? null : resolveSpeaker(seg, speakerMappings) || null,
         timestamp: seg.timestamp,
         text: seg.text,
       })),
@@ -249,9 +256,8 @@ function formatMd(note, segments, speakerMappings) {
   const untimed = isUntimed(segments);
   for (const seg of merged) {
     if (!untimed) {
-      lines.push(
-        `**${resolveSpeaker(seg, speakerMappings)}** \`${formatTimestamp(seg.timestamp)}\``
-      );
+      const label = resolveSpeaker(seg, speakerMappings);
+      lines.push(`${label ? `**${label}** ` : ""}\`${formatTimestamp(seg.timestamp)}\``);
     }
     lines.push(`${seg.text}`, "");
   }

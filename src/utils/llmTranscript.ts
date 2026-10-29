@@ -32,7 +32,10 @@ export function resolveLlmSpeakerLabel(
     if (!Number.isNaN(num)) return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? num + 1 });
   }
   if (segment.source === "mic") return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
-  return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
+  return segment.source === "system" || segment.speakerLocked ||
+    (typeof segment.speakerName === "string" && !!segment.speakerName)
+    ? t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 })
+    : "";
 }
 
 export function buildLlmTranscript(
@@ -42,7 +45,10 @@ export function buildLlmTranscript(
   t: Translate
 ): string {
   return normalizeTranscriptSegments(segments)
-    .map((s) => `${resolveLlmSpeakerLabel(s, speakerMappings, selfLabel, t)}: ${s.text}`)
+    .map((s) => {
+      const label = resolveLlmSpeakerLabel(s, speakerMappings, selfLabel, t);
+      return label ? `${label}: ${s.text}` : s.text;
+    })
     .join("\n");
 }
 

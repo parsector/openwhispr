@@ -610,7 +610,7 @@ function SpeakerLabel({
         <div className="border-t border-border/70 px-2 py-1.5 flex items-center gap-2">
           <button type="button" className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10 focus-visible:ring-1 focus-visible:ring-ring"
             onClick={() => { onAssignScope?.(scope, segment.id, null); setOpen(false); }}>
-            {t("notes.speaker.unknown")}
+            {t("notes.speaker.scope.unknown")}
           </button>
           {segment.corrections?.map((correction) => <button key={correction.id} type="button"
             className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10 focus-visible:ring-1 focus-visible:ring-ring"
@@ -797,7 +797,7 @@ const SegmentRow = memo(function SegmentRow({
   onToggleSelect,
   t,
 }: SegmentRowProps) {
-  const hasSpeaker = !!segment.speaker || !!segment.source;
+  const hasSpeaker = !!segment.speaker || !!segment.speakerName || !!segment.source || !!segment.speakerLocked;
   const isOriginallyYou = segment.speaker === "you";
   const isSystemSpeaker = hasSpeaker && !selfSide;
   // Mic location alone cannot identify the owner. A remote voice is never

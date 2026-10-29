@@ -3104,7 +3104,6 @@
     "speaker": {
       "you": "あなた",
       "them": "相手",
-      "unknown": "不明な話者",
       "label": "話者 {{n}}",
       "identifyingSpeakers": "話者を識別中...",
       "liveAccuracyHint": "話者を識別中です。通話終了後にラベルの精度が向上します。",

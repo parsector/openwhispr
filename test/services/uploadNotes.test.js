@@ -115,8 +115,8 @@ test("upload transcripts mixed with later live meeting segments export sane SRT 
   const appended = [{ text: "Live follow-up.", source: "mic", timestamp: anchorMs + 60_000 }];
 
   const output = formatSrt([...seeded, ...appended], {});
-  assert.match(output, /^1\n00:00:00,000 --> 00:00:30,000\nUnknown Speaker: Uploaded intro\./);
-  assert.match(output, /\n2\n00:00:30,000 --> 00:01:00,000\nUnknown Speaker: Uploaded detail\./);
+  assert.match(output, /^1\n00:00:00,000 --> 00:00:30,000\nUploaded intro\./);
+  assert.match(output, /\n2\n00:00:30,000 --> 00:01:00,000\nUploaded detail\./);
   assert.match(output, /\n3\n00:01:00,000 --> 00:01:03,000\nUnknown speaker 1: Live follow-up\./);
 });
 

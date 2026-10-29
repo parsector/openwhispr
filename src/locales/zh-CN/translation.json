@@ -3176,7 +3176,6 @@
     "speaker": {
       "you": "你",
       "them": "对方",
-      "unknown": "未知发言者",
       "label": "发言者 {{n}}",
       "identifyingSpeakers": "正在识别发言者...",
       "liveAccuracyHint": "正在识别发言者。通话结束后，标签准确性会提升。",
