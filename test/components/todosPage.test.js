@@ -668,10 +668,12 @@ test("proposal banner keeps evidence and separate review actions", () => {
   assert.doesNotMatch(renderToStaticMarkup(React.createElement(ProposalsBanner, { noteId: 7, items })), /I sent the deck/);
 });
 
-test("todo menu has exactly one clear-date path and its calendar only selects dates", () => {
+test("todo menu has one native date input and one clear-date action", () => {
   const html = renderToStaticMarkup(React.createElement(TodoRow, { row: row("date", "2026-10-29"),
     onComplete() {}, onReject() {}, onDue() {}, onPerson() {}, onOpenNote() {} }));
   assert.equal((html.match(/>todos\.clearDate<\/button>/g) || []).length, 1);
-  assert.doesNotMatch(html, /type="date"/);
+  assert.equal((html.match(/<input[^>]*type="date"/g) || []).length, 1);
+  assert.match(html, /<input dir="ltr" type="date"[^>]*value="2026-10-29"/);
+  assert.doesNotMatch(html, /todo-calendar|role="grid"/);
   assert.match(html, /aria-label="todos.pickDate"/);
 });

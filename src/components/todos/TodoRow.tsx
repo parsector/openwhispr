@@ -4,7 +4,6 @@ import { Check, MoreHorizontal, X } from "../icons";
 import type { Commitment } from "../../types/electron";
 import { groupFor, localDate } from "./TodoGroups";
 import TodoPersonPicker from "./TodoPersonPicker";
-import TodoDatePicker from "./TodoDatePicker";
 import { boundedDateLabel } from "./todoDateLabel";
 import { LocalApprovalCard } from "../chat/LocalApprovalCard";
 import { useLocalApprovalStore } from "../../stores/localApprovalStore";
@@ -167,7 +166,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
                 </div> : <>
                 {onText && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { commitMenu(() => { setText(row.text); setEditingText(true); }); }} type="button">{t("todos.editText")}</button>}
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { commitMenu(() => setEditingPerson(true)); }} type="button">{t("todos.editPerson")}</button>
-                <TodoDatePicker value={row.due_date} onSelect={(date) => commitMenu(() => onDue(row, { action: "pick", date }))} />
+                <input dir="ltr" type="date" aria-label={t("todos.pickDate")} value={row.due_date || ""} onChange={(event) => { if (event.target.value) commitMenu(() => onDue(row, { action: "pick", date: event.target.value })); }} className="w-full rounded px-2 py-1.5 text-foreground" />
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => commitMenu(() => onDue(row, { action: "push" }))} type="button">{t("todos.pushDay")}</button>
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => commitMenu(() => onDue(row, { action: "clear" }))} type="button">{t("todos.clearDate")}</button>
                 {!archived && projects.length > 0 && (!row.agent_job_id || inactiveJob) && <div className="border-t border-border pt-1">
