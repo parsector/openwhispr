@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Check, MoreHorizontal, X } from "../icons";
 import type { Commitment } from "../../types/electron";
 import { groupFor, localDate } from "./TodoGroups";
+import TodoPersonPicker from "./TodoPersonPicker";
 import { boundedDateLabel } from "./todoDateLabel";
 import { LocalApprovalCard } from "../chat/LocalApprovalCard";
 import { useLocalApprovalStore } from "../../stores/localApprovalStore";
@@ -112,8 +113,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
               </button>}
           </div>
           {editingPerson && <form className="mt-2 flex gap-2" onSubmit={(event) => { event.preventDefault(); onPerson(row, person); setEditingPerson(false); }}>
-            <input dir="auto" aria-label={t("todos.person")} value={person} onChange={(event) => setPerson(event.target.value)}
-              className="rounded border border-border bg-background px-2 py-1 text-sm" />
+            <TodoPersonPicker value={person} onChange={setPerson} onSelect={(value) => { setPerson(value); onPerson(row, value); setEditingPerson(false); }} onCancel={() => setEditingPerson(false)} />
             <button type="submit" className="text-sm text-primary">{t("todos.save")}</button>
           </form>}
           {rejecting && <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(event) => {
