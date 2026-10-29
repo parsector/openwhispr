@@ -668,14 +668,44 @@ test("proposal banner keeps evidence and separate review actions", () => {
   assert.doesNotMatch(renderToStaticMarkup(React.createElement(ProposalsBanner, { noteId: 7, items })), /I sent the deck/);
 });
 
-test("todo menu has one native date input and one clear-date action", () => {
+test("todo menu has one native date input and no separate clear-date action", () => {
   const html = renderToStaticMarkup(React.createElement(TodoRow, { row: row("date", "2026-10-29"),
     onComplete() {}, onReject() {}, onDue() {}, onPerson() {}, onOpenNote() {} }));
-  assert.equal((html.match(/>todos\.clearDate<\/button>/g) || []).length, 1);
+  assert.doesNotMatch(html, /todos\.clearDate/);
   assert.equal((html.match(/<input[^>]*type="date"/g) || []).length, 1);
   assert.match(html, /<input dir="ltr" type="date"[^>]*value="2026-10-29"/);
   assert.doesNotMatch(html, /todo-calendar|role="grid"/);
   assert.match(html, /aria-label="todos.pickDate"/);
+});
+
+test("clearing the native date input sends the clear action", async () => {
+  const { Window } = await import("happy-dom");
+  const browser = new Window();
+  const previous = { window: global.window, document: global.document, navigator: global.navigator,
+    IS_REACT_ACT_ENVIRONMENT: global.IS_REACT_ACT_ENVIRONMENT };
+  global.window = browser; global.document = browser.document; global.navigator = browser.navigator;
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const { createRoot } = require("react-dom/client");
+  const host = browser.document.createElement("div"); browser.document.body.append(host);
+  const root = createRoot(host);
+  const due = [];
+  try {
+    await React.act(async () => root.render(React.createElement(TodoRow, { row: row("date", "2026-10-29"),
+      onComplete() {}, onReject() {}, onDue(item, action) { due.push([item.id, action]); }, onPerson() {}, onOpenNote() {} })));
+    await React.act(async () => host.querySelector("summary").click());
+    const input = host.querySelector('input[type="date"]');
+    await React.act(async () => {
+      Object.getOwnPropertyDescriptor(browser.HTMLInputElement.prototype, "value").set.call(input, "");
+      input.dispatchEvent(new browser.Event("change", { bubbles: true }));
+    });
+    assert.deepEqual(due, [["date", { action: "clear" }]]);
+    assert.equal(host.querySelector("details").open, false);
+  } finally {
+    await React.act(async () => root.unmount()); browser.close();
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete global[key]; else global[key] = value;
+    }
+  }
 });
 
 test("Edit todo focuses its textarea and saves the edited text through commitmentsUpdate", async () => {
