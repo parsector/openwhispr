@@ -9,6 +9,8 @@ import type { AgentJob } from "../../types/electron";
 import { addLocalApproval } from "../../stores/localApprovalStore";
 import ProposalsBanner from "./ProposalsBanner";
 import { filterTodos } from "./todoFilters";
+import TodoMentionInput from "./TodoMentionInput";
+import { plainTodoText } from "./todoMentionDisplay";
 
 export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: (id: number) => void; onOpenAgentJob: (id: string) => void }) {
   const { t } = useTranslation();
@@ -78,7 +80,7 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
     setHandoffError(null);
     let jobId: string | null = null;
     try {
-      const job = await window.agentJobs.prepare({ project, task: row.text });
+      const job = await window.agentJobs.prepare({ project, task: plainTodoText(row.text) });
       jobId = job.jobId;
       const linked = await window.electronAPI.commitmentsSetAgentJob(row.id, job.jobId);
       if (!linked) throw new Error(t("todos.handoffUnavailable"));
@@ -118,11 +120,12 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
             <span aria-hidden="true" className="grid size-[21px] place-items-center rounded-full border border-border-hover text-lg font-light leading-none text-foreground"><Plus size={14} /></span>
             {t("todos.addPlaceholder")}
           </button>
-          {composerOpen && <form className="px-[14px] pb-3 ps-[37px]" onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); setComposerOpen(false); triggerRef.current?.focus(); } else if (event.key === "Enter" && !event.shiftKey && event.target === draftRef.current) { event.preventDefault(); event.currentTarget.requestSubmit(); } }}
+          {composerOpen && <form className="px-[14px] pb-3 ps-[37px]"
             onSubmit={async (event) => { event.preventDefault(); if (!draft.trim()) return;
               await window.electronAPI.commitmentsCreate({ text: draft.trim(), direction, ...(dueDate ? { due_date: dueDate } : {}) }); setDraft(""); setDueDate(""); setComposerOpen(false); triggerRef.current?.focus(); await refresh(); }}>
-            <textarea dir="auto" ref={draftRef} rows={2} className="min-h-[45px] w-full resize-y rounded-md bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:outline-none" value={draft}
-              onChange={(event) => setDraft(event.target.value)} placeholder={t("todos.addPlaceholder")} aria-label={t("todos.addPlaceholder")} />
+            <TodoMentionInput value={draft} onChange={setDraft} inputRef={draftRef} label={t("todos.addPlaceholder")} placeholder={t("todos.addPlaceholder")}
+              onEscape={() => { setComposerOpen(false); triggerRef.current?.focus(); }} onEnter={() => draftRef.current?.form?.requestSubmit()}
+              className="min-h-[45px] w-full resize-y rounded-md bg-transparent px-2 py-1 text-sm text-foreground outline-none focus:outline-none" />
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-2">
               <input dir="ltr" type="date" aria-label={t("todos.pickDate")} value={dueDate} onChange={(event) => setDueDate(event.target.value)} className="rounded-md border border-border bg-surface-1 px-2 py-1 text-xs text-foreground" />
               <select value={direction} onChange={(event) => setDirection(event.target.value as "owe" | "waiting")}
@@ -136,7 +139,7 @@ export default function TodosView({ onOpenNote, onOpenAgentJob }: { onOpenNote: 
         </div>
         <ProposalsBanner />
         {undo && <div role="status" className="mb-4 flex items-center gap-4 rounded-xl bg-foreground px-4 py-2 text-xs text-background">
-          <span>{t("todos.archived", { text: undo.text })}</span>
+          <span>{t("todos.archived", { text: plainTodoText(undo.text) })}</span>
           <button type="button" className="rounded px-1 font-bold text-background hover:bg-background/10 focus-visible:outline-2 focus-visible:outline-background" onClick={async () => {
             if (undoTimer.current) clearTimeout(undoTimer.current); await window.electronAPI.commitmentsUpdate(undo.id, { status: "open", rejected_reason: null }); setUndo(null); await refresh();
           }}>{t("todos.undo")}</button>

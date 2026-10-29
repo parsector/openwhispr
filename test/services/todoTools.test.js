@@ -51,6 +51,13 @@ test("list filters, local date boundaries, UI ordering, archive and account-spac
   assert.deepEqual(listTodos(db, { due: "overdue" }, new Date(2026, 9, 28, 0, 1)).data.map((item) => item.id), ["overdue"]);
 });
 
+test("list and detail expose readable mention names without markdown identifiers", () => {
+  const text = "Send [@Alex Ng](mention:alex%40example.com) the report";
+  const db = mockDb([row("mention", { text })]);
+  assert.equal(listTodos(db, {}, now).data[0].text, "Send @Alex Ng the report");
+  assert.equal(getTodo(db, { id: "mention" }).data.text, "Send @Alex Ng the report");
+});
+
 test("default and maximum limits clamp, and payload truncation remains valid JSON", async () => {
   const db = mockDb(Array.from({ length: 200 }, (_, i) => row(String(i), { text: "x".repeat(900), created_at: String(i).padStart(3, "0") })));
   assert.ok(listTodos(db, {}, now).data.length <= 20);

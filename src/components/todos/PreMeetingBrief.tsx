@@ -2,15 +2,16 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Commitment } from "../../types/electron";
 import type { BriefPerson } from "./preMeetingBriefModel";
+import { plainTodoText } from "./todoMentionDisplay";
 
 function BriefRow({ row, onComplete }: { row: Commitment; onComplete: (row: Commitment) => void }) {
   const [expanded, setExpanded] = useState(false);
   const { t } = useTranslation();
   return <div className="border-t border-border/50 py-1.5 text-[11px]">
     <div className="flex items-start gap-2">
-      <button type="button" aria-label={t("todos.briefComplete", { text: row.text })} onClick={() => onComplete(row)} className="shrink-0 text-primary hover:underline">✓</button>
+      <button type="button" aria-label={t("todos.briefComplete", { text: plainTodoText(row.text) })} onClick={() => onComplete(row)} className="shrink-0 text-primary hover:underline">✓</button>
       <button type="button" aria-expanded={expanded} onClick={() => setExpanded(!expanded)} className="min-w-0 flex-1 text-start">
-        <span className="block truncate">{row.text}</span>
+        <span className="block truncate">{plainTodoText(row.text)}</span>
       </button>
       <span className="shrink-0 rounded-full bg-muted px-1.5 text-muted-foreground">{row.due_date || t("todos.briefNoDate")}</span>
     </div>

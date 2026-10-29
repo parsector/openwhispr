@@ -32,6 +32,10 @@ test("store handles edits, archive, history and proposals on a temp DB", (t) => 
   assert.equal(store.update(todo.id, { due_date: "2026-11-01" }).due_date, "2026-10-30");
   assert.equal(store.update(todo.id, { person: "Sam" }, { user: true }).person, "Sam");
   assert.equal(store.update(todo.id, { person: "Pat" }).person, "Sam");
+  const mention = "Send [@Alex Ng](mention:alex%40example.com) the report";
+  assert.equal(store.update(todo.id, { text: mention }, { user: true }).text, mention);
+  assert.equal(new CommitmentStore(db).get(todo.id).text, mention);
+  assert.equal(store.update(todo.id, { text: "Extraction replacement" }).text, mention);
   store.restate(todo.id, { note_id: "2", segment_index: 0, quote: "I will send it" });
   assert.equal(store.get(todo.id).mention_count, 2);
   const proposal = store.propose(todo.id, { note_id: "3", segment_index: 0, quote: "I sent it", strength: "explicit" });

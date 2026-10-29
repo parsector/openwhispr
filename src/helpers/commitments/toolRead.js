@@ -1,4 +1,5 @@
 const { CommitmentStore, isOverdue, localToday } = require("./store");
+const { plainTodoText } = require("./plainTodoText");
 
 const MAX_PAYLOAD = 8000;
 const defs = require("./todoToolDefinitions.json");
@@ -75,7 +76,7 @@ function listTodos(database, args = {}, now = new Date()) {
     (a.due_date || "9999").localeCompare(b.due_date || "9999") ||
     String(a.created_at).localeCompare(String(b.created_at)));
   return capTodoResult({ success: true, data: filtered.slice(0, filters.limit).map((row) => ({
-    id: row.id, text: row.text, person: row.person, direction: row.direction,
+    id: row.id, text: plainTodoText(row.text), person: row.person, direction: row.direction,
     due_date: row.due_date, status: row.status, overdue: !!isOverdue(row, now),
     completed_at: row.completed_at, rejected_at: row.rejected_at, rejected_reason: row.rejected_reason,
     source_meeting_title: row.source_note_title, source: row.source, source_agent: row.source_agent,
@@ -94,7 +95,7 @@ function getTodo(database, args = {}) {
 
 function todoDetail(store, row) {
   const { account_id: _accountId, ...data } = row;
-  return capTodoResult({ success: true, data: { ...data, overdue: !!isOverdue(row), mentions: store.mentions(row.id).slice(-10) }, displayText: `Retrieved todo: ${row.id}` });
+  return capTodoResult({ success: true, data: { ...data, text: plainTodoText(data.text), overdue: !!isOverdue(row), mentions: store.mentions(row.id).slice(-10) }, displayText: `Retrieved todo: ${row.id}` });
 }
 
 module.exports = { definitions, listTodos, getTodo, capTodoResult, todoDetail };

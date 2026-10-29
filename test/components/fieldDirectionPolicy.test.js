@@ -132,8 +132,10 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/routines/RoutinesView.tsx": ["auto"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
-  "src/components/todos/TodoRow.tsx": ["auto", "auto", "ltr"],
-  "src/components/todos/TodosView.tsx": ["ltr", "auto", "ltr"],
+  "src/components/todos/TodoMentionInput.tsx": ["auto"],
+  "src/components/todos/TodoPersonPicker.tsx": ["auto"],
+  "src/components/todos/TodoRow.tsx": ["auto", "ltr"],
+  "src/components/todos/TodosView.tsx": ["ltr", "ltr"],
   "src/components/ui/EmojiPicker.tsx": ["auto"],
   "src/components/ui/LanguageSelector.tsx": ["auto"],
 };
