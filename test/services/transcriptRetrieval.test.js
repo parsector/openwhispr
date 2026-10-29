@@ -348,7 +348,7 @@ test("lines name the person taking the notes and number unnamed speakers as the 
   const { data } = await tool.execute({ id: 7, transcript_offset: 0 });
   assert.equal(
     data.transcript,
-    "Note taker: I'll draft the plan.\nNote taker: Me too.\nSpeaker 1: Sounds good.\nOthers: Unattributed remark.\nSpeaker 2: I'll own the budget."
+    "Unknown speaker 1: I'll draft the plan.\nNote taker: Me too.\nUnknown speaker 3: Sounds good.\nUnknown speaker 4: Unattributed remark.\nUnknown speaker 5: I'll own the budget."
   );
   const mine = (await tool.execute({ id: 7, transcript_query: "note taker" })).data;
   assert.equal(mine.transcript_match_found, true);
@@ -371,7 +371,7 @@ test("the note chat labels speakers exactly as get_note does", async () => {
   const mappings = { speaker_1: "Priya", speaker_2: "You" };
   const { data } = await tool.execute({ id: 7 });
   const lines =
-    "Priya: Ship it Friday.\nNote taker: Agreed.\nNote taker: Mapped to me.\nSpeaker 1: In the room.";
+    "Priya: Ship it Friday.\nNote taker: Agreed.\nNote taker: Mapped to me.\nUnknown speaker 4: In the room.";
   assert.equal(data.transcript, lines);
   // A teammate's note: saved names apply, and the note taker isn't the user.
   assert.equal(

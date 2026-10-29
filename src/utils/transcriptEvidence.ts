@@ -1,6 +1,6 @@
 import { parseTranscriptSegments } from "./parseTranscriptSegments";
 import { withoutAttendeesFence } from "./noteAttendees";
-import { isYouSpeakerName, resolveSegmentSpeakerName } from "./transcriptSpeakerState";
+import { isYouSpeakerName, normalizeTranscriptSegments, resolveSegmentSpeakerName } from "./transcriptSpeakerState";
 import { buildMeetingContext, type MeetingIdentity } from "./llmTranscript";
 import i18n from "../i18n";
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
@@ -95,7 +95,7 @@ export function noteChatTranscript(
   speakerMappings: Record<string, string>,
   owner: MeetingIdentity | null
 ): string | null {
-  const transcript = readableSegments(segments, speakerMappings);
+  const transcript = readableSegments(normalizeTranscriptSegments(segments), speakerMappings);
   if (!transcript) return null;
   return `${noteTakerContext(owner)}\n\n${transcript.text}`;
 }
