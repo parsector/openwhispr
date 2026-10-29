@@ -257,6 +257,28 @@ test("diarized speaker numbers render in the UI language", (t) => {
   assert.ok(!txtOutput.includes("Unknown speaker 1"));
 });
 
+test("a user-pinned unknown prints the same numbered placeholder in plain and Markdown exports", () => {
+  const note = { title: "Standup", created_at: "2026-01-01T00:00:00Z" };
+  const rows = [{ id: "pinned", source: "system", speaker: "speaker_mic",
+    speakerName: "Speaker 1", speakerIsPlaceholder: true,
+    speakerLocked: true, speakerLockSource: "user", unknownNumber: 7,
+    timestamp: 0, text: "Unidentified voice." }];
+  const mappings = { speaker_mic: "Wrong name" };
+  for (const output of [formatTxt(note, rows, mappings), formatMd(note, rows, mappings)]) {
+    assert.ok(output.includes("Unknown speaker 7"));
+    assert.ok(!output.includes("Wrong name"));
+  }
+});
+
+test("a legacy speaker stored as a name remains named in plain and Markdown exports", () => {
+  const note = { title: "Standup", created_at: "2026-01-01T00:00:00Z" };
+  const rows = [{ id: "legacy", speaker: "Alex", timestamp: 0, text: "I will send the poll." }];
+  for (const output of [formatTxt(note, rows, {}), formatMd(note, rows, {})]) {
+    assert.ok(output.includes("Alex"));
+    assert.ok(!output.includes("Unknown speaker"));
+  }
+});
+
 test("segments with no speaker information get a localized unknown label", (t) => {
   changeLanguage("de");
   t.after(() => changeLanguage("en"));

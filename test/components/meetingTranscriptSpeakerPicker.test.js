@@ -467,19 +467,23 @@ test("selected rows scope is available only with a selection", async (t) => {
   assert.deepEqual(calls, [["selected", "a", "Alice", 3]]);
 });
 
-test("adjacent, provisional, ambiguous, and suggested rows keep a clickable speaker chip", async (t) => {
+test("adjacent, provisional, ambiguous, suggested, and channel-only rows keep a clickable speaker chip", async (t) => {
+  const assignments = [];
   const { act } = await mount(t, chat([
     { id: "mic-1", text: "room discussion", source: "mic", timestamp: 1,
-      speaker: "speaker_mic", speakerStatus: "provisional", speakerIsPlaceholder: true },
+      speaker: "speaker_mic", speakerName: "Speaker 1", speakerStatus: "provisional", speakerIsPlaceholder: true },
     { id: "mic-2", text: "same speaker", source: "mic", timestamp: 1.5,
       speaker: "speaker_mic", speakerStatus: "provisional", speakerIsPlaceholder: true },
     { id: "ambiguous", text: "maybe", source: "system", timestamp: 2,
       speaker: "speaker_999999", unknownNumber: 1000000, uncertainty: { reason: "not_sure" } },
     { id: "suggested", text: "perhaps Alex", source: "system", timestamp: 3,
       speaker: "speaker_3", suggestedName: "Alex", suggestedProfileId: 9 },
-  ]));
+    { id: "channel-only", text: "no cluster", source: "system", timestamp: 4,
+      unknownNumber: 1000001 },
+  ], { onAssignSpeakerScope: (...args) => assignments.push(args),
+    speakerProfiles: [{ id: 3, display_name: "Alice", email: null }] }));
   const chips = [...happyWindow.document.querySelectorAll("[data-speaker-chip]")];
-  assert.equal(chips.length, 4, "every row with a speaker has a control");
+  assert.equal(chips.length, 5, "every meeting row has a speaker control");
   assert.equal(chips[0].textContent.trim(), "notes.speaker.unknownNumber");
   assert.ok(!hasButton(YOU));
   for (const chip of chips) {
@@ -488,4 +492,8 @@ test("adjacent, provisional, ambiguous, and suggested rows keep a clickable spea
     assert.ok(pickerOpen(), "the chip opens the speaker picker");
     await act(() => pressKey("Escape"));
   }
+  await act(() => chips[4].click());
+  assert.ok(!hasButton("notes.speaker.scope.cluster"), "a channel-only row has no cluster to remap");
+  await act(() => buttonWithText("Alice").click());
+  assert.deepEqual(assignments, [["row", "channel-only", "Alice", 3]]);
 });

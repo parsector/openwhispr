@@ -2,7 +2,8 @@ const { i18nMain } = require("./i18nMain");
 
 function resolveSpeaker(seg, speakerMappings) {
   if (seg.speakerLocked || seg.speakerLockSource === "user") {
-    return seg.speakerName || i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+    return (seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : null) ||
+      i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
   }
   if (seg.diarizationRunId) {
     return seg.speakerName && !seg.speakerIsPlaceholder
@@ -12,6 +13,8 @@ function resolveSpeaker(seg, speakerMappings) {
   if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
   if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
   if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
+  if (typeof seg.speaker === "string" && !seg.speakerIsPlaceholder && !seg.speaker.startsWith("speaker_"))
+    return seg.speaker;
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
     if (!isNaN(num)) return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || num + 1 });

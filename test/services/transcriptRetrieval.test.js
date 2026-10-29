@@ -396,6 +396,17 @@ test("the note chat labels speakers exactly as get_note does", async () => {
   assert.equal(noteChatTranscript([], mappings, owner), null, "plain text keeps the stored text");
 });
 
+test("a user-pinned unknown never leaks a recycled cluster name into chat or retrieval", async () => {
+  const { readableTranscript, noteChatTranscript } = await import("../../src/utils/transcriptEvidence.ts");
+  const rows = [{ id: "pinned", text: "Unidentified voice.", source: "mic",
+    speaker: "speaker_mic", speakerName: "Speaker 1", speakerIsPlaceholder: true,
+    speakerLocked: true, speakerLockSource: "user", unknownNumber: 7 }];
+  const mappings = { speaker_mic: "Wrong name" };
+  const expected = "Unknown speaker 7: Unidentified voice.";
+  assert.equal(readableTranscript(JSON.stringify(rows), mappings).text, expected);
+  assert.equal(noteChatTranscript(rows, mappings, null).split("\n\n").at(-1), expected);
+});
+
 test("a longer match cut off at the end of a passage is found by the next call", async () => {
   const tool = await getTool();
   stored.transcript = `a b ${"x".repeat(492)}a     b and more`;

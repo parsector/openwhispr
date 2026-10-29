@@ -255,10 +255,14 @@ export const resolveSegmentSpeakerName = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string | undefined => {
-  if (isTranscriptSpeakerLocked(segment)) return segment.speakerName;
+  if (isTranscriptSpeakerLocked(segment))
+    return segment.speakerIsPlaceholder ? undefined : segment.speakerName;
   if (segment.diarizationRunId) return segment.speakerIsPlaceholder ? undefined : segment.speakerName;
   const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
-  return mapped || segment.speakerName;
+  if (mapped) return mapped;
+  if (segment.speakerIsPlaceholder) return undefined;
+  return segment.speakerName || (typeof segment.speaker === "string" && segment.speaker !== "you" &&
+    !segment.speaker.startsWith("speaker_") ? segment.speaker : undefined);
 };
 
 // Naming a speaker "You" is how the user marks their own voice. The name is

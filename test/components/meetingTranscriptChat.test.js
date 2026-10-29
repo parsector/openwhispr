@@ -29,17 +29,18 @@ async function renderChat(props) {
 
 test("rows resolve speaker labels through the live mappings", async () => {
   const unmapped = await renderChat({ speakerMappings: {} });
-  assert.ok(unmapped.includes("Speaker 1"), "unmapped cluster shows its numbered label");
+  assert.ok(unmapped.includes("Unknown speaker 1"), "unmapped cluster shows its numbered label");
 
   const renamed = await renderChat({ speakerMappings: { speaker_0: "Alice" } });
   assert.ok(renamed.includes("Alice"), "renaming the cluster renames the rows");
-  assert.ok(!renamed.includes("Speaker 1"));
+  assert.equal(renamed.split(">Alice<").length - 1, 2, "both remote rows use the mapped name");
 });
 
-test("consecutive rows of one speaker collapse the repeat label behind hover", async () => {
+test("consecutive rows of one speaker each keep a visible speaker control", async () => {
   const html = await renderChat({});
   // s3 follows s2 with the same effective speaker key.
-  assert.equal(html.split("grid-rows-[0fr]").length - 1, 1);
+  assert.equal(html.split("data-speaker-chip").length - 1, 3);
+  assert.ok(!html.includes("grid-rows-[0fr]"));
 });
 
 test("selection ring follows selectedSegmentIds", async () => {
@@ -101,7 +102,7 @@ test("an in-person meeting draws numbered mic speakers on the other side", async
   const selfSide = html.split("bg-primary/90 text-primary-foreground").length - 1;
   assert.equal(otherSide, 2, "both numbered speakers sit on the other side");
   assert.equal(selfSide, 1, "a mic line without a speaker stays on the user's side");
-  assert.ok(html.includes("Speaker 1") && html.includes("Speaker 2"));
+  assert.ok(html.includes("Unknown speaker 1") && html.includes("Unknown speaker 2"));
 });
 
 test("a stretch of the user's lines reassigned to someone gets its own colour", async () => {
