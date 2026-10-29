@@ -4,6 +4,7 @@ import { Check, MoreHorizontal, X } from "../icons";
 import type { Commitment } from "../../types/electron";
 import { groupFor, localDate } from "./TodoGroups";
 import TodoPersonPicker from "./TodoPersonPicker";
+import TodoDatePicker from "./TodoDatePicker";
 import { boundedDateLabel } from "./todoDateLabel";
 import { LocalApprovalCard } from "../chat/LocalApprovalCard";
 import { useLocalApprovalStore } from "../../stores/localApprovalStore";
@@ -158,7 +159,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
             <button type="button" className="text-xs text-muted-foreground underline decoration-border-hover underline-offset-2 hover:text-foreground" onClick={() => { setMenuOpen(true); }}>{t("todos.pickDate")}</button>
             <details ref={detailsRef} className="relative text-xs" open={isMenuOpen}>
               <summary onClick={(event) => { event.preventDefault(); setMenuOpen(!isMenuOpen); }} aria-label={t("todos.actions")} className="list-none cursor-pointer rounded text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"><MoreHorizontal size={16} /></summary>
-              <div className="absolute start-0 z-20 mt-1 w-44 rounded-lg border border-border bg-background p-1 shadow-lg text-sm">
+              <div className="absolute start-0 z-20 mt-1 w-64 rounded-lg border border-border bg-background p-1 shadow-lg text-sm">
                 {confirmingDelete ? <div className="space-y-2 p-2">
                   <p className="text-xs text-foreground">{t("todos.deleteConfirm")}</p>
                   <button type="button" className="block w-full rounded px-2 py-1.5 text-start text-destructive hover:bg-muted" onClick={() => { setConfirmingDelete(false); commitMenu(() => onDelete?.(row)); }}>{t("todos.deletePermanently")}</button>
@@ -166,10 +167,7 @@ export default function TodoRow({ row, onComplete, onReject, onDue, onPerson, on
                 </div> : <>
                 {onText && <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { commitMenu(() => { setText(row.text); setEditingText(true); }); }} type="button">{t("todos.editText")}</button>}
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => { commitMenu(() => setEditingPerson(true)); }} type="button">{t("todos.editPerson")}</button>
-                <label className="block rounded px-2 py-1.5 hover:bg-muted">{t("todos.pickDate")}
-                  <input dir="ltr" type="date" className="mt-1 w-full bg-background" value={row.due_date || ""}
-                    onChange={(event) => { if (event.target.value) commitMenu(() => onDue(row, { action: "pick", date: event.target.value })); }} />
-                </label>
+                <TodoDatePicker value={row.due_date} onSelect={(date) => commitMenu(() => onDue(row, { action: "pick", date }))} />
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => commitMenu(() => onDue(row, { action: "push" }))} type="button">{t("todos.pushDay")}</button>
                 <button className="block w-full rounded px-2 py-1.5 text-start hover:bg-muted" onClick={() => commitMenu(() => onDue(row, { action: "clear" }))} type="button">{t("todos.clearDate")}</button>
                 {!archived && projects.length > 0 && (!row.agent_job_id || inactiveJob) && <div className="border-t border-border pt-1">

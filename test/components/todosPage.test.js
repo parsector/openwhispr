@@ -114,7 +114,7 @@ test("handoff is hidden without projects and a cancelled linked job keeps its to
     const project = article.querySelector('select[aria-label="todos.agentProject"]');
     assert.equal(project.value, "Alpha");
     await React.act(async () => { project.value = "Beta"; project.dispatchEvent(new browser.Event("change", { bubbles: true })); });
-    await React.act(async () => article.querySelector("details button:last-child").click());
+    await React.act(async () => [...article.querySelectorAll("details button")].find((item) => item.textContent === "todos.sendToAgent").click());
     assert.deepEqual(prepared, [{ project: "Beta", task: "Send report handoff" }]);
     assert.deepEqual(linked, [["handoff", "job-123"]]);
     assert.equal(rows[0].status, "open");
@@ -666,4 +666,12 @@ test("proposal banner keeps evidence and separate review actions", () => {
   assert.match(html, /I sent the deck/);
   assert.match(html, /<button/g);
   assert.doesNotMatch(renderToStaticMarkup(React.createElement(ProposalsBanner, { noteId: 7, items })), /I sent the deck/);
+});
+
+test("todo menu has exactly one clear-date path and its calendar only selects dates", () => {
+  const html = renderToStaticMarkup(React.createElement(TodoRow, { row: row("date", "2026-10-29"),
+    onComplete() {}, onReject() {}, onDue() {}, onPerson() {}, onOpenNote() {} }));
+  assert.equal((html.match(/>todos\.clearDate<\/button>/g) || []).length, 1);
+  assert.doesNotMatch(html, /type="date"/);
+  assert.match(html, /aria-label="todos.pickDate"/);
 });
