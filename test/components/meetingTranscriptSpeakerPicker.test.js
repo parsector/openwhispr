@@ -298,7 +298,7 @@ test("a row already on the user's side doesn't offer This is me", async (t) => {
   assert.ok(!hasButton(THIS_IS_ME));
 });
 
-test("the voice profile saved as You is folded into This is me", async (t) => {
+test("the voice profile saved as You is offered as an identity choice", async (t) => {
   const { act } = await mount(
     t,
     chat([{ id: "a", text: "hello", source: "mic", timestamp: 1, speaker: "speaker_0" }], {
@@ -315,7 +315,7 @@ test("the voice profile saved as You is folded into This is me", async (t) => {
   assert.ok(!hasButton(YOU), "the You profile isn't listed twice");
 });
 
-test("This is me adds the voice to the user's existing profile", async (t) => {
+test("This is me passes the existing profile identity without enrollment", async (t) => {
   const calls = [];
   const { act } = await mount(
     t,
@@ -408,4 +408,69 @@ test("Assign to leaves This is me out when every selected line is the user's", a
   await act(() => buttonWithText("notes.speaker.assignTo").click());
   assert.ok(pickerOpen());
   assert.ok(!hasButton(THIS_IS_ME));
+});
+
+test("speaker chip defaults to one row and does not write the cluster mapping", async (t) => {
+  const rowWrites = [];
+  const clusterWrites = [];
+  const segments = [
+    { id: "a", text: "first", source: "system", timestamp: 1, speaker: "speaker_1" },
+    { id: "b", text: "second", source: "system", timestamp: 2, speaker: "speaker_1" },
+  ];
+  const { act } = await mount(t, chat(segments, {
+    onAssignSpeakerScope: (...args) => rowWrites.push(args),
+    onMapSpeaker: (...args) => clusterWrites.push(args),
+    speakerProfiles: [{ id: 3, display_name: "Alice", email: null }],
+  }));
+  await act(() => buttonWithText("notes.speaker.label").click());
+  assert.equal(buttonWithText("notes.speaker.scope.row").getAttribute("aria-pressed"), "true");
+  await act(() => buttonWithText("Alice").click());
+  assert.deepEqual(rowWrites, [["row", "a", "Alice", 3]]);
+  assert.deepEqual(clusterWrites, []);
+});
+
+test("cluster scope previews the affected row count before changing the mapping", async (t) => {
+  const clusterWrites = [];
+  const segments = [
+    { id: "a", text: "first", source: "system", timestamp: 1, speaker: "speaker_1" },
+    { id: "b", text: "second", source: "system", timestamp: 2, speaker: "speaker_1" },
+  ];
+  const { act } = await mount(t, chat(segments, {
+    onAssignSpeakerScope: () => assert.fail("cluster scope used row assignment"),
+    onMapSpeaker: (...args) => clusterWrites.push(args),
+    speakerProfiles: [{ id: 3, display_name: "Alice", email: null }],
+  }));
+  await act(() => buttonWithText("notes.speaker.label").click());
+  await act(() => buttonWithText("notes.speaker.scope.cluster").click());
+  assert.equal(happyWindow.document.querySelector("[data-affected-rows]").getAttribute("data-affected-rows"), "2");
+  await act(() => buttonWithText("Alice").click());
+  assert.deepEqual(clusterWrites, [["speaker_1", "Alice", null, 3]]);
+});
+
+
+test("selected rows scope is available only with a selection", async (t) => {
+  const calls = [];
+  const segments = [
+    { id: "a", text: "first", source: "system", timestamp: 1, speaker: "speaker_1" },
+    { id: "b", text: "second", source: "system", timestamp: 2, speaker: "speaker_1" },
+  ];
+  const { act } = await mount(t, chat(segments, {
+    selectedSegmentIds: new Set(["a", "b"]),
+    onAssignSpeakerScope: (...args) => calls.push(args),
+    speakerProfiles: [{ id: 3, display_name: "Alice", email: null }],
+  }));
+  await act(() => buttonWithText("notes.speaker.label").click());
+  assert.ok(hasButton("notes.speaker.scope.selected"));
+  await act(() => buttonWithText("notes.speaker.scope.selected").click());
+  await act(() => buttonWithText("Alice").click());
+  assert.deepEqual(calls, [["selected", "a", "Alice", 3]]);
+});
+
+test("a provisional mic row shows an unknown speaker chip, not the owner", async (t) => {
+  await mount(t, chat([{
+    id: "mic-1", text: "room discussion", source: "mic", timestamp: 1,
+    speaker: "speaker_mic", speakerStatus: "provisional", speakerIsPlaceholder: true,
+  }]));
+  assert.ok(hasButton("notes.speaker.unknown"));
+  assert.ok(!hasButton(YOU));
 });

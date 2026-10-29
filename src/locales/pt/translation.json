@@ -3209,14 +3209,22 @@
         "notLabeled": "Participantes sem rótulo",
         "finalizing": "Finalizando participantes…",
         "justYou": "Só você",
-        "assumedHint": "assumindo 2 — ajuste se houver mais",
+        "assumedHint": "Número desconhecido — ajuste se souber",
         "speakersLabel": "Participantes",
         "labelToggle": "Rotular participantes",
         "toggleAria": "Alternar identificação de participantes para esta gravação",
         "incAria": "Aumentar número esperado de participantes",
         "decAria": "Diminuir número esperado de participantes"
       },
-      "consentNotice": "Sempre obtenha consentimento ao gravar outras pessoas"
+      "consentNotice": "Sempre obtenha consentimento ao gravar outras pessoas",
+      "scope": {
+        "label": "Escopo",
+        "row": "Esta linha",
+        "selected": "Linhas selecionadas",
+        "cluster": "Este grupo",
+        "changesRows": "altera {{n}} linhas",
+        "unknown": "Desconhecido"
+      }
     },
     "overview": {
       "subtitle": {

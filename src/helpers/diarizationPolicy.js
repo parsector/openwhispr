@@ -110,40 +110,6 @@ function isCollapsedDiarization(segments) {
   );
 }
 
-// Keeps the `cap` largest clusters and relabels each extra one to the kept
-// speaker whose voice centroid it is most similar to. Folding extras into the
-// largest cluster (capSpeakerClusters) handed one person's turns to the other
-// whenever clustering split a real speaker. Clusters without a centroid still
-// fold into the largest.
-function capSpeakerClustersByVoice(segments, cap, centroids, similarity) {
-  const { clusters } = summarizeClusters(segments);
-  if (clusters.size <= cap) return segments;
-
-  const ranked = [...clusters].sort((a, b) => b[1].total - a[1].total).map(([speaker]) => speaker);
-  const kept = ranked.slice(0, cap);
-  const relabel = new Map();
-  for (const extra of ranked.slice(cap)) {
-    const voice = centroids.get(extra);
-    let target = kept[0];
-    let bestSimilarity = -Infinity;
-    if (voice) {
-      for (const speaker of kept) {
-        const keptVoice = centroids.get(speaker);
-        if (!keptVoice) continue;
-        const score = similarity(voice, keptVoice);
-        if (score > bestSimilarity) {
-          bestSimilarity = score;
-          target = speaker;
-        }
-      }
-    }
-    relabel.set(extra, target);
-  }
-  return segments.map((s) =>
-    relabel.has(s.speaker) ? { ...s, speaker: relabel.get(s.speaker) } : s
-  );
-}
-
 module.exports = {
   DEFAULT_CLUSTER_THRESHOLD,
   LONG_AUDIO_CLUSTER_THRESHOLD,
@@ -154,5 +120,4 @@ module.exports = {
   resolveClusterThreshold,
   dropNegligibleClusters,
   isCollapsedDiarization,
-  capSpeakerClustersByVoice,
 };

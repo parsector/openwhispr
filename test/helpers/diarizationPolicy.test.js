@@ -11,7 +11,6 @@ const {
   resolveClusterThreshold,
   dropNegligibleClusters,
   isCollapsedDiarization,
-  capSpeakerClustersByVoice,
 } = require("../../src/helpers/diarizationPolicy");
 
 // 0.55 is tuned for short clean audio; on a 73-minute single-mic voice memo one
@@ -307,57 +306,4 @@ test("interviews, podcasts and lectures dominated by one voice keep their labels
 test("characterization: a listener who only backchannels beside a dominant speaker reads as collapsed", () => {
   const segments = [...cluster("speaker_0", 100, 10), ...cluster("speaker_1", 30, 1.8)];
   assert.equal(isCollapsedDiarization(segments), true);
-});
-
-const dot = (a, b) => a.reduce((sum, value, i) => sum + value * b[i], 0);
-
-test("an extra cluster is relabelled to the kept speaker it sounds like", () => {
-  const segments = [
-    ...cluster("speaker_0", 10, 10),
-    ...cluster("speaker_1", 8, 10),
-    ...cluster("speaker_2", 6, 10),
-  ];
-  const centroids = new Map([
-    ["speaker_0", [1, 0]],
-    ["speaker_1", [0, 1]],
-    ["speaker_2", [0.1, 0.9]],
-  ]);
-  const capped = capSpeakerClustersByVoice(segments, 2, centroids, dot);
-  assert.deepEqual(speakersOf(capped), ["speaker_0", "speaker_1"]);
-  assert.equal(capped.filter((s) => s.speaker === "speaker_1").length, 14);
-  assert.deepEqual(
-    capped.slice(0, 18).map((s) => s.speaker),
-    segments.slice(0, 18).map((s) => s.speaker)
-  );
-});
-
-test("an extra cluster without a usable voice folds into the largest", () => {
-  const segments = [
-    ...cluster("speaker_0", 10, 10),
-    ...cluster("speaker_1", 8, 10),
-    ...cluster("speaker_2", 6, 10),
-  ];
-  const noExtraVoice = new Map([
-    ["speaker_0", [1, 0]],
-    ["speaker_1", [0, 1]],
-  ]);
-  const capped = capSpeakerClustersByVoice(segments, 2, noExtraVoice, dot);
-  assert.equal(capped.filter((s) => s.speaker === "speaker_0").length, 16);
-
-  // A kept speaker without a voice can't be matched, so the extra goes to the
-  // closest kept speaker that has one.
-  const onlySecondVoice = new Map([
-    ["speaker_1", [0, 1]],
-    ["speaker_2", [1, 0]],
-  ]);
-  const matched = capSpeakerClustersByVoice(segments, 2, onlySecondVoice, dot);
-  assert.equal(matched.filter((s) => s.speaker === "speaker_1").length, 14);
-});
-
-test("the voice cap leaves a run within the cap untouched and can fold everything into one", () => {
-  const segments = [...cluster("speaker_0", 10, 10), ...cluster("speaker_1", 8, 10)];
-  assert.equal(capSpeakerClustersByVoice(segments, 2, new Map(), dot), segments);
-  assert.deepEqual(speakersOf(capSpeakerClustersByVoice(segments, 1, new Map(), dot)), [
-    "speaker_0",
-  ]);
 });

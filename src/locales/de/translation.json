@@ -3554,14 +3554,22 @@
         "notLabeled": "Sprecher nicht beschriftet",
         "finalizing": "Sprecher werden finalisiert…",
         "justYou": "Nur du",
-        "assumedHint": "Standard: 2 — bei Bedarf anpassen",
+        "assumedHint": "Anzahl unbekannt — bei Bedarf anpassen",
         "speakersLabel": "Sprecher",
         "labelToggle": "Sprecher beschriften",
         "toggleAria": "Sprechererkennung für diese Aufnahme umschalten",
         "incAria": "Erwartete Sprecheranzahl erhöhen",
         "decAria": "Erwartete Sprecheranzahl verringern"
       },
-      "consentNotice": "Hole immer die Zustimmung ein, wenn du andere aufnimmst"
+      "consentNotice": "Hole immer die Zustimmung ein, wenn du andere aufnimmst",
+      "scope": {
+        "label": "Bereich",
+        "row": "Diese Zeile",
+        "selected": "Ausgewählte Zeilen",
+        "cluster": "Dieser Cluster",
+        "changesRows": "ändert {{n}} Zeilen",
+        "unknown": "Unbekannt"
+      }
     },
     "overview": {
       "subtitle": {

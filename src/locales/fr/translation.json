@@ -3554,14 +3554,22 @@
         "notLabeled": "Intervenants non étiquetés",
         "finalizing": "Finalisation des intervenants…",
         "justYou": "Juste vous",
-        "assumedHint": "2 par défaut — ajustez si plus",
+        "assumedHint": "Nombre inconnu — ajustez si connu",
         "speakersLabel": "Intervenants",
         "labelToggle": "Étiqueter les intervenants",
         "toggleAria": "Activer l'identification des intervenants pour cet enregistrement",
         "incAria": "Augmenter le nombre d'intervenants attendus",
         "decAria": "Diminuer le nombre d'intervenants attendus"
       },
-      "consentNotice": "Obtenez toujours le consentement avant d'enregistrer d'autres personnes"
+      "consentNotice": "Obtenez toujours le consentement avant d'enregistrer d'autres personnes",
+      "scope": {
+        "label": "Portée",
+        "row": "Cette ligne",
+        "selected": "Lignes sélectionnées",
+        "cluster": "Ce groupe",
+        "changesRows": "modifie {{n}} lignes",
+        "unknown": "Inconnu"
+      }
     },
     "overview": {
       "subtitle": {

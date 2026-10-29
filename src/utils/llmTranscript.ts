@@ -15,11 +15,8 @@ const isSelfParticipant = (participant: CalendarAttendee, identity: MeetingIdent
   participant.self || (!!identity.selfEmail && participant.email === identity.selfEmail);
 
 /**
- * Speaker label for the LLM payload. An unnamed, unnumbered mic track falls back
- * to the note owner's real name instead of an anonymous "You" whenever it is known.
- * Diarization numbers the mic's clusters when several people share it (an
- * in-person meeting), so a numbered mic segment is someone in the room, not
- * necessarily the owner — matching the "Speaker N" the transcript view shows.
+ * Speaker label for the LLM payload. Mic location does not identify the
+ * note owner; only an explicit name or legacy "you" assignment does.
  */
 export function resolveLlmSpeakerLabel(
   segment: TranscriptSegment,
@@ -34,7 +31,7 @@ export function resolveLlmSpeakerLabel(
     const num = Number.parseInt(segment.speaker.replace("speaker_", ""), 10);
     if (!Number.isNaN(num)) return t("notes.speaker.label", { n: num + 1 });
   }
-  if (segment.source === "mic") return selfLabel;
+  if (segment.source === "mic") return t("notes.speaker.unknown");
   return t("notes.speaker.them");
 }
 

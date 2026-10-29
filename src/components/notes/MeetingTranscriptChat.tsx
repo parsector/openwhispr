@@ -158,9 +158,7 @@ interface SpeakerPickerProps {
   participants?: Array<{ email: string; displayName: string | null }>;
   onSelectName: (name: string, email?: string | null, profileId?: number) => void;
   onClose: () => void;
-  // "offer": a voice that may be the user's gets a "This is me" row, which the
-  // user's own voice profile folds into. "exclude": a call's remote voice is
-  // never the user, so it can't be named after them.
+  // Selecting a name, including "This is me", only assigns labels.
   self?: "offer" | "exclude";
   t: (key: string, opts?: Record<string, unknown>) => string;
 }
@@ -275,8 +273,7 @@ function SpeakerPicker({
   const selfProfiles = self
     ? (speakerProfiles || []).filter((p) => isYouSpeakerName(p.display_name, youLabel))
     : [];
-  // Naming the speaker after the existing profile adds this voice to it rather
-  // than to a second "You" profile.
+  // Reuse the existing identity label without changing its voice embedding.
   const selfProfile = selfProfiles.find((p) => p.id != null) ?? selfProfiles[0];
   const matchesSelf =
     !!self &&
@@ -514,6 +511,9 @@ function SpeakerLabel({
   isOriginallyYou,
   self,
   onMap,
+  onAssignScope,
+  selectedRowIds,
+  clusterRowCount,
   onConfirm,
   onDismiss,
   t,
@@ -527,11 +527,15 @@ function SpeakerLabel({
   isOriginallyYou: boolean;
   self?: "offer" | "exclude";
   onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
+  onAssignScope?: (scope: "row" | "selected", rowId: string, name: string, profileId?: number) => void;
+  selectedRowIds?: Set<string>;
+  clusterRowCount: number;
   onConfirm?: (speakerId: string, name: string, profileId: number) => void;
   onDismiss?: (speakerId: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const [open, setOpen] = useState(false);
+  const [scope, setScope] = useState<"row" | "selected" | "cluster">("row");
   const speakerState =
     segment.speakerLocked || isTranscriptSpeakerLocked(segment)
       ? "locked"
@@ -575,11 +579,13 @@ function SpeakerLabel({
     segment.speakerName ||
     (isOriginallyYou
       ? t("notes.speaker.you")
-      : t("notes.speaker.label", { n: getSpeakerNumber(speakerId) }));
+      : speakerId === "speaker_mic"
+        ? t("notes.speaker.unknown")
+        : t("notes.speaker.label", { n: getSpeakerNumber(speakerId) }));
   const isUnmapped = !resolvedName && !segment.speakerName;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(next) => { setOpen(next); if (next) setScope("row"); }}>
       <PopoverTrigger asChild>
         <button
           className={cn(
@@ -596,11 +602,22 @@ function SpeakerLabel({
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0">
+        <div className="flex gap-1 p-2 border-b border-border/70" role="group" aria-label={t("notes.speaker.scope.label")}>
+          {(["row", ...(selectedRowIds?.size ? ["selected"] : []), "cluster"] as Array<"row" | "selected" | "cluster">).map((choice) => (
+            <button key={choice} type="button" aria-pressed={scope === choice}
+              onClick={() => setScope(choice)}
+              className={cn("rounded px-2 py-1 text-[11px] hover:bg-foreground/10", scope === choice && "bg-foreground/10 font-medium")}>
+              {t(`notes.speaker.scope.${choice}`)}
+            </button>
+          ))}
+        </div>
+        {scope === "cluster" && <div className="px-3 pt-2 text-[11px] text-muted-foreground" data-affected-rows={clusterRowCount}>{t("notes.speaker.scope.changesRows", { n: clusterRowCount })}</div>}
         <SpeakerPicker
           speakerProfiles={speakerProfiles}
           participants={participants}
           onSelectName={(name, email, profileId) => {
-            onMap?.(speakerId, name, email, profileId);
+            if (scope === "cluster" || !onAssignScope) onMap?.(speakerId, name, email, profileId);
+            else onAssignScope(scope, segment.id, name, profileId);
             setOpen(false);
           }}
           onClose={() => setOpen(false)}
@@ -715,6 +732,9 @@ interface SegmentRowProps {
   matchedProfile?: SpeakerProfileLite;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
+  onAssignSpeakerScope?: (scope: "row" | "selected", rowId: string, name: string, profileId?: number) => void;
+  selectedRowIds?: Set<string>;
+  clusterRowCount: number;
   onMapSpeaker?: (
     speakerId: string,
     displayName: string,
@@ -748,6 +768,9 @@ const SegmentRow = memo(function SegmentRow({
   speakerProfiles,
   participants,
   onMapSpeaker,
+  onAssignSpeakerScope,
+  selectedRowIds,
+  clusterRowCount,
   onConfirmSuggestion,
   onDismissSuggestion,
   onAttachSpeakerEmail,
@@ -757,9 +780,8 @@ const SegmentRow = memo(function SegmentRow({
   const hasSpeaker = !!segment.speaker;
   const isOriginallyYou = segment.speaker === "you";
   const isSystemSpeaker = hasSpeaker && !selfSide;
-  // Only an in-person mic cluster may be the user: diarization can't tell which
-  // voice is theirs. A call's remote voices never are, and its mic is already
-  // "you", where naming one line remaps every line of the mic.
+  // Mic location alone cannot identify the owner. A remote voice is never
+  // offered as the owner; mic clusters can be assigned explicitly.
   const self =
     segment.source === "system" ? "exclude" : !selfSide && !isOriginallyYou ? "offer" : undefined;
   const selectable = !!onToggleSelect;
@@ -784,6 +806,9 @@ const SegmentRow = memo(function SegmentRow({
         isOriginallyYou={isOriginallyYou}
         self={self}
         onMap={onMapSpeaker}
+        onAssignScope={onAssignSpeakerScope}
+        selectedRowIds={selectedRowIds}
+        clusterRowCount={clusterRowCount}
         onConfirm={onConfirmSuggestion}
         onDismiss={onDismissSuggestion}
         t={t}
@@ -871,10 +896,11 @@ interface MeetingTranscriptChatProps {
   isRecording?: boolean;
   isDiarizing?: boolean;
   sessionDiarizationEnabled?: boolean;
-  sessionExpectedCount?: number;
+  sessionExpectedCount?: number | null;
   userTouchedStepper?: boolean;
   onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
   onSetSessionExpectedCount?: (count: number) => void;
+  onAssignSpeakerScope?: (scope: "row" | "selected", rowId: string, name: string, profileId?: number) => void;
   onMapSpeaker?: (
     speakerId: string,
     displayName: string,
@@ -902,11 +928,12 @@ export function MeetingTranscriptChat({
   isRecording,
   isDiarizing,
   sessionDiarizationEnabled = true,
-  sessionExpectedCount = 2,
+  sessionExpectedCount = null,
   userTouchedStepper = false,
   onSetSessionDiarizationEnabled,
   onSetSessionExpectedCount,
   onMapSpeaker,
+  onAssignSpeakerScope,
   onConfirmSuggestion,
   onDismissSuggestion,
   onAttachSpeakerEmail,
@@ -1026,7 +1053,7 @@ export function MeetingTranscriptChat({
   const showAssumedHint =
     !isDiarizing &&
     sessionDiarizationEnabled &&
-    sessionExpectedCount === 2 &&
+    sessionExpectedCount == null &&
     !(participants && participants.length > 0) &&
     !userTouchedStepper;
 
@@ -1068,8 +1095,8 @@ export function MeetingTranscriptChat({
                 </span>
                 <div className="flex items-center gap-0.5 rounded-md border border-border bg-surface-2/60">
                   <button
-                    onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount - 1)}
-                    disabled={sessionExpectedCount <= 1}
+                    onClick={() => onSetSessionExpectedCount?.((sessionExpectedCount ?? 2) - 1)}
+                    disabled={sessionExpectedCount == null || sessionExpectedCount <= 1}
                     className="px-1.5 py-0.5 rounded-s-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                     aria-label={t("notes.speaker.pill.decAria")}
                   >
@@ -1078,11 +1105,11 @@ export function MeetingTranscriptChat({
                   <span className="px-1.5 tabular-nums" aria-live="polite">
                     {sessionExpectedCount === 1
                       ? t("notes.speaker.pill.justYou")
-                      : sessionExpectedCount}
+                      : sessionExpectedCount ?? t("notes.speaker.scope.unknown")}
                   </span>
                   <button
-                    onClick={() => onSetSessionExpectedCount?.(sessionExpectedCount + 1)}
-                    disabled={sessionExpectedCount >= MAX_SPEAKER_COUNT}
+                    onClick={() => onSetSessionExpectedCount?.((sessionExpectedCount ?? 1) + 1)}
+                    disabled={sessionExpectedCount != null && sessionExpectedCount >= MAX_SPEAKER_COUNT}
                     className="px-1.5 py-0.5 rounded-e-md hover:bg-accent focus-visible:bg-accent focus-visible:outline-none disabled:opacity-30 disabled:pointer-events-none transition-colors"
                     aria-label={t("notes.speaker.pill.incAria")}
                   >
@@ -1158,6 +1185,9 @@ export function MeetingTranscriptChat({
                     speakerProfiles={speakerProfiles}
                     participants={participants}
                     onMapSpeaker={onMapSpeaker}
+                    onAssignSpeakerScope={onAssignSpeakerScope}
+                    selectedRowIds={selectedSegmentIds}
+                    clusterRowCount={segments.filter((row) => row.speaker === segment.speaker).length}
                     onConfirmSuggestion={onConfirmSuggestion}
                     onDismissSuggestion={onDismissSuggestion}
                     onAttachSpeakerEmail={onAttachSpeakerEmail}

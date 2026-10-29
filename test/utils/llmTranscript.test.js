@@ -17,11 +17,11 @@ const attendee = (email, displayName, self = false) => ({
   self,
 });
 
-test("mic segments carry the note owner's label", async () => {
+test("mic source alone does not name the note owner", async () => {
   const { resolveLlmSpeakerLabel } = await load();
   assert.equal(
     resolveLlmSpeakerLabel({ source: "mic", text: "hi" }, {}, "Gabriel Stein", t),
-    "Gabriel Stein"
+    "notes.speaker.unknown"
   );
   assert.equal(
     resolveLlmSpeakerLabel(
@@ -93,7 +93,7 @@ test("an in-person meeting's diarized mic clusters keep their speaker numbers", 
       "Speaker 1: Can you send the proposal?",
       "Speaker 2: I will send it today.",
       "Casey: Thanks.",
-      "Casey: Before diarization.",
+      "notes.speaker.unknown: Before diarization.",
     ].join("\n")
   );
   assert.equal(
@@ -136,7 +136,7 @@ test("buildLlmTranscript prefixes every line with the resolved label", async () 
   ];
   assert.equal(
     buildLlmTranscript(segments, { speaker_0: "Michael" }, "Gabriel", t),
-    "Gabriel: Morning everyone\nMichael: Morning"
+    "notes.speaker.unknown: Morning everyone\nMichael: Morning"
   );
 });
 

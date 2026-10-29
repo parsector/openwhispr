@@ -3131,7 +3131,7 @@
         "notLabeled": "話者ラベルなし",
         "finalizing": "話者を確定中…",
         "justYou": "あなたのみ",
-        "assumedHint": "2人と想定 — 違う場合は変更してください",
+        "assumedHint": "人数は不明です。分かる場合は調整してください",
         "speakersLabel": "話者数",
         "labelToggle": "話者をラベル付け",
         "toggleAria": "この録音の話者識別を切り替える",
@@ -3144,7 +3144,15 @@
       "nameOrEmailPlaceholder": "名前またはメールを入力",
       "addContact": "連絡先を追加",
       "save": "保存",
-      "cancel": "キャンセル"
+      "cancel": "キャンセル",
+      "scope": {
+        "label": "適用範囲",
+        "row": "この行",
+        "selected": "選択した行",
+        "cluster": "このクラスタ",
+        "changesRows": "{{n}}行を変更",
+        "unknown": "不明"
+      }
     },
     "overview": {
       "subtitle": {

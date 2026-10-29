@@ -207,14 +207,14 @@ test("an unidentified cluster still merges into an identified one", () => {
   assert.equal(merges[0].displayName, "Alice");
 });
 
-test("a voice force-merged at the cap becomes its own speaker once the cap rises", () => {
+test("a new voice remains separate at the requested cap and after it rises", () => {
   const { LiveSpeakerIdentifier } = loadIdentifier();
   const identifier = new LiveSpeakerIdentifier();
   identifier.setMaxSpeakers(1);
 
   const first = identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: true });
   const folded = identifier._resolveSpeakerForEmbedding(voiceB, { updateCentroid: true });
-  assert.equal(folded.speakerId, first.speakerId, "at the cap the voice is folded");
+  assert.notEqual(folded.speakerId, first.speakerId, "at the cap the new voice remains separate");
 
   // Participants added mid-meeting raise the cap; the folded voice must not
   // stay captured by a centroid polluted during the at-cap period.
@@ -227,7 +227,7 @@ test("a voice force-merged at the cap becomes its own speaker once the cap rises
   );
 });
 
-test("an at-cap fold never steals the cluster's identity for a profile-matched voice", () => {
+test("a profile-matched voice remains separate at the requested cap", () => {
   const { LiveSpeakerIdentifier } = loadIdentifier();
   const identifier = new LiveSpeakerIdentifier();
   identifier.setMaxSpeakers(1);
@@ -243,8 +243,8 @@ test("an at-cap fold never steals the cluster's identity for a profile-matched v
   // the cluster must keep Alice's identity — retagging it as Bob would both
   // mislabel Alice and re-capture Bob through the profile lookup later.
   const bobAtCap = identifier._resolveSpeakerForEmbedding(voiceB, { updateCentroid: true });
-  assert.equal(bobAtCap.speakerId, alice.speakerId);
-  assert.equal(bobAtCap.displayName, "Alice");
+  assert.notEqual(bobAtCap.speakerId, alice.speakerId);
+  assert.equal(bobAtCap.displayName, "Bob");
 
   identifier.setMaxSpeakers(3);
   const bobAfter = identifier._resolveSpeakerForEmbedding(voiceB, { updateCentroid: true });
@@ -428,7 +428,7 @@ test("identification embeds the exact tail of the concatenated speech chunks", a
   );
 });
 
-test("distinct voices are folded into one cluster when the session cap is 1", () => {
+test("distinct voices are not folded when the requested session count is 1", () => {
   const { LiveSpeakerIdentifier } = loadIdentifier();
   const identifier = new LiveSpeakerIdentifier();
   identifier.setMaxSpeakers(1);
@@ -437,11 +437,7 @@ test("distinct voices are folded into one cluster when the session cap is 1", ()
   const second = identifier._resolveSpeakerForEmbedding(voiceB, { updateCentroid: true });
 
   assert.equal(cosineSimilarity(voiceA, voiceB), 0);
-  assert.equal(
-    second.speakerId,
-    first.speakerId,
-    "at the cap, new voices are force-merged into the nearest cluster by design"
-  );
+  assert.notEqual(second.speakerId, first.speakerId);
 });
 
 // Every 16 kHz sample the identifier produced, in order: the VAD windows it

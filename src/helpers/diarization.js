@@ -440,20 +440,6 @@ class DiarizationManager {
     return { kept, removed };
   }
 
-  capSpeakerClusters(segments, cap) {
-    if (!cap || !segments?.length) return segments;
-    const totals = new Map();
-    for (const s of segments) {
-      totals.set(s.speaker, (totals.get(s.speaker) || 0) + (s.end - s.start));
-    }
-    if (totals.size <= cap) return segments;
-
-    const ranked = [...totals.entries()].sort((a, b) => b[1] - a[1]);
-    const keep = new Set(ranked.slice(0, cap).map(([sp]) => sp));
-    const primary = ranked[0][0];
-    return segments.map((s) => (keep.has(s.speaker) ? s : { ...s, speaker: primary }));
-  }
-
   // Expects echo duplicates already removed with splitMicEchoDuplicates, so
   // the caller can report them to the renderer.
   mergeWithTranscript(
@@ -470,11 +456,6 @@ class DiarizationManager {
     const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
     const speakerMap = buildSpeakerRenumber(speakerSet, speakerIndexBase);
 
-    // Mic-mode softening: a single cluster on a mic-only session is the user
-    // talking alone (e.g. a call where the remote never spoke audibly), so it
-    // stays "you" instead of becoming a stranger's speaker_0.
-    const micSingleCluster = diarizedSource === "mic" && speakerSet.size === 1;
-
     const nextTimestampAt = (startIndex, source) => {
       for (let i = startIndex + 1; i < transcriptSegments.length; i += 1) {
         const candidate = transcriptSegments[i];
@@ -488,11 +469,14 @@ class DiarizationManager {
     return transcriptSegments.map((seg, index) => {
       const enriched = { ...seg };
 
-      if (seg.source === "mic" && (diarizedSource !== "mic" || micSingleCluster)) {
-        applyConfirmedSpeaker(enriched, {
-          speaker: "you",
-          speakerIsPlaceholder: false,
-        });
+      // A mic track can contain several people. Preserve any user correction,
+      // otherwise leave it unnamed when only system audio was diarized.
+      if (seg.source === "mic" && diarizedSource !== "mic") {
+        if (!enriched.speaker) {
+          enriched.speaker = "speaker_mic";
+          enriched.speakerIsPlaceholder = true;
+          enriched.speakerStatus = "provisional";
+        }
         return enriched;
       }
 
