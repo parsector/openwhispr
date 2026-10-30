@@ -54,7 +54,7 @@ export function buildNoteUpdatePayload(note, cloudFolderId) {
     note_type: note.note_type,
     source_file: note.source_file,
     audio_duration_seconds: note.audio_duration_seconds,
-    transcript: publicTranscript(note.transcript),
+    transcript: publicTranscript(note.transcript, note.speaker_mapping_labels),
     participants: note.participants,
     calendar_event_id: note.calendar_event_id,
     diarization_enabled: note.diarization_enabled,

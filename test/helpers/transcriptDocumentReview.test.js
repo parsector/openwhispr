@@ -40,7 +40,7 @@ test('merged clusters have one Unknown number and competing clusters get fresh n
   assert.ok(resolved[2].unknownNumber > 2);
 });
 
-test('older-client cloud pull keeps explicit Unknown and local-only rows', () => {
+test('idless older-client row stays separate and unnamed beside local state', () => {
   const local = writeTranscriptDocument([
     { id: 'a', text: 'hello', source: 'system', timestamp: 1, speaker: 'speaker_0',
       speakerIsPlaceholder: true, speakerLocked: true, speakerLockSource: 'user',
@@ -50,12 +50,14 @@ test('older-client cloud pull keeps explicit Unknown and local-only rows', () =>
   const cloud = JSON.stringify([{ text: 'hello', source: 'system', timestamp: 1,
     speaker: 'speaker_0', speakerName: 'Alex', speakerStatus: 'confirmed' }]);
   const rows = readTranscriptDocument(mergeLocalTranscriptState(cloud, local)).rows;
-  assert.equal(rows.length, 2);
+  assert.equal(rows.length, 3);
   assert.equal(rows[0].id, 'a');
   assert.equal(rows[0].speakerName, undefined);
   assert.equal(rows[0].speakerLockSource, 'user');
   assert.equal(rows[0].corrections[0].id, 'correction');
   assert.equal(rows[1].id, 'local-only');
+  assert.equal(rows[2].speakerName, undefined);
+  assert.equal(rows[2].importedUnlabeled, true);
 });
 
 test('one mic row keeps its Unknown number through five serialisations', () => {
@@ -66,6 +68,16 @@ test('one mic row keeps its Unknown number through five serialisations', () => {
     assert.equal(doc.unknownNumberHighWater, 1);
     raw = writeTranscriptDocument(doc.rows, doc.unknownNumberHighWater);
   }
+});
+
+test('outbound transcript omits a marker whose original id is ambiguous', () => {
+  const raw = JSON.stringify({ version: 2, rows: [
+    { id: 'shared', text: 'Live', source: 'system' },
+    { id: 'shared', deleted: true },
+  ] });
+  const rows = readTranscriptDocument(publicTranscript(raw)).rows;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].deleted, undefined);
 });
 
 test('outbound transcript and JSON export hide a superseded prior name', () => {

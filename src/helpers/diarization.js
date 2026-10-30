@@ -520,6 +520,7 @@ class DiarizationManager {
         const matchedSpan = overlapSpan ?? nearestSpan;
 
         enriched.uncertainty = shortSpanReason(matchedSpan) || enriched.uncertainty;
+        if (enriched.uncertainty) enriched.speakerAssessmentAvailable = true;
         const abstained = ["too_short", "close_match", "not_sure"].includes(enriched.uncertainty?.reason);
         if (abstained && !enriched.speakerLocked && enriched.speakerLockSource !== "user") {
           enriched.speakerName = undefined;

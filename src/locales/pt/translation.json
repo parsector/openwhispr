@@ -3233,6 +3233,9 @@
       "notAssessed": "Não avaliado",
       "correctionHistoryUnresolved": "{{n}} registros do histórico de correções precisam de revisão",
       "reviewStretches": "Rever {{n}} trechos",
+      "importedUnlabeled": "Importado sem nome do orador",
+      "useCloudLabels": "Usar nomes da cópia na nuvem",
+      "undoCloudLabels": "Desfazer nomes da nuvem",
       "showAll": "Mostrar todos os trechos",
       "reason": {
         "closeMatch": "{{first}} ou {{second}}",

@@ -3233,6 +3233,9 @@
       "notAssessed": "Non valutato",
       "correctionHistoryUnresolved": "{{n}} record della cronologia delle correzioni da esaminare",
       "reviewStretches": "Rivedi {{n}} passaggi",
+      "importedUnlabeled": "Importato senza nome del parlante",
+      "useCloudLabels": "Usa le etichette della copia cloud",
+      "undoCloudLabels": "Annulla etichette cloud",
       "showAll": "Mostra tutti i passaggi",
       "reason": {
         "closeMatch": "{{first}} o {{second}}",

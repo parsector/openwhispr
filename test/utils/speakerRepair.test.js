@@ -53,7 +53,7 @@ test('sync and JSON export redact local evidence while remote render keeps label
   }
   const remote = parseTranscriptSegments(payload.transcript, 8);
   assert.equal(remote[0].speakerName, 'Alex');
-  assert.equal(remote[0].speakerLocked, true);
+  assert.equal(remote[0].speakerLocked, false);
 });
 
 test('final analysis keeps the number already displayed on a matched live row', async () => {

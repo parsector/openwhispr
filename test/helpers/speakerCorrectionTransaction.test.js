@@ -180,7 +180,7 @@ test('an early correction survives 55 later corrections to other rows', () => {
   assert.equal(rows(f)[55].speakerName, 'Person 55');
 });
 
-test('a cloud label change conflicts without replacing the local event or label', () => {
+test('a cloud label change preserves the local event and label without conflict', () => {
   const f = fixture();
   applySpeakerCorrection(f.db, f.identifier, {
     type: 'apply', noteId: 1, id: 'c1', scope: 'row', rowIds: ['a'], name: 'Alex', rows: [],
@@ -190,7 +190,7 @@ test('a cloud label change conflicts without replacing the local event or label'
     source: entry.source, speaker: entry.speaker, speakerName: entry.id === 'a' ? 'Sam' : undefined,
     speakerLocked: entry.id === 'a', speakerLockSource: entry.id === 'a' ? 'user' : undefined }));
   const result = reconcileCloudTranscript(writeTranscriptDocument(cloudRows), f.note.transcript);
-  assert.equal(result.conflicted, true);
+  assert.equal(result.conflicted, undefined);
   f.note.transcript = result.transcript;
   assert.equal(rows(f)[0].corrections[0].id, 'c1');
   assert.equal(rows(f)[0].speakerName, 'Alex');

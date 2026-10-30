@@ -3578,6 +3578,9 @@
       "notAssessed": "Nicht bewertet",
       "correctionHistoryUnresolved": "{{n}} Korrekturverlaufseinträge müssen geprüft werden",
       "reviewStretches": "{{n}} Abschnitte prüfen",
+      "importedUnlabeled": "Ohne Sprechername importiert",
+      "useCloudLabels": "Namen aus der Cloud-Kopie verwenden",
+      "undoCloudLabels": "Cloud-Namen rückgängig machen",
       "showAll": "Alle Abschnitte anzeigen",
       "reason": {
         "closeMatch": "{{first}} oder {{second}}",

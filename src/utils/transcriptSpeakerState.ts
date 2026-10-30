@@ -242,6 +242,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       diarizationRunId: segment.diarizationRunId,
       correctionRevision: segment.correctionRevision,
       speakerAssessmentAvailable: segment.speakerAssessmentAvailable,
+      importedUnlabeled: segment.importedUnlabeled,
       corrections: segment.corrections,
       quarantinedCorrections: segment.quarantinedCorrections,
       text: segment.text,

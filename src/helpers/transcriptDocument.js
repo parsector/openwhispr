@@ -162,83 +162,102 @@ function writeTranscriptDocument(rows, highWater = 0) {
 }
 
 // Explicit allowlist: new local evidence fields cannot cross this boundary.
-function publicTranscript(raw) {
+function publicTranscript(raw, speakerMappings = {}) {
   if (!raw || !isTranscriptDocument(raw)) return raw;
   const { rows, unknownNumberHighWater } = readTranscriptDocument(raw);
-  const fields = ["id", "text", "source", "timestamp", "speaker", "speakerName",
-    "speakerIsPlaceholder", "speakerLocked", "speakerLockSource", "speakerStatus",
-    "unknownNumber", "diarizationRunId", "deleted"];
-  fields.push("speakerAssessmentAvailable");
+  const fields = ["id", "text", "source", "timestamp", "speakerName",
+    "speakerIsPlaceholder", "unknownNumber", "deleted"];
   const numbered = allocateUnknownNumbers(normalizeRowIds(rows), unknownNumberHighWater);
-  const visible = numbered.map((row) => row.deleted ? { id: row.id, deleted: true } : Object.fromEntries(
-    fields.filter((field) => row[field] !== undefined &&
-      !(field === "speakerName" && row.speakerIsPlaceholder))
-      .map((field) => [field, row[field]])
-  ));
-  return JSON.stringify({ version: 2, unknownNumberHighWater: Math.max(unknownNumberHighWater,
-    ...numbered.map((row) => row.unknownNumber || 0), 0), rows: visible });
+  const originalIdCounts = new Map();
+  for (const row of rows) if (typeof row.id === "string" && row.id.trim())
+    originalIdCounts.set(row.id, (originalIdCounts.get(row.id) || 0) + 1);
+  const visible = numbered.filter((row, index) => !row.deleted ||
+    (typeof rows[index].id === "string" && !!rows[index].id.trim() &&
+      originalIdCounts.get(rows[index].id) === 1))
+    .map((row) => {
+      if (row.deleted) return { id: row.id, deleted: true };
+      const fixedAssignment = row.speakerLocked || row.speakerLockSource === "user" ||
+        row.diarizationRunId;
+      const mappedName = !fixedAssignment && row.speaker
+        ? speakerMappings[row.speaker] : undefined;
+      const displayedName = fixedAssignment
+        ? (row.speakerIsPlaceholder ? undefined : row.speakerName)
+        : mappedName || (row.speakerIsPlaceholder ? undefined : row.speakerName ||
+          (typeof row.speaker === "string" && row.speaker !== "you" &&
+          !row.speaker.startsWith("speaker_") ? row.speaker : undefined));
+      return Object.fromEntries(fields.filter((field) => {
+        if (field === "speakerName") return displayedName !== undefined;
+        if (field === "speakerIsPlaceholder") return !!row.speakerIsPlaceholder && !displayedName;
+        return row[field] !== undefined;
+      }).map((field) => [field, field === "speakerName" ? displayedName : row[field]]));
+    });
+  return JSON.stringify({ version: 2, rows: visible });
 }
 
-function reconcileCloudTranscript(cloudRaw, localRaw, { syncedBefore = false, noteId = "unknown", takeTheirs = false, keepMine = false } = {}) {
+// Cloud rows are display data. An existing note's attribution, evidence and
+// history are owned by this device. Identity is only the durable row id.
+function reconcileCloudTranscript(cloudRaw, localRaw, { noteId = "unknown" } = {}) {
   if (!isTranscriptDocument(cloudRaw))
-    return { transcript: cloudRaw, conflicted: false, pendingUpload: false };
+    return { transcript: localRaw || cloudRaw, pendingUpload: false, quarantinedMarkers: [] };
   const cloud = readTranscriptDocument(cloudRaw);
-  const cloudIds = normalizeRowIds(cloud.rows, noteId);
   const local = isTranscriptDocument(localRaw) ? readTranscriptDocument(localRaw)
     : { rows: [], unknownNumberHighWater: 0 };
-  const localRows = normalizeRowIds(local.rows);
-  const localById = new Map(localRows.map((row) => [row.id, row]));
-  const used = new Set();
-  let conflicted = false;
-  let pendingUpload = false;
-  const rows = cloud.rows.map((raw, index) => {
-    const idlessCandidates = raw.id ? [] : localRows.filter((candidate) =>
-      !used.has(candidate.id) && rowIdentityKey(candidate) === rowIdentityKey(raw));
-    const own = raw.id ? localById.get(raw.id) : idlessCandidates.length === 1 ? idlessCandidates[0] : null;
-    const id = raw.id || own?.id || cloudIds[index].id;
-    const incoming = { ...raw, id };
-    for (const field of ["corrections", "quarantinedCorrections", "suggestedName",
-      "suggestedProfileId", "uncertainty", "idRepair"]) delete incoming[field];
-    if (!own) return incoming;
-    used.add(own.id);
-    const ownUser = own.speakerLockSource === "user" || own.deleted;
-    const changed = own.speakerName !== incoming.speakerName ||
-      !!own.speakerIsPlaceholder !== !!incoming.speakerIsPlaceholder ||
-      !!own.speakerLocked !== !!incoming.speakerLocked ||
-      !!own.deleted !== !!incoming.deleted;
-    if (ownUser && changed && !takeTheirs && !keepMine) conflicted = true;
-    if (ownUser && changed && keepMine) {
-      pendingUpload = true;
-      if (incoming.deleted && !own.deleted) return { ...own };
-      for (const field of ["speakerName", "speakerIsPlaceholder", "speakerLocked",
-        "speakerLockSource", "speakerStatus", "deleted"]) {
-        if (own[field] === undefined) delete incoming[field];
-        else incoming[field] = own[field];
+  const localRows = normalizeRowIds(local.rows, noteId);
+  const rows = [...localRows];
+  const byId = new Map(rows.map((row, index) => [row.id, index]));
+  const cloudCounts = new Map();
+  const liveCounts = new Map();
+  for (const row of cloud.rows) {
+    if (!row.id) continue;
+    cloudCounts.set(row.id, (cloudCounts.get(row.id) || 0) + 1);
+    if (!row.deleted) liveCounts.set(row.id, (liveCounts.get(row.id) || 0) + 1);
+  }
+  const repaired = normalizeRowIds(cloud.rows, noteId);
+  const quarantinedMarkers = [];
+  for (const [index, raw] of cloud.rows.entries()) {
+    if (raw.deleted) {
+      if (typeof raw.id !== "string" || !raw.id.trim() || cloudCounts.get(raw.id) !== 1) {
+        quarantinedMarkers.push({ marker: { id: typeof raw.id === "string" ? raw.id : null,
+          deleted: true }, reason: "ambiguous_or_missing_id" });
+        continue;
       }
+      const ownIndex = byId.get(raw.id);
+      if (ownIndex !== undefined) rows[ownIndex] = { ...rows[ownIndex], deleted: true };
+      else {
+        byId.set(raw.id, rows.length);
+        rows.push({ id: raw.id, deleted: true });
+      }
+      continue;
     }
-    return { ...incoming, corrections: own.corrections,
-      quarantinedCorrections: own.quarantinedCorrections,
-      correctionRevision: own.correctionRevision,
-      idRepair: own.idRepair,
-      suggestedName: own.suggestedName, suggestedProfileId: own.suggestedProfileId,
-      uncertainty: own.uncertainty,
-      ...(takeTheirs && changed ? { corrections: undefined, quarantinedCorrections: undefined,
-        suggestedName: undefined, suggestedProfileId: undefined, uncertainty: undefined } : {}) };
-  });
-  for (const own of localRows) if (!used.has(own.id)) {
-    if (syncedBefore && own.syncState !== "local") {
-      if (own.speakerLockSource === "user" && !own.deleted && !takeTheirs && !keepMine) conflicted = true;
-      const preserve = keepMine && own.speakerLockSource === "user" && !own.deleted;
-      if (preserve) pendingUpload = true;
-      rows.push(preserve ? own : { id: own.id, deleted: true });
+    const incoming = publicRow(raw, raw.id && liveCounts.get(raw.id) === 1
+      ? raw.id : repaired[index].id);
+    const ownIndex = byId.get(incoming.id);
+    if (ownIndex === undefined) {
+      if (typeof incoming.text !== "string") continue;
+      byId.set(incoming.id, rows.length);
+      rows.push(localRows.length ? { id: incoming.id, text: incoming.text,
+        source: incoming.source, timestamp: incoming.timestamp, importedUnlabeled: true } : incoming);
     } else {
-      rows.push(own);
-      pendingUpload = true;
+      const own = rows[ownIndex];
+      // A live row cannot resurrect a locally deleted row. Text changes on
+      // an existing id still arrive; attribution and history remain local.
+      rows[ownIndex] = { ...own,
+        ...(incoming.text !== undefined && { text: incoming.text }),
+        ...(incoming.timestamp !== undefined && { timestamp: incoming.timestamp }),
+        ...(incoming.source !== undefined && { source: incoming.source }) };
     }
   }
-  return { transcript: conflicted ? localRaw : writeTranscriptDocument(rows,
-    Math.max(cloud.unknownNumberHighWater, local.unknownNumberHighWater)),
-    conflicted, pendingUpload };
+  return { transcript: JSON.stringify({ version: 2,
+    unknownNumberHighWater: local.unknownNumberHighWater, rows }),
+    pendingUpload: localRows.some((row) => !cloudCounts.has(row.id)), quarantinedMarkers };
+}
+
+function publicRow(row, id) {
+  return Object.fromEntries(["id", "text", "source", "timestamp", "speakerName",
+    "speakerIsPlaceholder", "unknownNumber"].filter((key) =>
+    key === "id" || (row[key] !== undefined &&
+      !(key === "speakerName" && row.speakerIsPlaceholder))).map((key) =>
+    [key, key === "id" ? id : row[key]]));
 }
 
 function mergeLocalTranscriptState(cloudRaw, localRaw) {

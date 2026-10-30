@@ -796,10 +796,6 @@ export class SyncService {
   private async pushNote(id: number): Promise<void> {
     const note = await window.electronAPI.getNote?.(id);
     if (!note) return;
-    if (note.transcript_conflict) {
-      this.requestSyncAll("interval");
-      return;
-    }
     if (readNoteConflictIds().has(note.client_note_id)) {
       // An unresolved conflict: the editor's debounced push would auto-resolve
       // it as local-wins (or 409-spam) before the user chose Keep or Refresh.
@@ -1825,7 +1821,7 @@ export class SyncService {
       (await this.noteRevisionsSupported()) === true;
     if (
       pullsForUnrevisionedClear ||
-      unresolved.some((note) => note.cloud_create_rejected || note.cloud_create_pending || note.transcript_conflict)
+      unresolved.some((note) => note.cloud_create_rejected || note.cloud_create_pending)
     ) {
       const pulled = await this.pullNotes(teamOnly, true);
       if (pullsForUnrevisionedClear && pulled) this.unrevisionedClearPullDone = true;
@@ -2081,7 +2077,7 @@ export class SyncService {
                     `Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`
                   );
                 } else if (ctx.privateSpace) {
-                  const applied = await window.electronAPI.upsertNoteFromCloud?.(
+                  await window.electronAPI.upsertNoteFromCloud?.(
                     cloudNote as unknown as Record<string, unknown>,
                     resolvePulledNoteFolderId(
                       cloudNote,
@@ -2091,8 +2087,6 @@ export class SyncService {
                     ),
                     ctx.privateSpace.id
                   );
-                  if (applied?.transcript_conflict)
-                    await this.surfaceNoteConflict(local.client_note_id, cloudNote);
                 }
               }
             }
@@ -2186,7 +2180,10 @@ export class SyncService {
               !!local.cloud_id && !!local.transcript && !!cloudNote.transcript &&
               local.title === cloudNote.title && local.content === cloudNote.content &&
               local.enhanced_content === cloudNote.enhanced_content &&
-              !local.content_sync_operation && !local.enhanced_content_sync_operation;
+              !local.content_sync_operation && !local.enhanced_content_sync_operation &&
+              !local.folder_sync_operation && !local.participants_sync_operation &&
+              local.folder_id === resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId) &&
+              local.participants === cloudNote.participants;
             if (local && local.sync_status !== "synced" && !transcriptOnlyPending) {
               // A newer cloud copy over unpushed local edits ('pending' or
               // 'error'): surface the conflict to the editor banner instead
@@ -2203,14 +2200,12 @@ export class SyncService {
               console.warn(`Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`);
               continue;
             }
-            const applied = await window.electronAPI.upsertNoteFromCloud?.(
+            await window.electronAPI.upsertNoteFromCloud?.(
               cloudNote as unknown as Record<string, unknown>,
               resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId),
               space.id
             );
-            if (local && applied?.transcript_conflict) {
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-            } else if (local) {
+            if (local) {
               // Applying cloud over a clean row settles any stale conflict.
               await this.settleNoteConflict(local.client_note_id);
             }

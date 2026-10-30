@@ -1724,6 +1724,16 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      for (const column of ["cloud_transcript TEXT", "speaker_label_undo TEXT",
+        "folder_sync_operation TEXT", "participants_sync_operation TEXT"]) {
+        try { this.db.exec(`ALTER TABLE notes ADD COLUMN ${column}`); }
+        catch (err) { if (!err.message.includes("duplicate column")) throw err; }
+      }
+      this.db.exec(`CREATE TABLE IF NOT EXISTS transcript_deletion_quarantine (
+        client_note_id TEXT NOT NULL, marker_json TEXT NOT NULL, reason TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (client_note_id, marker_json)
+      )`);
 
       // Space vector purges owed to Qdrant while the sidecar was down/booting;
       // drained on the next semantic search activation.
@@ -3443,11 +3453,20 @@ class DatabaseManager {
       }
       const accountScope = this._accountScopeCondition("notes");
       const stmt = this.db.prepare(`SELECT * FROM notes WHERE id = ? AND ${accountScope.sql}`);
-      return stmt.get(id, ...accountScope.params) || null;
+      return this._withSpeakerDisplayNames(stmt.get(id, ...accountScope.params) || null);
     } catch (error) {
       debugLogger.error("Error getting note", { error: error.message }, "notes");
       throw error;
     }
+  }
+
+  _withSpeakerDisplayNames(note) {
+    if (!note?.transcript) return note;
+    const rows = this.db.prepare(
+      "SELECT speaker_id, display_name FROM speaker_mappings WHERE note_id = ?"
+    ).all(note.id);
+    return rows.length ? { ...note, speaker_mapping_labels: Object.fromEntries(
+      rows.map((row) => [row.speaker_id, row.display_name])) } : note;
   }
 
   getNoteByCloudId(cloudId) {
@@ -3607,13 +3626,6 @@ class DatabaseManager {
         const incoming = readTranscriptDocument(updates.transcript);
         const previousDocument = readTranscriptDocument(previous.transcript);
         const incomingRows = normalizeRowIds(incoming.rows, previous.client_note_id || id);
-        if (previous.cloud_id) {
-          const incomingIds = new Set(incomingRows.map((row) => row.id));
-          for (const oldRow of normalizeRowIds(previousDocument.rows, previous.client_note_id || id)) {
-            if (oldRow.id && !incomingIds.has(oldRow.id))
-              incomingRows.push({ id: oldRow.id, deleted: true });
-          }
-        }
         updates.transcript = writeTranscriptDocument(incomingRows,
           Math.max(incoming.unknownNumberHighWater, previousDocument.unknownNumberHighWater));
       } else if (typeof updates.transcript === "string") {
@@ -3669,6 +3681,10 @@ class DatabaseManager {
         updates.enhanced_content_sync_operation = "set";
       }
       delete updates.clear_fields;
+      for (const field of ["folder_id", "participants"]) {
+        if (updates[field] !== undefined && updates[field] !== previous[field])
+          updates[`${field === "folder_id" ? "folder" : field}_sync_operation`] = "set";
+      }
       delete updates.account_id;
       delete updates.cloud_revision;
       delete updates.cloud_create_rejected;
@@ -3717,6 +3733,8 @@ class DatabaseManager {
       const allowedFields = [
         "content_sync_operation",
         "enhanced_content_sync_operation",
+        "folder_sync_operation",
+        "participants_sync_operation",
         "cloud_revision",
         "cloud_create_rejected",
         "cloud_create_pending",
@@ -6718,7 +6736,7 @@ class DatabaseManager {
              WHERE n.sync_status IN ('pending', 'error') AND n.deleted_at IS NULL
                AND ${accountScope.sql} AND (s.kind = ?${leftTeam})`
           )
-          .all(...accountScope.params, spaceKind);
+          .all(...accountScope.params, spaceKind).map((note) => this._withSpeakerDisplayNames(note));
       }
       // 'error' rows retry too: a transient failure (e.g. one offline pass)
       // must not strand a note until its next local edit.
@@ -6728,7 +6746,7 @@ class DatabaseManager {
            WHERE n.sync_status IN ('pending', 'error') AND n.deleted_at IS NULL
              AND ${accountScope.sql}`
         )
-        .all(...accountScope.params);
+        .all(...accountScope.params).map((note) => this._withSpeakerDisplayNames(note));
     } catch (error) {
       debugLogger.error("Error getting pending notes", { error: error.message }, "database");
       throw error;
@@ -6821,18 +6839,29 @@ class DatabaseManager {
       const clearsContent = cleared.includes("content");
       const clearsSummary = cleared.includes("enhanced_content");
       cloudNote = { ...cloudNote };
+      const cloudTranscriptForLabels = require("./transcriptDocument").publicTranscript(cloudNote.transcript);
       let transcriptPendingUpload = false;
+      let quarantinedMarkerCount = 0;
       if (existing?.transcript && cloudNote.transcript) {
         const result = require("./transcriptDocument").reconcileCloudTranscript(
-          cloudNote.transcript, existing.transcript,
-          { syncedBefore: !!existing.cloud_id && existing.sync_status === "synced",
-            noteId: cloudNote.client_note_id, takeTheirs: !!options.takeTheirs });
-        if (result.conflicted) return { ...existing, transcript_conflict: true };
+          cloudNote.transcript, existing.transcript, { noteId: cloudNote.client_note_id });
+        if (result.quarantinedMarkers.length) debugLogger.warn(
+          "Quarantined ambiguous transcript deletion markers",
+          { noteId: cloudNote.client_note_id, count: result.quarantinedMarkers.length }, "database");
+        for (const item of result.quarantinedMarkers) this.db.prepare(
+          "INSERT OR IGNORE INTO transcript_deletion_quarantine (client_note_id, marker_json, reason) VALUES (?, ?, ?)"
+        ).run(cloudNote.client_note_id, JSON.stringify(item.marker), item.reason);
+        quarantinedMarkerCount = result.quarantinedMarkers.length;
         cloudNote.transcript = result.transcript;
         transcriptPendingUpload = result.pendingUpload;
       } else if (cloudNote.transcript && require("./transcriptDocument").isTranscriptDocument(cloudNote.transcript)) {
-        cloudNote.transcript = require("./transcriptDocument").reconcileCloudTranscript(
-          cloudNote.transcript, "[]", { noteId: cloudNote.client_note_id }).transcript;
+        const result = require("./transcriptDocument").reconcileCloudTranscript(
+          cloudNote.transcript, "[]", { noteId: cloudNote.client_note_id });
+        cloudNote.transcript = result.transcript;
+        for (const item of result.quarantinedMarkers) this.db.prepare(
+          "INSERT OR IGNORE INTO transcript_deletion_quarantine (client_note_id, marker_json, reason) VALUES (?, ?, ?)"
+        ).run(cloudNote.client_note_id, JSON.stringify(item.marker), item.reason);
+        quarantinedMarkerCount = result.quarantinedMarkers.length;
       }
       if (!cloudNote.content?.trim()) cloudNote.content = "";
       if (!cloudNote.enhanced_content?.trim()) cloudNote.enhanced_content = null;
@@ -6896,17 +6925,19 @@ class DatabaseManager {
           transcript = CASE
             WHEN COALESCE(excluded.transcript, '') = '' AND COALESCE(transcript, '') <> ''
             THEN transcript ELSE excluded.transcript END,
-          folder_id = excluded.folder_id,
-          space_id = excluded.space_id,
-          account_id = excluded.account_id,
-          participants = COALESCE(excluded.participants, participants),
+          folder_id = CASE WHEN folder_sync_operation IS NOT NULL THEN folder_id ELSE excluded.folder_id END,
+          space_id = CASE WHEN folder_sync_operation IS NOT NULL THEN space_id ELSE excluded.space_id END,
+          account_id = CASE WHEN folder_sync_operation IS NOT NULL THEN account_id ELSE excluded.account_id END,
+          participants = CASE WHEN participants_sync_operation IS NOT NULL THEN participants
+            ELSE COALESCE(excluded.participants, participants) END,
           calendar_event_id = COALESCE(excluded.calendar_event_id, calendar_event_id),
           diarization_enabled = COALESCE(excluded.diarization_enabled, diarization_enabled),
           expected_speaker_count = COALESCE(excluded.expected_speaker_count, expected_speaker_count),
           updated_by_user_id = ${updaterUpdate},
           owner_user_id = COALESCE(excluded.owner_user_id, owner_user_id),
           created_by_user_id = ${creatorUpdate},
-          sync_status = 'synced',
+          sync_status = CASE WHEN folder_sync_operation IS NOT NULL OR participants_sync_operation IS NOT NULL
+            THEN 'pending' ELSE 'synced' END,
           left_team = 0,
           updated_at = excluded.updated_at,
           cloud_updated_at = excluded.cloud_updated_at,
@@ -6946,12 +6977,16 @@ class DatabaseManager {
         accountId,
         versioned ? cloudNote.revision : null
       );
+      this.db.prepare("UPDATE notes SET cloud_transcript = ? WHERE client_note_id = ?")
+        .run(cloudTranscriptForLabels, cloudNote.client_note_id);
       if (transcriptPendingUpload) this.db.prepare(
         "UPDATE notes SET sync_status = 'pending' WHERE client_note_id = ?"
       ).run(cloudNote.client_note_id);
-      return this.db
+      const pulledNote = this.db
         .prepare("SELECT * FROM notes WHERE client_note_id = ?")
         .get(cloudNote.client_note_id);
+      return quarantinedMarkerCount ? { ...pulledNote,
+        quarantined_transcript_markers: quarantinedMarkerCount } : pulledNote;
     } catch (error) {
       debugLogger.error("Error upserting note from cloud", { error: error.message }, "database");
       throw error;
@@ -6968,7 +7003,7 @@ class DatabaseManager {
       // once; a null owner fails closed until a pull records the real one).
       this.db
         .prepare(
-          "UPDATE notes SET sync_status = 'synced', cloud_id = ?, left_team = 0, cloud_updated_at = ?, owner_user_id = ? WHERE id = ?"
+          "UPDATE notes SET sync_status = 'synced', cloud_id = ?, left_team = 0, cloud_updated_at = ?, owner_user_id = ?, folder_sync_operation = NULL, participants_sync_operation = NULL WHERE id = ?"
         )
         .run(cloudId, cloudUpdatedAt, ownerUserId, id);
       return { success: true };
@@ -6976,6 +7011,59 @@ class DatabaseManager {
       debugLogger.error("Error marking note synced", { error: error.message }, "database");
       throw error;
     }
+  }
+
+  takeCloudSpeakerLabels(id, undo = false) {
+    if (!this.db) throw new Error("Database not initialized");
+    const { readTranscriptDocument, writeTranscriptDocument, isTranscriptDocument } = require("./transcriptDocument");
+    return this.db.transaction(() => {
+      const note = this.getNote(id);
+      if (!note) return { success: false, error: "note_missing" };
+      if (undo) {
+        const record = note.speaker_label_undo && JSON.parse(note.speaker_label_undo);
+        const hasLaterMappings = ["speaker_mappings", "speaker_run_mappings"].some((table) =>
+          this.db.prepare(`SELECT 1 FROM ${table} WHERE note_id = ? LIMIT 1`).get(id));
+        if (!record || note.transcript !== record.after || hasLaterMappings)
+          return { success: false, error: "later_change" };
+        for (const table of ["speaker_mappings", "speaker_run_mappings"])
+          this.db.prepare(`DELETE FROM ${table} WHERE note_id = ?`).run(id);
+        for (const row of record.mappings || []) this.db.prepare(
+          "INSERT INTO speaker_mappings (note_id, speaker_id, profile_id, display_name) VALUES (?, ?, ?, ?)"
+        ).run(id, row.speaker_id, row.profile_id, row.display_name);
+        for (const row of record.runMappings || []) this.db.prepare(
+          "INSERT INTO speaker_run_mappings (note_id, run_id, cluster_id, profile_id, display_name) VALUES (?, ?, ?, ?, ?)"
+        ).run(id, row.run_id, row.cluster_id, row.profile_id, row.display_name);
+        this.db.prepare("UPDATE notes SET transcript = ?, speaker_label_undo = NULL, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .run(record.before, id);
+      } else {
+        if (!isTranscriptDocument(note.cloud_transcript) || !isTranscriptDocument(note.transcript))
+          return { success: false, error: "cloud_labels_missing" };
+        const cloud = readTranscriptDocument(note.cloud_transcript);
+        const local = readTranscriptDocument(note.transcript);
+        const labels = new Map(cloud.rows.filter((row) => !row.deleted && row.id)
+          .map((row) => [row.id, row]));
+        const fields = ["speakerName", "speakerIsPlaceholder", "unknownNumber", "speaker",
+          "diarizationRunId", "speakerStatus", "speakerLocked", "speakerLockSource",
+          "speakerAssessmentAvailable", "suggestedName", "suggestedProfileId", "uncertainty"];
+        const rows = local.rows.map((row) => {
+          if (row.deleted) return row;
+          const next = { ...row };
+          for (const field of fields) delete next[field];
+          const cloudRow = labels.get(row.id);
+          if (cloudRow) for (const field of ["speakerName", "speakerIsPlaceholder", "unknownNumber"])
+            if (cloudRow[field] !== undefined) next[field] = cloudRow[field];
+          return next;
+        });
+        const after = writeTranscriptDocument(rows, local.unknownNumberHighWater);
+        const mappings = this.db.prepare("SELECT * FROM speaker_mappings WHERE note_id = ?").all(id);
+        const runMappings = this.db.prepare("SELECT * FROM speaker_run_mappings WHERE note_id = ?").all(id);
+        this.db.prepare("DELETE FROM speaker_mappings WHERE note_id = ?").run(id);
+        this.db.prepare("DELETE FROM speaker_run_mappings WHERE note_id = ?").run(id);
+        this.db.prepare("UPDATE notes SET transcript = ?, speaker_label_undo = ?, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .run(after, JSON.stringify({ before: note.transcript, after, mappings, runMappings }), id);
+      }
+      return { success: true, note: this.getNote(id) };
+    })();
   }
 
   // A row moved from a team space to Personal while its push was in flight
@@ -7151,6 +7239,7 @@ class DatabaseManager {
                SET sync_status = 'synced', cloud_id = ?, left_team = 0,
                    cloud_updated_at = ?, cloud_revision = ?,
                    owner_user_id = ?,
+                   folder_sync_operation = NULL, participants_sync_operation = NULL,
                    content_sync_operation = NULL, enhanced_content_sync_operation = NULL,
                    cloud_create_pending = NULL
                WHERE id = ? AND client_note_id = ?`
@@ -7275,6 +7364,7 @@ class DatabaseManager {
             .prepare(
               `UPDATE notes
                SET sync_status = 'synced', left_team = 0, content_sync_operation = NULL, enhanced_content_sync_operation = NULL,
+                   folder_sync_operation = NULL, participants_sync_operation = NULL,
                    cloud_updated_at = ?, cloud_revision = ?,
                    owner_user_id = COALESCE(?, owner_user_id)
                WHERE id = ? AND client_note_id = ? AND cloud_id = ?`
@@ -7420,7 +7510,7 @@ class DatabaseManager {
           const { reconcileCloudTranscript, isTranscriptDocument } = require("./transcriptDocument");
           if (isTranscriptDocument(cloudNote.transcript) && isTranscriptDocument(current.transcript)) {
             const rebased = reconcileCloudTranscript(cloudNote.transcript, current.transcript,
-              { syncedBefore: !!current.cloud_id, noteId: current.client_note_id, keepMine: true });
+              { noteId: current.client_note_id });
             if (rebased.transcript !== current.transcript)
               this.db.prepare("UPDATE notes SET transcript = ? WHERE id = ?").run(rebased.transcript, id);
           }

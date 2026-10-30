@@ -451,7 +451,6 @@ export interface Leaderboard {
 }
 
 export interface NoteItem {
-  transcript_conflict?: boolean;
   id: number;
   title: string;
   content: string;
@@ -466,6 +465,11 @@ export interface NoteItem {
   folder_id: number | null;
   space_id: number;
   transcript: string | null;
+  speaker_mapping_labels?: Record<string, string>;
+  cloud_transcript?: string | null;
+  speaker_label_undo?: string | null;
+  folder_sync_operation?: "set" | null;
+  participants_sync_operation?: "set" | null;
   calendar_event_id: string | null;
   participants: string | null;
   diarization_enabled: number | null;
@@ -3978,9 +3982,11 @@ declare global {
       upsertNoteFromCloud?: (
         cloudNote: Record<string, unknown>,
         localFolderId: number | null,
-        localSpaceId?: number | null,
-        options?: { takeTheirs?: boolean }
+        localSpaceId?: number | null
       ) => Promise<NoteItem | null>;
+      takeCloudSpeakerLabels?: (noteId: number, undo?: boolean) => Promise<{
+        success: boolean; error?: string; note?: NoteItem;
+      }>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,

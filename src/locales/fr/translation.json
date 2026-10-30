@@ -3578,6 +3578,9 @@
       "notAssessed": "Non évalué",
       "correctionHistoryUnresolved": "{{n}} entrées de l’historique des corrections à examiner",
       "reviewStretches": "Examiner {{n}} passages",
+      "importedUnlabeled": "Importé sans nom de locuteur",
+      "useCloudLabels": "Utiliser les noms de la copie cloud",
+      "undoCloudLabels": "Annuler les noms du cloud",
       "showAll": "Afficher tous les passages",
       "reason": {
         "closeMatch": "{{first}} ou {{second}}",

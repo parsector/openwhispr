@@ -1023,14 +1023,31 @@ export default function NoteEditor({
     const fresh = await window.electronAPI.upsertNoteFromCloud?.(
       conflict as unknown as Record<string, unknown>,
       note.folder_id,
-      note.space_id,
-      { takeTheirs: true }
+      note.space_id
     );
     clearNoteConflict(note.client_note_id);
     // With no save pending, the owner's external-update resync applies the
     // fresh copy to the visible editor buffer.
     if (fresh) updateNoteInStore(fresh);
   }, [conflict, note.client_note_id, note.folder_id, note.id, note.space_id, onCancelPendingSaves]);
+
+  const handleCloudLabels = useCallback(async (undo = false) => {
+    try {
+      await onFlushPendingSaves?.(note.id);
+      const result = await window.electronAPI.takeCloudSpeakerLabels?.(note.id, undo);
+      if (!result?.success || !result.note) {
+        setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
+        return;
+      }
+      updateNoteInStore(result.note);
+      setDiarizedSegments(null);
+      const mappings = await window.electronAPI.getSpeakerMappings?.(note.id);
+      setSpeakerMappings(Object.fromEntries((mappings || []).map((mapping) =>
+        [mapping.speaker_id, mapping.display_name])));
+    } catch {
+      setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
+    }
+  }, [note.id, onFlushPendingSaves, t]);
 
   // Keep the local edits, overwriting the cloud revision the user just saw.
   // Advancing the base first is what lets the next push succeed instead of
@@ -1370,6 +1387,16 @@ export default function NoteEditor({
               </div>
             </div>
             <div className="flex w-full shrink-0 flex-wrap items-center gap-2 @[650px]/note-editor:w-auto">
+              {viewMode === "transcript" && !isRecording && note.cloud_transcript &&
+                <button type="button" onClick={() => void handleCloudLabels(false)}
+                  className="rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5">
+                  {t("notes.speaker.useCloudLabels")}
+                </button>}
+              {viewMode === "transcript" && !isRecording && note.speaker_label_undo &&
+                <button type="button" onClick={() => void handleCloudLabels(true)}
+                  className="rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5">
+                  {t("notes.speaker.undoCloudLabels")}
+                </button>}
               {reviewCount > 0 && !isRecording && <button type="button" aria-pressed={reviewOnly}
                 onClick={() => { setSelectedViewMode("transcript"); setReviewOnly((current) => !current); }}
                 className="rounded-md border border-border/70 bg-surface-2/40 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-ring">

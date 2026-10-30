@@ -2607,6 +2607,9 @@
       "notAssessed": "لم يتم التقييم",
       "correctionHistoryUnresolved": "تحتاج {{n}} سجلات من سجل التصحيحات إلى المراجعة",
       "reviewStretches": "راجع {{n}} مقاطع",
+      "importedUnlabeled": "تم الاستيراد دون اسم للمتحدث",
+      "useCloudLabels": "استخدام أسماء النسخة السحابية",
+      "undoCloudLabels": "التراجع عن الأسماء السحابية",
       "showAll": "عرض كل المقاطع",
       "reason": {
         "closeMatch": "{{first}} أو {{second}}",

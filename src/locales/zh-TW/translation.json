@@ -3233,6 +3233,9 @@
       "notAssessed": "未評估",
       "correctionHistoryUnresolved": "有 {{n}} 筆修正記錄需要檢查",
       "reviewStretches": "檢查 {{n}} 個片段",
+      "importedUnlabeled": "匯入時沒有說話者名稱",
+      "useCloudLabels": "使用雲端副本的名稱",
+      "undoCloudLabels": "復原雲端名稱",
       "showAll": "顯示所有片段",
       "reason": {
         "closeMatch": "{{first}} 或 {{second}}",

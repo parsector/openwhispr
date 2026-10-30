@@ -3293,13 +3293,18 @@ class IPCHandlers {
     ipcMain.handle("db-get-note-by-client-id", (_, clientNoteId) =>
       this.databaseManager.getNoteByClientId(clientNoteId)
     );
-    ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId, options) => {
-      const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId, options);
+    ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
+      const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
       if (note) {
         setImmediate(() => broadcastToWindows("note-synced", note));
         this.notifyVectorChanges();
       }
       return note;
+    });
+    ipcMain.handle("db-take-cloud-speaker-labels", (_, noteId, undo) => {
+      const result = this.databaseManager.takeCloudSpeakerLabels(noteId, undo);
+      if (result.success) setImmediate(() => broadcastToWindows("note-updated", result.note));
+      return result;
     });
     ipcMain.handle(
       "db-acknowledge-note-create",
@@ -13568,6 +13573,13 @@ class IPCHandlers {
                   }
                 }
 
+                // A usable embedding was compared with local profiles even
+                // when none scored high enough to suggest a name.
+                for (const seg of enrichedSegments) {
+                  if (seg.speaker === mappedId && !isSpeakerLocked(seg))
+                    seg.speakerAssessmentAvailable = true;
+                }
+
                 const { matchReason } = require("./speakerUncertainty");
                 const reason = matchReason(
                   bestProfile && { name: bestProfile.display_name, score: bestSim },
@@ -13577,6 +13589,7 @@ class IPCHandlers {
                   for (const seg of enrichedSegments) {
                     if (seg.speaker === mappedId && !isSpeakerLocked(seg)) {
                       if (seg.uncertainty?.reason !== "too_short") seg.uncertainty = reason;
+                      seg.speakerAssessmentAvailable = true;
                       seg.speakerName = undefined;
                       seg.speakerIsPlaceholder = true;
                       seg.speakerStatus = "provisional";
@@ -13594,6 +13607,7 @@ class IPCHandlers {
                         suggestedName: undefined,
                         suggestedProfileId: undefined,
                       });
+                      seg.speakerAssessmentAvailable = true;
                     }
                   }
                 } else if (bestProfile && bestSim > 0.5) {
@@ -13606,6 +13620,7 @@ class IPCHandlers {
                         suggestedName: bestProfile.display_name,
                         suggestedProfileId: bestProfile.id,
                       });
+                      seg.speakerAssessmentAvailable = true;
                     }
                   }
                 }
@@ -13623,6 +13638,7 @@ class IPCHandlers {
           const changed = changedAfterFinalReason(prior?.speakerName, seg.speakerName);
           if (changed && !isSpeakerLocked(seg) && seg.uncertainty?.reason !== "too_short") {
             seg.uncertainty = changed;
+            seg.speakerAssessmentAvailable = true;
           }
         }
         send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });

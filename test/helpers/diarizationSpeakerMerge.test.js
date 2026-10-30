@@ -209,4 +209,5 @@ test("short audio remains provisional after transcript merge", () => {
   assert.equal(row.speakerStatus, "provisional");
   assert.equal(row.speakerIsPlaceholder, true);
   assert.deepEqual(row.uncertainty, { reason: "too_short" });
+  assert.equal(row.speakerAssessmentAvailable, true);
 });

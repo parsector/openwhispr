@@ -64,6 +64,7 @@ export interface TranscriptSegment {
   diarizationRunId?: string;
   correctionRevision?: number;
   speakerAssessmentAvailable?: boolean;
+  importedUnlabeled?: boolean;
   corrections?: import("../utils/transcriptCorrections").TranscriptCorrection[];
   quarantinedCorrections?: import("../utils/transcriptCorrections").TranscriptCorrection[];
   text: string;

@@ -3233,6 +3233,9 @@
       "notAssessed": "未评估",
       "correctionHistoryUnresolved": "有 {{n}} 条更正记录需要检查",
       "reviewStretches": "检查 {{n}} 个片段",
+      "importedUnlabeled": "导入时没有说话人名称",
+      "useCloudLabels": "使用云端副本的名称",
+      "undoCloudLabels": "撤销云端名称",
       "showAll": "显示所有片段",
       "reason": {
         "closeMatch": "{{first}} 或 {{second}}",

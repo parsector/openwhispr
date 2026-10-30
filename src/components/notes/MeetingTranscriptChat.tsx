@@ -864,7 +864,9 @@ const SegmentRow = memo(function SegmentRow({
       {labelElement}
       {(segment.uncertainty || latestCorrection(segment) || segment.quarantinedCorrections?.length ||
         (!segment.speakerAssessmentAvailable && !segment.speakerLocked && !segment.speakerName)) && <div className="flex items-center gap-2 px-1 pb-0.5 text-[11px] text-muted-foreground">
-        {!segment.speakerAssessmentAvailable && !segment.speakerLocked && !segment.speakerName &&
+        {segment.importedUnlabeled && !segment.speakerName &&
+          <span>{t("notes.speaker.importedUnlabeled")}</span>}
+        {!segment.importedUnlabeled && !segment.speakerAssessmentAvailable && !segment.speakerLocked && !segment.speakerName &&
           <span>{t("notes.speaker.notAssessed")}</span>}
         {!!segment.quarantinedCorrections?.length && <span>{t("notes.speaker.correctionHistoryUnresolved", { n: segment.quarantinedCorrections.length })}</span>}
         {segment.uncertainty && <span>{segment.uncertainty.reason === "close_match" && segment.uncertainty.candidates

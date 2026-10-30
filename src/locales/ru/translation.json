@@ -3247,6 +3247,9 @@
       "notAssessed": "Не оценено",
       "correctionHistoryUnresolved": "Записей истории исправлений для проверки: {{n}}",
       "reviewStretches": "Проверить {{n}} фрагментов",
+      "importedUnlabeled": "Импортировано без имени говорящего",
+      "useCloudLabels": "Использовать имена из облачной копии",
+      "undoCloudLabels": "Отменить облачные имена",
       "showAll": "Показать все фрагменты",
       "reason": {
         "closeMatch": "{{first}} или {{second}}",

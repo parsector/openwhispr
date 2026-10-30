@@ -3285,6 +3285,9 @@
       "notAssessed": "Sin evaluar",
       "correctionHistoryUnresolved": "{{n}} registros del historial de correcciones requieren revisión",
       "reviewStretches": "Revisar {{n}} fragmentos",
+      "importedUnlabeled": "Importado sin nombre de hablante",
+      "useCloudLabels": "Usar etiquetas de la copia en la nube",
+      "undoCloudLabels": "Deshacer etiquetas de la nube",
       "showAll": "Mostrar todos los fragmentos",
       "reason": {
         "closeMatch": "{{first}} o {{second}}",

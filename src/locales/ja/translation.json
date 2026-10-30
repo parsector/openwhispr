@@ -3161,6 +3161,9 @@
       "notAssessed": "未評価",
       "correctionHistoryUnresolved": "修正履歴の{{n}}件を確認してください",
       "reviewStretches": "{{n}} 件の発話を確認",
+      "importedUnlabeled": "話者名なしでインポート",
+      "useCloudLabels": "クラウドのコピーの名前を使用",
+      "undoCloudLabels": "クラウドの名前を元に戻す",
       "showAll": "すべての発話を表示",
       "reason": {
         "closeMatch": "{{first}} または {{second}}",

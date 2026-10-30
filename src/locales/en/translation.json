@@ -3730,6 +3730,9 @@
       "notAssessed": "Not assessed",
       "correctionHistoryUnresolved": "{{n}} correction history record(s) need review",
       "reviewStretches": "Review {{n}} stretches",
+      "importedUnlabeled": "Imported without a speaker label",
+      "useCloudLabels": "Use labels from cloud copy",
+      "undoCloudLabels": "Undo cloud labels",
       "showAll": "Show all stretches",
       "reason": {
         "closeMatch": "{{first}} or {{second}}",
