@@ -603,7 +603,8 @@ function SpeakerLabel({
           onSelectName={(name, email, profileId) => {
             if (scope === "cluster" || !onAssignScope) {
               if (segment.speaker) onMap?.(speakerId, name, email, profileId);
-            } else onAssignScope(scope, segment.id, name, profileId, email);
+            } else if (email) onAssignScope(scope, segment.id, name, profileId, email);
+            else onAssignScope(scope, segment.id, name, profileId);
             setOpen(false);
           }}
           onClose={() => setOpen(false)}
