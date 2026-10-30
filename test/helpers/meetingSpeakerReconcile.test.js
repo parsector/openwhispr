@@ -72,6 +72,10 @@ function createMappingRecorder(existingMappings) {
     removeSpeakerMapping: (noteId, speakerId) => {
       calls.remove.push({ noteId, speakerId });
     },
+    transferLegacySpeakerMapping: (noteId, sourceId, targetId, profileId, displayName) => {
+      calls.set.push({ noteId, speakerId: targetId, profileId, displayName });
+      calls.remove.push({ noteId, speakerId: sourceId });
+    },
   };
   return { calls, databaseManager };
 }
@@ -98,7 +102,7 @@ function reconcile(IPCHandlers, databaseManager, liveSpeakerId) {
   );
 }
 
-test("reconciliation keeps the mapping when live and offline ids already match", () => {
+test("reconciliation leaves an existing same-id mapping alone", () => {
   const { IPCHandlers } = loadHandlers();
   const { calls, databaseManager } = createMappingRecorder([
     { speaker_id: "speaker_0", display_name: "Alice", profile_id: 5 },
@@ -106,13 +110,7 @@ test("reconciliation keeps the mapping when live and offline ids already match",
 
   reconcile(IPCHandlers, databaseManager, "speaker_0");
 
-  assert.equal(calls.set.length, 1);
-  assert.deepEqual(calls.set[0], {
-    noteId: NOTE_ID,
-    speakerId: "speaker_0",
-    profileId: 5,
-    displayName: "Alice",
-  });
+  assert.equal(calls.set.length, 0);
   assert.deepEqual(
     calls.remove,
     [],

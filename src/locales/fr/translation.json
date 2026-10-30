@@ -3032,7 +3032,6 @@
       "conflictBanner": "Cette note comporte des modifications en conflit.",
       "conflictRefresh": "Prendre leur version",
       "conflictKeep": "Garder ma version",
-      "transcriptPendingUpload": "Des modifications attendent leur envoi.",
       "editedBy": "Modifié par {{name}} · {{time}}",
       "members": {
         "addPeople": "Ajouter des personnes",

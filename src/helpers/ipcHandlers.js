@@ -13291,31 +13291,14 @@ class IPCHandlers {
         const liveMapping = noteMappingsForId.find(
           (mapping) => mapping.speaker_id === bestEntry.speakerId
         );
-        if (hasLockedRow || allAbstained || finalNameDiffers ||
-            (existingTarget && bestEntry.speakerId !== mappedId)) {
+        if (hasLockedRow || allAbstained || finalNameDiffers || existingTarget) {
           continue;
         }
         if (liveMapping) {
           displayName = liveMapping.display_name || displayName;
           profileId = liveMapping.profile_id ?? profileId;
-          this.databaseManager.setSpeakerMapping(
-            bestEntry.noteId,
-            mappedId,
-            profileId,
-            displayName
-          );
-          // Live and offline ids share one namespace now, so they often match —
-          // removing the "old" row would delete the mapping just written.
-          if (bestEntry.speakerId !== mappedId) {
-            this.databaseManager.removeSpeakerMapping(bestEntry.noteId, bestEntry.speakerId);
-          }
-        } else if (displayName) {
-          this.databaseManager.setSpeakerMapping(
-            bestEntry.noteId,
-            mappedId,
-            profileId,
-            displayName
-          );
+          this.databaseManager.transferLegacySpeakerMapping(
+            bestEntry.noteId, bestEntry.speakerId, mappedId, profileId, displayName);
         }
       }
 

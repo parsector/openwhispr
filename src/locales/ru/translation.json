@@ -2699,7 +2699,6 @@
       "conflictBanner": "В этой заметке есть конфликтующие изменения.",
       "conflictRefresh": "Принять их версию",
       "conflictKeep": "Сохранить мою версию",
-      "transcriptPendingUpload": "Изменения ожидают загрузки.",
       "editedBy": "Изменено: {{name}} · {{time}}",
       "members": {
         "addPeople": "Добавить людей",

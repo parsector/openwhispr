@@ -796,6 +796,10 @@ export class SyncService {
   private async pushNote(id: number): Promise<void> {
     const note = await window.electronAPI.getNote?.(id);
     if (!note) return;
+    if (note.transcript_conflict) {
+      this.requestSyncAll("interval");
+      return;
+    }
     if (readNoteConflictIds().has(note.client_note_id)) {
       // An unresolved conflict: the editor's debounced push would auto-resolve
       // it as local-wins (or 409-spam) before the user chose Keep or Refresh.
@@ -1807,7 +1811,7 @@ export class SyncService {
 
   private async pushPendingNotes(teamOnly = false): Promise<void> {
     let pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
-    const conflicted = readNoteConflictIds();
+    let conflicted = readNoteConflictIds();
     // A surfaced conflict already holds its cloud copy; only rows still
     // awaiting one need the snapshot pull, as an unchanged cloud row may be
     // absent from the delta feed. A rejected create pulls until its conflict
@@ -1821,11 +1825,12 @@ export class SyncService {
       (await this.noteRevisionsSupported()) === true;
     if (
       pullsForUnrevisionedClear ||
-      unresolved.some((note) => note.cloud_create_rejected || note.cloud_create_pending)
+      unresolved.some((note) => note.cloud_create_rejected || note.cloud_create_pending || note.transcript_conflict)
     ) {
       const pulled = await this.pullNotes(teamOnly, true);
       if (pullsForUnrevisionedClear && pulled) this.unrevisionedClearPullDone = true;
       pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
+      conflicted = readNoteConflictIds();
     }
     if (pending.length === 0) return;
     this.teamPassMovedWork = true;

@@ -179,7 +179,7 @@ function publicTranscript(raw) {
     ...numbered.map((row) => row.unknownNumber || 0), 0), rows: visible });
 }
 
-function reconcileCloudTranscript(cloudRaw, localRaw, { syncedBefore = false, noteId = "unknown", takeTheirs = false } = {}) {
+function reconcileCloudTranscript(cloudRaw, localRaw, { syncedBefore = false, noteId = "unknown", takeTheirs = false, keepMine = false } = {}) {
   if (!isTranscriptDocument(cloudRaw))
     return { transcript: cloudRaw, conflicted: false, pendingUpload: false };
   const cloud = readTranscriptDocument(cloudRaw);
@@ -206,7 +206,16 @@ function reconcileCloudTranscript(cloudRaw, localRaw, { syncedBefore = false, no
       !!own.speakerIsPlaceholder !== !!incoming.speakerIsPlaceholder ||
       !!own.speakerLocked !== !!incoming.speakerLocked ||
       !!own.deleted !== !!incoming.deleted;
-    if (ownUser && changed && !takeTheirs) conflicted = true;
+    if (ownUser && changed && !takeTheirs && !keepMine) conflicted = true;
+    if (ownUser && changed && keepMine) {
+      pendingUpload = true;
+      if (incoming.deleted && !own.deleted) return { ...own };
+      for (const field of ["speakerName", "speakerIsPlaceholder", "speakerLocked",
+        "speakerLockSource", "speakerStatus", "deleted"]) {
+        if (own[field] === undefined) delete incoming[field];
+        else incoming[field] = own[field];
+      }
+    }
     return { ...incoming, corrections: own.corrections,
       quarantinedCorrections: own.quarantinedCorrections,
       correctionRevision: own.correctionRevision,
@@ -218,8 +227,10 @@ function reconcileCloudTranscript(cloudRaw, localRaw, { syncedBefore = false, no
   });
   for (const own of localRows) if (!used.has(own.id)) {
     if (syncedBefore && own.syncState !== "local") {
-      if (own.speakerLockSource === "user" && !own.deleted && !takeTheirs) conflicted = true;
-      rows.push({ id: own.id, deleted: true });
+      if (own.speakerLockSource === "user" && !own.deleted && !takeTheirs && !keepMine) conflicted = true;
+      const preserve = keepMine && own.speakerLockSource === "user" && !own.deleted;
+      if (preserve) pendingUpload = true;
+      rows.push(preserve ? own : { id: own.id, deleted: true });
     } else {
       rows.push(own);
       pendingUpload = true;

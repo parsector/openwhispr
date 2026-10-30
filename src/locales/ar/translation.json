@@ -2051,7 +2051,6 @@
       "conflictBanner": "توجد تغييرات متعارضة في هذه الملاحظة.",
       "conflictRefresh": "اعتماد نسختهم",
       "conflictKeep": "الاحتفاظ بنسختي",
-      "transcriptPendingUpload": "التغييرات في انتظار الرفع.",
       "editedBy": "تم التعديل بواسطة {{name}} · {{time}}",
       "members": {
         "addPeople": "إضافة أشخاص",

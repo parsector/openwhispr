@@ -413,14 +413,46 @@ test('Keep mine resolves the conflict as one pending local revision', (t) => {
   db.markNoteSynced(note.id, 'cloud-test-1');
   const current = db.getNote(note.id);
   const cloud = { ...emptyCloudShell(current), revision: 7,
-    transcript: JSON.stringify([{ ...localRow, speakerName: 'Sam' }]) };
+    transcript: JSON.stringify([{ ...localRow, speakerName: 'Sam' },
+      { id: 'cloud-append', text: 'later', source: 'system' }]) };
   assert.equal(db.upsertNoteFromCloud(cloud, null).transcript_conflict, true);
   const result = db.setNoteCloudBase(note.id, cloud.updated_at, cloud.revision,
     { keepLocal: true, cloudNote: cloud });
   assert.equal(result.success, true);
   assert.equal(result.note.sync_status, 'pending');
   assert.equal(result.note.cloud_revision, 7);
-  assert.equal(result.note.transcript, current.transcript);
+  const rows = require('../../src/helpers/transcriptDocument').readTranscriptDocument(result.note.transcript).rows;
+  assert.equal(rows[0].speakerName, 'Alex');
+  assert.deepEqual(rows.map((row) => row.id), ['shared-row', 'cloud-append']);
+});
+
+test('legacy mapping transfer cannot replace a manual name or locked Unknown', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.setSpeakerMapping(note.id, 'old', null, 'Alice');
+  db.updateNote(note.id, { transcript: JSON.stringify([
+    { id: 'manual', text: 'Hi', speaker: 'speaker_0', speakerName: 'Sam',
+      speakerLocked: true, speakerLockSource: 'user' },
+  ]) });
+  assert.equal(db.transferLegacySpeakerMapping(note.id, 'old', 'speaker_0', null, 'Alice'), false);
+  assert.equal(db.getSpeakerMappings(note.id).find((m) => m.speaker_id === 'speaker_0'), undefined);
+  db.updateNote(note.id, { transcript: JSON.stringify([
+    { id: 'named', text: 'Hi', speaker: 'speaker_0', speakerName: 'Sam' },
+  ]) });
+  assert.equal(db.transferLegacySpeakerMapping(note.id, 'old', 'speaker_0', null, 'Alice'), false);
+  assert.equal(db.getSpeakerMappings(note.id).find((m) => m.speaker_id === 'speaker_0'), undefined);
+  db.updateNote(note.id, { transcript: JSON.stringify([
+    { id: 'unknown', text: 'Hi', speaker: 'speaker_0', speakerLocked: true,
+      speakerLockSource: 'user', speakerIsPlaceholder: true },
+  ]) });
+  assert.equal(db.transferLegacySpeakerMapping(note.id, 'old', 'speaker_0', null, 'Alice'), false);
+  assert.equal(db.getSpeakerMappings(note.id).find((m) => m.speaker_id === 'speaker_0'), undefined);
+  db.updateNote(note.id, { transcript: JSON.stringify([
+    { id: 'unowned', text: 'Hi', speaker: 'speaker_0' },
+  ]) });
+  assert.equal(db.transferLegacySpeakerMapping(note.id, 'old', 'speaker_0', null, 'Alice'), true);
+  assert.equal(db.getSpeakerMappings(note.id).find((m) => m.speaker_id === 'speaker_0').display_name, 'Alice');
 });
 
 test('a local deletion marker survives a cloud pull of the old live row', (t) => {

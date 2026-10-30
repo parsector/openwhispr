@@ -3032,7 +3032,6 @@
       "conflictBanner": "Diese Notiz enthält widersprüchliche Änderungen.",
       "conflictRefresh": "Deren Version übernehmen",
       "conflictKeep": "Meine Version behalten",
-      "transcriptPendingUpload": "Änderungen warten auf den Upload.",
       "editedBy": "Bearbeitet von {{name}} · {{time}}",
       "members": {
         "addPeople": "Personen hinzufügen",

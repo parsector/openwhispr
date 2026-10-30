@@ -1407,7 +1407,7 @@ export default function NoteEditor({
           </div>
         </div>
 
-        {(conflict || (note.cloud_id && note.transcript && note.sync_status === "pending")) && (
+        {conflict && (
           <div
             className={cn(
               "h-8 mt-2 shrink-0",
@@ -1419,8 +1419,8 @@ export default function NoteEditor({
             <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
               <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
               <p className="text-[11px] text-foreground/50 flex-1 truncate">
-                {conflict ? t("notes.spaces.conflictBanner") : t("notes.spaces.transcriptPendingUpload")}
-                {conflict && conflictEditorName && (
+                {t("notes.spaces.conflictBanner")}
+                {conflictEditorName && (
                   <span className="text-foreground/45">
                     {" "}
                     {t("notes.spaces.editedBy", {
@@ -1430,18 +1430,18 @@ export default function NoteEditor({
                   </span>
                 )}
               </p>
-              {conflict && <button
+              <button
                 onClick={handleConflictRefresh}
                 className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               >
                 {t("notes.spaces.conflictRefresh")}
-              </button>}
-              {conflict && <button
+              </button>
+              <button
                 onClick={handleConflictKeep}
                 className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               >
                 {t("notes.spaces.conflictKeep")}
-              </button>}
+              </button>
             </div>
           </div>
         )}

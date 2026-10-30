@@ -2615,7 +2615,6 @@
       "conflictBanner": "このノートには競合する変更があります。",
       "conflictRefresh": "相手の変更を採用",
       "conflictKeep": "自分の変更を保持",
-      "transcriptPendingUpload": "変更はアップロード待ちです。",
       "editedBy": "{{name}} が編集 · {{time}}",
       "members": {
         "addPeople": "メンバーを追加",

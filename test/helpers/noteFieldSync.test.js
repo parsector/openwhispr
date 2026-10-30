@@ -49,6 +49,33 @@ const INITIAL = {
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const SUMMARY_KEYS = ["enhancement_prompt", "enhancement_template_id", "enhanced_at_content_hash"];
 
+test("a legacy transcript conflict flag loads into the note conflict registry before push", async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const base = { ...INITIAL, transcript: JSON.stringify([{ id: "row", text: "Hi",
+    source: "system", speakerName: "Alex", speakerLocked: true, speakerLockSource: "user" }]) };
+  const row = db.upsertNoteFromCloud(base, null);
+  const remote = { ...base, revision: 8, updated_at: "2026-01-02T00:00:00.000Z",
+    transcript: JSON.stringify([{ id: "row", text: "Hi", source: "system",
+      speakerName: "Sam", speakerLocked: true, speakerLockSource: "user" }]) };
+  const cloud = protocolCloud(remote);
+  const service = await client(t, db, cloud);
+  const original = windowStub.electronAPI.getPendingNotes;
+  windowStub.electronAPI.getPendingNotes = async (...args) =>
+    [{ ...db.getNote(row.id), transcript_conflict: true }, ...(await original(...args))
+      .filter((note) => note.id !== row.id)];
+  await service.pushPendingNotes();
+  const conflict = readNoteConflicts()[base.client_note_id];
+  assert.equal(conflict.revision, 8);
+  assert.equal(updateCalls(cloud).length, 0);
+  const kept = db.setNoteCloudBase(row.id, conflict.updated_at, conflict.revision,
+    { keepLocal: true, cloudNote: conflict });
+  removeNoteConflictId(base.client_note_id);
+  assert.equal(kept.note.cloud_revision, 8);
+  assert.equal(kept.note.sync_status, "pending");
+  assert.equal(readNoteConflictIds().has(base.client_note_id), false);
+});
+
 test("explicit server clears replace stored text while an empty transcript remains protected", (t) => {
   const db = createDb(t);
   if (!db) return;

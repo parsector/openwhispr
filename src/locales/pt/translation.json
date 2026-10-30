@@ -2687,7 +2687,6 @@
       "conflictBanner": "Esta nota tem alterações em conflito.",
       "conflictRefresh": "Usar a versão deles",
       "conflictKeep": "Manter a minha versão",
-      "transcriptPendingUpload": "As alterações aguardam envio.",
       "editedBy": "Editado por {{name}} · {{time}}",
       "members": {
         "addPeople": "Adicionar pessoas",

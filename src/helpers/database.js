@@ -6605,6 +6605,34 @@ class DatabaseManager {
     }
   }
 
+  // The live-to-offline id handoff is legacy state, never a user correction.
+  // Check the current transcript and both mappings under the same transaction
+  // so a correction cannot land between the check and the transfer.
+  transferLegacySpeakerMapping(noteId, sourceId, targetId, profileId, displayName) {
+    return this.db.transaction(() => {
+      const note = this.getNote(noteId);
+      if (!note || sourceId === targetId) return false;
+      const rows = require("./transcriptDocument").readTranscriptDocument(note.transcript).rows;
+      const userOwned = (id) => rows.some((row) => row.speaker === id &&
+        (row.speakerLockSource === "user" || row.speakerLocked || row.speakerStatus === "locked" ||
+          row.speakerName || row.deleted));
+      if (userOwned(sourceId) || userOwned(targetId)) return false;
+      const source = this.db.prepare(
+        "SELECT * FROM speaker_mappings WHERE note_id = ? AND speaker_id = ?"
+      ).get(noteId, sourceId);
+      const target = this.db.prepare(
+        "SELECT 1 FROM speaker_mappings WHERE note_id = ? AND speaker_id = ?"
+      ).get(noteId, targetId);
+      if (!source || target) return false;
+      this.db.prepare(
+        "INSERT INTO speaker_mappings (note_id, speaker_id, profile_id, display_name) VALUES (?, ?, ?, ?)"
+      ).run(noteId, targetId, source.profile_id ?? profileId, source.display_name || displayName);
+      this.db.prepare("DELETE FROM speaker_mappings WHERE note_id = ? AND speaker_id = ?")
+        .run(noteId, sourceId);
+      return true;
+    })();
+  }
+
   getSpeakerMappings(noteId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
@@ -7389,6 +7417,13 @@ class DatabaseManager {
         )
           return { success: false };
         if (keepLocal && cloudNote) {
+          const { reconcileCloudTranscript, isTranscriptDocument } = require("./transcriptDocument");
+          if (isTranscriptDocument(cloudNote.transcript) && isTranscriptDocument(current.transcript)) {
+            const rebased = reconcileCloudTranscript(cloudNote.transcript, current.transcript,
+              { syncedBefore: !!current.cloud_id, noteId: current.client_note_id, keepMine: true });
+            if (rebased.transcript !== current.transcript)
+              this.db.prepare("UPDATE notes SET transcript = ? WHERE id = ?").run(rebased.transcript, id);
+          }
           // A deferred create may already have delivered (or had the server
           // discard) these sets. Keep preserves edits made after that POST,
           // not the unchanged submitted text a newer cloud copy cleared.

@@ -2687,7 +2687,6 @@
       "conflictBanner": "此笔记存在冲突的更改。",
       "conflictRefresh": "采用对方版本",
       "conflictKeep": "保留我的版本",
-      "transcriptPendingUpload": "更改正在等待上传。",
       "editedBy": "由 {{name}} 编辑 · {{time}}",
       "members": {
         "addPeople": "添加成员",
