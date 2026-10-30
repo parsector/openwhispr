@@ -412,7 +412,10 @@ test('cloud history stays remote; explicit whole-note labels replace and undo in
   assert.equal(db.getSpeakerMappings(note.id).length, 0);
   assert.equal(db.getSpeakerRunMapping(note.id, 'run-1', 'speaker_0'), null);
   assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
-  assert.equal(db.getNote(note.id).transcript, before);
+  const restored = readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.equal(restored[0].speakerName, 'Alex');
+  assert.equal(restored[0].corrections[0].id, 'mine');
+  assert.equal(restored[1].speakerName, undefined);
   assert.equal(db.getSpeakerMappings(note.id)[0].display_name, 'Alex');
   assert.equal(db.getSpeakerRunMapping(note.id, 'run-1', 'speaker_0').display_name, 'Alex');
 });
@@ -614,6 +617,69 @@ test('cloud-label Undo refuses to erase a later local mapping', (t) => {
   db.setSpeakerMapping(note.id, 'speaker_0', null, 'Jordan');
   assert.equal(db.takeCloudSpeakerLabels(note.id, true).error, 'later_change');
   assert.equal(db.getSpeakerMappings(note.id)[0].display_name, 'Jordan');
+});
+
+test('two cloud label adoptions undo in order while text edits and original correction survive', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system' }]) });
+  assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id,
+    id: 'alex-correction', scope: 'row', rowIds: ['row-1'], name: 'Alex', rows: [] }).success, true);
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+    { id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Sam' },
+  ]) }, null);
+  const name = () => readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName;
+  assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
+  assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
+  const edited = readTranscriptDocument(db.getNote(note.id).transcript);
+  edited.rows[0].text = 'Edited later';
+  db.updateNote(note.id, { transcript: JSON.stringify(edited) });
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
+  assert.equal(name(), 'Sam');
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
+  assert.equal(name(), 'Alex');
+  assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].text, 'Edited later');
+  assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id,
+    id: 'alex-correction' }).success, true);
+  assert.equal(name(), undefined);
+});
+
+test('adopted cloud name rejects a stale automatic diarization completion', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  const oldProposal = JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Alex' }]);
+  db.updateNote(note.id, { transcript: oldProposal });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+    { id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Sam' },
+  ]) }, null);
+  assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
+  assert.equal(db.updateNote(note.id, { transcript: oldProposal },
+    { reconcileTranscript: true }).error, 'stale_automatic_transcript');
+  assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName, 'Sam');
+});
+
+test('folderless space move stays pending through a cloud upsert', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { folder_id: null });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  const original = db.getNote(note.id);
+  assert.equal(original.folder_id, null);
+  assert.equal(original.folder_sync_operation, null);
+  const targetId = db.db.prepare("INSERT INTO spaces (client_space_id, kind, name) VALUES ('other-space', 'private', 'Other space')").run().lastInsertRowid;
+  assert.equal(db.updateNote(note.id, { folder_id: null, space_id: targetId }).success, true);
+  assert.equal(db.getNote(note.id).folder_sync_operation, 'set');
+  db.upsertNoteFromCloud(emptyCloudShell(original), null, original.space_id);
+  assert.equal(db.getNote(note.id).space_id, targetId);
+  assert.equal(db.getNote(note.id).sync_status, 'pending');
 });
 
 test('a fresh device displays cloud labels without importing speaker evidence', (t) => {

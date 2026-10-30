@@ -2183,6 +2183,7 @@ export class SyncService {
               !local.content_sync_operation && !local.enhanced_content_sync_operation &&
               !local.folder_sync_operation && !local.participants_sync_operation &&
               local.folder_id === resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId) &&
+              local.space_id === space.id &&
               local.participants === cloudNote.participants;
             if (local && local.sync_status !== "synced" && !transcriptOnlyPending) {
               // A newer cloud copy over unpushed local edits ('pending' or

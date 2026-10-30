@@ -3718,6 +3718,7 @@ class DatabaseManager {
           )
           .get(id);
         if (current && current.space_id !== updates.space_id) {
+          updates.folder_sync_operation = "set";
           const newKind = this.db
             .prepare("SELECT kind FROM spaces WHERE id = ?")
             .get(updates.space_id)?.kind;
@@ -4166,7 +4167,7 @@ class DatabaseManager {
           .run(spaceId, nextAccountId, leftTeam && folder.cloud_id ? 1 : 0, id);
         this.db
           .prepare(
-            "UPDATE notes SET space_id = ?, account_id = ?, sync_status = 'pending', updated_at = datetime('now'), left_team = (CASE WHEN ? = 1 AND cloud_id IS NOT NULL THEN 1 ELSE 0 END) WHERE folder_id = ? AND deleted_at IS NULL"
+            "UPDATE notes SET space_id = ?, account_id = ?, folder_sync_operation = 'set', sync_status = 'pending', updated_at = datetime('now'), left_team = (CASE WHEN ? = 1 AND cloud_id IS NOT NULL THEN 1 ELSE 0 END) WHERE folder_id = ? AND deleted_at IS NULL"
           )
           .run(spaceId, nextAccountId, leftTeam, id);
         this.db
@@ -7016,14 +7017,42 @@ class DatabaseManager {
   takeCloudSpeakerLabels(id, undo = false) {
     if (!this.db) throw new Error("Database not initialized");
     const { readTranscriptDocument, writeTranscriptDocument, isTranscriptDocument } = require("./transcriptDocument");
+    const fields = ["speakerName", "speakerIsPlaceholder", "unknownNumber", "speaker",
+      "diarizationRunId", "speakerStatus", "speakerLocked", "speakerLockSource",
+      "speakerAssessmentAvailable", "suggestedName", "suggestedProfileId", "uncertainty"];
+    const attribution = (row) => Object.fromEntries(fields.filter((field) =>
+      row[field] !== undefined).map((field) => [field, row[field]]));
+    const restore = (row, saved) => {
+      const next = { ...row };
+      for (const field of fields) delete next[field];
+      return { ...next, ...saved };
+    };
     return this.db.transaction(() => {
       const note = this.getNote(id);
       if (!note) return { success: false, error: "note_missing" };
+      const history = note.speaker_label_undo ? JSON.parse(note.speaker_label_undo) : [];
+      const stack = Array.isArray(history) ? history : [history];
+      // Commit 8 stored one whole-transcript snapshot. Convert it on use so
+      // existing users keep its undo without restoring stale transcript text.
+      if (stack[0]?.before && stack[0]?.after && !stack[0].rows) {
+        const beforeRows = new Map(readTranscriptDocument(stack[0].before).rows.map((row) => [row.id, row]));
+        stack[0].rows = readTranscriptDocument(stack[0].after).rows.filter((row) => !row.deleted)
+          .map((row) => ({ id: row.id, before: attribution(beforeRows.get(row.id) || {}),
+            after: attribution(row), revision: Number(row.correctionRevision) || 0 }));
+        delete stack[0].before;
+        delete stack[0].after;
+      }
       if (undo) {
-        const record = note.speaker_label_undo && JSON.parse(note.speaker_label_undo);
+        const record = stack.at(-1);
+        const document = readTranscriptDocument(note.transcript);
+        const byId = new Map(document.rows.map((row) => [row.id, row]));
         const hasLaterMappings = ["speaker_mappings", "speaker_run_mappings"].some((table) =>
           this.db.prepare(`SELECT 1 FROM ${table} WHERE note_id = ? LIMIT 1`).get(id));
-        if (!record || note.transcript !== record.after || hasLaterMappings)
+        if (!record || hasLaterMappings || !record.rows || record.rows.some(({ id: rowId, after, revision }) => {
+          const current = byId.get(rowId);
+          return !current || JSON.stringify(attribution(current)) !== JSON.stringify(after) ||
+            (Number(current.correctionRevision) || 0) !== revision;
+        }))
           return { success: false, error: "later_change" };
         for (const table of ["speaker_mappings", "speaker_run_mappings"])
           this.db.prepare(`DELETE FROM ${table} WHERE note_id = ?`).run(id);
@@ -7033,8 +7062,23 @@ class DatabaseManager {
         for (const row of record.runMappings || []) this.db.prepare(
           "INSERT INTO speaker_run_mappings (note_id, run_id, cluster_id, profile_id, display_name) VALUES (?, ?, ?, ?, ?)"
         ).run(id, row.run_id, row.cluster_id, row.profile_id, row.display_name);
-        this.db.prepare("UPDATE notes SET transcript = ?, speaker_label_undo = NULL, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-          .run(record.before, id);
+        const snapshots = new Map(record.rows.map((row) => [row.id, row]));
+        const restored = document.rows.map((row) => {
+          const saved = snapshots.get(row.id);
+          return saved ? { ...restore(row, saved.before),
+            correctionRevision: (Number(row.correctionRevision) || 0) + 1 } : row;
+        });
+        stack.pop();
+        if (stack.length) {
+          const latest = stack.at(-1);
+          for (const entry of latest.rows) {
+            const current = restored.find((row) => row.id === entry.id);
+            if (current) entry.revision = current.correctionRevision;
+          }
+        }
+        this.db.prepare("UPDATE notes SET transcript = ?, speaker_label_undo = ?, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
+          .run(writeTranscriptDocument(restored, document.unknownNumberHighWater),
+            stack.length ? JSON.stringify(stack) : null, id);
       } else {
         if (!isTranscriptDocument(note.cloud_transcript) || !isTranscriptDocument(note.transcript))
           return { success: false, error: "cloud_labels_missing" };
@@ -7042,25 +7086,34 @@ class DatabaseManager {
         const local = readTranscriptDocument(note.transcript);
         const labels = new Map(cloud.rows.filter((row) => !row.deleted && row.id)
           .map((row) => [row.id, row]));
-        const fields = ["speakerName", "speakerIsPlaceholder", "unknownNumber", "speaker",
-          "diarizationRunId", "speakerStatus", "speakerLocked", "speakerLockSource",
-          "speakerAssessmentAvailable", "suggestedName", "suggestedProfileId", "uncertainty"];
         const rows = local.rows.map((row) => {
           if (row.deleted) return row;
-          const next = { ...row };
-          for (const field of fields) delete next[field];
+          const next = restore(row, {});
           const cloudRow = labels.get(row.id);
           if (cloudRow) for (const field of ["speakerName", "speakerIsPlaceholder", "unknownNumber"])
             if (cloudRow[field] !== undefined) next[field] = cloudRow[field];
+          next.speakerLocked = true;
+          next.speakerLockSource = "user";
+          next.speakerStatus = "locked";
+          next.correctionRevision = (Number(row.correctionRevision) || 0) + 1;
           return next;
         });
         const after = writeTranscriptDocument(rows, local.unknownNumberHighWater);
+        const written = readTranscriptDocument(after);
+        const previous = new Map(local.rows.map((row) => [row.id, row]));
+        const snapshots = written.rows.filter((row) => !row.deleted).map((row) => ({
+          id: row.id, before: attribution(previous.get(row.id) || {}),
+          after: attribution(row), revision: Number(row.correctionRevision) || 0,
+        }));
         const mappings = this.db.prepare("SELECT * FROM speaker_mappings WHERE note_id = ?").all(id);
         const runMappings = this.db.prepare("SELECT * FROM speaker_run_mappings WHERE note_id = ?").all(id);
+        stack.push({ rows: snapshots, mappings, runMappings });
+        if (Buffer.byteLength(JSON.stringify(stack), "utf8") > 16 * 1024 * 1024)
+          return { success: false, error: "history_full" };
         this.db.prepare("DELETE FROM speaker_mappings WHERE note_id = ?").run(id);
         this.db.prepare("DELETE FROM speaker_run_mappings WHERE note_id = ?").run(id);
         this.db.prepare("UPDATE notes SET transcript = ?, speaker_label_undo = ?, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
-          .run(after, JSON.stringify({ before: note.transcript, after, mappings, runMappings }), id);
+          .run(after, JSON.stringify(stack), id);
       }
       return { success: true, note: this.getNote(id) };
     })();

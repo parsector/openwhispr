@@ -49,6 +49,22 @@ const INITIAL = {
 const copy = (value) => JSON.parse(JSON.stringify(value));
 const SUMMARY_KEYS = ["enhancement_prompt", "enhancement_template_id", "enhanced_at_content_hash"];
 
+test('pull keeps a folderless meeting in its newly selected space and pending', async (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const base = { ...INITIAL, folder_id: null, transcript: JSON.stringify([
+    { id: 'row-1', text: 'Hello', source: 'system' },
+  ]) };
+  const note = db.upsertNoteFromCloud(base, null);
+  const targetId = db.db.prepare("INSERT INTO spaces (client_space_id, kind, name) VALUES ('move-target', 'private', 'Other')").run().lastInsertRowid;
+  assert.equal(db.updateNote(note.id, { folder_id: null, space_id: targetId }).success, true);
+  const cloud = protocolCloud({ ...base, revision: 8,
+    updated_at: '2026-11-01T00:00:00.000Z' });
+  await (await client(t, db, cloud)).pullNotes(false, true);
+  assert.equal(db.getNote(note.id).space_id, targetId);
+  assert.equal(db.getNote(note.id).sync_status, 'pending');
+});
+
 test("a legacy transcript conflict flag does not register a speaker conflict", async (t) => {
   const db = createDb(t);
   if (!db) return;
