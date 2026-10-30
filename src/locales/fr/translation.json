@@ -3573,6 +3573,8 @@
       },
       "unknownNumber": "Intervenant inconnu {{n}}",
       "restore": "Rétablir",
+      "olderCorrections": "Afficher {{n}} corrections précédentes",
+      "historyFull": "L’historique des corrections de cette note est plein (16 Mo). Les anciennes corrections peuvent encore être annulées.",
       "reviewStretches": "Examiner {{n}} passages",
       "showAll": "Afficher tous les passages",
       "reason": {

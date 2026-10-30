@@ -1,4 +1,5 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
+import { allocateUnknownNumbers, writeTranscriptDocument } from "../helpers/transcriptDocument";
 
 export type TranscriptSpeakerStatus = "provisional" | "confirmed" | "suggested" | "locked";
 export type TranscriptSpeakerLockSource = "user" | "diarization" | "suggestion";
@@ -79,27 +80,9 @@ export const normalizeTranscriptSegment = (segment: TranscriptSegment): Transcri
   };
 };
 
-export const normalizeTranscriptSegments = (segments: TranscriptSegment[]) => {
-  const numbers = new Map<string, number>();
-  let next = Math.max(0, ...segments.map((s) => Math.max(s.unknownNumber || 0, s.unknownNumberHighWater || 0))) + 1;
-  for (const segment of segments) {
-    if (segment.speaker && segment.unknownNumber) {
-      numbers.set(`${segment.diarizationRunId || "legacy"}:${segment.speaker}`, segment.unknownNumber);
-    }
-  }
-  const assigned = segments.map((segment, index) => {
-    if (!(typeof segment.speaker === "string" && segment.speaker) &&
-        !(typeof segment.speakerName === "string" && segment.speakerName) &&
-        segment.source !== "mic" && segment.source !== "system" && !segment.speakerLocked)
-      return normalizeTranscriptSegment(segment);
-    const key = segment.speaker
-      ? `${segment.diarizationRunId || "legacy"}:${segment.speaker}`
-      : segment.id ?? `${segment.source || "unknown"}:${segment.timestamp ?? index}`;
-    if (!numbers.has(key)) numbers.set(key, next++);
-    return normalizeTranscriptSegment({ ...segment, unknownNumber: segment.unknownNumber ?? numbers.get(key) });
-  });
-  const highWater = Math.max(next - 1, ...assigned.map((segment) => segment.unknownNumber || 0));
-  return assigned.map((segment) => ({ ...segment, unknownNumberHighWater: highWater }));
+export const normalizeTranscriptSegments = (segments: TranscriptSegment[], noteHighWater = 0) => {
+  return (allocateUnknownNumbers(segments, noteHighWater) as TranscriptSegment[])
+    .map(normalizeTranscriptSegment);
 };
 
 export const applyTranscriptSpeakerPatch = (
@@ -146,15 +129,17 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
 
 export const mergeTranscriptSegments = (
   existingSegments: TranscriptSegment[],
-  incomingSegments: TranscriptSegment[]
+  incomingSegments: TranscriptSegment[],
+  noteHighWater = 0,
+  preserveMatchedNumbers = false
 ) => {
   if (incomingSegments.length === 0) {
-    return normalizeTranscriptSegments(existingSegments);
+    return normalizeTranscriptSegments(existingSegments, noteHighWater);
   }
   if (existingSegments.length === 0) {
     return normalizeTranscriptSegments(incomingSegments.map((segment) =>
       ({ ...segment, id: segment.id || crypto.randomUUID() })
-    ));
+    ), noteHighWater);
   }
 
   const existingById = new Map<string, number>();
@@ -220,7 +205,7 @@ export const mergeTranscriptSegments = (
       enrichedByIndex.set(matchIndex, mergeSpeakerFields(existing, {
         ...segment,
         id: existingSegments[matchIndex].id,
-        unknownNumber: segment.speaker === existingSegments[matchIndex].speaker
+        unknownNumber: (preserveMatchedNumbers || segment.speaker === existingSegments[matchIndex].speaker)
           ? existingSegments[matchIndex].unknownNumber : undefined,
         unknownNumberHighWater: existingSegments[matchIndex].unknownNumberHighWater,
         corrections: existingSegments[matchIndex].corrections,
@@ -236,12 +221,13 @@ export const mergeTranscriptSegments = (
     (segment, index) => enrichedByIndex.get(index) ?? normalizeTranscriptSegment(segment)
   );
 
-  return normalizeTranscriptSegments([...preserved, ...unmatchedIncoming]);
+  return normalizeTranscriptSegments([...preserved, ...unmatchedIncoming], noteHighWater);
 };
 
-export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
-  JSON.stringify(
-    normalizeTranscriptSegments(segments).map((segment) => ({
+export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteHighWater = 0) => {
+  const normalized = normalizeTranscriptSegments(segments, noteHighWater);
+  return writeTranscriptDocument(
+    normalized.map((segment) => ({
       id: segment.id || crypto.randomUUID(),
       unknownNumber: segment.unknownNumber,
       unknownNumberHighWater: segment.unknownNumberHighWater,
@@ -259,8 +245,9 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[]) =>
       speakerStatus: segment.speakerStatus,
       speakerLocked: segment.speakerLocked,
       speakerLockSource: segment.speakerLockSource,
-    }))
+    })), Math.max(noteHighWater, ...normalized.map((segment) => segment.unknownNumberHighWater || 0), 0)
   );
+};
 
 // A speaker mapping renames a whole diarization cluster; a locked segment is the
 // user correcting one stretch of it. The correction has to outrank the cluster,

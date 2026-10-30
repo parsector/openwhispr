@@ -88,7 +88,7 @@ const correction = (
   profileId,
   rows: [row(targetRow, cluster, run)],
 });
-const rows = (f) => JSON.parse(f.note.transcript);
+const rows = (f) => require("../../src/helpers/transcriptDocument").readTranscriptDocument(f.note.transcript).rows;
 
 test("atomic correction merges a live row appended while IPC waits", () => {
   const f = fixture();
@@ -159,4 +159,37 @@ test("same-target undo uses event order when the clock moves backward", () => {
   f.note.transcript = JSON.stringify(current);
   const result = applySpeakerCorrection(f.db, f.identifier, { type: "undo", noteId: 1, id: "c1" });
   assert.equal(result.error, "later_change");
+});
+
+test('an early correction survives 55 later corrections to other rows', () => {
+  const f = fixture();
+  f.note.transcript = JSON.stringify(Array.from({ length: 56 }, (_, i) => row(`r${i}`, `speaker_${i}`, 'run1')));
+  for (let i = 0; i < 56; i++) {
+    const result = applySpeakerCorrection(f.db, f.identifier, {
+      type: 'apply', noteId: 1, id: `correction-${i}`, scope: 'row',
+      rowIds: [`r${i}`], name: `Person ${i}`, rows: [],
+    });
+    assert.equal(result.success, true);
+  }
+  assert.equal(rows(f)[0].corrections[0].id, 'correction-0');
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: 'undo', noteId: 1, id: 'correction-0' }).success, true);
+  assert.equal(rows(f)[0].speakerName, undefined);
+  assert.equal(rows(f)[55].speakerName, 'Person 55');
+});
+
+test('a cloud label change keeps the local event but refuses a stale undo', () => {
+  const f = fixture();
+  applySpeakerCorrection(f.db, f.identifier, {
+    type: 'apply', noteId: 1, id: 'c1', scope: 'row', rowIds: ['a'], name: 'Alex', rows: [],
+  });
+  const { mergeLocalTranscriptState, writeTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const cloudRows = rows(f).map((entry) => ({ id: entry.id, text: entry.text,
+    source: entry.source, speaker: entry.speaker, speakerName: entry.id === 'a' ? 'Sam' : undefined,
+    speakerLocked: entry.id === 'a', speakerLockSource: entry.id === 'a' ? 'user' : undefined }));
+  f.note.transcript = mergeLocalTranscriptState(writeTranscriptDocument(cloudRows), f.note.transcript);
+  assert.equal(rows(f)[0].corrections[0].id, 'c1');
+  assert.deepEqual(applySpeakerCorrection(f.db, f.identifier,
+    { type: 'undo', noteId: 1, id: 'c1' }), { success: false, error: 'later_change' });
+  assert.equal(rows(f)[0].speakerName, 'Sam');
 });

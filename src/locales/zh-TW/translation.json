@@ -3228,6 +3228,8 @@
       },
       "unknownNumber": "未知發言者 {{n}}",
       "restore": "還原",
+      "olderCorrections": "顯示較早的 {{n}} 項修正",
+      "historyFull": "此筆記的修正記錄已滿（16 MB）。較早的修正仍可復原。",
       "reviewStretches": "檢查 {{n}} 個片段",
       "showAll": "顯示所有片段",
       "reason": {

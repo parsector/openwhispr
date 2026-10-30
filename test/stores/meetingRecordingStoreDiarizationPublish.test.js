@@ -225,7 +225,7 @@ test("a resumed note's diarization labels the resumed session's row, not an earl
   });
   await settle();
 
-  const rows = JSON.parse(state.updatedTranscripts.at(-1).transcript);
+  const rows = require("../../src/helpers/transcriptDocument").readTranscriptDocument(state.updatedTranscripts.at(-1).transcript).rows;
   assert.deepEqual(
     rows.map((row) => [row.text, row.timestamp, row.speakerName]),
     [
@@ -247,7 +247,7 @@ const diarized = (text, timestamp, speakerName) => ({
 });
 
 const rowsOf = (note) =>
-  JSON.parse(note.transcript).map((row) => [row.text, row.timestamp, row.speakerName]);
+  require("../../src/helpers/transcriptDocument").readTranscriptDocument(note.transcript).rows.map((row) => [row.text, row.timestamp, row.speakerName]);
 
 // Each stop keeps its own seed length: with one shared value, the resumed
 // session's seed would also shield the earlier session's own diarization.

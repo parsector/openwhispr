@@ -85,7 +85,7 @@ test("the note update payload carries the full content, not just identifiers", a
   assert.equal(payload.title, "Vision, Values, and Product Priorities");
   assert.equal(payload.content, "REAL MEETING NOTES");
   assert.equal(payload.enhanced_content, "ENHANCED NOTES");
-  assert.equal(payload.transcript, '[{"text":"hello"}]');
+  assert.deepEqual(JSON.parse(payload.transcript).rows, [{ text: "hello" }]);
   assert.equal(payload.enhancement_prompt, "prompt");
   assert.equal(payload.enhancement_template_id, "notes.actions.builtin.detailedNotes");
   assert.equal(payload.enhanced_at_content_hash, "hash-1");

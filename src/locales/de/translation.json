@@ -3573,6 +3573,8 @@
       },
       "unknownNumber": "Unbekannte Person {{n}}",
       "restore": "Wiederherstellen",
+      "olderCorrections": "{{n}} ältere Korrekturen anzeigen",
+      "historyFull": "Der Korrekturverlauf dieser Notiz ist voll (16 MB). Ältere Korrekturen können weiterhin rückgängig gemacht werden.",
       "reviewStretches": "{{n}} Abschnitte prüfen",
       "showAll": "Alle Abschnitte anzeigen",
       "reason": {

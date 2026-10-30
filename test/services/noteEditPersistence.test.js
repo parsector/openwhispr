@@ -73,6 +73,7 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
   await t.test(
     "removing a summary section changes only its stored field, including after reopen",
     async () => {
+      const previousTranscript = database.getNote(note.id).transcript;
       const result = await updateNoteTool.execute({ id: note.id, summary: EDITED });
       assert.equal(result.success, true);
       database.db.close();
@@ -81,7 +82,7 @@ test("note edits preserve separate stored fields, reopen correctly, and report f
       const saved = database.getNote(note.id);
       assert.equal(saved.enhanced_content, EDITED);
       assert.equal(saved.content, CONTENT);
-      assert.equal(saved.transcript, TRANSCRIPT);
+      assert.equal(saved.transcript, previousTranscript);
       assert.equal(saved.title, "Workshop");
       assert.deepEqual(result.data.updatedFields, ["summary"]);
     }

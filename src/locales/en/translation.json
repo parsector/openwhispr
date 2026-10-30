@@ -3725,6 +3725,8 @@
       },
       "unknownNumber": "Unknown speaker {{n}}",
       "restore": "Restore",
+      "olderCorrections": "Show {{n}} older corrections",
+      "historyFull": "This note’s correction history is full (16 MB). Older corrections remain available to undo.",
       "reviewStretches": "Review {{n}} stretches",
       "showAll": "Show all stretches",
       "reason": {

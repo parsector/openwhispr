@@ -239,7 +239,7 @@ test("one-on-one roster attaches a suggestion without confirming or mapping the 
     setSpeakerMapping: (...args) => calls.push(args), updateNote: (_id, patch) => Object.assign(note, patch) };
   Object.assign(Object.create(IPCHandlers.prototype), { databaseManager: db })._tryAutoLabelOneOnOne(NOTE_ID);
   await new Promise((resolve) => setImmediate(resolve));
-  const [updated] = JSON.parse(note.transcript);
+  const [updated] = require("../../src/helpers/transcriptDocument").readTranscriptDocument(note.transcript).rows;
   assert.equal(updated.suggestedName, "Alice");
   assert.equal(updated.speakerName, undefined);
   assert.equal(updated.speakerStatus, "suggested");

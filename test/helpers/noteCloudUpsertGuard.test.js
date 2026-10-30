@@ -138,7 +138,7 @@ test("upsertNoteFromCloud: empty cloud values never destroy non-empty local cont
   const after = db.getNote(before.id);
 
   assert.equal(after.content, "REAL MEETING NOTES", "content must survive an empty cloud copy");
-  assert.equal(after.transcript, TRANSCRIPT, "transcript must survive an empty cloud copy");
+  assert.equal(after.transcript, before.transcript, "transcript must survive an empty cloud copy");
   assert.equal(
     after.enhanced_content,
     "ENHANCED NOTES",
@@ -181,7 +181,7 @@ test("upsertNoteFromCloud: non-empty cloud values still overwrite (last-writer-w
   assert.equal(after.title, "Cloud Title");
   assert.equal(after.content, "CLOUD EDIT");
   assert.equal(after.enhanced_content, "CLOUD ENHANCED");
-  assert.equal(after.transcript, '[{"text":"cloud"}]');
+  assert.deepEqual(require("../../src/helpers/transcriptDocument").readTranscriptDocument(after.transcript).rows.map((row) => row.text), ["cloud"]);
   assert.equal(
     after.enhancement_prompt,
     null,
@@ -307,4 +307,31 @@ test("clearing a linked note's event with null stores the synced blank", (t) => 
   // A null arriving while that unlink still waits to sync keeps it.
   db.updateNote(linked.id, { calendar_event_id: null });
   assert.equal(db.getNote(linked.id).calendar_event_id, "");
+});
+
+test('upsertNoteFromCloud keeps local correction history when cloud echoes the same labelled row', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const before = seedEditedMeetingNote(db);
+  const readTranscriptDocument = (raw) => {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? { rows: parsed, unknownNumberHighWater: 0 } : parsed;
+  };
+  const corrected = { id: 'durable-row', text: 'Hello', source: 'system', speaker: 'speaker_0',
+    speakerName: 'Alex', speakerLocked: true, speakerLockSource: 'user', unknownNumber: 4,
+    corrections: [{ id: 'early', rowId: 'durable-row', previous: { speakerName: 'Prior' },
+      next: { speakerName: 'Alex' }, actor: 'user', timestamp: '2026-01-01' }] };
+  db.updateNote(before.id, { transcript: JSON.stringify({ version: 2,
+    unknownNumberHighWater: 4, rows: [corrected] }) });
+  const local = db.getNote(before.id);
+  const cloud = { ...emptyCloudShell(local), transcript: JSON.stringify({ version: 2,
+    unknownNumberHighWater: 4, rows: [{ id: corrected.id, text: corrected.text,
+      source: corrected.source, speaker: corrected.speaker, speakerName: corrected.speakerName,
+      speakerLocked: true, speakerLockSource: 'user', unknownNumber: 4 }] }) };
+  assert.equal(cloud.transcript.includes('early'), false);
+  db.upsertNoteFromCloud(cloud, null);
+  const after = readTranscriptDocument(db.getNote(before.id).transcript);
+  assert.equal(after.unknownNumberHighWater, 4);
+  assert.equal(after.rows[0].speakerName, 'Alex');
+  assert.equal(after.rows[0].corrections[0].id, 'early');
 });

@@ -40,7 +40,6 @@ const value = (row: TranscriptSegment): SpeakerValue => ({
   suggestedProfileId: row.suggestedProfileId,
   uncertainty: row.uncertainty,
 });
-const LIMIT = 50;
 
 export function correctTranscriptRows(
   rows: TranscriptSegment[], ids: Set<string>, scope: CorrectionScope,
@@ -64,13 +63,7 @@ export function correctTranscriptRows(
       clusterId: scope === "cluster" ? row.speaker : undefined,
     }] };
   });
-  const events = [...new Map(changed.flatMap((row) => row.corrections || [])
-    .sort((a, b) => a.timestamp.localeCompare(b.timestamp))
-    .map((record) => [record.id, record])).keys()];
-  const keep = new Set(events.slice(-LIMIT));
-  return changed.map((row) => row.corrections
-    ? { ...row, corrections: row.corrections.filter((record) => keep.has(record.id)) }
-    : row);
+  return changed;
 }
 
 export function undoTranscriptCorrection(rows: TranscriptSegment[], correctionId: string): TranscriptSegment[] {

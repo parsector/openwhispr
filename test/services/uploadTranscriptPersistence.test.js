@@ -113,7 +113,7 @@ for (const source of ["file", "url"]) {
 }
 
 const withoutIds = (transcript) => {
-  const rows = JSON.parse(transcript);
+  const rows = require("../../src/helpers/transcriptDocument").readTranscriptDocument(transcript).rows;
   assert.equal(new Set(rows.map((row) => row.id)).size, rows.length);
   for (const row of rows) assert.match(row.id, /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i);
   return rows.map(({ id, ...row }) => row);
@@ -325,7 +325,8 @@ test("upload creation keeps its selected workspace and sends transcript in the r
   assert.equal(calls.length, 1);
   const { body } = calls[0];
   assert.equal(body.content, "");
-  assert.equal(body.transcript, note.transcript);
+  assert.deepEqual(require("../../src/helpers/transcriptDocument").readTranscriptDocument(body.transcript).rows,
+    require("../../src/helpers/transcriptDocument").readTranscriptDocument(note.transcript).rows);
   assert.deepEqual(withoutIds(body.transcript), [{ text }]);
   assert.equal(body.folder_id, "synthetic-cloud-folder");
   assert.equal(body.space_id, "synthetic-cloud-space");
@@ -333,5 +334,6 @@ test("upload creation keeps its selected workspace and sends transcript in the r
   const update = JSON.parse(
     JSON.stringify(buildNoteUpdatePayload({ ...note, cloud_revision: 3 }, "synthetic-cloud-folder"))
   );
-  assert.equal(update.transcript, note.transcript);
+  assert.deepEqual(require("../../src/helpers/transcriptDocument").readTranscriptDocument(update.transcript).rows,
+    require("../../src/helpers/transcriptDocument").readTranscriptDocument(note.transcript).rows);
 });

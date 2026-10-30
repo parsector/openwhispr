@@ -33,11 +33,13 @@ import { usePolicyStore } from "./policyStore";
 import {
   lockTranscriptSpeaker,
   normalizeTranscriptSegment,
+  normalizeTranscriptSegments,
   serializeTranscriptSegments,
   type TranscriptSpeakerLockSource,
   type TranscriptSpeakerStatus,
 } from "../utils/transcriptSpeakerState";
 import { parseSeedSegments } from "../utils/parseTranscriptSegments";
+import { readTranscriptDocument } from "../helpers/transcriptDocument";
 import {
   mergeSessionDiarization,
   resolveDiarizationTarget,
@@ -430,6 +432,7 @@ const meetingRecordingStartCoordinator = createMeetingRecordingStartCoordinator(
 const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
+let sessionUnknownHighWater = 0;
 // A resumed note seeds the recording with its earlier transcript, but that
 // session's diarization covers only its own audio, so its result must not be
 // matched against the seeded rows. Keyed by diarization session at stop.
@@ -800,6 +803,7 @@ export interface StartRecordingArgs {
   noteTitle: string | null;
   folderId: number | null;
   seedSegments?: TranscriptSegment[];
+  seedUnknownHighWater?: number;
   diarizationEnabled?: boolean | null;
   expectedCount?: number | null;
   expectedCountIsExplicit?: boolean;
@@ -836,6 +840,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
     logger.info("Meeting transcription starting...", {}, "meeting");
     const seed = args.seedSegments ?? [];
+    sessionUnknownHighWater = Math.max(args.seedUnknownHighWater || 0,
+      ...seed.map((row) => row.unknownNumberHighWater || row.unknownNumber || 0), 0);
     const locks = new Map<string, string>();
     let maxSpeakerIndex = -1;
     for (const s of seed) {
@@ -849,7 +855,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     segmentsRefValue = seed;
     sessionSeedLength = seed.length;
     speakerIdentifications = [];
-    sessionSpeakerIndexBase = maxSpeakerIndex + 1;
+    sessionSpeakerIndexBase = Math.max(maxSpeakerIndex + 1, sessionUnknownHighWater);
     nextPlaceholderSpeakerIndex = sessionSpeakerIndexBase;
     recentSystemSpeaker = null;
     speakerLocks = locks;
@@ -1145,10 +1151,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           );
 
           if (reduction.kind === "retract") {
-            segmentsRefValue = reduction.state.segments;
+            const numbered = normalizeTranscriptSegments(reduction.state.segments, sessionUnknownHighWater);
+            sessionUnknownHighWater = Math.max(sessionUnknownHighWater, ...numbered.map((row) => row.unknownNumberHighWater || 0), 0);
+            segmentsRefValue = numbered;
             useMeetingRecordingStore.setState({
-              segments: reduction.state.segments,
-              transcript: buildTranscriptText(reduction.state.segments),
+              segments: numbered,
+              transcript: buildTranscriptText(numbered),
             });
             return;
           }
@@ -1177,13 +1185,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             seg.speakerIsPlaceholder = true;
             seg.speakerStatus = "provisional";
           }
-          segmentsRefValue = reduction.state.segments;
+          const numbered = normalizeTranscriptSegments(reduction.state.segments, sessionUnknownHighWater);
+          sessionUnknownHighWater = Math.max(sessionUnknownHighWater, ...numbered.map((row) => row.unknownNumberHighWater || 0), 0);
+          segmentsRefValue = numbered;
           // Only the cleared partial goes in the payload (spreading both partial fields would add a
           // key the pre-reducer code never wrote), so derive it from the inserted segment's source.
           const partialPatch = seg.source === "mic" ? { micPartial: "" } : { systemPartial: "" };
           useMeetingRecordingStore.setState({
-            segments: reduction.state.segments,
-            transcript: buildTranscriptText(reduction.state.segments),
+            segments: numbered,
+            transcript: buildTranscriptText(numbered),
             ...partialPatch,
           });
           if (seg.source === "system" && seg.speaker) {
@@ -1618,7 +1628,7 @@ export async function persistLiveTranscript(): Promise<void> {
     // Posted before the first await: during beforeunload nothing after it is
     // guaranteed to run.
     const result = await window.electronAPI?.updateNote?.(recordingNoteId, {
-      transcript: serializeTranscriptSegments(segments),
+      transcript: serializeTranscriptSegments(segments, sessionUnknownHighWater),
     });
     if (result && !result.success) {
       logger.error(
@@ -1707,13 +1717,13 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     const diarizationSessionId = await persistFinalTranscriptAroundStop({
       segments: finalSegments,
       seedLength: sessionSeedLength,
-      serializeSegments: serializeTranscriptSegments,
+      serializeSegments: (rows) => serializeTranscriptSegments(rows, sessionUnknownHighWater),
       persist: persistTranscript,
       fallbackTranscript: () =>
         stopTranscript &&
         (finalSegments.length === 0
           ? stopTranscript
-          : serializeTranscriptSegments(useMeetingRecordingStore.getState().segments)),
+          : serializeTranscriptSegments(useMeetingRecordingStore.getState().segments, sessionUnknownHighWater)),
       stop: async () => {
         // Set before cleanup's awaits: the final transcript write is already
         // posted, so an earlier session's result can land from here on.
@@ -1950,6 +1960,7 @@ if (typeof window !== "undefined") {
       });
       const { segments: enriched, removedCount } = mergeSessionDiarization({
         existing,
+        unknownNumberHighWater: readTranscriptDocument(persisted.transcript).unknownNumberHighWater,
         seedLength,
         fallbackTranscript: seed?.fallbackTranscript,
         segments: data.segments,
@@ -1969,7 +1980,7 @@ if (typeof window !== "undefined") {
         // read this write — without it the ordering depends on db-update-note
         // staying synchronous ahead of its first await.
         await window.electronAPI?.updateNote?.(targetNoteId, {
-          transcript: serializeTranscriptSegments(enriched),
+          transcript: serializeTranscriptSegments(enriched, readTranscriptDocument(persisted.transcript).unknownNumberHighWater),
         });
       } catch (error) {
         publish([]);
@@ -1989,6 +2000,7 @@ if (typeof window !== "undefined") {
       ) {
         const merged = mergeSessionDiarization({
           existing: current.segments,
+          unknownNumberHighWater: sessionUnknownHighWater,
           seedLength,
           fallbackTranscript: seed.fallbackTranscript,
           segments: data.segments,

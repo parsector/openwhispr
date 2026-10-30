@@ -723,7 +723,8 @@ export default function NoteEditor({
       if (!result?.success || !result.rows) {
         if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();
         setSpeakerCorrectionError(t(result?.error === "later_change"
-          ? "notes.speaker.laterChangeReplaced" : "notes.speaker.correctionSaveFailed"));
+          ? "notes.speaker.laterChangeReplaced" : result?.error === "history_full"
+            ? "notes.speaker.historyFull" : "notes.speaker.correctionSaveFailed"));
         return false;
       }
       const committed = result.rows;

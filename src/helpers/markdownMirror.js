@@ -176,7 +176,7 @@ class MarkdownMirror {
   writeTranscript(note, folderName, speakerMappings) {
     if (!this._baseRealPath) return;
     try {
-      const segments = JSON.parse(note.transcript || "[]");
+      const segments = require("./transcriptDocument").readTranscriptDocument(note.transcript).rows;
       if (!segments.length) return;
 
       const dirPath = this._resolveFolderPath(folderName, { create: true });

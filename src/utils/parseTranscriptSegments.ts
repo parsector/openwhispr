@@ -1,6 +1,7 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import { normalizeTranscriptSegments } from "./transcriptSpeakerState";
 import logger from "./logger";
+import { readTranscriptDocument } from "../helpers/transcriptDocument";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // A stable, note-scoped UUID for ids minted by older versions. No index enters
@@ -19,9 +20,10 @@ function legacyUuid(noteId: number | undefined, oldId: string): string {
 export function parseTranscriptSegmentsWithMigration(raw: string, noteId?: number): {
   segments: TranscriptSegment[]; migrated: boolean; droppedCorrections: number;
 } {
-  if (!raw.startsWith("[")) return { segments: [], migrated: false, droppedCorrections: 0 };
+  if (!raw.trim().startsWith("[") && !raw.trim().startsWith("{")) return { segments: [], migrated: false, droppedCorrections: 0 };
   try {
-    const parsed = JSON.parse(raw) as Array<{
+    const document = readTranscriptDocument(raw);
+    const parsed = document.rows as Array<{
       id?: string;
       unknownNumber?: number;
       unknownNumberHighWater?: number;
@@ -71,7 +73,7 @@ export function parseTranscriptSegmentsWithMigration(raw: string, noteId?: numbe
           speakerLocked: s.speakerLocked,
           speakerLockSource: s.speakerLockSource,
         };
-      }));
+      }), document.unknownNumberHighWater);
     for (const row of segments) {
       if (!row.corrections) continue;
       row.corrections = row.corrections.flatMap((record) => {
@@ -118,6 +120,9 @@ const isJsonArray = (raw: string): boolean => {
     return false;
   }
 };
+const isTranscriptDocument = (raw: string): boolean => {
+  try { return Array.isArray(JSON.parse(raw)?.rows); } catch { return false; }
+};
 
 /**
  * Segments to seed a recording into a note with. Every save of that recording
@@ -129,6 +134,6 @@ const isJsonArray = (raw: string): boolean => {
 export function parseSeedSegments(raw: string | null | undefined, noteId?: number): TranscriptSegment[] {
   const text = raw?.trim();
   if (!text) return [];
-  if (isJsonArray(text)) return parseTranscriptSegments(text, noteId);
+  if (isJsonArray(text) || isTranscriptDocument(text)) return parseTranscriptSegments(text, noteId);
   return [{ id: crypto.randomUUID(), text, source: "system" }];
 }

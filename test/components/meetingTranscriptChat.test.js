@@ -130,3 +130,15 @@ test("a stretch of the user's lines reassigned to someone gets its own colour", 
   );
   assert.equal(html.split("border-s-green-400/50").length - 1, 1, "Bob gets the next one");
 });
+
+test('filtered review rows expose virtual positions for variable-height measurement', async () => {
+  const segments = Array.from({ length: 12 }, (_, i) => ({
+    id: `review-${i}`, source: 'system', speaker: 'speaker_0', timestamp: i,
+    text: i % 2 ? 'Tall row '.repeat(80) : 'Short',
+    ...(i === 7 ? { uncertainty: { reason: 'ambiguous' } } : {}),
+  }));
+  const html = await renderChat({ segments, reviewOnly: true });
+  const measured = [...html.matchAll(/data-index="(\d+)"/g)].map((match) => Number(match[1]));
+  assert.deepEqual(measured, [0, 1, 2]);
+  assert.ok(html.includes('Tall row'));
+});

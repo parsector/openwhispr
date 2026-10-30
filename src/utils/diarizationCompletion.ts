@@ -1,5 +1,5 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
-import { mergeTranscriptSegments } from "./transcriptSpeakerState";
+import { mergeTranscriptSegments, normalizeTranscriptSegments } from "./transcriptSpeakerState";
 
 // Routing rules for meeting-diarization-complete events (issue #1495): a result
 // must be persisted to the note that owns the recording session, never to
@@ -97,8 +97,10 @@ export function mergeSessionDiarization(params: {
   fallbackTranscript?: string;
   segments: Array<Omit<TranscriptSegment, "id"> & { id?: string }>;
   removedSegments?: RemovedTranscriptSegment[];
+  unknownNumberHighWater?: number;
 }): { segments: TranscriptSegment[]; removedCount: number } {
   const { existing, seedLength, fallbackTranscript, segments, removedSegments } = params;
+  const complete = (rows: TranscriptSegment[]) => normalizeTranscriptSegments(rows, params.unknownNumberHighWater);
   const seededCount = Math.min(seedLength, existing.length);
   const sessionRows = existing.slice(seededCount);
   const incoming = segments.map((segment) => ({
@@ -107,17 +109,17 @@ export function mergeSessionDiarization(params: {
   }));
   if (fallbackTranscript && sessionRows[0]?.text === fallbackTranscript) {
     return {
-      segments: [
+      segments: complete([
         ...existing.slice(0, seededCount),
-        ...mergeTranscriptSegments([], incoming),
+        ...mergeTranscriptSegments([], incoming, params.unknownNumberHighWater, true),
         ...sessionRows.slice(1),
-      ],
+      ]),
       removedCount: 1 - incoming.length,
     };
   }
   const keptRows = withoutRemovedSegments(sessionRows, removedSegments);
   return {
-    segments: [...existing.slice(0, seededCount), ...mergeTranscriptSegments(keptRows, incoming)],
+    segments: complete([...existing.slice(0, seededCount), ...mergeTranscriptSegments(keptRows, incoming, params.unknownNumberHighWater, true)]),
     removedCount: sessionRows.length - keptRows.length,
   };
 }

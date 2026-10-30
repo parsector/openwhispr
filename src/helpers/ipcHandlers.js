@@ -3577,8 +3577,10 @@ class IPCHandlers {
         const note = this.databaseManager.getNote(noteId);
         if (!note) return { success: false, error: "Note not found" };
 
-        const segments = JSON.parse(note.transcript || "[]");
-        if (!segments.length) return { success: false, error: "No transcript available" };
+        const segments = require("./transcriptDocument").readTranscriptDocument(note.transcript).rows;
+        if (!segments.length && !(format === "json" &&
+          require("./transcriptDocument").readTranscriptDocument(note.transcript).unknownNumberHighWater > 0))
+          return { success: false, error: "No transcript available" };
 
         const speakerMappings = this._buildSpeakerMappings(noteId);
 
@@ -13128,7 +13130,7 @@ class IPCHandlers {
               const note = this.databaseManager.getNote(noteId);
               if (note?.transcript) {
                 try {
-                  const segments = JSON.parse(note.transcript);
+                  const segments = require("./transcriptDocument").readTranscriptDocument(note.transcript).rows;
                   let changed = false;
                   for (const seg of segments) {
                     if (seg.speaker === emb.speaker_id && !seg.speakerName) {
@@ -13143,7 +13145,7 @@ class IPCHandlers {
                   }
                   if (changed) {
                     this.databaseManager.updateNote(noteId, {
-                      transcript: JSON.stringify(segments),
+                      transcript: require("./transcriptDocument").writeTranscriptDocument(segments, require("./transcriptDocument").readTranscriptDocument(note.transcript).unknownNumberHighWater),
                     });
                   }
                 } catch (_) {}
@@ -13171,7 +13173,7 @@ class IPCHandlers {
         const existingMappings = this.databaseManager.getSpeakerMappings(noteId);
         const mappedSpeakers = new Set(existingMappings.map((m) => m.speaker_id));
 
-        const transcript = note.transcript ? JSON.parse(note.transcript) : [];
+        const transcript = note.transcript ? require("./transcriptDocument").readTranscriptDocument(note.transcript).rows : [];
         const systemSpeakers = new Set(
           transcript.filter((s) => s.source !== "mic" && s.speaker).map((s) => s.speaker)
         );
@@ -13192,7 +13194,7 @@ class IPCHandlers {
         }
 
         if (changed) {
-          this.databaseManager.updateNote(noteId, { transcript: JSON.stringify(transcript) });
+          this.databaseManager.updateNote(noteId, { transcript: require("./transcriptDocument").writeTranscriptDocument(transcript, require("./transcriptDocument").readTranscriptDocument(note.transcript).unknownNumberHighWater) });
           const updated = this.databaseManager.getNote(noteId);
           if (updated) broadcastToWindows("note-updated", updated);
         }

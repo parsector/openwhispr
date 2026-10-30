@@ -3156,6 +3156,8 @@
       },
       "unknownNumber": "不明な話者 {{n}}",
       "restore": "元に戻す",
+      "olderCorrections": "以前の修正を{{n}}件表示",
+      "historyFull": "このノートの修正履歴は上限（16 MB）に達しました。以前の修正は引き続き元に戻せます。",
       "reviewStretches": "{{n}} 件の発話を確認",
       "showAll": "すべての発話を表示",
       "reason": {

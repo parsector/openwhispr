@@ -3586,6 +3586,18 @@ class DatabaseManager {
       const previous = this.getNote(id);
       if (!previous) return { success: false, error: "Note not found" };
       updates = { ...updates };
+      if (typeof updates.transcript === "string" && require("./transcriptDocument").isTranscriptDocument(updates.transcript)) {
+        const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
+        const incoming = readTranscriptDocument(updates.transcript);
+        const previousDocument = readTranscriptDocument(previous.transcript);
+        updates.transcript = writeTranscriptDocument(incoming.rows,
+          Math.max(incoming.unknownNumberHighWater, previousDocument.unknownNumberHighWater));
+      } else if (typeof updates.transcript === "string") {
+        const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
+        const highWater = readTranscriptDocument(previous.transcript).unknownNumberHighWater;
+        if (highWater > 0) updates.transcript = writeTranscriptDocument(
+          updates.transcript ? [{ id: crypto.randomUUID(), text: updates.transcript }] : [], highWater);
+      }
       // An unlink is stored as "" so it syncs: the cloud keeps a NULL as "unchanged".
       if (updates.calendar_event_id === null && previous.calendar_event_id != null) {
         updates.calendar_event_id = "";
@@ -6753,6 +6765,10 @@ class DatabaseManager {
       const clearsContent = cleared.includes("content");
       const clearsSummary = cleared.includes("enhanced_content");
       cloudNote = { ...cloudNote };
+      if (existing?.transcript && cloudNote.transcript) {
+        cloudNote.transcript = require("./transcriptDocument").mergeLocalTranscriptState(
+          cloudNote.transcript, existing.transcript);
+      }
       if (!cloudNote.content?.trim()) cloudNote.content = "";
       if (!cloudNote.enhanced_content?.trim()) cloudNote.enhanced_content = null;
       if (clearsSummary) {

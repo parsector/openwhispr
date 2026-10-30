@@ -3228,6 +3228,8 @@
       },
       "unknownNumber": "Voce sconosciuta {{n}}",
       "restore": "Ripristina",
+      "olderCorrections": "Mostra {{n}} correzioni precedenti",
+      "historyFull": "La cronologia delle correzioni di questa nota è piena (16 MB). Puoi ancora annullare le correzioni precedenti.",
       "reviewStretches": "Rivedi {{n}} passaggi",
       "showAll": "Mostra tutti i passaggi",
       "reason": {

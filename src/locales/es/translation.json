@@ -3280,6 +3280,8 @@
       },
       "unknownNumber": "Hablante desconocido {{n}}",
       "restore": "Restaurar",
+      "olderCorrections": "Mostrar {{n}} correcciones anteriores",
+      "historyFull": "El historial de correcciones de esta nota está lleno (16 MB). Las correcciones anteriores aún se pueden deshacer.",
       "reviewStretches": "Revisar {{n}} fragmentos",
       "showAll": "Mostrar todos los fragmentos",
       "reason": {

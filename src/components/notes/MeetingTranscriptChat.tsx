@@ -16,6 +16,7 @@ import {
   isSelfSideSegment,
   isTranscriptSpeakerLocked,
   isYouSpeakerName,
+  normalizeTranscriptSegments,
   resolveSegmentSpeakerName,
   type TranscriptSpeakerStatus,
 } from "../../utils/transcriptSpeakerState";
@@ -539,6 +540,7 @@ function SpeakerLabel({
 }) {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<"row" | "selected" | "cluster">("row");
+  const [visibleCorrections, setVisibleCorrections] = useState(20);
   const storedName = segment.speakerIsPlaceholder ? undefined : segment.speakerName;
   const speakerState =
     segment.speakerLocked || isTranscriptSpeakerLocked(segment)
@@ -561,7 +563,7 @@ function SpeakerLabel({
       ? t("notes.speaker.you")
       : speakerId === "speaker_mic"
         ? t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 })
-        : t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? getSpeakerNumber(speakerId) }));
+        : t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 }));
   const isUnmapped = !resolvedName && !storedName;
 
   return (
@@ -612,11 +614,16 @@ function SpeakerLabel({
             onClick={() => { onAssignScope?.(scope, segment.id, null); setOpen(false); }}>
             {t("notes.speaker.scope.unknown")}
           </button>
-          {segment.corrections?.map((correction) => <button key={correction.id} type="button"
+          {segment.corrections?.slice(-visibleCorrections).map((correction) => <button key={correction.id} type="button"
             className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10 focus-visible:ring-1 focus-visible:ring-ring"
             onClick={() => { onUndoCorrection?.(correction.id); setOpen(false); }}>
             {t("notes.speaker.restore")}
           </button>)}
+          {(segment.corrections?.length || 0) > visibleCorrections &&
+            <button type="button" className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10"
+              onClick={() => setVisibleCorrections((count) => count + 20)}>
+              {t("notes.speaker.olderCorrections", { n: segment.corrections!.length - visibleCorrections })}
+            </button>}
         </div>
       </PopoverContent>
     </Popover>
@@ -935,7 +942,7 @@ interface MeetingTranscriptChatProps {
 }
 
 export function MeetingTranscriptChat({
-  segments,
+  segments: providedSegments,
   noteId,
   micPartial,
   systemPartial,
@@ -962,6 +969,7 @@ export function MeetingTranscriptChat({
   reviewOnly = false,
   contentClassName,
 }: MeetingTranscriptChatProps) {
+  const segments = useMemo(() => normalizeTranscriptSegments(providedSegments), [providedSegments]);
   const { t } = useTranslation();
   const [sourceChips, setSourceChips] = useState<{ noteId: number; rows: Commitment[] } | null>(null);
   useEffect(() => {
@@ -1191,7 +1199,7 @@ export function MeetingTranscriptChat({
               return (
                 <div
                   key={segment.id}
-                  data-index={i}
+                  data-index={virtualItem.index}
                   ref={virtualizer.measureElement}
                   className="pb-1.5"
                   style={{

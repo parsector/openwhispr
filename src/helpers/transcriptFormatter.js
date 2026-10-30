@@ -85,23 +85,9 @@ function normalizeSegmentTimestamps(segments, note) {
 function mergeSegments(segments) {
   const merged = [];
   let lastTimestamp = null;
-  const numbers = new Map();
-  let nextNumber = Math.max(0, ...segments.map((seg) =>
-    Math.max(seg.unknownNumber || 0, seg.unknownNumberHighWater || 0))) + 1;
-  for (const seg of segments) {
-    if (seg.speaker && seg.unknownNumber)
-      numbers.set(`${seg.diarizationRunId || "legacy"}:${seg.speaker}`, seg.unknownNumber);
-  }
-  for (const rawSeg of segments) {
+  for (const rawSeg of require("./transcriptDocument").allocateUnknownNumbers(segments)) {
     const seg = { ...rawSeg };
     if (!seg.text?.trim()) continue;
-    if ((seg.source || seg.speaker || seg.speakerName || seg.speakerLocked) && !seg.unknownNumber) {
-      const key = seg.speaker
-        ? `${seg.diarizationRunId || "legacy"}:${seg.speaker}`
-        : seg.id || `${seg.source}:${seg.timestamp ?? nextNumber}`;
-      if (!numbers.has(key)) numbers.set(key, nextNumber++);
-      seg.unknownNumber = numbers.get(key);
-    }
     const ts = seg.timestamp || 0;
     const last = merged[merged.length - 1];
     if (last && speakerKey(last) === speakerKey(seg) && ts - lastTimestamp < 2) {
@@ -219,6 +205,10 @@ function formatJson(note, segments, speakerMappings) {
 
   return JSON.stringify(
     {
+      unknownNumberHighWater: Math.max(
+        require("./transcriptDocument").readTranscriptDocument(note.transcript).unknownNumberHighWater,
+        ...segments.map((seg) => Math.max(seg.unknownNumber || 0, seg.unknownNumberHighWater || 0)), 0
+      ),
       metadata: {
         title,
         date: dateStr,
@@ -232,7 +222,9 @@ function formatJson(note, segments, speakerMappings) {
         segment_count: merged.length,
       },
       speakers: [...speakersSet],
-      transcriptRows: segments.map((seg) => ({ ...seg })),
+      transcriptRows: JSON.parse(require("./transcriptDocument").publicTranscript(
+        require("./transcriptDocument").writeTranscriptDocument(segments)
+      )).rows,
       segments: merged.map((seg) => ({
         id: seg.id,
         speaker: untimed ? null : resolveSpeaker(seg, speakerMappings) || null,

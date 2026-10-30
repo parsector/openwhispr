@@ -3228,6 +3228,8 @@
       },
       "unknownNumber": "Pessoa desconhecida {{n}}",
       "restore": "Restaurar",
+      "olderCorrections": "Mostrar {{n}} correções anteriores",
+      "historyFull": "O histórico de correções desta nota está cheio (16 MB). As correções anteriores ainda podem ser desfeitas.",
       "reviewStretches": "Rever {{n}} trechos",
       "showAll": "Mostrar todos os trechos",
       "reason": {

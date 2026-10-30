@@ -10,6 +10,8 @@ const FIELDS = [
   "suggestedProfileId",
   "uncertainty",
 ];
+const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
+const MAX_CORRECTION_BYTES = 16 * 1024 * 1024;
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
 const snapshot = (row) =>
   Object.fromEntries(FIELDS.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
@@ -19,14 +21,7 @@ const restore = (row, previous) => {
   Object.assign(next, previous);
   return next;
 };
-const parse = (raw) => {
-  try {
-    const rows = JSON.parse(raw || "[]");
-    return Array.isArray(rows) ? rows : [];
-  } catch {
-    return [];
-  }
-};
+const parse = (raw) => readTranscriptDocument(raw).rows;
 function applySpeakerCorrection(database, identifier, request) {
   const { noteId, id } = request;
   if (!noteId || !id || !["apply", "undo"].includes(request.type))
@@ -101,6 +96,10 @@ function applySpeakerCorrection(database, identifier, request) {
         };
         return { ...next, corrections: [...(row.corrections || []), record] };
       });
+      // Keep every accepted event undoable. Reject a new one when this note's
+      // local history reaches its size budget; never discard older events.
+      if (Buffer.byteLength(JSON.stringify(rows.flatMap((row) => row.corrections || [])), "utf8") > MAX_CORRECTION_BYTES)
+        return { success: false, error: "history_full" };
       if (key) {
         const result = database.setSpeakerRunMapping(
           noteId,
@@ -141,7 +140,14 @@ function applySpeakerCorrection(database, identifier, request) {
             (record, index, list) => record.id === id && index < list.length - 1
           )
       );
-      if (laterOnTarget || laterOnRow) return { success: false, error: "later_change" };
+      const changedElsewhere = rows.some((row) => {
+        const record = (row.corrections || []).find((item) => item.id === id);
+        return record && (row.speakerName !== record.next?.speakerName ||
+          !!row.speakerIsPlaceholder !== !!record.next?.speakerIsPlaceholder ||
+          !!row.speakerLocked !== !!record.next?.speakerLocked);
+      });
+      if (laterOnTarget || laterOnRow || changedElsewhere)
+        return { success: false, error: "later_change" };
       rows = rows.map((row) => {
         const record = (row.corrections || []).find((item) => item.id === id);
         if (!record) return row;
@@ -177,7 +183,7 @@ function applySpeakerCorrection(database, identifier, request) {
         committedMapping = { clusterId: event.clusterId, value: active || before || null };
       }
     }
-    const transcript = JSON.stringify(rows);
+    const transcript = writeTranscriptDocument(rows, readTranscriptDocument(note.transcript).unknownNumberHighWater);
     const result = database.updateNote(noteId, { transcript });
     if (!result?.success) throw Error(result?.error || "transcript_failed");
     if (committedMapping && identifier) {
@@ -208,4 +214,4 @@ function applySpeakerCorrection(database, identifier, request) {
     throw error;
   }
 }
-module.exports = { applySpeakerCorrection, mappingKey };
+module.exports = { applySpeakerCorrection, mappingKey, MAX_CORRECTION_BYTES };
