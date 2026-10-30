@@ -4645,8 +4645,8 @@ class IPCHandlers {
 
           // Always auto-cluster: forcing 2 clusters on #2021's two-person call
           // split short utterances from long ones instead of one speaker from
-          // the other, merging both speakers. The requested count is applied
-          // as a cap after cleanup instead.
+          // the other, merging both speakers. Preserve substantial clusters
+          // even when the requested count is lower.
           let segments = await this.diarizationManager.diarize(wavPath, { threshold, signal });
           if (signal?.aborted) {
             return { success: false, error: "Cancelled", code: "UPLOAD_CANCELLED" };
@@ -7801,7 +7801,7 @@ class IPCHandlers {
       const id = crypto.randomUUID();
       meetingDiarizationSegments.push({
         id,
-        diarizationRunId: sessionId,
+        diarizationRunId: meetingConnectionOptions?.sessionId,
         text,
         source,
         timestamp,

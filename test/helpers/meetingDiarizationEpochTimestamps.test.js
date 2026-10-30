@@ -163,7 +163,7 @@ test("main final analysis finds the prior row by its ingestion id", async () => 
   visit(source);
   const stored = [];
   const sent = [];
-  const context = { crypto, sessionId: "diar-1", meetingDiarizationSegments: stored, appendMeetingLocalTranscript() {} };
+  const context = { crypto, meetingConnectionOptions: { sessionId: "diar-1" }, meetingDiarizationSegments: stored, appendMeetingLocalTranscript() {} };
   const store = vm.runInNewContext(`(${arrows.get("storeMeetingDiarizationSegment")})`, context);
   const sendFinal = vm.runInNewContext(`(${arrows.get("sendMeetingFinalSegment")})`, {
     ...context, storeMeetingDiarizationSegment: store,
@@ -172,6 +172,7 @@ test("main final analysis finds the prior row by its ingestion id", async () => 
     send: (channel, row) => sent.push([channel, row]) });
   const id = stored[0].id;
   assert.match(id, /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i);
+  assert.equal(stored[0].diarizationRunId, "diar-1");
   assert.equal(sent[0][1].id, id);
   stored[0].speakerName = "Alex";
   const payload = await runMainDiarization(stored, { finalName: "Sam" });

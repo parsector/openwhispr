@@ -164,7 +164,7 @@ test("a collapsed run returns no segments, so the plain transcript is kept", asy
   assert.equal(result.durationSeconds, 1);
 });
 
-test("a requested speaker count caps the clusters automatic clustering finds", async () => {
+test("a requested speaker count keeps substantial extra clusters", async () => {
   diarizerOutput = [
     ...cluster("speaker_0", 80, 6),
     ...cluster("speaker_1", 60, 6),
@@ -173,10 +173,10 @@ test("a requested speaker count caps the clusters automatic clustering finds", a
 
   const result = await handler({}, audioPath, { numSpeakers: 2 });
 
-  assert.deepEqual(speakersOf(result.segments), ["speaker_0", "speaker_1"]);
+  assert.deepEqual(speakersOf(result.segments), ["speaker_0", "speaker_1", "speaker_2"]);
 });
 
-test("an extra cluster goes to the requested speaker whose voice it matches", async () => {
+test("an extra cluster stays distinct even when its voice matches another", async () => {
   diarizerOutput = [
     ...cluster("speaker_0", 80, 6),
     ...cluster("speaker_1", 60, 6),
@@ -191,12 +191,13 @@ test("an extra cluster goes to the requested speaker whose voice it matches", as
 
   const result = await handler({}, audioPath, { numSpeakers: 2 });
 
-  assert.equal(centroidCalls.length, 1);
-  assert.equal(result.segments.filter((s) => s.speaker === "speaker_1").length, 100);
+  assert.equal(centroidCalls.length, 0);
+  assert.equal(result.segments.filter((s) => s.speaker === "speaker_1").length, 60);
   assert.equal(result.segments.filter((s) => s.speaker === "speaker_0").length, 80);
+  assert.equal(result.segments.filter((s) => s.speaker === "speaker_2").length, 40);
 });
 
-test("extra clusters fold into the largest when voices can't be read", async () => {
+test("extra clusters stay distinct when voices can't be read", async () => {
   diarizerOutput = [
     ...cluster("speaker_0", 80, 6),
     ...cluster("speaker_1", 60, 6),
@@ -209,7 +210,9 @@ test("extra clusters fold into the largest when voices can't be read", async () 
   const result = await handler({}, audioPath, { numSpeakers: 2 });
 
   assert.equal(result.success, true);
-  assert.equal(result.segments.filter((s) => s.speaker === "speaker_0").length, 120);
+  assert.equal(centroidCalls.length, 0);
+  assert.equal(result.segments.filter((s) => s.speaker === "speaker_0").length, 80);
+  assert.equal(result.segments.filter((s) => s.speaker === "speaker_2").length, 40);
 });
 
 // Dropping the 3 % phantom first would lift the interviewee from 88 % to
@@ -234,11 +237,11 @@ test("an interview with short questions keeps its labels", async () => {
   assert.deepEqual(speakersOf(result.segments), ["speaker_0", "speaker_1"]);
 });
 
-test("a request for one speaker labels one speaker instead of discarding the run", async () => {
+test("a request for one speaker retains substantial extra voices", async () => {
   diarizerOutput = [...cluster("speaker_01", 165, 6.06), ...cluster("speaker_00", 35, 1.72)];
 
   const result = await handler({}, audioPath, { numSpeakers: 1 });
 
   assert.equal(result.segments.length, 200);
-  assert.deepEqual(speakersOf(result.segments), ["speaker_01"]);
+  assert.deepEqual(speakersOf(result.segments), ["speaker_00", "speaker_01"]);
 });
