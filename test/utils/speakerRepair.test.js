@@ -76,3 +76,30 @@ test('JSON export retains the note counter after all rows are removed', async ()
   assert.equal(exported.unknownNumberHighWater, 9);
   assert.deepEqual(exported.transcriptRows, []);
 });
+
+test('two live rows split into different final clusters receive distinct Unknown numbers', async () => {
+  const { normalizeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const { mergeSessionDiarization } = await import('../../src/utils/diarizationCompletion.ts');
+  const live = normalizeTranscriptSegments([
+    { ...row('a', 'run1'), text: 'first' },
+    { ...row('b', 'run1'), text: 'second' },
+  ]);
+  const final = mergeSessionDiarization({ existing: live, seedLength: 0,
+    unknownNumberHighWater: 1, segments: [
+      { ...row('a', 'run1', 'speaker_1'), text: 'first' },
+      { ...row('b', 'run1', 'speaker_2'), text: 'second' },
+    ] });
+  assert.notEqual(final.segments[0].unknownNumber, final.segments[1].unknownNumber);
+  assert.deepEqual(final.segments.map((s) => s.unknownNumber), [1, 2]);
+});
+
+test('final abstention clears the prior name from the saved row', async () => {
+  const { mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const previous = { ...row('a', 'run1'), speakerName: 'Alex', speakerStatus: 'confirmed',
+    speakerIsPlaceholder: false };
+  const final = { ...row('a', 'run1'), speakerName: undefined, speakerStatus: 'provisional',
+    speakerIsPlaceholder: true };
+  const [saved] = mergeTranscriptSegments([previous], [final]);
+  assert.equal(saved.speakerName, undefined);
+  assert.equal(saved.speakerIsPlaceholder, true);
+});

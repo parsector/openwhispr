@@ -163,7 +163,7 @@ test("upsertNoteFromCloud: empty cloud values never destroy non-empty local cont
   assert.equal(after.calendar_event_id, "cal-ev-1", "calendar_event_id still preserved (COALESCE)");
 });
 
-test("upsertNoteFromCloud: non-empty cloud values still overwrite (last-writer-wins intact)", (t) => {
+test("upsertNoteFromCloud: non-empty cloud text updates and local-only transcript rows survive", (t) => {
   const db = createDb(t);
   if (!db) return;
 
@@ -181,7 +181,10 @@ test("upsertNoteFromCloud: non-empty cloud values still overwrite (last-writer-w
   assert.equal(after.title, "Cloud Title");
   assert.equal(after.content, "CLOUD EDIT");
   assert.equal(after.enhanced_content, "CLOUD ENHANCED");
-  assert.deepEqual(require("../../src/helpers/transcriptDocument").readTranscriptDocument(after.transcript).rows.map((row) => row.text), ["cloud"]);
+  const transcriptRows = require("../../src/helpers/transcriptDocument").readTranscriptDocument(after.transcript).rows;
+  assert.equal(transcriptRows[0].text, "cloud");
+  assert.equal(transcriptRows[1].text,
+    require("../../src/helpers/transcriptDocument").readTranscriptDocument(before.transcript).rows[0].text);
   assert.equal(
     after.enhancement_prompt,
     null,

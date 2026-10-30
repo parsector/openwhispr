@@ -47,6 +47,7 @@ import {
   useMeetingRecordingStore,
   mergeCommittedSpeakerRows,
   restoreSpeakerIdentityCache,
+  getActiveRecordingSessionId,
   persistLiveTranscript,
   setSpeakerCorrectionPending,
   type TranscriptSegment,
@@ -481,13 +482,13 @@ export default function NoteEditor({
     [note.id, note.transcript]
   );
   const displaySegments = diarizedSegments?.length ? diarizedSegments : storedTranscript.segments;
-  const reviewCount = displaySegments.filter((segment) => segment.uncertainty).length;
+  const reviewCount = displaySegments.filter((segment) =>
+    segment.uncertainty || segment.quarantinedCorrections?.length).length;
 
   useEffect(() => {
     if (storedTranscript.migrated) {
-      void window.electronAPI?.updateNote?.(note.id, {
-        transcript: serializeTranscriptSegments(storedTranscript.segments),
-      });
+      void window.electronAPI?.updateNote?.(note.id, {},
+        { expectedTranscript: note.transcript, migrateTranscript: true });
     }
   }, [note.id, storedTranscript]);
 
@@ -694,14 +695,16 @@ export default function NoteEditor({
 
   const persistDisplaySegments = useCallback(
     async (nextSegments: TranscriptSegment[], updateOverlay = true) => {
-      if (updateOverlay) {
-        setDiarizedSegments(nextSegments);
-      }
-      await window.electronAPI?.updateNote(note.id, {
+      const result = await window.electronAPI?.updateNote(note.id, {
         transcript: serializeTranscriptSegments(nextSegments),
-      });
+      }, { expectedTranscript: note.transcript });
+      if (!result?.success) {
+        setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
+        return;
+      }
+      if (updateOverlay) setDiarizedSegments(nextSegments);
     },
-    [note.id]
+    [note.id, note.transcript, t]
   );
 
   const commitSpeakerCorrection = useCallback(async (request: {
@@ -740,7 +743,7 @@ export default function NoteEditor({
       } else {
         setDiarizedSegments(committed);
       }
-      if (result.mapping) {
+      if (result.mapping && (!isRecording || result.mapping.runId === getActiveRecordingSessionId())) {
         const { clusterId, value } = result.mapping;
         const name = value?.display_name || value?.displayName || null;
         if (isRecording) restoreSpeakerIdentityCache(clusterId, name);

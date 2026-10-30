@@ -13,6 +13,7 @@ const fixture = () => {
   const note = { transcript: JSON.stringify([row("a"), row("b", "speaker_1")]) };
   const mappings = new Map();
   const identifier = {
+    activeRunId: "run1",
     transientDisplayNames: new Map(),
     transientProfileIds: new Map(),
     mapSpeaker(id, profile, name) {
@@ -143,6 +144,7 @@ test("cluster undo restores only its run mapping", () => {
   const f = fixture();
   applySpeakerCorrection(f.db, f.identifier, correction("c1", "a", "Alex"));
   f.note.transcript = JSON.stringify([...rows(f), row("other", "speaker_0", "run2")]);
+  f.identifier.activeRunId = "run2";
   applySpeakerCorrection(f.db, f.identifier, correction("c2", "other", "Sam", "speaker_0", "run2"));
   applySpeakerCorrection(f.db, f.identifier, { type: "undo", noteId: 1, id: "c1" });
   assert.equal(rows(f).find((r) => r.id === "other").speakerName, "Sam");
@@ -192,4 +194,43 @@ test('a cloud label change keeps the local event but refuses a stale undo', () =
   assert.deepEqual(applySpeakerCorrection(f.db, f.identifier,
     { type: 'undo', noteId: 1, id: 'c1' }), { success: false, error: 'later_change' });
   assert.equal(rows(f)[0].speakerName, 'Sam');
+});
+
+test('owner can correct a 650-row cluster and undo it from one indexed event', () => {
+  const f = fixture();
+  f.note.transcript = JSON.stringify(Array.from({ length: 650 }, (_, i) => row(`r${i}`)));
+  const result = applySpeakerCorrection(f.db, f.identifier, correction('large-cluster', 'r0', 'Alex'));
+  assert.equal(result.success, true, result.error);
+  assert.equal(rows(f).length, 650);
+  assert.equal(rows(f).filter((r) => r.speakerName === 'Alex').length, 650);
+  const history = rows(f).flatMap((r) => r.corrections || []);
+  assert.equal(history.filter((record) => record.snapshots).length, 1);
+  assert.equal(Object.keys(history.find((record) => record.snapshots).snapshots).length, 650);
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: 'undo', noteId: 1, id: 'large-cluster' }).success, true);
+  assert.equal(rows(f).filter((r) => r.speakerName).length, 0);
+});
+
+test('owner can correct a 500-row selection without filling first-event history', () => {
+  const f = fixture();
+  f.note.transcript = JSON.stringify(Array.from({ length: 500 }, (_, i) => row(`r${i}`)));
+  const result = applySpeakerCorrection(f.db, f.identifier, {
+    type: 'apply', noteId: 1, id: 'large-selection', scope: 'selected',
+    rowIds: Array.from({ length: 500 }, (_, i) => `r${i}`), name: 'Alex', rows: [],
+  });
+  assert.equal(result.success, true, result.error);
+  assert.equal(rows(f).filter((r) => r.speakerName === 'Alex').length, 500);
+});
+
+test('undoing an old run never replaces the active run cache with its historical name', () => {
+  const f = fixture();
+  applySpeakerCorrection(f.db, f.identifier, correction('old', 'a', 'Alex'));
+  f.identifier.activeRunId = 'run2';
+  f.identifier.mapSpeaker('speaker_0', 8, 'Sam');
+  f.mappings.set('run2:speaker_0', { display_name: 'Sam', profile_id: 8 });
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: 'undo', noteId: 1, id: 'old' }).success, true);
+  assert.equal(f.identifier.transientDisplayNames.get('speaker_0'), 'Sam');
+  assert.equal(f.mappings.get('run1:speaker_0'), undefined);
+  assert.equal(f.mappings.get('run2:speaker_0').display_name, 'Sam');
 });

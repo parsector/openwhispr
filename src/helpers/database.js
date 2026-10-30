@@ -3585,12 +3585,26 @@ class DatabaseManager {
       if (!this.db) throw new Error("Database not initialized");
       const previous = this.getNote(id);
       if (!previous) return { success: false, error: "Note not found" };
+      if (options && Object.prototype.hasOwnProperty.call(options, "expectedTranscript") &&
+          previous.transcript !== options.expectedTranscript)
+        return { success: false, error: "transcript_changed" };
       updates = { ...updates };
+      if (options?.migrateTranscript) {
+        const { migrateTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
+        const migration = migrateTranscriptDocument(previous.transcript, id);
+        updates.transcript = writeTranscriptDocument(migration.rows, migration.unknownNumberHighWater);
+      }
+      if (options?.reconcileTranscript && typeof updates.transcript === "string" &&
+          require("./transcriptDocument").isTranscriptDocument(updates.transcript) &&
+          require("./transcriptDocument").isTranscriptDocument(previous.transcript)) {
+        updates.transcript = require("./transcriptDocument").reconcileAutomaticTranscript(
+          updates.transcript, previous.transcript);
+      }
       if (typeof updates.transcript === "string" && require("./transcriptDocument").isTranscriptDocument(updates.transcript)) {
-        const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
+        const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
         const incoming = readTranscriptDocument(updates.transcript);
         const previousDocument = readTranscriptDocument(previous.transcript);
-        updates.transcript = writeTranscriptDocument(incoming.rows,
+        updates.transcript = writeTranscriptDocument(normalizeRowIds(incoming.rows, id),
           Math.max(incoming.unknownNumberHighWater, previousDocument.unknownNumberHighWater));
       } else if (typeof updates.transcript === "string") {
         const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
@@ -6765,6 +6779,13 @@ class DatabaseManager {
       const clearsContent = cleared.includes("content");
       const clearsSummary = cleared.includes("enhanced_content");
       cloudNote = { ...cloudNote };
+      if (cloudNote.transcript && require("./transcriptDocument").isTranscriptDocument(cloudNote.transcript)) {
+        const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
+        const document = readTranscriptDocument(cloudNote.transcript);
+        cloudNote.transcript = writeTranscriptDocument(
+          normalizeRowIds(document.rows, existing?.id ?? cloudNote.client_note_id),
+          document.unknownNumberHighWater);
+      }
       if (existing?.transcript && cloudNote.transcript) {
         cloudNote.transcript = require("./transcriptDocument").mergeLocalTranscriptState(
           cloudNote.transcript, existing.transcript);

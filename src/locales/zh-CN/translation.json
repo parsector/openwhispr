@@ -3230,6 +3230,8 @@
       "restore": "恢复",
       "olderCorrections": "显示较早的 {{n}} 项更正",
       "historyFull": "此笔记的更正记录已满（16 MB）。较早的更正仍可撤销。",
+      "notAssessed": "未评估",
+      "correctionHistoryUnresolved": "有 {{n}} 条更正记录需要检查",
       "reviewStretches": "检查 {{n}} 个片段",
       "showAll": "显示所有片段",
       "reason": {

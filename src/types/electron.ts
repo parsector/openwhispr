@@ -2111,7 +2111,8 @@ declare global {
           updated_by_user_id?: string | null;
           left_team?: number;
         },
-        options?: { undoable: true; expected: NoteItem; turn?: string }
+        options?: { undoable?: boolean; expected?: NoteItem; turn?: string;
+          expectedTranscript?: string | null; reconcileTranscript?: boolean; migrateTranscript?: boolean }
       ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
       getNoteUndos: () => Promise<Array<{ token: string; noteId: number; title: string }>>;
       claimNoteUndo: (token: string) => Promise<boolean>;
@@ -3775,7 +3776,7 @@ declare global {
         success: boolean;
         error?: string;
         rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
-        mapping?: { clusterId: string; value: { display_name?: string; displayName?: string } | null } | null;
+        mapping?: { runId?: string; clusterId: string; value: { display_name?: string; displayName?: string } | null } | null;
       }>;
       removeSpeakerMapping?: (noteId: number, speakerId: string) => Promise<{ success: boolean }>;
       getSpeakerProfiles?: () => Promise<

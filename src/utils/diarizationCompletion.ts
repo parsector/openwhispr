@@ -100,7 +100,25 @@ export function mergeSessionDiarization(params: {
   unknownNumberHighWater?: number;
 }): { segments: TranscriptSegment[]; removedCount: number } {
   const { existing, seedLength, fallbackTranscript, segments, removedSegments } = params;
-  const complete = (rows: TranscriptSegment[]) => normalizeTranscriptSegments(rows, params.unknownNumberHighWater);
+  const complete = (rows: TranscriptSegment[]) => {
+    // A provisional cluster may split in the final result. A number belongs
+    // to one final cluster per run; the largest continuation keeps it.
+    const groups = new Map<string, Map<string, number>>();
+    for (const row of rows) {
+      if (!row.unknownNumber || !row.speaker) continue;
+      const key = `${row.diarizationRunId || "legacy"}:${row.unknownNumber}`;
+      const counts = groups.get(key) || new Map<string, number>();
+      counts.set(row.speaker, (counts.get(row.speaker) || 0) + 1);
+      groups.set(key, counts);
+    }
+    const winners = new Map([...groups].map(([key, counts]) =>
+      [key, [...counts].sort((a, b) => b[1] - a[1])[0][0]]));
+    return normalizeTranscriptSegments(rows.map((row) => {
+      if (!row.unknownNumber || !row.speaker) return row;
+      const key = `${row.diarizationRunId || "legacy"}:${row.unknownNumber}`;
+      return winners.get(key) === row.speaker ? row : { ...row, unknownNumber: undefined };
+    }), params.unknownNumberHighWater);
+  };
   const seededCount = Math.min(seedLength, existing.length);
   const sessionRows = existing.slice(seededCount);
   const incoming = segments.map((segment) => ({

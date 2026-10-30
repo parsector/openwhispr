@@ -246,6 +246,28 @@ test("one-on-one roster attaches a suggestion without confirming or mapping the 
   assert.equal(calls.length, 0);
 });
 
+test("attaching an email offers a suggestion without claiming an unranked voice", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const vector = Buffer.from(new Float32Array([1, 0, 0, 0]).buffer);
+  const note = { transcript: JSON.stringify([{ id: 'voice', text: 'hello', source: 'system',
+    speaker: 'speaker_0' }]) };
+  const db = {
+    getNotesWithUnmappedSpeakers: () => [NOTE_ID],
+    getNoteSpeakerEmbeddings: () => [{ speaker_id: 'speaker_0', embedding: vector }],
+    getSpeakerMappings: () => [],
+    getSpeakerProfiles: () => [{ id: 8, display_name: 'Better candidate', embedding: vector }],
+    getNote: () => note,
+    updateNote: (_id, patch) => Object.assign(note, patch),
+  };
+  Object.assign(Object.create(IPCHandlers.prototype), { databaseManager: db })
+    ._retroactiveMapping({ id: 7, display_name: 'Alex', embedding: vector });
+  await new Promise((resolve) => setImmediate(resolve));
+  const [saved] = require('../../src/helpers/transcriptDocument').readTranscriptDocument(note.transcript).rows;
+  assert.equal(saved.speakerName, undefined);
+  assert.equal(saved.suggestedName, 'Alex');
+  assert.equal(saved.speakerStatus, 'suggested');
+});
+
 test("live reconciliation cannot restore a name to a short provisional row", () => {
   const { IPCHandlers } = loadHandlers();
   const row = { id: "short-row", speaker: "speaker_0", speakerName: undefined,

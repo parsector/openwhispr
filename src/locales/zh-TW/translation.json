@@ -3230,6 +3230,8 @@
       "restore": "還原",
       "olderCorrections": "顯示較早的 {{n}} 項修正",
       "historyFull": "此筆記的修正記錄已滿（16 MB）。較早的修正仍可復原。",
+      "notAssessed": "未評估",
+      "correctionHistoryUnresolved": "有 {{n}} 筆修正記錄需要檢查",
       "reviewStretches": "檢查 {{n}} 個片段",
       "showAll": "顯示所有片段",
       "reason": {

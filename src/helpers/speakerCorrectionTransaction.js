@@ -53,6 +53,8 @@ function applySpeakerCorrection(database, identifier, request) {
         : null;
       const after = key ? { display_name: name, profile_id: profileId ?? null } : null;
       const affectedRowIds = affected.map((row) => row.id);
+      const affectedSet = new Set(affectedRowIds);
+      const snapshots = {};
       const timestamp = new Date().toISOString();
       const sequence =
         Math.max(
@@ -60,7 +62,7 @@ function applySpeakerCorrection(database, identifier, request) {
           ...rows.flatMap((row) => row.corrections || []).map((record) => record.sequence || 0)
         ) + 1;
       rows = rows.map((row) => {
-        if (!affectedRowIds.includes(row.id)) return row;
+        if (!affectedSet.has(row.id)) return row;
         const previous = snapshot(row);
         const next = {
           ...row,
@@ -73,33 +75,29 @@ function applySpeakerCorrection(database, identifier, request) {
           suggestedProfileId: profileId ?? undefined,
           uncertainty: undefined,
         };
+        snapshots[row.id] = { previous, next: snapshot(next) };
         const record = {
           id,
-          noteId,
           rowId: row.id,
-          scope,
-          actor: "user",
-          timestamp,
           sequence,
-          previous,
-          next: snapshot(next),
-          diarizationRunId: row.diarizationRunId,
-          clusterId: scope === "cluster" ? target.clusterId : undefined,
-          target: scope === "cluster" ? target : { rowIds: affectedRowIds },
-          affectedRowIds,
-          mappingChanged: !!key,
-          mappingBefore: before && {
-            displayName: before.display_name,
-            profileId: before.profile_id,
-          },
-          mappingAfter: after && { displayName: after.display_name, profileId: after.profile_id },
         };
         return { ...next, corrections: [...(row.corrections || []), record] };
       });
+      const event = {
+        id, noteId, rowId: affected[0].id, scope, actor: "user", timestamp, sequence,
+        diarizationRunId: affected[0].diarizationRunId,
+        clusterId: scope === "cluster" ? target.clusterId : undefined,
+        target: scope === "cluster" ? target : { rowIds: affectedRowIds },
+        affectedRowIds, snapshots, mappingChanged: !!key,
+        mappingBefore: before && { displayName: before.display_name, profileId: before.profile_id },
+        mappingAfter: after && { displayName: after.display_name, profileId: after.profile_id },
+      };
+      const anchor = rows.find((row) => row.id === affected[0].id);
+      anchor.corrections[anchor.corrections.length - 1] = event;
       // Keep every accepted event undoable. Reject a new one when this note's
       // local history reaches its size budget; never discard older events.
-      if (Buffer.byteLength(JSON.stringify(rows.flatMap((row) => row.corrections || [])), "utf8") > MAX_CORRECTION_BYTES)
-        return { success: false, error: "history_full" };
+      if (Buffer.byteLength(JSON.stringify(rows.map((row) => row.corrections || [])), "utf8") > MAX_CORRECTION_BYTES)
+        return { success: false, error: "history_full", recoverableBy: "undo_correction" };
       if (key) {
         const result = database.setSpeakerRunMapping(
           noteId,
@@ -109,18 +107,18 @@ function applySpeakerCorrection(database, identifier, request) {
           after.display_name
         );
         if (!result?.success) throw Error(result?.error || "mapping_failed");
-        committedMapping = { clusterId: target.clusterId, value: after };
+        committedMapping = { runId: target.runId, clusterId: target.clusterId, value: after };
       }
     } else {
       const records = rows
         .flatMap((row) => row.corrections || [])
         .filter((record) => record.id === id);
       if (!records.length) return { success: false, error: "correction_missing" };
-      const event = records[0];
+      const event = records.find((record) => record.snapshots) || records[0];
       const affected = new Set(event.affectedRowIds || records.map((record) => record.rowId));
       const sameTarget = (record) =>
         event.scope === "cluster" &&
-        record.scope === "cluster" &&
+        (record.scope === "cluster" || !!record.snapshots) &&
         record.clusterId === event.clusterId &&
         record.diarizationRunId === event.diarizationRunId;
       const laterOnTarget = rows.some((row) =>
@@ -142,16 +140,17 @@ function applySpeakerCorrection(database, identifier, request) {
       );
       const changedElsewhere = rows.some((row) => {
         const record = (row.corrections || []).find((item) => item.id === id);
-        return record && (row.speakerName !== record.next?.speakerName ||
-          !!row.speakerIsPlaceholder !== !!record.next?.speakerIsPlaceholder ||
-          !!row.speakerLocked !== !!record.next?.speakerLocked);
+        const next = event.snapshots?.[row.id]?.next || record?.next;
+        return record && (row.speakerName !== next?.speakerName ||
+          !!row.speakerIsPlaceholder !== !!next?.speakerIsPlaceholder ||
+          !!row.speakerLocked !== !!next?.speakerLocked);
       });
       if (laterOnTarget || laterOnRow || changedElsewhere)
         return { success: false, error: "later_change" };
       rows = rows.map((row) => {
         const record = (row.corrections || []).find((item) => item.id === id);
         if (!record) return row;
-        const next = restore(row, record.previous || {});
+        const next = restore(row, event.snapshots?.[row.id]?.previous || record.previous || {});
         const remaining = (row.corrections || []).filter((item) => item.id !== id);
         if (remaining.length) next.corrections = remaining;
         else delete next.corrections;
@@ -169,24 +168,15 @@ function applySpeakerCorrection(database, identifier, request) {
             )
           : database.removeSpeakerRunMapping(noteId, event.diarizationRunId, event.clusterId);
         if (!result?.success) throw Error(result?.error || "mapping_failed");
-        const latest = rows
-          .flatMap((row) => row.corrections || [])
-          .filter((record) => record.mappingChanged && record.clusterId === event.clusterId)
-          .sort((a, b) =>
-            a.sequence != null && b.sequence != null
-              ? b.sequence - a.sequence
-              : b.timestamp.localeCompare(a.timestamp)
-          )[0];
-        const active = latest
-          ? database.getSpeakerRunMapping(noteId, latest.diarizationRunId, event.clusterId)
-          : null;
-        committedMapping = { clusterId: event.clusterId, value: active || before || null };
+        committedMapping = { runId: event.diarizationRunId, clusterId: event.clusterId,
+          value: before || null };
       }
     }
     const transcript = writeTranscriptDocument(rows, readTranscriptDocument(note.transcript).unknownNumberHighWater);
     const result = database.updateNote(noteId, { transcript });
     if (!result?.success) throw Error(result?.error || "transcript_failed");
-    if (committedMapping && identifier) {
+    if (committedMapping && identifier &&
+      (identifier.activeRunId === undefined || identifier.activeRunId === committedMapping.runId)) {
       const { clusterId, value } = committedMapping;
       if (value?.display_name || value?.displayName)
         identifier.mapSpeaker(

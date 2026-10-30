@@ -3727,6 +3727,8 @@
       "restore": "Restore",
       "olderCorrections": "Show {{n}} older corrections",
       "historyFull": "This note’s correction history is full (16 MB). Older corrections remain available to undo.",
+      "notAssessed": "Not assessed",
+      "correctionHistoryUnresolved": "{{n}} correction history record(s) need review",
       "reviewStretches": "Review {{n}} stretches",
       "showAll": "Show all stretches",
       "reason": {

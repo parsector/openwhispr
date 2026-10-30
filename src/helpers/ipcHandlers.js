@@ -2891,7 +2891,10 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-update-note", async (event, id, updates, options) => {
-      const result = this.databaseManager.updateNote(id, updates, options);
+      const write = () => this.databaseManager.updateNote(id, updates, options);
+      const result = options?.reconcileTranscript || options?.migrateTranscript ||
+        Object.prototype.hasOwnProperty.call(options || {}, "expectedTranscript")
+        ? this.databaseManager.db.transaction(write)() : write();
       if (result?.success && result?.note) {
         setImmediate(() => broadcastToWindows("note-updated", result.note));
         this.notifyVectorChanges();
@@ -8804,6 +8807,7 @@ class IPCHandlers {
 
       meetingLiveSpeakerActive = false;
       meetingLiveSpeakerState = await liveSpeakerIdentifier.stop();
+      liveSpeakerIdentifier.activeRunId = null;
       return meetingLiveSpeakerState;
     };
 
@@ -8891,6 +8895,7 @@ class IPCHandlers {
         });
 
       if (started) {
+        liveSpeakerIdentifier.activeRunId = meetingConnectionOptions?.sessionId || null;
         meetingLiveSpeakerActive = true;
         meetingReclusterTimer = setInterval(async () => {
           if (!meetingLiveSpeakerActive || !win || win.isDestroyed()) return;
@@ -13135,9 +13140,9 @@ class IPCHandlers {
                   for (const seg of segments) {
                     if (seg.speaker === emb.speaker_id && !seg.speakerName) {
                       if (canAutoRelabelSpeaker(seg)) {
-                        applyConfirmedSpeaker(seg, {
-                          speakerName: profile.display_name,
-                          speakerIsPlaceholder: false,
+                        applySuggestedSpeaker(seg, {
+                          suggestedName: profile.display_name,
+                          suggestedProfileId: profile.id,
                         });
                         changed = true;
                       }

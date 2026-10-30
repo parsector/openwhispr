@@ -21,6 +21,7 @@ export function startRecordingForNote(note: NoteItem | null): Promise<boolean> {
     noteTitle: note?.title ?? null,
     folderId: note?.folder_id ?? null,
     seedSegments: parseSeedSegments(note?.transcript, note?.id),
+    seedTranscriptRaw: note?.transcript,
     seedUnknownHighWater: readTranscriptDocument(note?.transcript).unknownNumberHighWater,
     diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
     expectedCount: resolveExpectedSpeakerCount(note),

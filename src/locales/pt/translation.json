@@ -3230,6 +3230,8 @@
       "restore": "Restaurar",
       "olderCorrections": "Mostrar {{n}} correções anteriores",
       "historyFull": "O histórico de correções desta nota está cheio (16 MB). As correções anteriores ainda podem ser desfeitas.",
+      "notAssessed": "Não avaliado",
+      "correctionHistoryUnresolved": "{{n}} registros do histórico de correções precisam de revisão",
       "reviewStretches": "Rever {{n}} trechos",
       "showAll": "Mostrar todos os trechos",
       "reason": {

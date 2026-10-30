@@ -65,7 +65,7 @@ test('different ids never acquire a correction from identical text or a nearby c
   assert.equal(mergedIncoming.find(s => s.id === 'incoming').speakerName, 'Alex');
 });
 
-test('counter id migration rewrites matching references and drops unresolved ones', async () => {
+test('counter id migration rewrites matching references and quarantines unresolved ones', async () => {
   const { parseTranscriptSegmentsWithMigration } = await import('../../src/utils/parseTranscriptSegments.ts');
   const { serializeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
   const correction = { id: 'c1', rowId: 'seg-1', scope: 'row', actor: 'user', timestamp: '2026-01-01', previous: {}, next: { speakerName: 'Alex' } };
@@ -77,10 +77,33 @@ test('counter id migration rewrites matching references and drops unresolved one
   assert.equal(first.segments[0].corrections.length, 1);
   assert.equal(first.segments[0].corrections[0].rowId, first.segments[0].id);
   assert.equal(first.segments[0].speakerName, 'Alex');
-  assert.equal(first.droppedCorrections, 1);
+  assert.equal(first.quarantinedCorrections, 1);
+  assert.equal(first.segments[0].quarantinedCorrections[0].rowId, 'missing');
   const second = parseTranscriptSegmentsWithMigration(serializeTranscriptSegments(first.segments), 42);
   assert.deepEqual(second.segments.map(s => [s.id, s.corrections?.[0]?.rowId]), first.segments.map(s => [s.id, s.corrections?.[0]?.rowId]));
-  assert.equal(second.droppedCorrections, 0);
+  assert.equal(second.quarantinedCorrections, 0);
+  assert.equal(second.segments[0].quarantinedCorrections[0].rowId, 'missing');
+});
+
+test('migration rewrites every selection reference and keeps ambiguous evidence for review', async () => {
+  const { parseTranscriptSegmentsWithMigration } = await import('../../src/utils/parseTranscriptSegments.ts');
+  const { serializeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const correction = { id: 'c1', rowId: 'seg-1', scope: 'selected', actor: 'user', timestamp: '2026-01-01',
+    previous: {}, next: {}, affectedRowIds: ['seg-1', 'seg-2'], target: { rowIds: ['seg-1', 'seg-2'] },
+    snapshots: { 'seg-1': { previous: {}, next: {} }, 'seg-2': { previous: {}, next: {} } } };
+  const raw = JSON.stringify([
+    { id: 'seg-1', text: 'one', source: 'system', corrections: [correction,
+      { ...correction, id: 'ambiguous', affectedRowIds: ['missing'] }] },
+    { id: 'seg-2', text: 'two', source: 'system' },
+  ]);
+  const first = parseTranscriptSegmentsWithMigration(raw, 42);
+  const [a, b] = first.segments;
+  assert.deepEqual(a.corrections[0].affectedRowIds, [a.id, b.id]);
+  assert.deepEqual(a.corrections[0].target.rowIds, [a.id, b.id]);
+  assert.deepEqual(Object.keys(a.corrections[0].snapshots), [a.id, b.id]);
+  assert.equal(a.quarantinedCorrections[0].id, 'ambiguous');
+  const reloaded = parseTranscriptSegmentsWithMigration(serializeTranscriptSegments(first.segments), 42);
+  assert.equal(reloaded.segments[0].quarantinedCorrections[0].id, 'ambiguous');
 });
 
 test('cluster correction records carry note, run, and cluster identity', async () => {

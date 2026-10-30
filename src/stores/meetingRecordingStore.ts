@@ -63,6 +63,7 @@ export interface TranscriptSegment {
   uncertainty?: { reason: string; candidates?: [string, string] };
   diarizationRunId?: string;
   corrections?: import("../utils/transcriptCorrections").TranscriptCorrection[];
+  quarantinedCorrections?: import("../utils/transcriptCorrections").TranscriptCorrection[];
   text: string;
   source: "mic" | "system";
   timestamp?: number;
@@ -433,6 +434,7 @@ const meetingRecordingStopBarrier = createMeetingRecordingStopBarrier();
 let isPrepared = false;
 let segmentsRefValue: TranscriptSegment[] = [];
 let sessionUnknownHighWater = 0;
+let sessionExpectedTranscript: string | null | undefined;
 // A resumed note seeds the recording with its earlier transcript, but that
 // session's diarization covers only its own audio, so its result must not be
 // matched against the seeded rows. Keyed by diarization session at stop.
@@ -803,6 +805,7 @@ export interface StartRecordingArgs {
   noteTitle: string | null;
   folderId: number | null;
   seedSegments?: TranscriptSegment[];
+  seedTranscriptRaw?: string | null;
   seedUnknownHighWater?: number;
   diarizationEnabled?: boolean | null;
   expectedCount?: number | null;
@@ -840,6 +843,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
     logger.info("Meeting transcription starting...", {}, "meeting");
     const seed = args.seedSegments ?? [];
+    sessionExpectedTranscript = args.seedTranscriptRaw;
     sessionUnknownHighWater = Math.max(args.seedUnknownHighWater || 0,
       ...seed.map((row) => row.unknownNumberHighWater || row.unknownNumber || 0), 0);
     const locks = new Map<string, string>();
@@ -1625,18 +1629,8 @@ export async function persistLiveTranscript(): Promise<void> {
   if (!isRecordingFlag || recordingNoteDeleted || recordingNoteId == null) return;
   if (segments.length === 0) return;
   try {
-    // Posted before the first await: during beforeunload nothing after it is
-    // guaranteed to run.
-    const result = await window.electronAPI?.updateNote?.(recordingNoteId, {
-      transcript: serializeTranscriptSegments(segments, sessionUnknownHighWater),
-    });
-    if (result && !result.success) {
-      logger.error(
-        "Failed to persist live meeting transcript",
-        { error: result.error, noteId: recordingNoteId },
-        "meeting"
-      );
-    }
+    await persistAutomaticTranscript(recordingNoteId,
+      serializeTranscriptSegments(segments, sessionUnknownHighWater));
   } catch (err) {
     logger.error(
       "Failed to persist live meeting transcript",
@@ -1644,6 +1638,23 @@ export async function persistLiveTranscript(): Promise<void> {
       "meeting"
     );
   }
+}
+
+async function persistAutomaticTranscript(noteId: number, transcript: string) {
+  // Post before the first await so beforeunload still flushes the recording.
+  const options = sessionExpectedTranscript === undefined
+    ? { reconcileTranscript: true }
+    : { expectedTranscript: sessionExpectedTranscript, reconcileTranscript: true };
+  let result = await window.electronAPI?.updateNote?.(noteId, { transcript }, options);
+  if (result?.error === "transcript_changed") {
+    const current = await window.electronAPI?.getNote?.(noteId);
+    if (!current || current.deleted_at) throw Error("transcript_note_missing");
+    result = await window.electronAPI?.updateNote?.(noteId, { transcript },
+      { expectedTranscript: current.transcript, reconcileTranscript: true });
+  }
+  if (!result?.success) throw Error(result?.error || "transcript_save_failed");
+  sessionExpectedTranscript = result.note?.transcript ?? transcript;
+  return result;
 }
 
 export interface StopRecordingResult {
@@ -1704,7 +1715,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     const persistTranscript = async (transcript: string) => {
       if (recordingNoteId == null) return;
       try {
-        await window.electronAPI?.updateNote?.(recordingNoteId, { transcript });
+        await persistAutomaticTranscript(recordingNoteId, transcript);
       } catch (err) {
         logger.error(
           "Failed to persist final meeting transcript",
@@ -1958,7 +1969,7 @@ if (typeof window !== "undefined") {
         recordingNoteId,
         targetNoteId,
       });
-      const { segments: enriched, removedCount } = mergeSessionDiarization({
+      let { segments: enriched, removedCount } = mergeSessionDiarization({
         existing,
         unknownNumberHighWater: readTranscriptDocument(persisted.transcript).unknownNumberHighWater,
         seedLength,
@@ -1979,9 +1990,31 @@ if (typeof window !== "undefined") {
         // Awaited so the next queued completion's getNote is guaranteed to
         // read this write — without it the ordering depends on db-update-note
         // staying synchronous ahead of its first await.
-        await window.electronAPI?.updateNote?.(targetNoteId, {
-          transcript: serializeTranscriptSegments(enriched, readTranscriptDocument(persisted.transcript).unknownNumberHighWater),
-        });
+        let baseTranscript = persisted.transcript;
+        let saved = false;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          const result = await window.electronAPI?.updateNote?.(targetNoteId, {
+            transcript: serializeTranscriptSegments(enriched, readTranscriptDocument(baseTranscript).unknownNumberHighWater),
+          }, { expectedTranscript: baseTranscript, reconcileTranscript: true });
+          if (result?.success) {
+            if (result.note?.transcript) enriched = parseSeedSegments(result.note.transcript, targetNoteId);
+            saved = true;
+            break;
+          }
+          if (result?.error !== "transcript_changed") throw Error(result?.error || "finalisation_save_failed");
+          const latest = await window.electronAPI?.getNote?.(targetNoteId);
+          if (!latest || latest.deleted_at) throw Error("finalisation_note_missing");
+          baseTranscript = latest.transcript;
+          const retried = mergeSessionDiarization({
+            existing: parseSeedSegments(baseTranscript || "", targetNoteId),
+            unknownNumberHighWater: readTranscriptDocument(baseTranscript).unknownNumberHighWater,
+            seedLength, fallbackTranscript: seed?.fallbackTranscript,
+            segments: data.segments, removedSegments: data.removedSegments,
+          });
+          enriched = retried.segments;
+          removedCount = retried.removedCount;
+        }
+        if (!saved) throw Error("transcript_changed");
       } catch (error) {
         publish([]);
         finalize(targetNoteId, false);

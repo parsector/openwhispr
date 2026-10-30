@@ -3575,6 +3575,8 @@
       "restore": "Wiederherstellen",
       "olderCorrections": "{{n}} ältere Korrekturen anzeigen",
       "historyFull": "Der Korrekturverlauf dieser Notiz ist voll (16 MB). Ältere Korrekturen können weiterhin rückgängig gemacht werden.",
+      "notAssessed": "Nicht bewertet",
+      "correctionHistoryUnresolved": "{{n}} Korrekturverlaufseinträge müssen geprüft werden",
       "reviewStretches": "{{n}} Abschnitte prüfen",
       "showAll": "Alle Abschnitte anzeigen",
       "reason": {

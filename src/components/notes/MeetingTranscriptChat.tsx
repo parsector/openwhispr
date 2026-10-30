@@ -862,7 +862,11 @@ const SegmentRow = memo(function SegmentRow({
       style={isNewest ? { animation: "agent-message-in 200ms ease-out both" } : undefined}
     >
       {labelElement}
-      {(segment.uncertainty || latestCorrection(segment)) && <div className="flex items-center gap-2 px-1 pb-0.5 text-[11px] text-muted-foreground">
+      {(segment.uncertainty || latestCorrection(segment) || segment.quarantinedCorrections?.length ||
+        (!segment.speakerStatus && !segment.speakerLocked && !segment.speakerName)) && <div className="flex items-center gap-2 px-1 pb-0.5 text-[11px] text-muted-foreground">
+        {!segment.speakerStatus && !segment.speakerLocked && !segment.speakerName &&
+          <span>{t("notes.speaker.notAssessed")}</span>}
+        {!!segment.quarantinedCorrections?.length && <span>{t("notes.speaker.correctionHistoryUnresolved", { n: segment.quarantinedCorrections.length })}</span>}
         {segment.uncertainty && <span>{segment.uncertainty.reason === "close_match" && segment.uncertainty.candidates
           ? t("notes.speaker.reason.closeMatch", { first: segment.uncertainty.candidates[0], second: segment.uncertainty.candidates[1] })
           : t(`notes.speaker.reason.${segment.uncertainty.reason}`)}</span>}
@@ -991,12 +995,13 @@ export function MeetingTranscriptChat({
     if (noteId != null && typeof window !== "undefined") void window.electronAPI?.commitmentsOpenTodos?.({ kind: "note", value: String(noteId) });
   }, [noteId]);
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
-  const reviewCount = segments.filter((segment) => segment.uncertainty).length;
+  const reviewCount = segments.filter((segment) =>
+    segment.uncertainty || segment.quarantinedCorrections?.length).length;
   const shownIndexes = useMemo(() => {
     if (!reviewOnly) return segments.map((_, index) => index);
     const indexes = new Set<number>();
     segments.forEach((segment, index) => {
-      if (!segment.uncertainty) return;
+      if (!segment.uncertainty && !segment.quarantinedCorrections?.length) return;
       if (index > 0) indexes.add(index - 1);
       indexes.add(index);
       if (index + 1 < segments.length) indexes.add(index + 1);

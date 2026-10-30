@@ -11,7 +11,8 @@ function resolveSpeaker(seg, speakerMappings) {
       : i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
   }
   if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
-  if (seg.speaker && speakerMappings[seg.speaker]) return speakerMappings[seg.speaker];
+  if (seg.speaker && !seg.speakerIsPlaceholder && speakerMappings[seg.speaker])
+    return speakerMappings[seg.speaker];
   if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
   if (typeof seg.speaker === "string" && !seg.speakerIsPlaceholder && !seg.speaker.startsWith("speaker_"))
     return seg.speaker;

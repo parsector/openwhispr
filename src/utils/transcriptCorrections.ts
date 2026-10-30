@@ -29,6 +29,7 @@ export interface TranscriptCorrection {
   affectedRowIds?: string[];
   mappingBefore?: { displayName: string; profileId: number | null } | null;
   mappingAfter?: { displayName: string | null; profileId: number | null } | null;
+  snapshots?: Record<string, { previous: SpeakerValue; next: SpeakerValue }>;
 }
 const value = (row: TranscriptSegment): SpeakerValue => ({
   speakerName: row.speakerName,

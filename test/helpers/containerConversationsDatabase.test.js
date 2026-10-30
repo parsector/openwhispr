@@ -1038,3 +1038,31 @@ test("speaker correction rolls back a run mapping when transcript persistence fa
   assert.deepEqual(JSON.parse(db.getNote(note.id).transcript), initial);
   assert.equal(db.getSpeakerRunMapping(note.id, "run-1", "speaker_0"), null);
 });
+
+test("stale finalisation after a correction fails, then preserves the saved Unknown on retry", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  const { readTranscriptDocument, writeTranscriptDocument } = require("../../src/helpers/transcriptDocument");
+  const initial = [{ id: "row-1", text: "hello", source: "system", speaker: "speaker_0", diarizationRunId: "run-1" }];
+  const note = db.saveNote("Meeting", "", "meeting", null, null, null, null, JSON.stringify(initial)).note;
+  const staleTranscript = note.transcript;
+  assert.equal(applySpeakerCorrection(db, null, {
+    type: "apply", noteId: note.id, id: "correction-1", scope: "row",
+    rowIds: ["row-1"], name: null, rows: [],
+  }).success, true);
+  const proposed = writeTranscriptDocument([{ ...initial[0], speaker: "speaker_7", speakerName: "Alex" }]);
+  const stale = db.db.transaction(() => db.updateNote(note.id, { transcript: proposed },
+    { expectedTranscript: staleTranscript, reconcileTranscript: true }))();
+  assert.equal(stale.success, false);
+  assert.equal(stale.error, "transcript_changed");
+  const current = db.getNote(note.id).transcript;
+  const retry = db.db.transaction(() => db.updateNote(note.id, { transcript: proposed },
+    { expectedTranscript: current, reconcileTranscript: true }))();
+  assert.equal(retry.success, true);
+  const [saved] = readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.equal(saved.speakerName, undefined);
+  assert.equal(saved.speakerIsPlaceholder, true);
+  assert.equal(saved.speakerLockSource, "user");
+  assert.equal(saved.corrections[0].id, "correction-1");
+});

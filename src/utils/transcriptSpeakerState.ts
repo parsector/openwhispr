@@ -109,8 +109,15 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
 
   for (const field of SPEAKER_STATE_FIELDS) {
     if (mergedFields[field] === undefined && existingFields[field] !== undefined) {
+      if ((field === "speakerName" || field === "speakerStatus") &&
+        incoming.speakerIsPlaceholder && !isTranscriptSpeakerLocked(existing)) continue;
       mergedFields[field] = existingFields[field];
     }
+  }
+
+  if (incoming.speakerIsPlaceholder && !isTranscriptSpeakerLocked(existing)) {
+    merged.speakerName = undefined;
+    if (incoming.speakerStatus !== "confirmed") merged.speakerStatus = "provisional";
   }
 
   if (isTranscriptSpeakerLocked(existing)) {
@@ -234,6 +241,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       uncertainty: segment.uncertainty,
       diarizationRunId: segment.diarizationRunId,
       corrections: segment.corrections,
+      quarantinedCorrections: segment.quarantinedCorrections,
       text: segment.text,
       source: segment.source,
       timestamp: segment.timestamp,
