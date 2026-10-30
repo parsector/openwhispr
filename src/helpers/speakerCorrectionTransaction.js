@@ -11,7 +11,8 @@ const FIELDS = [
   "uncertainty",
 ];
 const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
-const MAX_CORRECTION_BYTES = 16 * 1024 * 1024;
+const { readSpeakerActionLog, appendAction, removeNewestAction, MAX_ACTION_LOG_BYTES } = require('./speakerActionLog');
+const MAX_CORRECTION_BYTES = MAX_ACTION_LOG_BYTES;
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
 const snapshot = (row) =>
   Object.fromEntries(FIELDS.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
@@ -30,6 +31,8 @@ function applySpeakerCorrection(database, identifier, request) {
   const run = database.db.transaction(() => {
     const note = database.getNote(noteId);
     if (!note) return { success: false, error: "note_missing" };
+    const log = readSpeakerActionLog(note);
+    let nextLog = log;
     const saved = parse(note.transcript, note.client_note_id || noteId);
     const byId = new Map(saved.map((row) => [row.id, row]));
     // Live rows may not have reached the periodic save yet. They are included
@@ -58,11 +61,7 @@ function applySpeakerCorrection(database, identifier, request) {
       const affectedSet = new Set(affectedRowIds);
       const snapshots = {};
       const timestamp = new Date().toISOString();
-      const sequence =
-        Math.max(
-          0,
-          ...rows.flatMap((row) => row.corrections || []).map((record) => record.sequence || 0)
-        ) + 1;
+      const sequence = log.nextSequence;
       rows = rows.map((row) => {
         if (!affectedSet.has(row.id)) return row;
         const previous = snapshot(row);
@@ -97,9 +96,8 @@ function applySpeakerCorrection(database, identifier, request) {
       };
       const anchor = rows.find((row) => row.id === affected[0].id);
       anchor.corrections[anchor.corrections.length - 1] = event;
-      // Keep every accepted event undoable. Reject a new one when this note's
-      // local history reaches its size budget; never discard older events.
-      if (Buffer.byteLength(JSON.stringify(rows.map((row) => row.corrections || [])), "utf8") > MAX_CORRECTION_BYTES)
+      nextLog = appendAction(log, { kind: 'correction', id, event });
+      if (!nextLog)
         return { success: false, error: "history_full", recoverableBy: "undo_correction" };
       if (key) {
         const result = database.setSpeakerRunMapping(
@@ -113,43 +111,13 @@ function applySpeakerCorrection(database, identifier, request) {
         committedMapping = { runId: target.runId, clusterId: target.clusterId, value: after };
       }
     } else {
-      const records = rows
-        .flatMap((row) => row.corrections || [])
-        .filter((record) => record.id === id);
-      if (!records.length) return { success: false, error: "correction_missing" };
-      const event = records.find((record) => record.snapshots) || records[0];
-      const affected = new Set(event.affectedRowIds || records.map((record) => record.rowId));
-      const sameTarget = (record) =>
-        event.scope === "cluster" &&
-        (record.scope === "cluster" || !!record.snapshots) &&
-        record.clusterId === event.clusterId &&
-        record.diarizationRunId === event.diarizationRunId;
-      const laterOnTarget = rows.some((row) =>
-        (row.corrections || []).some(
-          (record) =>
-            record.id !== id &&
-            sameTarget(record) &&
-            (record.sequence != null && event.sequence != null
-              ? record.sequence > event.sequence
-              : record.timestamp >= event.timestamp)
-        )
-      );
-      const laterOnRow = rows.some(
-        (row) =>
-          affected.has(row.id) &&
-          (row.corrections || []).some(
-            (record, index, list) => record.id === id && index < list.length - 1
-          )
-      );
-      const changedElsewhere = rows.some((row) => {
-        const record = (row.corrections || []).find((item) => item.id === id);
-        const next = event.snapshots?.[row.id]?.next || record?.next;
-        return record && (row.speakerName !== next?.speakerName ||
-          !!row.speakerIsPlaceholder !== !!next?.speakerIsPlaceholder ||
-          !!row.speakerLocked !== !!next?.speakerLocked);
-      });
-      if (laterOnTarget || laterOnRow || changedElsewhere)
-        return { success: false, error: "later_change" };
+      const action = log.actions.at(-1);
+      if (!log.actions.some((entry) => entry.kind === 'correction' && entry.id === id))
+        return { success: false, error: 'correction_missing' };
+      if (action.kind !== 'correction' || action.id !== id)
+        return { success: false, error: 'later_change' };
+      const event = action.event;
+      nextLog = removeNewestAction(log);
       rows = rows.map((row) => {
         const record = (row.corrections || []).find((item) => item.id === id);
         if (!record) return row;
@@ -177,7 +145,8 @@ function applySpeakerCorrection(database, identifier, request) {
       }
     }
     const transcript = writeTranscriptDocument(rows, readTranscriptDocument(note.transcript).unknownNumberHighWater);
-    const result = database.updateNote(noteId, { transcript });
+    const result = database.updateNote(noteId, { transcript,
+      speaker_action_log: JSON.stringify(nextLog), speaker_label_undo: null });
     if (!result?.success) throw Error(result?.error || "transcript_failed");
     if (committedMapping && identifier &&
       (identifier.activeRunId === undefined || identifier.activeRunId === committedMapping.runId)) {

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+const { applySpeakerCorrection, MAX_CORRECTION_BYTES } = require("../../src/helpers/speakerCorrectionTransaction");
 
 const row = (id, cluster = "speaker_0", run = "run1") => ({
   id,
@@ -31,13 +31,15 @@ const fixture = () => {
     db: {
       transaction(fn) {
         return (...args) => {
-          const snapshot = { transcript: note.transcript, mappings: new Map(mappings) };
+          const snapshot = { transcript: note.transcript, speaker_action_log: note.speaker_action_log,
+            mappings: new Map(mappings) };
           try {
             const result = fn(...args);
             if (fail) throw Error("injected persistence failure");
             return result;
           } catch (error) {
             note.transcript = snapshot.transcript;
+            note.speaker_action_log = snapshot.speaker_action_log;
             mappings.clear();
             for (const [k, v] of snapshot.mappings) mappings.set(k, v);
             throw error;
@@ -57,7 +59,7 @@ const fixture = () => {
       return { success: true };
     },
     updateNote(_id, update) {
-      note.transcript = update.transcript;
+      Object.assign(note, update);
       return { success: true, note };
     },
   };
@@ -123,14 +125,16 @@ test("map undo and another identification cannot revive name or profile", () => 
   assert.equal(f.identifier.transientProfileIds.size, 0);
   assert.equal(rows(f)[0].speakerName, undefined);
 });
-test("older correction on different target can be undone", () => {
+test("older correction on different target waits for newest action", () => {
   const f = fixture();
   applySpeakerCorrection(f.db, f.identifier, correction("c1", "a", "Alex"));
   applySpeakerCorrection(f.db, f.identifier, correction("c2", "b", "Sam", "speaker_1"));
   const result = applySpeakerCorrection(f.db, f.identifier, { type: "undo", noteId: 1, id: "c1" });
-  assert.equal(result.success, true);
+  assert.equal(result.error, 'later_change');
+  assert.equal(applySpeakerCorrection(f.db, f.identifier, { type: 'undo', noteId: 1, id: 'c2' }).success, true);
+  assert.equal(applySpeakerCorrection(f.db, f.identifier, { type: 'undo', noteId: 1, id: 'c1' }).success, true);
   assert.equal(rows(f)[0].speakerName, undefined);
-  assert.equal(rows(f)[1].speakerName, "Sam");
+  assert.equal(rows(f)[1].speakerName, undefined);
 });
 test("older correction on same cluster target is refused", () => {
   const f = fixture();
@@ -146,10 +150,11 @@ test("cluster undo restores only its run mapping", () => {
   f.note.transcript = JSON.stringify([...rows(f), row("other", "speaker_0", "run2")]);
   f.identifier.activeRunId = "run2";
   applySpeakerCorrection(f.db, f.identifier, correction("c2", "other", "Sam", "speaker_0", "run2"));
+  assert.equal(applySpeakerCorrection(f.db, f.identifier, { type: "undo", noteId: 1, id: "c1" }).error, 'later_change');
+  applySpeakerCorrection(f.db, f.identifier, { type: "undo", noteId: 1, id: "c2" });
   applySpeakerCorrection(f.db, f.identifier, { type: "undo", noteId: 1, id: "c1" });
-  assert.equal(rows(f).find((r) => r.id === "other").speakerName, "Sam");
-  assert.equal(f.mappings.size, 1);
-  assert.equal(f.identifier.transientDisplayNames.get("speaker_0"), "Sam");
+  assert.equal(rows(f).find((r) => r.id === "other").speakerName, undefined);
+  assert.equal(f.mappings.size, 0);
 });
 
 test("same-target undo uses event order when the clock moves backward", () => {
@@ -175,9 +180,13 @@ test('an early correction survives 55 later corrections to other rows', () => {
   }
   assert.equal(rows(f)[0].corrections[0].id, 'correction-0');
   assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: 'undo', noteId: 1, id: 'correction-0' }).error, 'later_change');
+  for (let i = 55; i > 0; i--) assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: 'undo', noteId: 1, id: `correction-${i}` }).success, true);
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
     { type: 'undo', noteId: 1, id: 'correction-0' }).success, true);
   assert.equal(rows(f)[0].speakerName, undefined);
-  assert.equal(rows(f)[55].speakerName, 'Person 55');
+  assert.equal(rows(f)[55].speakerName, undefined);
 });
 
 test('a cloud label change preserves the local event and label without conflict', () => {
@@ -223,6 +232,18 @@ test('owner can correct a 500-row selection without filling first-event history'
   });
   assert.equal(result.success, true, result.error);
   assert.equal(rows(f).filter((r) => r.speakerName === 'Alex').length, 500);
+});
+
+test('an oversized action rejects without changing the transcript or action log', () => {
+  const f = fixture();
+  const before = f.note.transcript;
+  const result = applySpeakerCorrection(f.db, f.identifier, {
+    type: 'apply', noteId: 1, id: 'huge', scope: 'row', rowIds: ['a'],
+    name: 'A'.repeat(MAX_CORRECTION_BYTES + 1), rows: [],
+  });
+  assert.equal(result.error, 'history_full');
+  assert.equal(f.note.transcript, before);
+  assert.equal(f.note.speaker_action_log, undefined);
 });
 
 test('undoing an old run never replaces the active run cache with its historical name', () => {

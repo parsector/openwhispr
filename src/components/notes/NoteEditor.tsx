@@ -484,6 +484,13 @@ export default function NoteEditor({
   const displaySegments = diarizedSegments?.length ? diarizedSegments : storedTranscript.segments;
   const reviewCount = displaySegments.filter((segment) =>
     segment.uncertainty || segment.quarantinedCorrections?.length).length;
+  const canUndoCloudLabels = (() => {
+    if (!note.speaker_action_log) return !!note.speaker_label_undo;
+    try {
+      const actions = JSON.parse(note.speaker_action_log).actions;
+      return Array.isArray(actions) && actions.at(-1)?.kind === "adoption";
+    } catch { return false; }
+  })();
 
   useEffect(() => {
     if (storedTranscript.migrated) {
@@ -1392,7 +1399,7 @@ export default function NoteEditor({
                   className="rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5">
                   {t("notes.speaker.useCloudLabels")}
                 </button>}
-              {viewMode === "transcript" && !isRecording && note.speaker_label_undo &&
+              {viewMode === "transcript" && !isRecording && canUndoCloudLabels &&
                 <button type="button" onClick={() => void handleCloudLabels(true)}
                   className="rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5">
                   {t("notes.speaker.undoCloudLabels")}

@@ -468,6 +468,7 @@ export interface NoteItem {
   speaker_mapping_labels?: Record<string, string>;
   cloud_transcript?: string | null;
   speaker_label_undo?: string | null;
+  speaker_action_log?: string | null;
   folder_sync_operation?: "set" | null;
   participants_sync_operation?: "set" | null;
   calendar_event_id: string | null;

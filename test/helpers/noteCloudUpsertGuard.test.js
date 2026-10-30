@@ -617,6 +617,8 @@ test('cloud-label Undo refuses to erase a later local mapping', (t) => {
   db.setSpeakerMapping(note.id, 'speaker_0', null, 'Jordan');
   assert.equal(db.takeCloudSpeakerLabels(note.id, true).error, 'later_change');
   assert.equal(db.getSpeakerMappings(note.id)[0].display_name, 'Jordan');
+  assert.equal(db.undoSpeakerMapping(note.id).success, true);
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
 });
 
 test('two cloud label adoptions undo in order while text edits and original correction survive', (t) => {
@@ -646,6 +648,107 @@ test('two cloud label adoptions undo in order while text edits and original corr
   assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id,
     id: 'alex-correction' }).success, true);
   assert.equal(name(), undefined);
+});
+
+test('adoption then correction undo in order restores original label and keeps edited text', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'row-1', text: 'Original', source: 'system', speakerName: 'Alex' }]) });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+    { id: 'row-1', text: 'Original', source: 'system', speakerName: 'Sam' },
+  ]) }, null);
+  assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
+  assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id: 'jordan',
+    scope: 'row', rowIds: ['row-1'], name: 'Jordan', rows: [] }).success, true);
+  const log = JSON.parse(db.getNote(note.id).speaker_action_log);
+  assert.deepEqual(log.actions.map((action) => [action.sequence, action.kind]),
+    [[1, 'adoption'], [2, 'correction']]);
+  assert.equal(log.nextSequence, 3);
+  const edited = readTranscriptDocument(db.getNote(note.id).transcript);
+  edited.rows[0].text = 'Edited later';
+  db.updateNote(note.id, { transcript: JSON.stringify(edited) });
+  const jordanUndo = applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id, id: 'jordan' });
+  assert.equal(jordanUndo.success, true, jordanUndo.error);
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
+  const [restored] = readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.equal(restored.speakerName, 'Alex');
+  assert.equal(restored.text, 'Edited later');
+});
+
+test('an older correction waits for later adoption and becomes undoable afterward', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Alex' }]) });
+  assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id: 'sam',
+    scope: 'row', rowIds: ['row-1'], name: 'Sam', rows: [] }).success, true);
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+    { id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Sam' },
+  ]) }, null);
+  assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
+  assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id, id: 'sam' }).error, 'later_change');
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
+  assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName, 'Sam');
+  assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id, id: 'sam' }).success, true);
+  assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName, 'Alex');
+});
+
+test('separate stored histories migrate into one ordered undo log', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Alex' }]) });
+  assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id: 'sam',
+    scope: 'row', rowIds: ['row-1'], name: 'Sam', rows: [] }).success, true);
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+    { id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Jordan' },
+  ]) }, null);
+  assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
+  const stored = JSON.parse(db.getNote(note.id).speaker_action_log);
+  const legacyAdoption = stored.actions.find((action) => action.kind === 'adoption').record;
+  db.db.prepare('UPDATE notes SET speaker_action_log = NULL, speaker_label_undo = ? WHERE id = ?')
+    .run(JSON.stringify([legacyAdoption]), note.id);
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
+  const migrated = JSON.parse(db.getNote(note.id).speaker_action_log);
+  assert.equal(migrated.version, 1);
+  assert.equal(migrated.actions.length, 1);
+  assert.equal(migrated.actions[0].id, 'sam');
+  assert.equal(db.getNote(note.id).speaker_label_undo, null);
+  assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id, id: 'sam' }).success, true);
+  assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName, 'Alex');
+});
+
+test('legacy adoption before correction keeps its original order during migration', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Alex' }]) });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+    { id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Sam' },
+  ]) }, null);
+  assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
+  assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id: 'jordan',
+    scope: 'row', rowIds: ['row-1'], name: 'Jordan', rows: [] }).success, true);
+  const log = JSON.parse(db.getNote(note.id).speaker_action_log);
+  db.db.prepare('UPDATE notes SET speaker_action_log = NULL, speaker_label_undo = ? WHERE id = ?')
+    .run(JSON.stringify([log.actions[0].record]), note.id);
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).error, 'later_change');
+  assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id, id: 'jordan' }).success, true);
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
+  assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName, 'Alex');
 });
 
 test('adopted cloud name rejects a stale automatic diarization completion', (t) => {
