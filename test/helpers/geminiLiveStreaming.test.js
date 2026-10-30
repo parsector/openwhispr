@@ -42,6 +42,11 @@ async function withServer(run, script) {
 
 const audioFrames = (received) => received.filter((message) => message.realtimeInput?.audio);
 
+async function waitUntil(predicate) {
+  for (let attempt = 0; attempt < 100 && !predicate(); attempt++)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+}
+
 test("url: the two Live methods are auth-disjoint and pinned per mode", () => {
   assert.equal(
     buildGeminiLiveUrl({ mode: "byok", token: "AI-KEY" }),
@@ -344,7 +349,7 @@ test("a turn the server closed before the hotkey release answers the stop immedi
     async ({ streaming, received }) => {
       await streaming.connect({ token: "t", mode: "byok" });
       streaming.sendAudio(FRAME);
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await waitUntil(() => streaming._turnEnded);
       // Trailing silence let the server finalize on its own; nothing more will come.
       assert.equal(streaming._turnEnded, true);
       // Room-noise frames keep arriving until the hotkey is released; they are not speech.
@@ -354,7 +359,7 @@ test("a turn the server closed before the hotkey release answers the stop immedi
       const startedAt = Date.now();
       assert.deepEqual(await streaming.disconnect(true), { text: "already final" });
       assert.ok(Date.now() - startedAt < 500, "must not wait out the budget for a second turn end");
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await waitUntil(() => received.some((message) => message.realtimeInput?.audioStreamEnd));
       assert.equal(
         received.filter((message) => message.realtimeInput?.audioStreamEnd).length,
         1,

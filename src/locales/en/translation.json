@@ -5291,7 +5291,7 @@
     "search": "Search people",
     "sort": "Sort people",
     "sortUsage": "Most used",
-    "sortHeard": "Last heard",
+    "sortHeard": "Last seen",
     "emptyTitle": "No people yet",
     "emptyBody": "People appear when you name a speaker on a transcript chip or when a meeting has known attendees. Open a transcript and use its speaker chip to name someone.",
     "noMatches": "No people match your search.",
@@ -5356,6 +5356,9 @@
       "person": "Person’s rows"
     },
     "resetPreview": "Remove the voice profile and {{samples}} samples. Names in {{notes}} notes and {{segments}} segments stay as they are.",
-    "doneReset": "Voice reset for {{name}}. Names in notes were kept."
+    "doneReset": "Voice reset for {{name}}. Names in notes were kept.",
+    "meetingCount": "Meetings: {{count}}",
+    "lastSeen": "Last seen {{date}}",
+    "attendeeDeleteReappears": "They will disappear from People and can reappear if they attend a new meeting."
   }
 }

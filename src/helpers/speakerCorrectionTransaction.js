@@ -52,9 +52,18 @@ function applySpeakerCorrection(database, identifier, request) {
           : ids.has(row.id)
       ));
       if (!affected.length) return { success: false, error: "target_missing" };
-      const createdProfile = name && profileId == null && database.createNamedSpeakerProfile
+      // Naming is the only step that links an attendee identity to transcript rows.
+      // Register this note first so a speaker can reuse its attendee-only person.
+      const canPersistIdentity = name && profileId == null && database.createNamedSpeakerProfile;
+      if (canPersistIdentity && note.participants) require('./peopleActions').registerAttendees(database, noteId);
+      const normalized = value => String(value || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+      const profiles = canPersistIdentity
+        ? database.db.prepare('SELECT id, display_name, email FROM speaker_profiles ORDER BY id').all() : [];
+      const existingProfile = profiles.find(p => email && normalized(p.email) === normalized(email))
+        || profiles.find(p => normalized(p.display_name) === normalized(name));
+      const createdProfile = canPersistIdentity && !existingProfile
         ? database.createNamedSpeakerProfile(name, email) : null;
-      const chosenProfileId = profileId ?? createdProfile?.id ?? null;
+      const chosenProfileId = profileId ?? existingProfile?.id ?? createdProfile?.id ?? null;
       const key = scope === "cluster" ? mappingKey(target.runId, target.clusterId) : null;
       const before = key
         ? database.getSpeakerRunMapping(noteId, target.runId, target.clusterId)

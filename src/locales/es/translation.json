@@ -5291,7 +5291,7 @@
     "search": "Buscar personas",
     "sort": "Ordenar personas",
     "sortUsage": "Más usadas",
-    "sortHeard": "Escuchadas recientemente",
+    "sortHeard": "Visto por última vez",
     "emptyTitle": "Todavía no hay personas",
     "emptyBody": "Las personas aparecen al nombrar a un hablante en una transcripción o cuando una reunión tiene asistentes conocidos. Abre una transcripción y usa la etiqueta del hablante.",
     "noMatches": "No hay personas que coincidan.",
@@ -5356,6 +5356,9 @@
       "person": "Filas de esta persona"
     },
     "resetPreview": "Se eliminarán el perfil de voz y {{samples}} muestras. Los nombres en {{notes}} notas y {{segments}} segmentos seguirán igual.",
-    "doneReset": "Se restableció la voz de {{name}}. Se conservaron los nombres en las notas."
+    "doneReset": "Se restableció la voz de {{name}}. Se conservaron los nombres en las notas.",
+    "meetingCount": "Reuniones: {{count}}",
+    "lastSeen": "Visto por última vez: {{date}}",
+    "attendeeDeleteReappears": "Esta persona desaparecerá de Personas y podrá volver a aparecer si asiste a una reunión nueva."
   }
 }

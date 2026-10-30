@@ -5291,7 +5291,7 @@
     "search": "Pesquisar pessoas",
     "sort": "Ordenar pessoas",
     "sortUsage": "Mais usadas",
-    "sortHeard": "Ouvidas recentemente",
+    "sortHeard": "Visto pela última vez",
     "emptyTitle": "Ainda não há pessoas",
     "emptyBody": "As pessoas surgem quando dá um nome a um orador numa transcrição ou quando uma reunião tem participantes conhecidos. Abra uma transcrição e use a etiqueta do orador.",
     "noMatches": "Nenhuma pessoa corresponde à pesquisa.",
@@ -5356,6 +5356,9 @@
       "person": "Linhas desta pessoa"
     },
     "resetPreview": "Remover o perfil de voz e {{samples}} amostras. Os nomes em {{notes}} notas e {{segments}} segmentos mantêm-se.",
-    "doneReset": "Voz de {{name}} reposta. Os nomes nas notas foram mantidos."
+    "doneReset": "Voz de {{name}} reposta. Os nomes nas notas foram mantidos.",
+    "meetingCount": "Reuniões: {{count}}",
+    "lastSeen": "Visto pela última vez em {{date}}",
+    "attendeeDeleteReappears": "Essa pessoa desaparecerá de Pessoas e poderá reaparecer se participar de uma nova reunião."
   }
 }

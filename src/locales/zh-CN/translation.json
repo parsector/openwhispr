@@ -5291,7 +5291,7 @@
     "search": "搜索人物",
     "sort": "排序人物",
     "sortUsage": "使用次数最多",
-    "sortHeard": "最近听到",
+    "sortHeard": "上次出现",
     "emptyTitle": "尚无人物",
     "emptyBody": "在转录的说话人标签中命名，或会议有已知参会者时，人物会显示在这里。打开转录并使用说话人标签命名。",
     "noMatches": "没有匹配的人物。",
@@ -5356,6 +5356,9 @@
       "person": "此人物的行"
     },
     "resetPreview": "删除声纹资料和 {{samples}} 个样本。{{notes}} 条笔记和 {{segments}} 个片段中的姓名保持不变。",
-    "doneReset": "已重置 {{name}} 的声音，笔记中的姓名已保留。"
+    "doneReset": "已重置 {{name}} 的声音，笔记中的姓名已保留。",
+    "meetingCount": "参加会议：{{count}}",
+    "lastSeen": "上次出现：{{date}}",
+    "attendeeDeleteReappears": "此人将从“人物”中消失；如果参加新的会议，可能会再次出现。"
   }
 }

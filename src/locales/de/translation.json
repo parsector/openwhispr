@@ -5291,7 +5291,7 @@
     "search": "Personen suchen",
     "sort": "Personen sortieren",
     "sortUsage": "Meistgenutzt",
-    "sortHeard": "Zuletzt gehört",
+    "sortHeard": "Zuletzt gesehen",
     "emptyTitle": "Noch keine Personen",
     "emptyBody": "Personen erscheinen, wenn Sie über einen Sprecherchip im Transkript einen Namen vergeben oder eine Besprechung bekannte Teilnehmende hat. Öffnen Sie ein Transkript und benennen Sie jemanden über den Sprecherchip.",
     "noMatches": "Keine passenden Personen.",
@@ -5356,6 +5356,9 @@
       "person": "Zeilen dieser Person"
     },
     "resetPreview": "Stimmprofil und {{samples}} Beispiele entfernen. Namen in {{notes}} Notizen und {{segments}} Abschnitten bleiben unverändert.",
-    "doneReset": "Stimme von {{name}} zurückgesetzt. Namen in Notizen bleiben erhalten."
+    "doneReset": "Stimme von {{name}} zurückgesetzt. Namen in Notizen bleiben erhalten.",
+    "meetingCount": "Besuchte Meetings: {{count}}",
+    "lastSeen": "Zuletzt gesehen: {{date}}",
+    "attendeeDeleteReappears": "Diese Person verschwindet aus „Personen“ und kann nach Teilnahme an einem neuen Meeting wieder erscheinen."
   }
 }

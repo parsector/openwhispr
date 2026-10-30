@@ -44,6 +44,95 @@ test('people list counts notes and segments and flags near duplicates and used o
   assert.ok(people.find(p => p.id === typo.id).duplicates.some(d => d.id === alex.id));
   assert.equal(people.find(p => p.id === alex.id).legacyVoice, true);
 });
+test('calendar and manual attendees become identity-only people, deduped against a speaker email', t => {
+  const f = fixture(t); if (!f) return;
+  const known = f.db.createNamedSpeakerProfile('Alex Rivera', 'alex@example.test');
+  const id = f.note('Planning', [], []);
+  f.db.updateNote(id, { participants: JSON.stringify([
+    { email: 'ALEX@example.test', displayName: 'Alex Rivera', addedByEvent: 'event-1' },
+    { email: 'maya@example.test', displayName: 'Maya Chen', addedByEvent: 'event-1' },
+    { email: 'sam@example.test', displayName: 'Sam Lee' },
+    { email: 'room@example.test', displayName: 'Meeting room', resource: true },
+  ]) });
+  const people = listPeople(f.db);
+  assert.equal(people.length, 3);
+  assert.equal(people.find(p => p.id === known.id).noteCount, 1);
+  for (const email of ['maya@example.test', 'sam@example.test']) {
+    const person = people.find(p => p.email === email);
+    assert.ok(person, email);
+    assert.equal(person.noteCount, 1);
+    assert.equal(person.meetingCount, 1);
+    assert.equal(person.hasVoice, false);
+    assert.equal(person.segmentCount, 0);
+    assert.ok(person.lastSeen);
+  }
+  assert.equal(f.rows(id).length, 0);
+});
+test('one attendee across two meetings is one person with two meetings', t => {
+  const f = fixture(t); if (!f) return;
+  for (const title of ['One', 'Two']) {
+    const id = f.note(title, [], []);
+    f.db.updateNote(id, { participants: JSON.stringify([{ email: 'maya@example.test', displayName: 'Maya Chen' }]) });
+  }
+  const people = listPeople(f.db);
+  assert.equal(people.length, 1);
+  assert.equal(people[0].meetingCount, 2);
+  assert.equal(people[0].noteCount, 2);
+});
+test('naming a speaker reuses an attendee identity and never names other rows', t => {
+  const f = fixture(t); if (!f) return;
+  const note = f.note('One', [
+    { id: 'a', text: 'hello', source: 'system', speaker: 'speaker_0', diarizationRunId: 'run1' },
+    { id: 'b', text: 'other', source: 'system', speaker: 'speaker_1', diarizationRunId: 'run1' },
+  ], []);
+  f.db.updateNote(note, { participants: JSON.stringify([{ email: 'maya@example.test', displayName: 'Maya Chen' }]) });
+  const person = listPeople(f.db)[0];
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const result = applySpeakerCorrection(f.db, null, { type: 'apply', noteId: note, id: 'name-maya', scope: 'row', rowIds: ['a'], name: 'Maya Chen', email: 'MAYA@example.test' });
+  assert.equal(result.success, true);
+  assert.equal(listPeople(f.db).length, 1);
+  assert.equal(f.rows(note)[0].suggestedProfileId, person.id);
+  assert.equal(f.rows(note)[1].speakerName, undefined);
+});
+test('deleting an attendee identity hides old attendance until a new meeting registers them', t => {
+  const f = fixture(t); if (!f) return;
+  const first = f.note('One', [], []);
+  f.db.updateNote(first, { participants: JSON.stringify([{ email: 'maya@example.test', displayName: 'Maya Chen' }]) });
+  const person = listPeople(f.db)[0];
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: person.id }).success, true);
+  assert.equal(listPeople(f.db).length, 0);
+  const second = f.note('Two', [], []);
+  f.db.updateNote(second, { participants: JSON.stringify([{ email: 'maya@example.test', displayName: 'Maya Chen' }]) });
+  const revived = listPeople(f.db);
+  assert.equal(revived.length, 1);
+  assert.notEqual(revived[0].id, person.id);
+  assert.equal(revived[0].meetingCount, 1);
+});
+test('an attendee-only person can be renamed and merged with undo', t => {
+  const f = fixture(t); if (!f) return;
+  const id = f.note('One', [], []);
+  f.db.updateNote(id, { participants: JSON.stringify([
+    { email: 'maya@example.test', displayName: 'Maya Chen' },
+    { email: 'sam@example.test', displayName: 'Sam Lee' },
+  ]) });
+  const people = listPeople(f.db);
+  const maya = people.find(p => p.email === 'maya@example.test');
+  const sam = people.find(p => p.email === 'sam@example.test');
+  const rename = { type: 'rename', profileId: maya.id, name: 'Maya C.' };
+  assert.equal(previewPersonAction(f.db, rename).success, true);
+  const renamed = applyPersonAction(f.db, rename);
+  assert.equal(renamed.success, true);
+  assert.equal(listPeople(f.db).find(p => p.id === maya.id).displayName, 'Maya C.');
+  assert.equal(undoPersonAction(f.db, renamed.id).success, true);
+  assert.equal(listPeople(f.db).find(p => p.id === maya.id).displayName, 'Maya Chen');
+  const merge = { type: 'merge', profileId: maya.id, survivorId: sam.id };
+  assert.equal(previewPersonAction(f.db, merge).success, true);
+  const merged = applyPersonAction(f.db, merge);
+  assert.equal(merged.success, true);
+  assert.equal(listPeople(f.db).length, 1);
+  assert.equal(undoPersonAction(f.db, merged.id).success, true);
+  assert.equal(listPeople(f.db).length, 2);
+});
 test('rename changes labels across notes, keeps locks, and undo restores labels', t => {
   const f = fixture(t); if (!f) return;
   const alex = f.person('Alec', 1);
@@ -64,6 +153,8 @@ test('merge preserves survivor embedding, rewrites pinned rows, and restores los
   const f = fixture(t); if (!f) return;
   const loser = f.person('Alexndra', 2), winner = f.person('Alexandra', 1);
   const note = f.note('one', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Alexndra', speakerLocked: true, speakerLockSource: 'user' }, { id: 'b', speaker: 'speaker_0', speakerName: 'Alexndra' }], [['speaker_0', loser]]);
+  f.db.updateNote(note, { participants: JSON.stringify([{ email: 'alexndra@example.test', displayName: 'Alexndra' }]) });
+  listPeople(f.db);
   const request = { type: 'merge', profileId: loser.id, survivorId: winner.id };
   assert.deepEqual([previewPersonAction(f.db, request).noteCount, previewPersonAction(f.db, request).segmentCount, previewPersonAction(f.db, request).pinnedCount], [1, 2, 1]);
   const original = Buffer.from(f.db.db.prepare('SELECT embedding FROM speaker_profiles WHERE id = ?').get(winner.id).embedding);
@@ -71,11 +162,13 @@ test('merge preserves survivor embedding, rewrites pinned rows, and restores los
   assert.equal(result.success, true);
   assert.deepEqual(f.db.db.prepare('SELECT embedding FROM speaker_profiles WHERE id = ?').get(winner.id).embedding, original);
   assert.equal(f.db.db.prepare('SELECT id FROM speaker_profiles WHERE id = ?').get(loser.id), undefined);
+  assert.equal(listPeople(f.db).find(p => p.id === winner.id).meetingCount, 1);
   assert.equal(f.rows(note)[0].speakerName, 'Alexandra');
   assert.equal(f.db.db.prepare('SELECT profile_id FROM speaker_mappings WHERE note_id = ?').get(note).profile_id, winner.id);
   assert.equal(undoPersonAction(f.db, result.id).success, true);
   assert.equal(f.rows(note)[0].speakerName, 'Alexndra');
   assert.ok(f.db.db.prepare('SELECT id FROM speaker_profiles WHERE id = ?').get(loser.id));
+  assert.equal(listPeople(f.db).find(p => p.id === loser.id).meetingCount, 1);
 });
 test('delete allocates new unknown numbers and cannot restore the person', t => {
   const f = fixture(t); if (!f) return;

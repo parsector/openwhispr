@@ -5291,7 +5291,7 @@
     "search": "Cerca persone",
     "sort": "Ordina persone",
     "sortUsage": "Più usate",
-    "sortHeard": "Ascoltate di recente",
+    "sortHeard": "Ultima presenza",
     "emptyTitle": "Nessuna persona ancora",
     "emptyBody": "Le persone compaiono quando assegni un nome a un parlante nella trascrizione o quando una riunione ha partecipanti noti. Apri una trascrizione e usa il chip del parlante.",
     "noMatches": "Nessuna persona corrisponde alla ricerca.",
@@ -5356,6 +5356,9 @@
       "person": "Righe di questa persona"
     },
     "resetPreview": "Rimuovi il profilo vocale e {{samples}} campioni. I nomi in {{notes}} note e {{segments}} segmenti restano invariati.",
-    "doneReset": "Voce di {{name}} reimpostata. I nomi nelle note sono stati mantenuti."
+    "doneReset": "Voce di {{name}} reimpostata. I nomi nelle note sono stati mantenuti.",
+    "meetingCount": "Riunioni: {{count}}",
+    "lastSeen": "Ultima presenza: {{date}}",
+    "attendeeDeleteReappears": "Questa persona scomparirà da Persone e potrà riapparire se partecipa a una nuova riunione."
   }
 }

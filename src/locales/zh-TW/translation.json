@@ -5291,7 +5291,7 @@
     "search": "搜尋人物",
     "sort": "排序人物",
     "sortUsage": "使用次數最多",
-    "sortHeard": "最近聽到",
+    "sortHeard": "上次出現",
     "emptyTitle": "尚無人物",
     "emptyBody": "在逐字稿的說話者標籤中命名，或會議有已知與會者時，人物會顯示在這裡。開啟逐字稿並使用說話者標籤命名。",
     "noMatches": "沒有符合的人物。",
@@ -5356,6 +5356,9 @@
       "person": "此人物的列"
     },
     "resetPreview": "刪除聲紋資料與 {{samples}} 個樣本。{{notes}} 則筆記與 {{segments}} 個片段中的姓名保持不變。",
-    "doneReset": "已重設 {{name}} 的聲音，筆記中的姓名已保留。"
+    "doneReset": "已重設 {{name}} 的聲音，筆記中的姓名已保留。",
+    "meetingCount": "參加會議：{{count}}",
+    "lastSeen": "上次出現：{{date}}",
+    "attendeeDeleteReappears": "此人將從「人物」中消失；如果參加新的會議，可能會再次出現。"
   }
 }

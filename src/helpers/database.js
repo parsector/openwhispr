@@ -1205,6 +1205,25 @@ class DatabaseManager {
         )
       `);
 
+      // Local attendance identities are independent of transcript speaker mappings.
+      // A NULL profile_id remembers attendance after the owner deletes an identity.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS person_attendance (
+          note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+          identity_key TEXT NOT NULL,
+          profile_id INTEGER REFERENCES speaker_profiles(id) ON DELETE SET NULL,
+          PRIMARY KEY (note_id, identity_key)
+        );
+        CREATE INDEX IF NOT EXISTS idx_person_attendance_profile ON person_attendance(profile_id);
+        CREATE TABLE IF NOT EXISTS person_identity_actions (
+          id TEXT PRIMARY KEY,
+          action TEXT NOT NULL,
+          profile_id INTEGER NOT NULL,
+          survivor_id INTEGER,
+          snapshot TEXT NOT NULL
+        );
+      `);
+
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS speaker_mappings (
           note_id INTEGER NOT NULL,
