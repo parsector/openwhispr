@@ -180,20 +180,23 @@ test('an early correction survives 55 later corrections to other rows', () => {
   assert.equal(rows(f)[55].speakerName, 'Person 55');
 });
 
-test('a cloud label change keeps the local event but refuses a stale undo', () => {
+test('a cloud label change conflicts without replacing the local event or label', () => {
   const f = fixture();
   applySpeakerCorrection(f.db, f.identifier, {
     type: 'apply', noteId: 1, id: 'c1', scope: 'row', rowIds: ['a'], name: 'Alex', rows: [],
   });
-  const { mergeLocalTranscriptState, writeTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const { reconcileCloudTranscript, writeTranscriptDocument } = require('../../src/helpers/transcriptDocument');
   const cloudRows = rows(f).map((entry) => ({ id: entry.id, text: entry.text,
     source: entry.source, speaker: entry.speaker, speakerName: entry.id === 'a' ? 'Sam' : undefined,
     speakerLocked: entry.id === 'a', speakerLockSource: entry.id === 'a' ? 'user' : undefined }));
-  f.note.transcript = mergeLocalTranscriptState(writeTranscriptDocument(cloudRows), f.note.transcript);
+  const result = reconcileCloudTranscript(writeTranscriptDocument(cloudRows), f.note.transcript);
+  assert.equal(result.conflicted, true);
+  f.note.transcript = result.transcript;
   assert.equal(rows(f)[0].corrections[0].id, 'c1');
-  assert.deepEqual(applySpeakerCorrection(f.db, f.identifier,
-    { type: 'undo', noteId: 1, id: 'c1' }), { success: false, error: 'later_change' });
-  assert.equal(rows(f)[0].speakerName, 'Sam');
+  assert.equal(rows(f)[0].speakerName, 'Alex');
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: 'undo', noteId: 1, id: 'c1' }).success, true);
+  assert.equal(rows(f)[0].speakerName, undefined);
 });
 
 test('owner can correct a 650-row cluster and undo it from one indexed event', () => {

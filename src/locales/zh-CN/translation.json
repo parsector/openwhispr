@@ -2684,9 +2684,10 @@
       "deleteDeniedNote": "“{{title}}”未被删除——只有笔记所有者或管理员才能删除它",
       "updateDeniedFolder": "你没有权限更改“{{name}}”——未同步的内容已保存到你的个人空间",
       "deleteDeniedFolder": "“{{name}}”未被删除——只有管理员才能删除空间文件夹",
-      "conflictBanner": "此笔记存在更新的版本。",
-      "conflictRefresh": "刷新",
-      "conflictKeep": "继续编辑",
+      "conflictBanner": "此笔记存在冲突的更改。",
+      "conflictRefresh": "采用对方版本",
+      "conflictKeep": "保留我的版本",
+      "transcriptPendingUpload": "更改正在等待上传。",
       "editedBy": "由 {{name}} 编辑 · {{time}}",
       "members": {
         "addPeople": "添加成员",

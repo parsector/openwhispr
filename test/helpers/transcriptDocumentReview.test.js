@@ -2,7 +2,43 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   mergeLocalTranscriptState, readTranscriptDocument, writeTranscriptDocument, publicTranscript,
+  normalizeRowIds, migrateTranscriptDocument,
 } = require('../../src/helpers/transcriptDocument');
+
+test('idless duplicate rows get unique stable IDs beside an already identified row', () => {
+  const collidingId = normalizeRowIds([{ text: 'yes', source: 'system' }], 'durable-note')[0].id;
+  const rows = [
+    { id: collidingId, text: 'yes', source: 'system' },
+    { text: 'yes', source: 'system' },
+    { text: 'yes', source: 'system' },
+  ];
+  const first = normalizeRowIds(rows, 'durable-note');
+  assert.equal(new Set(first.map((row) => row.id)).size, 3);
+  assert.deepEqual(normalizeRowIds(first, 'durable-note'), first);
+  assert.deepEqual(normalizeRowIds(rows, 'durable-note').map((row) => row.id), first.map((row) => row.id));
+});
+
+test('duplicate IDs already on disk are repaired once with an audit marker', () => {
+  const raw = JSON.stringify([{ id: 'duplicate', text: 'first' }, { id: 'duplicate', text: 'second' }]);
+  const repaired = migrateTranscriptDocument(raw, 'durable-note');
+  assert.equal(new Set(repaired.rows.map((row) => row.id)).size, 2);
+  assert.equal(repaired.rows[1].idRepair.previousId, 'duplicate');
+  const again = migrateTranscriptDocument(writeTranscriptDocument(repaired.rows), 'durable-note');
+  assert.deepEqual(again.rows.map((row) => row.id), repaired.rows.map((row) => row.id));
+  assert.equal(again.rows[1].idRepair.previousId, 'duplicate');
+});
+
+test('merged clusters have one Unknown number and competing clusters get fresh numbers', () => {
+  const rows = [
+    { id: 'a', text: 'first', source: 'system', speaker: 'speaker_0', diarizationRunId: 'run', unknownNumber: 1 },
+    { id: 'b', text: 'second', source: 'system', speaker: 'speaker_0', diarizationRunId: 'run', unknownNumber: 2 },
+    { id: 'c', text: 'third', source: 'system', speaker: 'speaker_1', diarizationRunId: 'run2', unknownNumber: 1 },
+  ];
+  const resolved = readTranscriptDocument(writeTranscriptDocument(rows)).rows;
+  assert.equal(resolved[0].unknownNumber, 1);
+  assert.equal(resolved[1].unknownNumber, 1);
+  assert.ok(resolved[2].unknownNumber > 2);
+});
 
 test('older-client cloud pull keeps explicit Unknown and local-only rows', () => {
   const local = writeTranscriptDocument([

@@ -3029,9 +3029,10 @@
       "deleteDeniedNote": "« {{title}} » n'a pas été supprimée — seul le propriétaire de la note ou un administrateur peut la supprimer",
       "updateDeniedFolder": "Vous n'avez pas la permission de modifier « {{name}} » — votre travail non synchronisé a été enregistré dans votre espace personnel",
       "deleteDeniedFolder": "« {{name}} » n'a pas été supprimé — seul un administrateur peut supprimer un dossier d'espace",
-      "conflictBanner": "Une version plus récente de cette note existe.",
-      "conflictRefresh": "Actualiser",
-      "conflictKeep": "Continuer à modifier",
+      "conflictBanner": "Cette note comporte des modifications en conflit.",
+      "conflictRefresh": "Prendre leur version",
+      "conflictKeep": "Garder ma version",
+      "transcriptPendingUpload": "Des modifications attendent leur envoi.",
       "editedBy": "Modifié par {{name}} · {{time}}",
       "members": {
         "addPeople": "Ajouter des personnes",

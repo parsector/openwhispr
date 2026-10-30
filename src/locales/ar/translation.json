@@ -2048,9 +2048,10 @@
       "deleteDeniedNote": "لم يتم حذف “{{title}}” — يمكن فقط لمالك الملاحظة أو المسؤول حذفها",
       "updateDeniedFolder": "ليس لديك إذن لتغيير “{{name}}” — تم حفظ عملك غير المتزامن في مساحتك الشخصية",
       "deleteDeniedFolder": "لم يتم حذف “{{name}}” — يمكن فقط للمسؤول حذف المجلدات داخل مساحة الفريق",
-      "conflictBanner": "توجد نسخة أحدث من هذه الملاحظة.",
-      "conflictRefresh": "تحديث",
-      "conflictKeep": "متابعة التعديل",
+      "conflictBanner": "توجد تغييرات متعارضة في هذه الملاحظة.",
+      "conflictRefresh": "اعتماد نسختهم",
+      "conflictKeep": "الاحتفاظ بنسختي",
+      "transcriptPendingUpload": "التغييرات في انتظار الرفع.",
       "editedBy": "تم التعديل بواسطة {{name}} · {{time}}",
       "members": {
         "addPeople": "إضافة أشخاص",

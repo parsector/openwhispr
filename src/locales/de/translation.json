@@ -3029,9 +3029,10 @@
       "deleteDeniedNote": "„{{title}}“ wurde nicht gelöscht — nur der Besitzer der Notiz oder ein Admin kann sie löschen",
       "updateDeniedFolder": "Du darfst „{{name}}“ nicht ändern — deine nicht synchronisierten Änderungen wurden in deinem persönlichen Bereich gespeichert",
       "deleteDeniedFolder": "„{{name}}“ wurde nicht gelöscht — nur ein Admin kann einen Bereichs-Ordner löschen",
-      "conflictBanner": "Es existiert eine neuere Version dieser Notiz.",
-      "conflictRefresh": "Aktualisieren",
-      "conflictKeep": "Weiter bearbeiten",
+      "conflictBanner": "Diese Notiz enthält widersprüchliche Änderungen.",
+      "conflictRefresh": "Deren Version übernehmen",
+      "conflictKeep": "Meine Version behalten",
+      "transcriptPendingUpload": "Änderungen warten auf den Upload.",
       "editedBy": "Bearbeitet von {{name}} · {{time}}",
       "members": {
         "addPeople": "Personen hinzufügen",

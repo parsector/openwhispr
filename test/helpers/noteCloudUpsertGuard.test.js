@@ -190,7 +190,7 @@ test("upsertNoteFromCloud: non-empty cloud text updates and local-only transcrip
     null,
     "a non-empty cloud enhancement brings its own prompt/hash (null here)"
   );
-  assert.equal(after.sync_status, "synced");
+  assert.equal(after.sync_status, "pending", "the local-only row stays queued for upload");
 });
 
 test("upsertNoteFromCloud: a brand-new empty cloud note still inserts as-is", (t) => {
@@ -337,4 +337,130 @@ test('upsertNoteFromCloud keeps local correction history when cloud echoes the s
   assert.equal(after.unknownNumberHighWater, 4);
   assert.equal(after.rows[0].speakerName, 'Alex');
   assert.equal(after.rows[0].corrections[0].id, 'early');
+});
+
+test('a conflicting cloud label on a locked row stays local and is surfaced', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  const localRow = { id: 'durable-row', text: 'yes', source: 'system', speaker: 'speaker_0',
+    speakerName: 'Alex', speakerLocked: true, speakerLockSource: 'user',
+    corrections: [{ id: 'local-event', rowId: 'durable-row' }] };
+  db.updateNote(note.id, { transcript: JSON.stringify([localRow]) });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  const local = db.getNote(note.id);
+  const cloud = { ...emptyCloudShell(local), transcript: JSON.stringify([{ ...localRow,
+    speakerName: 'Sam', corrections: [{ id: 'remote-event', rowId: 'durable-row' }] }]) };
+  const result = db.upsertNoteFromCloud(cloud, null);
+  assert.equal(result.transcript_conflict, true);
+  assert.equal(db.getNote(note.id).transcript, local.transcript);
+});
+
+test('two untimed yes rows with different durable IDs stay separate on cloud pull', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'local-yes', text: 'yes', source: 'system' }]) });
+  const local = db.getNote(note.id);
+  const cloud = { ...emptyCloudShell(local), transcript: JSON.stringify([{ id: 'remote-yes', text: 'yes', source: 'system' }]) };
+  db.upsertNoteFromCloud(cloud, null);
+  const rows = require('../../src/helpers/transcriptDocument').readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.deepEqual(rows.map((row) => row.id), ['remote-yes', 'local-yes']);
+  assert.equal(db.getNote(note.id).sync_status, 'pending');
+});
+
+test('an empty incoming synced transcript deletes its rows instead of restoring them', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'synced-row', text: 'yes', source: 'system' }]) });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  const local = db.getNote(note.id);
+  db.upsertNoteFromCloud({ ...emptyCloudShell(local), transcript: JSON.stringify({ version: 2, rows: [] }) }, null);
+  const rows = require('../../src/helpers/transcriptDocument').readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.equal(rows.filter((row) => !row.deleted).length, 0);
+});
+
+test('cloud history stays on its own device and Take theirs resolves a locked-label conflict', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  const localRow = { id: 'shared-row', text: 'yes', source: 'system', speakerName: 'Alex',
+    speakerLocked: true, speakerLockSource: 'user', corrections: [{ id: 'mine', rowId: 'shared-row' }] };
+  db.updateNote(note.id, { transcript: JSON.stringify([localRow]) });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  const local = db.getNote(note.id);
+  const cloud = { ...emptyCloudShell(local), transcript: JSON.stringify([
+    { ...localRow, speakerName: 'Sam', corrections: [{ id: 'theirs', rowId: 'shared-row' }] },
+    { id: 'remote-only', text: 'new', source: 'system', corrections: [{ id: 'remote-history', rowId: 'remote-only' }] },
+  ]) };
+  assert.equal(db.upsertNoteFromCloud(cloud, null).transcript_conflict, true);
+  assert.equal(db.upsertNoteFromCloud(cloud, null, null, { takeTheirs: true }).transcript_conflict, undefined);
+  const rows = readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.equal(rows[0].speakerName, 'Sam');
+  assert.equal(rows[0].corrections, undefined);
+  assert.equal(rows[1].corrections, undefined);
+});
+
+test('Keep mine resolves the conflict as one pending local revision', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  const localRow = { id: 'shared-row', text: 'yes', source: 'system', speakerName: 'Alex',
+    speakerLocked: true, speakerLockSource: 'user' };
+  db.updateNote(note.id, { transcript: JSON.stringify([localRow]) });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  const current = db.getNote(note.id);
+  const cloud = { ...emptyCloudShell(current), revision: 7,
+    transcript: JSON.stringify([{ ...localRow, speakerName: 'Sam' }]) };
+  assert.equal(db.upsertNoteFromCloud(cloud, null).transcript_conflict, true);
+  const result = db.setNoteCloudBase(note.id, cloud.updated_at, cloud.revision,
+    { keepLocal: true, cloudNote: cloud });
+  assert.equal(result.success, true);
+  assert.equal(result.note.sync_status, 'pending');
+  assert.equal(result.note.cloud_revision, 7);
+  assert.equal(result.note.transcript, current.transcript);
+});
+
+test('a local deletion marker survives a cloud pull of the old live row', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  const original = { id: 'deleted-row', text: 'yes', source: 'system' };
+  db.updateNote(note.id, { transcript: JSON.stringify([original]) });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  db.updateNote(note.id, { transcript: JSON.stringify({ version: 2, rows: [] }) });
+  const local = db.getNote(note.id);
+  const rows = require('../../src/helpers/transcriptDocument').readTranscriptDocument(local.transcript).rows;
+  assert.equal(rows[0].deleted, true);
+  const cloud = { ...emptyCloudShell(local), transcript: JSON.stringify([original]) };
+  assert.equal(db.upsertNoteFromCloud(cloud, null).transcript_conflict, true);
+  assert.equal(db.getNote(note.id).transcript, local.transcript);
+});
+
+test('a deletion after another pending edit still keeps a durable row marker', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'one', text: 'yes', source: 'system' }]) });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  db.updateNote(note.id, { title: 'Edited title' });
+  db.updateNote(note.id, { transcript: JSON.stringify({ version: 2, rows: [] }) });
+  const rows = require('../../src/helpers/transcriptDocument').readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.equal(rows[0].id, 'one');
+  assert.equal(rows[0].deleted, true);
+});
+
+test('a newly pulled note never imports another device correction history', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const cloud = { ...emptyCloudShell({ updated_at: '2026-01-01T00:00:00Z', client_note_id: 'new-cloud-note' }),
+    client_note_id: 'new-cloud-note', transcript: JSON.stringify([{ id: 'remote-row', text: 'yes',
+      source: 'system', corrections: [{ id: 'remote-event', rowId: 'remote-row' }],
+      suggestedName: 'Old name' }]) };
+  const result = db.upsertNoteFromCloud(cloud, null);
+  const [row] = require('../../src/helpers/transcriptDocument').readTranscriptDocument(result.transcript).rows;
+  assert.equal(row.corrections, undefined);
+  assert.equal(row.suggestedName, undefined);
 });

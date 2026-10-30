@@ -3181,9 +3181,10 @@
       "deleteDeniedNote": "“{{title}}” wasn't deleted — only the note's owner or an admin can delete it",
       "updateDeniedFolder": "You don't have permission to change “{{name}}” — your unsynced work was saved to your Personal space",
       "deleteDeniedFolder": "“{{name}}” wasn't deleted — only an admin can delete a space folder",
-      "conflictBanner": "A newer version of this note exists.",
-      "conflictRefresh": "Refresh",
-      "conflictKeep": "Keep editing",
+      "conflictBanner": "This note has conflicting changes.",
+      "conflictRefresh": "Take theirs",
+      "conflictKeep": "Keep mine",
+      "transcriptPendingUpload": "Changes are queued for upload.",
       "editedBy": "Edited by {{name}} · {{time}}",
       "members": {
         "addPeople": "Add people",

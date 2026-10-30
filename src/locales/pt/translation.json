@@ -2684,9 +2684,10 @@
       "deleteDeniedNote": "“{{title}}” não foi excluída — apenas o proprietário da nota ou um administrador pode excluí-la",
       "updateDeniedFolder": "Você não tem permissão para alterar “{{name}}” — seu trabalho não sincronizado foi salvo no seu espaço pessoal",
       "deleteDeniedFolder": "“{{name}}” não foi excluída — apenas um administrador pode excluir uma pasta do espaço",
-      "conflictBanner": "Existe uma versão mais recente desta nota.",
-      "conflictRefresh": "Atualizar",
-      "conflictKeep": "Continuar editando",
+      "conflictBanner": "Esta nota tem alterações em conflito.",
+      "conflictRefresh": "Usar a versão deles",
+      "conflictKeep": "Manter a minha versão",
+      "transcriptPendingUpload": "As alterações aguardam envio.",
       "editedBy": "Editado por {{name}} · {{time}}",
       "members": {
         "addPeople": "Adicionar pessoas",

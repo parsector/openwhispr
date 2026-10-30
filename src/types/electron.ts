@@ -451,6 +451,7 @@ export interface Leaderboard {
 }
 
 export interface NoteItem {
+  transcript_conflict?: boolean;
   id: number;
   title: string;
   content: string;
@@ -3755,13 +3756,6 @@ declare global {
           display_name: string;
         }>
       >;
-      setSpeakerMapping?: (
-        noteId: number,
-        speakerId: string,
-        displayName: string,
-        email?: string | null,
-        profileId?: number | null
-      ) => Promise<{ success: boolean; profileId: number | null }>;
       applySpeakerCorrection?: (request: {
         type: "apply" | "undo";
         noteId: number;
@@ -3778,7 +3772,6 @@ declare global {
         rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
         mapping?: { runId?: string; clusterId: string; value: { display_name?: string; displayName?: string } | null } | null;
       }>;
-      removeSpeakerMapping?: (noteId: number, speakerId: string) => Promise<{ success: boolean }>;
       getSpeakerProfiles?: () => Promise<
         Array<{
           id: number;
@@ -3985,7 +3978,8 @@ declare global {
       upsertNoteFromCloud?: (
         cloudNote: Record<string, unknown>,
         localFolderId: number | null,
-        localSpaceId?: number | null
+        localSpaceId?: number | null,
+        options?: { takeTheirs?: boolean }
       ) => Promise<NoteItem | null>;
       acknowledgeNoteCreate?: (
         id: number,

@@ -478,8 +478,8 @@ export default function NoteEditor({
   );
 
   const storedTranscript = useMemo(
-    () => parseTranscriptSegmentsWithMigration(note.transcript || "", note.id),
-    [note.id, note.transcript]
+    () => parseTranscriptSegmentsWithMigration(note.transcript || "", note.client_note_id),
+    [note.client_note_id, note.id, note.transcript]
   );
   const displaySegments = diarizedSegments?.length ? diarizedSegments : storedTranscript.segments;
   const reviewCount = displaySegments.filter((segment) =>
@@ -1023,7 +1023,8 @@ export default function NoteEditor({
     const fresh = await window.electronAPI.upsertNoteFromCloud?.(
       conflict as unknown as Record<string, unknown>,
       note.folder_id,
-      note.space_id
+      note.space_id,
+      { takeTheirs: true }
     );
     clearNoteConflict(note.client_note_id);
     // With no save pending, the owner's external-update resync applies the
@@ -1406,7 +1407,7 @@ export default function NoteEditor({
           </div>
         </div>
 
-        {conflict && (
+        {(conflict || (note.cloud_id && note.transcript && note.sync_status === "pending")) && (
           <div
             className={cn(
               "h-8 mt-2 shrink-0",
@@ -1418,8 +1419,8 @@ export default function NoteEditor({
             <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
               <span className="w-1 h-1 rounded-full bg-amber-400/60 shrink-0" />
               <p className="text-[11px] text-foreground/50 flex-1 truncate">
-                {t("notes.spaces.conflictBanner")}
-                {conflictEditorName && (
+                {conflict ? t("notes.spaces.conflictBanner") : t("notes.spaces.transcriptPendingUpload")}
+                {conflict && conflictEditorName && (
                   <span className="text-foreground/45">
                     {" "}
                     {t("notes.spaces.editedBy", {
@@ -1429,18 +1430,18 @@ export default function NoteEditor({
                   </span>
                 )}
               </p>
-              <button
+              {conflict && <button
                 onClick={handleConflictRefresh}
                 className="text-[11px] font-medium text-foreground/50 hover:text-foreground/70 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               >
                 {t("notes.spaces.conflictRefresh")}
-              </button>
-              <button
+              </button>}
+              {conflict && <button
                 onClick={handleConflictKeep}
                 className="text-[11px] font-medium text-foreground/45 hover:text-foreground/55 transition-colors shrink-0 px-1 -mx-1 rounded outline-none focus-visible:ring-1 focus-visible:ring-ring/30"
               >
                 {t("notes.spaces.conflictKeep")}
-              </button>
+              </button>}
             </div>
           </div>
         )}

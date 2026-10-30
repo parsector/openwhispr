@@ -604,10 +604,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Speaker name mapping
   getSpeakerMappings: (noteId) => ipcRenderer.invoke("get-speaker-mappings", noteId),
   applySpeakerCorrection: (request) => ipcRenderer.invoke("apply-speaker-correction", request),
-  setSpeakerMapping: (noteId, speakerId, displayName, email, profileId) =>
-    ipcRenderer.invoke("set-speaker-mapping", noteId, speakerId, displayName, email, profileId),
-  removeSpeakerMapping: (noteId, speakerId) =>
-    ipcRenderer.invoke("remove-speaker-mapping", noteId, speakerId),
   getSpeakerProfiles: () => ipcRenderer.invoke("get-speaker-profiles"),
   attachSpeakerEmail: (profileId, email) =>
     ipcRenderer.invoke("attach-speaker-email", profileId, email),
@@ -1256,8 +1252,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingNotes: (spaceKind) => ipcRenderer.invoke("db-get-pending-notes", spaceKind),
   getPendingNoteDeletes: () => ipcRenderer.invoke("db-get-pending-note-deletes"),
   getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
-  upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId) =>
-    ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
+  upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId, options) =>
+    ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId, options),
   acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",

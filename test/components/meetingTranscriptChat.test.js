@@ -36,6 +36,12 @@ test("rows resolve speaker labels through the live mappings", async () => {
   assert.equal(renamed.split(">Alice<").length - 1, 2, "both remote rows use the mapped name");
 });
 
+test("an unassessed provisional row still shows Not assessed", async () => {
+  const html = await renderChat({ segments: [{ id: 'unassessed', text: 'hello', source: 'system',
+    speaker: 'speaker_0', speakerIsPlaceholder: true, speakerStatus: 'provisional' }] });
+  assert.ok(html.includes('Not assessed'));
+});
+
 test("consecutive rows of one speaker each keep a visible speaker control", async () => {
   const html = await renderChat({});
   // s3 follows s2 with the same effective speaker key.

@@ -3591,7 +3591,7 @@ class DatabaseManager {
       updates = { ...updates };
       if (options?.migrateTranscript) {
         const { migrateTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
-        const migration = migrateTranscriptDocument(previous.transcript, id);
+        const migration = migrateTranscriptDocument(previous.transcript, previous.client_note_id || id);
         updates.transcript = writeTranscriptDocument(migration.rows, migration.unknownNumberHighWater);
       }
       if (options?.reconcileTranscript && typeof updates.transcript === "string" &&
@@ -3599,12 +3599,22 @@ class DatabaseManager {
           require("./transcriptDocument").isTranscriptDocument(previous.transcript)) {
         updates.transcript = require("./transcriptDocument").reconcileAutomaticTranscript(
           updates.transcript, previous.transcript);
+        if (updates.transcript === null)
+          return { success: false, error: "stale_automatic_transcript" };
       }
       if (typeof updates.transcript === "string" && require("./transcriptDocument").isTranscriptDocument(updates.transcript)) {
         const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
         const incoming = readTranscriptDocument(updates.transcript);
         const previousDocument = readTranscriptDocument(previous.transcript);
-        updates.transcript = writeTranscriptDocument(normalizeRowIds(incoming.rows, id),
+        const incomingRows = normalizeRowIds(incoming.rows, previous.client_note_id || id);
+        if (previous.cloud_id) {
+          const incomingIds = new Set(incomingRows.map((row) => row.id));
+          for (const oldRow of normalizeRowIds(previousDocument.rows, previous.client_note_id || id)) {
+            if (oldRow.id && !incomingIds.has(oldRow.id))
+              incomingRows.push({ id: oldRow.id, deleted: true });
+          }
+        }
+        updates.transcript = writeTranscriptDocument(incomingRows,
           Math.max(incoming.unknownNumberHighWater, previousDocument.unknownNumberHighWater));
       } else if (typeof updates.transcript === "string") {
         const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
@@ -6742,7 +6752,11 @@ class DatabaseManager {
     }
   }
 
-  upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId = null) {
+  upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId = null, options = {}) {
+    if (!this.db) throw new Error("Database not initialized");
+    if (!options.insideTransaction)
+      return this.db.transaction(() => this.upsertNoteFromCloud(
+        cloudNote, localFolderId, localSpaceId, { ...options, insideTransaction: true }))();
     try {
       if (!this.db) throw new Error("Database not initialized");
       const spaceId = localSpaceId ?? this.getPrivateSpaceId();
@@ -6779,16 +6793,18 @@ class DatabaseManager {
       const clearsContent = cleared.includes("content");
       const clearsSummary = cleared.includes("enhanced_content");
       cloudNote = { ...cloudNote };
-      if (cloudNote.transcript && require("./transcriptDocument").isTranscriptDocument(cloudNote.transcript)) {
-        const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
-        const document = readTranscriptDocument(cloudNote.transcript);
-        cloudNote.transcript = writeTranscriptDocument(
-          normalizeRowIds(document.rows, existing?.id ?? cloudNote.client_note_id),
-          document.unknownNumberHighWater);
-      }
+      let transcriptPendingUpload = false;
       if (existing?.transcript && cloudNote.transcript) {
-        cloudNote.transcript = require("./transcriptDocument").mergeLocalTranscriptState(
-          cloudNote.transcript, existing.transcript);
+        const result = require("./transcriptDocument").reconcileCloudTranscript(
+          cloudNote.transcript, existing.transcript,
+          { syncedBefore: !!existing.cloud_id && existing.sync_status === "synced",
+            noteId: cloudNote.client_note_id, takeTheirs: !!options.takeTheirs });
+        if (result.conflicted) return { ...existing, transcript_conflict: true };
+        cloudNote.transcript = result.transcript;
+        transcriptPendingUpload = result.pendingUpload;
+      } else if (cloudNote.transcript && require("./transcriptDocument").isTranscriptDocument(cloudNote.transcript)) {
+        cloudNote.transcript = require("./transcriptDocument").reconcileCloudTranscript(
+          cloudNote.transcript, "[]", { noteId: cloudNote.client_note_id }).transcript;
       }
       if (!cloudNote.content?.trim()) cloudNote.content = "";
       if (!cloudNote.enhanced_content?.trim()) cloudNote.enhanced_content = null;
@@ -6902,6 +6918,9 @@ class DatabaseManager {
         accountId,
         versioned ? cloudNote.revision : null
       );
+      if (transcriptPendingUpload) this.db.prepare(
+        "UPDATE notes SET sync_status = 'pending' WHERE client_note_id = ?"
+      ).run(cloudNote.client_note_id);
       return this.db
         .prepare("SELECT * FROM notes WHERE client_note_id = ?")
         .get(cloudNote.client_note_id);
@@ -7397,10 +7416,12 @@ class DatabaseManager {
           .prepare(
             `UPDATE notes SET cloud_updated_at = ?, cloud_revision = ?,
                cloud_create_rejected = CASE WHEN ? THEN 0 ELSE cloud_create_rejected END,
-               cloud_create_pending = CASE WHEN ? THEN NULL ELSE cloud_create_pending END
+               cloud_create_pending = CASE WHEN ? THEN NULL ELSE cloud_create_pending END,
+               sync_status = CASE WHEN ? THEN 'pending' ELSE sync_status END
              WHERE id = ?`
           )
-          .run(cloudUpdatedAt, revision, keepLocal ? 1 : 0, keepLocal ? 1 : 0, id);
+          .run(cloudUpdatedAt, revision, keepLocal ? 1 : 0, keepLocal ? 1 : 0,
+            keepLocal ? 1 : 0, id);
         return { success: true, note: this.getNote(id) };
       })();
     } catch (error) {

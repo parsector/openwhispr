@@ -1039,7 +1039,91 @@ test("speaker correction rolls back a run mapping when transcript persistence fa
   assert.equal(db.getSpeakerRunMapping(note.id, "run-1", "speaker_0"), null);
 });
 
-test("stale finalisation after a correction fails, then preserves the saved Unknown on retry", (t) => {
+test("cluster Unknown saves and undoes against the real SQLite run mapping", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  const { readTranscriptDocument } = require("../../src/helpers/transcriptDocument");
+  const initial = [{ id: "row-1", text: "hello", source: "system", speaker: "speaker_0", diarizationRunId: "run-1" }];
+  const note = db.saveNote("Meeting", "", "meeting", null, null, null, null, JSON.stringify(initial)).note;
+  const result = applySpeakerCorrection(db, null, {
+    type: "apply", noteId: note.id, id: "unknown-1", scope: "cluster",
+    target: { runId: "run-1", clusterId: "speaker_0" }, rowIds: ["row-1"],
+    name: null, rows: [],
+  });
+  assert.equal(result.success, true);
+  assert.equal(db.getSpeakerRunMapping(note.id, "run-1", "speaker_0").display_name, "");
+  assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerIsPlaceholder, true);
+  assert.equal(applySpeakerCorrection(db, null, { type: "undo", noteId: note.id, id: "unknown-1" }).success, true);
+  assert.equal(db.getSpeakerRunMapping(note.id, "run-1", "speaker_0"), null);
+});
+
+test("row and selected Unknown assignments save and undo against real SQLite", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  const { readTranscriptDocument } = require("../../src/helpers/transcriptDocument");
+  const initial = ["a", "b"].map((id) => ({ id, text: id, source: "system", speaker: "speaker_0" }));
+  const note = db.saveNote("Meeting", "", "meeting", null, null, null, null, JSON.stringify(initial)).note;
+  for (const [scope, rowIds] of [["row", ["a"]], ["selected", ["a", "b"]]]) {
+    const id = `unknown-${scope}`;
+    assert.equal(applySpeakerCorrection(db, null, { type: "apply", noteId: note.id, id,
+      scope, rowIds, name: null, rows: [] }).success, true);
+    const saved = readTranscriptDocument(db.getNote(note.id).transcript).rows;
+    assert.equal(saved.filter((row) => row.speakerIsPlaceholder).length, rowIds.length);
+    assert.equal(applySpeakerCorrection(db, null, { type: "undo", noteId: note.id, id }).success, true);
+    assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows.some((row) => row.speakerIsPlaceholder), false);
+  }
+});
+
+test("naming a speaker through the correction command writes no voice embedding", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  const initial = [{ id: "row-1", text: "hello", source: "system", speaker: "speaker_0", diarizationRunId: "run-1" }];
+  const note = db.saveNote("Meeting", "", "meeting", null, null, null, null, JSON.stringify(initial)).note;
+  assert.equal(applySpeakerCorrection(db, null, { type: "apply", noteId: note.id, id: "alice-1",
+    scope: "cluster", target: { runId: "run-1", clusterId: "speaker_0" },
+    rowIds: ["row-1"], name: "Alice", rows: [] }).success, true);
+  assert.equal(db.getSpeakerRunMapping(note.id, "run-1", "speaker_0").display_name, "Alice");
+  assert.equal(db.db.prepare("SELECT COUNT(*) AS n FROM note_speaker_embeddings WHERE note_id = ?").get(note.id).n, 0);
+});
+
+test("correcting a note with duplicate stored row IDs repairs them once", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  const { readTranscriptDocument } = require("../../src/helpers/transcriptDocument");
+  const initial = ["one", "two"].map((text) => ({ id: "duplicate", text, source: "system" }));
+  const note = db.saveNote("Meeting", "", "meeting", null, null, null, null, JSON.stringify(initial)).note;
+  assert.equal(applySpeakerCorrection(db, null, { type: "apply", noteId: note.id,
+    id: "correction", scope: "row", rowIds: ["duplicate"], name: "Alex", rows: [] }).success, true);
+  const repaired = readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.equal(new Set(repaired.map((row) => row.id)).size, 2);
+  assert.equal(repaired[1].idRepair.previousId, "duplicate");
+  assert.equal(repaired[0].speakerName, "Alex");
+  assert.equal(repaired[1].speakerName, undefined);
+});
+
+test("correct then undo rejects a stale automatic save and does not revive its event", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  const { readTranscriptDocument, writeTranscriptDocument } = require("../../src/helpers/transcriptDocument");
+  const initial = [{ id: "row-1", text: "hello", source: "system", speaker: "speaker_0", diarizationRunId: "run-1" }];
+  const note = db.saveNote("Meeting", "", "meeting", null, null, null, null, JSON.stringify(initial)).note;
+  assert.equal(applySpeakerCorrection(db, null, { type: "apply", noteId: note.id, id: "alex-1", scope: "row", rowIds: ["row-1"], name: "Alex", rows: [] }).success, true);
+  const stale = writeTranscriptDocument(readTranscriptDocument(db.getNote(note.id).transcript).rows);
+  assert.equal(applySpeakerCorrection(db, null, { type: "undo", noteId: note.id, id: "alex-1" }).success, true);
+  const current = db.getNote(note.id).transcript;
+  const result = db.updateNote(note.id, { transcript: stale }, { expectedTranscript: current, reconcileTranscript: true });
+  assert.equal(result.error, "stale_automatic_transcript");
+  const [saved] = readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.equal(saved.speakerName, undefined);
+  assert.equal(saved.corrections, undefined);
+});
+
+test("stale finalisation after a correction is rejected on retry and preserves Unknown", (t) => {
   const db = createDb(t);
   if (!db) return;
   const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
@@ -1059,7 +1143,7 @@ test("stale finalisation after a correction fails, then preserves the saved Unkn
   const current = db.getNote(note.id).transcript;
   const retry = db.db.transaction(() => db.updateNote(note.id, { transcript: proposed },
     { expectedTranscript: current, reconcileTranscript: true }))();
-  assert.equal(retry.success, true);
+  assert.equal(retry.error, "stale_automatic_transcript");
   const [saved] = readTranscriptDocument(db.getNote(note.id).transcript).rows;
   assert.equal(saved.speakerName, undefined);
   assert.equal(saved.speakerIsPlaceholder, true);

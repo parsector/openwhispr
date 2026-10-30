@@ -10,7 +10,7 @@ const FIELDS = [
   "suggestedProfileId",
   "uncertainty",
 ];
-const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
+const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
 const MAX_CORRECTION_BYTES = 16 * 1024 * 1024;
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
 const snapshot = (row) =>
@@ -21,7 +21,7 @@ const restore = (row, previous) => {
   Object.assign(next, previous);
   return next;
 };
-const parse = (raw) => readTranscriptDocument(raw).rows;
+const parse = (raw, noteId) => normalizeRowIds(readTranscriptDocument(raw).rows, noteId);
 function applySpeakerCorrection(database, identifier, request) {
   const { noteId, id } = request;
   if (!noteId || !id || !["apply", "undo"].includes(request.type))
@@ -30,28 +30,30 @@ function applySpeakerCorrection(database, identifier, request) {
   const run = database.db.transaction(() => {
     const note = database.getNote(noteId);
     if (!note) return { success: false, error: "note_missing" };
-    const saved = parse(note.transcript);
+    const saved = parse(note.transcript, note.client_note_id || noteId);
     const byId = new Map(saved.map((row) => [row.id, row]));
     // Live rows may not have reached the periodic save yet. They are included
     // once, while rows persisted during the IPC await remain in the note.
-    for (const row of request.rows || []) if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
+    for (const row of normalizeRowIds(request.rows || [], note.client_note_id || noteId))
+      if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
     let rows = [...byId.values()];
     if (request.type === "apply") {
       const { scope, target, name, profileId } = request;
       if (!["row", "selected", "cluster"].includes(scope))
         return { success: false, error: "invalid_request" };
       const ids = new Set(request.rowIds || []);
-      const affected = rows.filter((row) =>
+      const affected = rows.filter((row) => !row.deleted && (
         scope === "cluster"
           ? row.diarizationRunId === target?.runId && row.speaker === target?.clusterId
           : ids.has(row.id)
-      );
+      ));
       if (!affected.length) return { success: false, error: "target_missing" };
       const key = scope === "cluster" ? mappingKey(target.runId, target.clusterId) : null;
       const before = key
         ? database.getSpeakerRunMapping(noteId, target.runId, target.clusterId)
         : null;
-      const after = key ? { display_name: name, profile_id: profileId ?? null } : null;
+      // The empty string is the durable run-mapping sentinel for explicit Unknown.
+      const after = key ? { display_name: name ?? "", profile_id: profileId ?? null } : null;
       const affectedRowIds = affected.map((row) => row.id);
       const affectedSet = new Set(affectedRowIds);
       const snapshots = {};
@@ -71,6 +73,7 @@ function applySpeakerCorrection(database, identifier, request) {
           speakerStatus: "locked",
           speakerLocked: true,
           speakerLockSource: "user",
+          correctionRevision: (Number(row.correctionRevision) || 0) + 1,
           suggestedName: undefined,
           suggestedProfileId: profileId ?? undefined,
           uncertainty: undefined,
@@ -151,6 +154,7 @@ function applySpeakerCorrection(database, identifier, request) {
         const record = (row.corrections || []).find((item) => item.id === id);
         if (!record) return row;
         const next = restore(row, event.snapshots?.[row.id]?.previous || record.previous || {});
+        next.correctionRevision = (Number(row.correctionRevision) || 0) + 1;
         const remaining = (row.corrections || []).filter((item) => item.id !== id);
         if (remaining.length) next.corrections = remaining;
         else delete next.corrections;

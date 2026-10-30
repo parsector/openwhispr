@@ -39,7 +39,7 @@ import {
   type TranscriptSpeakerStatus,
 } from "../utils/transcriptSpeakerState";
 import { parseSeedSegments } from "../utils/parseTranscriptSegments";
-import { readTranscriptDocument } from "../helpers/transcriptDocument";
+import { readTranscriptDocument, reconcileAutomaticTranscript } from "../helpers/transcriptDocument";
 import {
   mergeSessionDiarization,
   resolveDiarizationTarget,
@@ -62,6 +62,8 @@ export interface TranscriptSegment {
   unknownNumberHighWater?: number;
   uncertainty?: { reason: string; candidates?: [string, string] };
   diarizationRunId?: string;
+  correctionRevision?: number;
+  speakerAssessmentAvailable?: boolean;
   corrections?: import("../utils/transcriptCorrections").TranscriptCorrection[];
   quarantinedCorrections?: import("../utils/transcriptCorrections").TranscriptCorrection[];
   text: string;
@@ -601,6 +603,7 @@ function applySpeakerIdentification(
     suggestedName: identification.suggestedName ?? segment.suggestedName,
     speakerIsPlaceholder: !identification.displayName,
     speakerStatus: identification.displayName ? "confirmed" : "suggested",
+    speakerAssessmentAvailable: true,
   });
 }
 
@@ -1649,6 +1652,8 @@ async function persistAutomaticTranscript(noteId: number, transcript: string) {
   if (result?.error === "transcript_changed") {
     const current = await window.electronAPI?.getNote?.(noteId);
     if (!current || current.deleted_at) throw Error("transcript_note_missing");
+    if (reconcileAutomaticTranscript(transcript, current.transcript) === null)
+      throw Error("stale_automatic_transcript");
     result = await window.electronAPI?.updateNote?.(noteId, { transcript },
       { expectedTranscript: current.transcript, reconcileTranscript: true });
   }

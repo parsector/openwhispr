@@ -3,7 +3,7 @@ import { normalizeTranscriptSegments } from "./transcriptSpeakerState";
 import logger from "./logger";
 import { migrateTranscriptDocument } from "../helpers/transcriptDocument";
 
-export function parseTranscriptSegmentsWithMigration(raw: string, noteId?: number): {
+export function parseTranscriptSegmentsWithMigration(raw: string, noteId?: string | number): {
   segments: TranscriptSegment[]; migrated: boolean; quarantinedCorrections: number;
 } {
   if (!raw.trim().startsWith("[") && !raw.trim().startsWith("{"))
@@ -11,7 +11,7 @@ export function parseTranscriptSegmentsWithMigration(raw: string, noteId?: numbe
   try {
     const document = migrateTranscriptDocument(raw, noteId);
     return {
-      segments: normalizeTranscriptSegments(document.rows as TranscriptSegment[], document.unknownNumberHighWater),
+      segments: normalizeTranscriptSegments(document.rows.filter((row: { deleted?: boolean }) => !row.deleted) as TranscriptSegment[], document.unknownNumberHighWater),
       migrated: document.migrated,
       quarantinedCorrections: document.quarantinedCorrections,
     };
@@ -21,7 +21,7 @@ export function parseTranscriptSegmentsWithMigration(raw: string, noteId?: numbe
   }
 }
 
-export function parseTranscriptSegments(raw: string, noteId?: number): TranscriptSegment[] {
+export function parseTranscriptSegments(raw: string, noteId?: string | number): TranscriptSegment[] {
   return parseTranscriptSegmentsWithMigration(raw, noteId).segments;
 }
 
@@ -58,7 +58,7 @@ const isTranscriptDocument = (raw: string): boolean => {
  * It has no timestamp or speaker: live speaker identification skips it, new
  * finals sort after it, and export keeps rebasing on the new segments' times.
  */
-export function parseSeedSegments(raw: string | null | undefined, noteId?: number): TranscriptSegment[] {
+export function parseSeedSegments(raw: string | null | undefined, noteId?: string | number): TranscriptSegment[] {
   const text = raw?.trim();
   if (!text) return [];
   if (isJsonArray(text) || isTranscriptDocument(text)) return parseTranscriptSegments(text, noteId);

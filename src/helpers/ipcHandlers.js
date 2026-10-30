@@ -177,7 +177,6 @@ const {
   isSpeakerLocked,
 } = require("./speakerAssignmentPolicy");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
-const { setSpeakerNameMapping } = require("./speakerNaming");
 const {
   buildSpeakerRenumber,
   normalizeSpeakerIndexBase,
@@ -3294,8 +3293,8 @@ class IPCHandlers {
     ipcMain.handle("db-get-note-by-client-id", (_, clientNoteId) =>
       this.databaseManager.getNoteByClientId(clientNoteId)
     );
-    ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
-      const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
+    ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId, options) => {
+      const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId, options);
       if (note) {
         setImmediate(() => broadcastToWindows("note-synced", note));
         this.notifyVectorChanges();
@@ -13048,23 +13047,6 @@ class IPCHandlers {
         debugLogger.error("Speaker correction failed", { error: error.message }, "speaker");
         return { success: false, error: "persistence_failed" };
       }
-    });
-
-    ipcMain.handle(
-      "set-speaker-mapping",
-      async (_event, noteId, speakerId, displayName, email, profileId) => {
-        // Naming is metadata only. Profile vectors are written only by a future
-        // approved-exemplar enrollment path, never by mapping handlers.
-        const resolvedProfileId = setSpeakerNameMapping(this.databaseManager, liveSpeakerIdentifier, {
-          noteId, speakerId, displayName, email, profileId,
-        });
-        return { success: true, profileId: resolvedProfileId };
-      }
-    );
-
-    ipcMain.handle("remove-speaker-mapping", async (_event, noteId, speakerId) => {
-      this.databaseManager.removeSpeakerMapping(noteId, speakerId);
-      return { success: true };
     });
 
     ipcMain.handle("get-speaker-profiles", async () => {

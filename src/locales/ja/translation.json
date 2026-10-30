@@ -2612,9 +2612,10 @@
       "deleteDeniedNote": "「{{title}}」は削除されませんでした — 削除できるのはノートの所有者または管理者のみです",
       "updateDeniedFolder": "「{{name}}」を変更する権限がありません — 未同期の作業内容は個人スペースに保存されました",
       "deleteDeniedFolder": "「{{name}}」は削除されませんでした — スペースのフォルダを削除できるのは管理者のみです",
-      "conflictBanner": "このノートには新しいバージョンがあります。",
-      "conflictRefresh": "更新",
-      "conflictKeep": "編集を続ける",
+      "conflictBanner": "このノートには競合する変更があります。",
+      "conflictRefresh": "相手の変更を採用",
+      "conflictKeep": "自分の変更を保持",
+      "transcriptPendingUpload": "変更はアップロード待ちです。",
       "editedBy": "{{name}} が編集 · {{time}}",
       "members": {
         "addPeople": "メンバーを追加",

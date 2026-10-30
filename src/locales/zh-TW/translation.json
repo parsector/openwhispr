@@ -2684,9 +2684,10 @@
       "deleteDeniedNote": "「{{title}}」未被刪除——只有筆記擁有者或管理員才能刪除它",
       "updateDeniedFolder": "你沒有權限變更「{{name}}」——未同步的內容已儲存到你的個人空間",
       "deleteDeniedFolder": "「{{name}}」未被刪除——只有管理員才能刪除空間資料夾",
-      "conflictBanner": "此筆記有更新的版本。",
-      "conflictRefresh": "重新整理",
-      "conflictKeep": "繼續編輯",
+      "conflictBanner": "此筆記有衝突的變更。",
+      "conflictRefresh": "採用對方版本",
+      "conflictKeep": "保留我的版本",
+      "transcriptPendingUpload": "變更正在等待上傳。",
       "editedBy": "由 {{name}} 編輯 · {{time}}",
       "members": {
         "addPeople": "新增成員",

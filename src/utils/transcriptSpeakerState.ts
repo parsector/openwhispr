@@ -240,6 +240,8 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       unknownNumberHighWater: segment.unknownNumberHighWater,
       uncertainty: segment.uncertainty,
       diarizationRunId: segment.diarizationRunId,
+      correctionRevision: segment.correctionRevision,
+      speakerAssessmentAvailable: segment.speakerAssessmentAvailable,
       corrections: segment.corrections,
       quarantinedCorrections: segment.quarantinedCorrections,
       text: segment.text,
