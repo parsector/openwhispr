@@ -70,16 +70,16 @@ const unit = (values) => {
 
 const voiceA = unit([1, 0, 0]);
 const voiceB = unit([0, 1, 0]);
-// ~0.7 similar to both A and B: fails the match margin, so it mints a cluster
-// that the next recluster pass merges back into A.
+// ~0.7 similar to both A and B: without a clear margin it must stay separate.
 const ambiguousVoice = unit([0.7, 0.7, 0.14]);
+const sameVoice = unit([0.98, 0.2, 0]);
 const voiceC = unit([0.05, 0.05, 0.99]);
 
 function seedMergedSession(identifier) {
   identifier.setMaxSpeakers(3);
-  identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: true });
-  identifier._resolveSpeakerForEmbedding(voiceB, { updateCentroid: true });
-  identifier._resolveSpeakerForEmbedding(ambiguousVoice, { updateCentroid: true });
+  identifier._assignSpeakerId(voiceA);
+  identifier._assignSpeakerId(voiceB);
+  identifier._assignSpeakerId(sameVoice);
   const merges = identifier._performRecluster();
   assert.equal(merges.length, 1, "expected the ambiguous cluster to merge away");
   return merges[0];
@@ -162,13 +162,22 @@ test("mapSpeaker stays quiet when no session is running", () => {
   assert.deepEqual(warnings, []);
 });
 
-// Plants exactly two clusters ~0.70 similar (above the 0.65 recluster
-// threshold) — creating them via resolution would just match them together.
+// Plant two clusters from the same voice; resolution would match them immediately.
 function seedSimilarIdentifiedPair(identifier) {
   identifier.setMaxSpeakers(3);
   identifier._assignSpeakerId(voiceA);
-  identifier._assignSpeakerId(ambiguousVoice);
+  identifier._assignSpeakerId(sameVoice);
 }
+
+test("live reclustering leaves an ambiguous extra voice distinct", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+  identifier._assignSpeakerId(voiceA);
+  identifier._assignSpeakerId(voiceB);
+  identifier._assignSpeakerId(ambiguousVoice);
+  assert.deepEqual(identifier._performRecluster(), []);
+  assert.equal(identifier.transientEmbeddings.size, 3);
+});
 
 test("clusters mapped to different profiles never merge on similarity alone", () => {
   const { LiveSpeakerIdentifier } = loadIdentifier();

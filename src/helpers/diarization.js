@@ -263,7 +263,7 @@ class DiarizationManager {
   }
 
   async diarize(wavPath, options = {}) {
-    const { numSpeakers = -1, threshold = 0.55, signal = null } = options;
+    const { threshold = 0.55, signal = null } = options;
 
     if (signal?.aborted) return [];
 
@@ -289,7 +289,7 @@ class DiarizationManager {
     const args = [
       `--segmentation.pyannote-model=${segPath}`,
       `--embedding.model=${embPath}`,
-      `--clustering.num-clusters=${numSpeakers}`,
+      "--clustering.num-clusters=-1",
       `--clustering.cluster-threshold=${threshold}`,
       "--min-duration-on=0.2",
       "--min-duration-off=0.5",
@@ -298,7 +298,7 @@ class DiarizationManager {
 
     debugLogger.info("Starting diarization", {
       binaryPath,
-      numSpeakers,
+      numSpeakers: "automatic",
       threshold,
       wavPath,
     });
@@ -520,16 +520,23 @@ class DiarizationManager {
         const matchedSpan = overlapSpan ?? nearestSpan;
 
         enriched.uncertainty = shortSpanReason(matchedSpan) || enriched.uncertainty;
-        if (enriched.uncertainty?.reason === "too_short" && !enriched.speakerLocked && enriched.speakerLockSource !== "user") {
+        const abstained = ["too_short", "close_match", "not_sure"].includes(enriched.uncertainty?.reason);
+        if (abstained && !enriched.speakerLocked && enriched.speakerLockSource !== "user") {
           enriched.speakerName = undefined;
           enriched.speakerIsPlaceholder = true;
+          enriched.speakerStatus = "provisional";
         }
 
         if (bestSpeaker) {
-          applyConfirmedSpeaker(enriched, {
+          const patch = {
             speaker: speakerMap.get(bestSpeaker) || bestSpeaker,
-            speakerIsPlaceholder: false,
-          });
+            speakerIsPlaceholder: abstained,
+          };
+          if (abstained) {
+            if (!enriched.speakerLocked && enriched.speakerLockSource !== "user") Object.assign(enriched, patch);
+          } else {
+            applyConfirmedSpeaker(enriched, patch);
+          }
         }
       }
 

@@ -67,7 +67,8 @@ const START_MS = 1792414000000;
 
 // Runs main's real _startOrSkipDiarization and resolves with the payload it
 // sends. `outcome` picks the diarized, skipped or failed path.
-const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized", finalName } = {}) =>
+const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized", finalName,
+  sessionConfig = null, diarizedSegments = null, onDiarize = null } = {}) =>
   new Promise((resolve) => {
     const diarizationManager = new DiarizationManager();
     diarizationManager.isAvailable = () => outcome !== "skipped";
@@ -75,7 +76,10 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
       if (outcome === "failed") throw new Error("Raw PCM file is empty");
       return "/nonexistent/diarization.wav";
     };
-    diarizationManager.diarize = async () => [{ start: 0, end: 120, speaker: "speaker_00" }];
+    diarizationManager.diarize = async (_wavPath, options) => {
+      onDiarize?.(options);
+      return diarizedSegments ?? [{ start: 0, end: 120, speaker: "speaker_00" }];
+    };
     if (finalName) {
       const merge = diarizationManager.mergeWithTranscript.bind(diarizationManager);
       diarizationManager.mergeWithTranscript = (...args) => merge(...args).map((seg) => ({ ...seg, speakerName: finalName }));
@@ -86,7 +90,6 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
       diarizationManager,
       speakerDiarizationEnabled: true,
       _diarizationSpeakerReservations: new Map(),
-      _resolveSpeakerExpectation: () => ({ numSpeakers: 0, cap: null }),
       _reconcileLiveSpeakerState: () => new Map(),
     });
     const win = {
@@ -101,7 +104,7 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
       mainSegments,
       win,
       null,
-      null,
+      sessionConfig,
       1,
       "system",
       0,
@@ -182,6 +185,24 @@ test("main final analysis finds the prior row by its ingestion id", async () => 
     { id, source: "system", text: "hello", timestamp: START_MS + 1000, speakerName: "Alex" },
   ], payload);
   assert.equal(merged[0].id, id);
+  assert.equal(merged[0].speakerName, "Sam");
+});
+
+test("two-person expectation leaves remote clustering automatic and preserves two voices", async () => {
+  let diarizeOptions;
+  const payload = await runMainDiarization([
+    { id: "remote-1", source: "system", text: "hello", timestamp: START_MS + 1000 },
+    { id: "remote-2", source: "system", text: "goodbye", timestamp: START_MS + 11000 },
+  ], {
+    sessionConfig: { enabled: true, explicit: true, expectedCount: 2 },
+    diarizedSegments: [
+      { start: 0, end: 6, speaker: "speaker_00" },
+      { start: 10, end: 16, speaker: "speaker_01" },
+    ],
+    onDiarize: (options) => { diarizeOptions = options; },
+  });
+  assert.equal(Object.hasOwn(diarizeOptions, "numSpeakers"), false);
+  assert.deepEqual(payload.segments.map((row) => row.speaker), ["speaker_0", "speaker_1"]);
 });
 
 test("a bleed-flagged mic segment that duplicates system text never keeps its epoch timestamp", async () => {

@@ -156,7 +156,7 @@ test("roster changes refresh an auto-derived speaker config", () => {
   const { fakeThis, liveSpeakerIdentifier, broadcasts } = refreshConfig(false);
 
   assert.equal(fakeThis.activeMeetingSpeakerConfig.expectedCount, 4);
-  assert.equal(liveSpeakerIdentifier.maxSpeakers, 3);
+  assert.equal(liveSpeakerIdentifier.maxSpeakers, 8);
   assert.equal(broadcasts.length, 1);
   assert.equal(broadcasts[0].channel, "meeting-session-speaker-config-updated");
   assert.deepEqual(broadcasts[0].payload, { enabled: true, expectedCount: 4 });
@@ -193,6 +193,86 @@ test("a shrinking roster leaves the speaker cap untouched", () => {
 
   assert.equal(emptied.fakeThis.activeMeetingSpeakerConfig.expectedCount, 4);
   assert.deepEqual(emptied.broadcasts, []);
+});
+
+test("attendee suggestion and live reconciliation preserve a user-locked Unknown row", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const row = { id: "row-1", source: "system", speaker: "speaker_0", speakerStatus: "locked",
+    speakerLocked: true, speakerLockSource: "user", speakerName: undefined, speakerIsPlaceholder: true };
+  const note = { participants: JSON.stringify([{ email: "owner@example.com" }, { email: "alice@example.com", displayName: "Alice" }]), transcript: JSON.stringify([row]) };
+  const writes = [];
+  const db = {
+    getNote: () => note,
+    getGoogleAccounts: () => [{ email: "owner@example.com" }],
+    getNoteSpeakerEmbeddings: () => [{ speaker_id: "speaker_0" }],
+    getSpeakerMappings: () => [],
+    setSpeakerMapping: (...args) => writes.push(args),
+    updateNote: (_id, patch) => Object.assign(note, patch),
+  };
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager: db });
+  handlers._tryAutoLabelOneOnOne(NOTE_ID);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(JSON.parse(note.transcript)[0].speakerName, undefined);
+  assert.equal(writes.length, 0);
+  // The live callback uses this same main-process writer for its identification.
+  require("../../src/helpers/speakerAssignmentPolicy").applyConfirmedSpeaker(row, {
+    speaker: "speaker_0", speakerName: "Alice", speakerIsPlaceholder: false,
+  });
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerStatus, "locked");
+  handlers._reconcileLiveSpeakerState(
+    { speaker_0: { displayName: "Alice", profileId: 5, noteId: NOTE_ID, embedding } },
+    { speaker_0: embedding }, [row]
+  );
+  assert.equal(row.speakerName, undefined);
+  assert.equal(writes.length, 0);
+});
+
+test("one-on-one roster attaches a suggestion without confirming or mapping the voice", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const row = { id: "row-2", source: "system", speaker: "speaker_0", speakerStatus: "provisional" };
+  const note = { participants: JSON.stringify([{ email: "owner@example.com" },
+    { email: "alice@example.com", displayName: "Alice" }]), transcript: JSON.stringify([row]) };
+  const calls = [];
+  const db = { getNote: () => note, getGoogleAccounts: () => [{ email: "owner@example.com" }],
+    getNoteSpeakerEmbeddings: () => [{ speaker_id: "speaker_0" }], getSpeakerMappings: () => [],
+    setSpeakerMapping: (...args) => calls.push(args), updateNote: (_id, patch) => Object.assign(note, patch) };
+  Object.assign(Object.create(IPCHandlers.prototype), { databaseManager: db })._tryAutoLabelOneOnOne(NOTE_ID);
+  await new Promise((resolve) => setImmediate(resolve));
+  const [updated] = JSON.parse(note.transcript);
+  assert.equal(updated.suggestedName, "Alice");
+  assert.equal(updated.speakerName, undefined);
+  assert.equal(updated.speakerStatus, "suggested");
+  assert.equal(calls.length, 0);
+});
+
+test("live reconciliation cannot restore a name to a short provisional row", () => {
+  const { IPCHandlers } = loadHandlers();
+  const row = { id: "short-row", speaker: "speaker_0", speakerName: undefined,
+    speakerStatus: "provisional", speakerIsPlaceholder: true, uncertainty: { reason: "too_short" } };
+  const { calls, databaseManager } = createMappingRecorder([]);
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
+  handlers._reconcileLiveSpeakerState(
+    { speaker_0: { displayName: "Alice", profileId: 5, noteId: NOTE_ID, embedding } },
+    { speaker_0: embedding }, [row]
+  );
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerStatus, "provisional");
+  assert.equal(calls.set.length, 0);
+});
+
+test("a stop-time name wins over the live label on the same row", () => {
+  const { IPCHandlers } = loadHandlers();
+  const row = { id: "same-row", speaker: "speaker_0", speakerName: "Sam", speakerStatus: "confirmed" };
+  const { databaseManager } = createMappingRecorder([]);
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
+  handlers._reconcileLiveSpeakerState(
+    { speaker_0: { displayName: "Alex", profileId: 5, noteId: NOTE_ID, embedding } },
+    { speaker_0: embedding }, [row]
+  );
+  assert.equal(row.speakerName, "Sam");
+  assert.deepEqual(require("../../src/helpers/speakerUncertainty").changedAfterFinalReason("Alex", row.speakerName),
+    { reason: "changed_after_final" });
 });
 
 function makeExpectationResolver() {

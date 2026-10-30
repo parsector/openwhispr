@@ -198,3 +198,15 @@ test("overflow diarizer clusters stay separate instead of folding into the large
   );
   assert.deepEqual(merged.map((segment) => segment.speaker), ["speaker_0", "speaker_1", "speaker_2"]);
 });
+
+test("short audio remains provisional after transcript merge", () => {
+  const manager = new DiarizationManager();
+  const [row] = manager.mergeWithTranscript(
+    [{ id: "row-1", ...systemSegment(1, "yes"), speakerName: "Live" }],
+    [{ start: 1, end: 1.5, speaker: "speaker_00" }]
+  );
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerStatus, "provisional");
+  assert.equal(row.speakerIsPlaceholder, true);
+  assert.deepEqual(row.uncertainty, { reason: "too_short" });
+});

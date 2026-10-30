@@ -2941,7 +2941,7 @@
       "speakerDetectionDescription": "Identificar diferentes locutores no áudio",
       "numSpeakersPlaceholder": "Detecção automática",
       "numSpeakersLabel": "Número de falantes",
-      "numSpeakersHint": "Os falantes são detectados automaticamente, até este número.",
+      "numSpeakersHint": "Número esperado de falantes; a análise pode encontrar mais.",
       "downloadingModels": "Baixando modelos...",
       "openaiDiarizeNote": "Substitui seu modelo de transcrição por gpt-4o-transcribe-diarize, o único modelo OpenAI com detecção de falantes. Os custos podem diferir do modelo selecionado.",
       "mistralDiarizeNote": "Detecção de falantes incluída sem custo adicional com Voxtral.",

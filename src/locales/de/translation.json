@@ -3286,7 +3286,7 @@
       "speakerDetectionDescription": "Verschiedene Sprecher im Audio identifizieren",
       "numSpeakersPlaceholder": "Automatisch erkennen",
       "numSpeakersLabel": "Anzahl der Sprecher",
-      "numSpeakersHint": "Sprecher werden automatisch erkannt, bis zu dieser Anzahl.",
+      "numSpeakersHint": "Erwartete Sprecherzahl; die Analyse kann weitere Sprecher erkennen.",
       "downloadingModels": "Modelle werden heruntergeladen...",
       "openaiDiarizeNote": "Überschreibt Ihr Transkriptionsmodell mit gpt-4o-transcribe-diarize, dem einzigen OpenAI-Modell mit Sprechererkennung. Die Kosten können von Ihrem gewählten Modell abweichen.",
       "mistralDiarizeNote": "Sprechererkennung ohne Zusatzkosten mit Voxtral enthalten.",

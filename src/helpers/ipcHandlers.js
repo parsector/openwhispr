@@ -1776,7 +1776,7 @@ class IPCHandlers {
     if (expectedCount == null || (config.expectedCount != null && expectedCount <= config.expectedCount)) return;
 
     this.activeMeetingSpeakerConfig = { ...config, expectedCount };
-    liveSpeakerIdentifier.setMaxSpeakers(Math.max(1, expectedCount - 1));
+    liveSpeakerIdentifier.setMaxSpeakers(MAX_SPEAKER_COUNT);
     broadcastToWindows("meeting-session-speaker-config-updated", {
       enabled: config.enabled,
       expectedCount,
@@ -4629,6 +4629,7 @@ class IPCHandlers {
           resolveClusterThreshold,
           dropNegligibleClusters,
           isCollapsedDiarization,
+          consolidateClusters,
         } = require("./diarizationPolicy");
         const { PCM16_MONO_16K_BYTES_PER_SECOND } = require("./transcriptionTimeout");
         const wavPath = path.join(getSafeTempDir(), `ow-diarize-${Date.now()}.wav`);
@@ -4665,6 +4666,13 @@ class IPCHandlers {
           // Drop only negligible phantom clusters; retain every substantial
           // voice even when an explicit count was lower.
           segments = dropNegligibleClusters(segments);
+          const advice = await consolidateClusters(
+            segments, requestedSpeakers, wavPath, require("./speakerEmbeddings"), signal
+          );
+          segments = advice.segments;
+          debugLogger.info("Speaker count advice", {
+            expected: requestedSpeakers, produced: advice.producedCount, final: advice.finalCount,
+          }, "speaker");
           // Callers persist this as audio_duration_seconds: for picked files
           // the renderer has no other duration source.
           return { success: true, segments, durationSeconds };
@@ -8570,22 +8578,14 @@ class IPCHandlers {
     let meetingPendingMicFinalTimer = null;
     let meetingAecEnabled = false;
     let meetingOneOnOneAttendee = null;
-    let meetingOneOnOneProfileBound = false;
     let meetingNoteId = null;
     // First speaker index this session may mint; past a resumed note's ids.
     let meetingSpeakerIndexBase = 0;
 
     const getLiveSpeakerProfiles = () => {
-      const attendees = this._getNoteNonSelfParticipants(meetingNoteId);
-      const attendeeEmails = new Set();
-      for (const p of attendees) {
-        const email = (p.email || "").toLowerCase().trim();
-        if (email) attendeeEmails.add(email);
-      }
-      if (attendeeEmails.size === 0) return [];
-      return this.databaseManager
-        .getSpeakerProfiles(true)
-        .filter((p) => p.email && attendeeEmails.has(p.email.toLowerCase()));
+      // A roster cannot narrow the acoustic runner-up set; doing so makes a
+      // weak match to the only attendee look decisive.
+      return this.databaseManager.getSpeakerProfiles(true);
     };
     const shouldSuppressMicTranscriptSegment = (startedAt, endedAt = Date.now()) =>
       meetingEchoLeakDetector.shouldSuppressMicSegment(startedAt, endedAt);
@@ -8603,26 +8603,7 @@ class IPCHandlers {
     const resolveDiarizationEnabled = () =>
       (this.activeMeetingSpeakerConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
-    const resolveSessionMaxSpeakers = () => {
-      const count = this.activeMeetingSpeakerConfig?.expectedCount;
-      return count == null ? MAX_SPEAKER_COUNT : Math.max(1, Math.min(count, MAX_SPEAKER_COUNT) - 1);
-    };
-
-    const bindOneOnOneAttendeeToSpeaker = (speakerId) => {
-      if (!meetingOneOnOneAttendee || meetingOneOnOneProfileBound || !speakerId) return;
-      if (!resolveDiarizationEnabled()) return;
-      try {
-        // Attendee names may label a meeting cluster, but cannot enroll its voice.
-        liveSpeakerIdentifier.mapSpeaker(speakerId, null, meetingOneOnOneAttendee.displayName, null);
-        meetingOneOnOneProfileBound = true;
-      } catch (error) {
-        debugLogger.warn(
-          "1-on-1 attendee profile binding failed",
-          { error: error.message },
-          "speaker"
-        );
-      }
-    };
+    const resolveSessionMaxSpeakers = () => MAX_SPEAKER_COUNT;
 
     const dispatchMeetingAudioBuffer = (buffer, source, synthetic = false, capturedAt = null) => {
       if (meetingLocalMode) {
@@ -8849,11 +8830,7 @@ class IPCHandlers {
               return;
             }
 
-            bindOneOnOneAttendeeToSpeaker(identification.speakerId);
-
-            const displayName = meetingOneOnOneAttendee
-              ? meetingOneOnOneAttendee.displayName
-              : identification.displayName;
+            const displayName = identification.displayName;
 
             const startTime = Math.max(
               meetingLiveSpeakerStartedAt,
@@ -8866,6 +8843,7 @@ class IPCHandlers {
             const enrichedIdentification = {
               ...identification,
               displayName,
+              suggestedName: meetingOneOnOneAttendee?.displayName,
               startTime,
               endTime,
             };
@@ -8880,11 +8858,14 @@ class IPCHandlers {
                 seg.timestamp <= endTime &&
                 (!seg.speaker || seg.speakerIsPlaceholder)
               ) {
-                applyConfirmedSpeaker(seg, {
+                const patch = {
                   speaker: identification.speakerId,
                   speakerName: displayName || seg.speakerName,
-                  speakerIsPlaceholder: false,
-                });
+                  speakerIsPlaceholder: !displayName,
+                  suggestedName: meetingOneOnOneAttendee?.displayName,
+                };
+                if (displayName) applyConfirmedSpeaker(seg, patch);
+                else applySuggestedSpeaker(seg, patch);
               }
             }
           },
@@ -8918,6 +8899,7 @@ class IPCHandlers {
           for (const { keep, remove, displayName } of merges) {
             for (const seg of meetingDiarizationSegments) {
               if (seg.speaker === remove) {
+                if (!canAutoRelabelSpeaker(seg)) continue;
                 seg.speaker = keep;
                 if (displayName) seg.speakerName = displayName;
               }
@@ -9160,7 +9142,6 @@ class IPCHandlers {
       meetingLiveSpeakerState = null;
       meetingLiveSpeakerStartedAt = null;
       meetingOneOnOneAttendee = null;
-      meetingOneOnOneProfileBound = false;
       meetingNoteId = null;
       meetingSpeakerIndexBase = 0;
       this._activeMeetingNoteId = null;
@@ -9758,7 +9739,6 @@ class IPCHandlers {
         const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
         meetingEchoLeakDetector.reset();
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
-        meetingOneOnOneProfileBound = false;
         meetingNoteId = options.noteId ?? null;
         meetingSpeakerIndexBase = this._resolveMeetingSpeakerIndexBase(
           meetingNoteId,
@@ -12752,7 +12732,7 @@ class IPCHandlers {
           explicit: payload?.countIsExplicit === true,
         };
         liveSpeakerIdentifier.setEnabled(enabled);
-        liveSpeakerIdentifier.setMaxSpeakers(expectedCount == null ? MAX_SPEAKER_COUNT : Math.max(1, expectedCount - 1));
+        liveSpeakerIdentifier.setMaxSpeakers(MAX_SPEAKER_COUNT);
         return { success: true };
       } catch (error) {
         return { success: false, error: error.message };
@@ -13145,13 +13125,6 @@ class IPCHandlers {
             const similarity = speakerEmbeddings.cosineSimilarity(profileEmb, speakerEmb);
 
             if (similarity > 0.6) {
-              this.databaseManager.setSpeakerMapping(
-                noteId,
-                emb.speaker_id,
-                profile.id,
-                profile.display_name
-              );
-
               const note = this.databaseManager.getNote(noteId);
               if (note?.transcript) {
                 try {
@@ -13164,11 +13137,8 @@ class IPCHandlers {
                           speakerName: profile.display_name,
                           speakerIsPlaceholder: false,
                         });
-                      } else {
-                        seg.speakerName = profile.display_name;
-                        seg.speakerIsPlaceholder = false;
+                        changed = true;
                       }
-                      changed = true;
                     }
                   }
                   if (changed) {
@@ -13211,22 +13181,13 @@ class IPCHandlers {
         );
         if (!unmapped.length) return;
 
-        for (const emb of unmapped) {
-          this.databaseManager.setSpeakerMapping(noteId, emb.speaker_id, null, displayName);
-          liveSpeakerIdentifier.mapSpeaker(emb.speaker_id, null, displayName, noteId);
-        }
-
         const unmappedSystemSpeakers = new Set(unmapped.map((e) => e.speaker_id));
         let changed = false;
         for (const seg of transcript) {
           if (!unmappedSystemSpeakers.has(seg.speaker)) continue;
           if (seg.speakerName && !seg.speakerIsPlaceholder) continue;
-          if (canAutoRelabelSpeaker(seg)) {
-            applyConfirmedSpeaker(seg, { speakerName: displayName, speakerIsPlaceholder: false });
-          } else {
-            seg.speakerName = displayName;
-            seg.speakerIsPlaceholder = false;
-          }
+          if (!canAutoRelabelSpeaker(seg)) continue;
+          applySuggestedSpeaker(seg, { suggestedName: displayName });
           changed = true;
         }
 
@@ -13237,7 +13198,7 @@ class IPCHandlers {
         }
 
         debugLogger.info(
-          "Auto-labeled 1-on-1 meeting speakers",
+          "Suggested 1-on-1 meeting speakers",
           { noteId, displayName, speakerCount: unmapped.length },
           "speaker"
         );
@@ -13256,6 +13217,9 @@ class IPCHandlers {
       if (segment.speaker !== speakerId) {
         continue;
       }
+
+      // A stop-time label already attached to this row outranks the live pass.
+      if (segment.speakerName) continue;
 
       applyConfirmedSpeaker(segment, {
         speakerName: displayName,
@@ -13323,9 +13287,25 @@ class IPCHandlers {
       let profileId = bestEntry.profileId;
 
       if (bestEntry.noteId) {
-        const liveMapping = getMappingsForNote(bestEntry.noteId).find(
+        const hasLockedRow = enrichedSegments.some((segment) =>
+          segment.speaker === mappedId && isSpeakerLocked(segment)
+        );
+        const mappedRows = enrichedSegments.filter((segment) => segment.speaker === mappedId);
+        const allAbstained = mappedRows.length > 0 && mappedRows.every((segment) =>
+          !canAutoRelabelSpeaker(segment)
+        );
+        const finalNameDiffers = mappedRows.some((segment) =>
+          segment.speakerName && displayName && segment.speakerName !== displayName
+        );
+        const noteMappingsForId = getMappingsForNote(bestEntry.noteId);
+        const existingTarget = noteMappingsForId.find((mapping) => mapping.speaker_id === mappedId);
+        const liveMapping = noteMappingsForId.find(
           (mapping) => mapping.speaker_id === bestEntry.speakerId
         );
+        if (hasLockedRow || allAbstained || finalNameDiffers ||
+            (existingTarget && bestEntry.speakerId !== mappedId)) {
+          continue;
+        }
         if (liveMapping) {
           displayName = liveMapping.display_name || displayName;
           profileId = liveMapping.profile_id ?? profileId;
@@ -13517,8 +13497,20 @@ class IPCHandlers {
         tmpWav = await this.diarizationManager.convertRawPcmToWav(rawPcmPath, 24000);
         let diarizationSegments = await this.diarizationManager.diarize(
           tmpWav,
-          numSpeakers > 0 ? { numSpeakers } : {}
+          {}
         );
+        const producedCount = new Set(diarizationSegments.map((segment) => segment.speaker)).size;
+        if (numSpeakers > 0 && !kept.some(isSpeakerLocked)) {
+          const advice = await require("./diarizationPolicy").consolidateClusters(
+            diarizationSegments, numSpeakers, tmpWav, require("./speakerEmbeddings")
+          );
+          diarizationSegments = advice.segments;
+        }
+        debugLogger.info("Meeting speaker count advice", {
+          expected: numSpeakers > 0 ? numSpeakers : null,
+          produced: producedCount,
+          final: new Set(diarizationSegments.map((segment) => segment.speaker)).size,
+        }, "speaker");
 
         const enrichedSegments = this.diarizationManager.mergeWithTranscript(
           kept,
@@ -13615,6 +13607,7 @@ class IPCHandlers {
                       if (seg.uncertainty?.reason !== "too_short") seg.uncertainty = reason;
                       seg.speakerName = undefined;
                       seg.speakerIsPlaceholder = true;
+                      seg.speakerStatus = "provisional";
                     }
                   }
                   continue;
@@ -13656,7 +13649,7 @@ class IPCHandlers {
           const prior = transcriptSegments.find((row) => row.id && row.id === seg.id);
           const { changedAfterFinalReason } = require("./speakerUncertainty");
           const changed = changedAfterFinalReason(prior?.speakerName, seg.speakerName);
-          if (changed && !isSpeakerLocked(seg)) {
+          if (changed && !isSpeakerLocked(seg) && seg.uncertainty?.reason !== "too_short") {
             seg.uncertainty = changed;
           }
         }

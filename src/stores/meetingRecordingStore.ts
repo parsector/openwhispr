@@ -79,6 +79,7 @@ export const SIDE_PANEL_BREAKPOINT_PX = 1024;
 interface SpeakerIdentification {
   speakerId: string;
   displayName?: string | null;
+  suggestedName?: string | null;
   startTime: number;
   endTime: number;
 }
@@ -582,7 +583,8 @@ function applySpeakerIdentification(
     segment.source !== "system" ||
     !isSegmentWithinIdentificationWindow(segment, identification) ||
     (segment.speaker && !segment.speakerIsPlaceholder && segment.speakerStatus !== "provisional") ||
-    segment.speakerLocked
+    segment.speakerLocked ||
+    segment.uncertainty?.reason === "too_short"
   ) {
     return segment;
   }
@@ -591,8 +593,9 @@ function applySpeakerIdentification(
     ...segment,
     speaker: identification.speakerId,
     speakerName: identification.displayName ?? segment.speakerName,
-    speakerIsPlaceholder: false,
-    speakerStatus: "confirmed",
+    suggestedName: identification.suggestedName ?? segment.suggestedName,
+    speakerIsPlaceholder: !identification.displayName,
+    speakerStatus: identification.displayName ? "confirmed" : "suggested",
   });
 }
 
@@ -1223,12 +1226,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         for (const { keep, remove, displayName } of merges) {
           next = next.map((seg) => {
             if (seg.speaker !== remove) return seg;
-            // Locked segments keep their user-set name but must still move to the
-            // kept cluster: the removed id no longer exists in the identifier, so
-            // later merges and renames would never reach a segment left on it.
-            if (seg.speakerLocked) {
-              return normalizeTranscriptSegment({ ...seg, speaker: keep });
-            }
+            if (seg.speakerLocked || seg.uncertainty?.reason === "too_short") return seg;
             return normalizeTranscriptSegment({
               ...seg,
               speaker: keep,
@@ -1249,11 +1247,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             if (id.speakerId === remove) id.speakerId = keep;
           }
 
-          const lockedName = speakerLocks.get(remove);
-          if (lockedName) {
-            speakerLocks.set(keep, lockedName);
-            speakerLocks.delete(remove);
-          }
         }
       });
       if (mergeCleanup) ipcCleanups.push(mergeCleanup);
@@ -1303,20 +1296,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         }
       );
       if (speakerConfigCleanup) ipcCleanups.push(speakerConfigCleanup);
-
-      if (startResult.oneOnOneAttendee) {
-        const synthetic: SpeakerIdentification = {
-          // Main's live identifier mints the session's first cluster at the base too.
-          speakerId: `speaker_${sessionSpeakerIndexBase}`,
-          displayName: startResult.oneOnOneAttendee.displayName,
-          startTime: 0,
-          endTime: Number.MAX_SAFE_INTEGER,
-        };
-        reserveSpeakerIndex(synthetic.speakerId);
-        setSystemPartialSpeakerIdentity(synthetic.speakerId, synthetic.displayName);
-        rememberSystemSpeaker(synthetic.speakerId, synthetic.displayName, false, Date.now());
-        speakerIdentifications.push(synthetic);
-      }
 
       const pendingMicChunks: ArrayBuffer[] = [];
       const pendingSystemChunks: ArrayBuffer[] = [];

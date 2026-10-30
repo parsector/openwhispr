@@ -3021,7 +3021,7 @@
       "speakerDetectionDescription": "音声内の異なる話者を識別",
       "numSpeakersPlaceholder": "自動検出",
       "numSpeakersLabel": "話者の人数",
-      "numSpeakersHint": "話者はこの人数を上限として自動で検出されます。",
+      "numSpeakersHint": "予想される話者数です。解析ではさらに多くの話者が見つかる場合があります。",
       "downloadingModels": "モデルをダウンロード中...",
       "openaiDiarizeNote": "話者検出をサポートする唯一のOpenAIモデルであるgpt-4o-transcribe-diarizeに切り替わります。選択したモデルとコストが異なる場合があります。",
       "mistralDiarizeNote": "Voxtralでの話者検出は追加料金なしで利用できます。",

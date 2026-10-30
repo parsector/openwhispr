@@ -191,10 +191,26 @@ test("an extra cluster stays distinct even when its voice matches another", asyn
 
   const result = await handler({}, audioPath, { numSpeakers: 2 });
 
-  assert.equal(centroidCalls.length, 0);
+  assert.equal(centroidCalls.length, 1);
   assert.equal(result.segments.filter((s) => s.speaker === "speaker_1").length, 60);
   assert.equal(result.segments.filter((s) => s.speaker === "speaker_0").length, 80);
   assert.equal(result.segments.filter((s) => s.speaker === "speaker_2").length, 40);
+});
+
+test("decisively matching extra clusters consolidate, while close alternatives stay separate", async () => {
+  diarizerOutput = [
+    ...cluster("speaker_0", 10, 6), ...cluster("speaker_1", 10, 6), ...cluster("speaker_2", 10, 6),
+  ];
+  clusterCentroids = async () => new Map([
+    ["speaker_0", [1, 0, 0]], ["speaker_1", [0.98, 0.2, 0]], ["speaker_2", [0, 0, 1]],
+  ]);
+  const merged = await handler({}, audioPath, { numSpeakers: 2 });
+  assert.deepEqual(speakersOf(merged.segments), ["speaker_0", "speaker_2"]);
+  clusterCentroids = async () => new Map([
+    ["speaker_0", [1, 0, 0]], ["speaker_1", [0.96, 0.28, 0]], ["speaker_2", [0.95, -0.31, 0]],
+  ]);
+  const distinct = await handler({}, audioPath, { numSpeakers: 2 });
+  assert.deepEqual(speakersOf(distinct.segments), ["speaker_0", "speaker_1", "speaker_2"]);
 });
 
 test("extra clusters stay distinct when voices can't be read", async () => {
@@ -210,7 +226,7 @@ test("extra clusters stay distinct when voices can't be read", async () => {
   const result = await handler({}, audioPath, { numSpeakers: 2 });
 
   assert.equal(result.success, true);
-  assert.equal(centroidCalls.length, 0);
+  assert.equal(centroidCalls.length, 1);
   assert.equal(result.segments.filter((s) => s.speaker === "speaker_0").length, 80);
   assert.equal(result.segments.filter((s) => s.speaker === "speaker_2").length, 40);
 });

@@ -15,7 +15,7 @@ function shortSpanReason(span) {
 }
 
 function changedAfterFinalReason(priorName, finalName) {
-  return priorName && finalName && priorName !== finalName
+  return priorName && priorName !== finalName
     ? { reason: "changed_after_final" } : null;
 }
 

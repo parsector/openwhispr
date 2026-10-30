@@ -173,7 +173,7 @@ test("a lower base from main never pulls the session back onto earlier ids", asy
   await store.stopRecording();
 });
 
-test("a 1:1 attendee is bound to the resumed session's first speaker id", async (t) => {
+test("a 1:1 attendee never confirms the resumed session's first speaker", async (t) => {
   const { api, state } = createElectronAPI({
     startResult: { oneOnOneAttendee: { displayName: "Grace", email: null } },
   });
@@ -183,7 +183,8 @@ test("a 1:1 attendee is bound to the resumed session's first speaker id", async 
   emitSystemFinal(state, "hi again");
   const resumed = segmentWithText(store, "hi again");
   assert.equal(resumed.speaker, "speaker_2");
-  assert.equal(resumed.speakerName, "Grace");
+  assert.equal(resumed.speakerName, undefined);
+  assert.notEqual(resumed.speakerStatus, "confirmed");
   assert.equal(segmentWithText(store, "agreed").speakerName, undefined);
   await store.stopRecording();
 });

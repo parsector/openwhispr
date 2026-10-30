@@ -32,11 +32,12 @@ function isSpeakerLocked(segment) {
 }
 
 function canAutoRelabelSpeaker(segment) {
-  return !isSpeakerLocked(segment);
+  return !isSpeakerLocked(segment) && !["too_short", "close_match", "not_sure"].includes(segment?.uncertainty?.reason);
 }
 
 function applySpeakerUpdate(segment, patch, status) {
-  if (isSpeakerLocked(segment)) {
+  if (!canAutoRelabelSpeaker(segment)) {
+    if (!isSpeakerLocked(segment)) return segment;
     segment.speakerStatus = SPEAKER_STATUS.LOCKED;
     segment.speakerLocked = true;
     segment.speakerLockSource = segment.speakerLockSource || "user";
@@ -58,7 +59,7 @@ function applyConfirmedSpeaker(segment, patch = {}) {
 }
 
 function applySuggestedSpeaker(segment, patch = {}) {
-  if (isSpeakerLocked(segment)) {
+  if (!canAutoRelabelSpeaker(segment)) {
     return segment;
   }
 

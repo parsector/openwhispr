@@ -48,6 +48,8 @@ const SILENCE_THRESHOLD = 0.08;
 const SILENCE_WINDOWS_TO_END = 24;
 const MATCH_THRESHOLD = 0.65;
 const MATCH_MARGIN = 0.03;
+const RECLUSTER_SIMILARITY = 0.93;
+const RECLUSTER_MARGIN = 0.08;
 const LIVE_WINDOW_PADDING_SECONDS = 0.75;
 // The 24 kHz -> 16 kHz resampler restarts on every buffer and only divides
 // evenly on whole groups of 3 input samples (6 bytes). Capture buffers come in
@@ -283,7 +285,13 @@ class LiveSpeakerIdentifier {
         if (removed.has(speakers[j][0])) continue;
 
         const similarity = speakerEmbeddings.cosineSimilarity(speakers[i][1], speakers[j][1]);
-        if (similarity < MATCH_THRESHOLD) continue;
+        if (similarity < RECLUSTER_SIMILARITY) continue;
+        const bestAlternative = (index, otherIndex) => speakers.reduce((best, [id, embedding], k) =>
+          k === index || k === otherIndex || removed.has(id)
+            ? best
+            : Math.max(best, speakerEmbeddings.cosineSimilarity(speakers[index][1], embedding)), 0);
+        if (similarity - bestAlternative(i, j) < RECLUSTER_MARGIN ||
+            similarity - bestAlternative(j, i) < RECLUSTER_MARGIN) continue;
 
         // Confirmed-distinct identities (different profiles, or different
         // user-set names) must never merge on embedding similarity alone.
