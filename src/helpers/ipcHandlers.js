@@ -13058,6 +13058,42 @@ class IPCHandlers {
       return this.databaseManager.getSpeakerProfiles();
     });
 
+    ipcMain.handle("people-list", () => require("./peopleActions").listPeople(this.databaseManager));
+    ipcMain.handle("people-review", (_event, profileId) =>
+      require("./peopleActions").listReviewRows(this.databaseManager, profileId));
+    ipcMain.handle("people-preview", (_event, request) =>
+      require("./peopleActions").previewPersonAction(this.databaseManager, request));
+    ipcMain.handle("people-apply", (_event, request) => {
+      try {
+        const result = require("./peopleActions").applyPersonAction(this.databaseManager, request);
+        if (result.success && request.type !== 'rename') this.notifyVectorChanges();
+        if (result.success) for (const noteId of result.noteIds) {
+          const note = this.databaseManager.getNote(noteId);
+          setImmediate(() => broadcastToWindows("note-updated", note));
+          this._asyncMirrorWrite(note);
+        }
+        return result;
+      } catch (error) {
+        debugLogger.error("People action failed", { error: error.message }, "speaker");
+        return { success: false, error: "persistence_failed" };
+      }
+    });
+    ipcMain.handle("people-undo", (_event, id) => {
+      try {
+        const result = require("./peopleActions").undoPersonAction(this.databaseManager, id);
+        if (result.success) this.notifyVectorChanges();
+        if (result.success) for (const noteId of result.noteIds) {
+          const note = this.databaseManager.getNote(noteId);
+          setImmediate(() => broadcastToWindows("note-updated", note));
+          this._asyncMirrorWrite(note);
+        }
+        return result;
+      } catch (error) {
+        debugLogger.error("People undo failed", { error: error.message }, "speaker");
+        return { success: false, error: "persistence_failed" };
+      }
+    });
+
     ipcMain.handle("attach-speaker-email", async (_event, profileId, email) => {
       try {
         const profile = this.databaseManager.attachEmailToProfile(profileId, email);
@@ -13093,6 +13129,7 @@ class IPCHandlers {
   }
 
   _retroactiveMapping(profile) {
+    if (!profile.embedding?.length || profile.sample_count === 0) return;
     setImmediate(async () => {
       try {
         const speakerEmbeddings = require("./speakerEmbeddings");

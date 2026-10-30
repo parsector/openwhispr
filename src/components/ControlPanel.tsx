@@ -980,6 +980,18 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               if (!open) setSettingsSection(undefined);
             }}
             initialSection={settingsSection}
+            onOpenNote={(id, rowId) => {
+              window.sessionStorage.setItem("peopleReviewTarget", JSON.stringify({ noteId: id, rowId }));
+              void window.electronAPI.getNote(id).then((note) => {
+                if (!note) return;
+                if (note.folder_id) {
+                  setActiveFolderId(note.folder_id);
+                  void initializeNotes(null, 50, note.folder_id);
+                }
+                setActiveNoteId(id);
+                setActiveView("personal-notes");
+              });
+            }}
           />
         </Suspense>
       )}

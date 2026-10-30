@@ -6470,21 +6470,20 @@ class DatabaseManager {
           .get(name);
       }
       if (existing) {
-        const stored = new Float32Array(
-          existing.embedding.buffer,
-          existing.embedding.byteOffset,
-          existing.embedding.byteLength / 4
-        );
-        const incoming = new Float32Array(
-          embeddingBuffer.buffer,
-          embeddingBuffer.byteOffset,
-          embeddingBuffer.byteLength / 4
-        );
-        const updated = new Float32Array(stored.length);
-        for (let i = 0; i < stored.length; i++) {
-          updated[i] = 0.3 * incoming[i] + 0.7 * stored[i];
+        if (normalizedEmail) {
+          const collision = this.db.prepare(
+            "SELECT id FROM speaker_profiles WHERE lower(email) = ? AND id != ?"
+          ).get(normalizedEmail, existing.id);
+          if (collision) throw new Error("A different speaker already has this email");
         }
-        const updatedBuf = Buffer.from(updated.buffer);
+        const stored = new Float32Array(existing.embedding.buffer,
+          existing.embedding.byteOffset, existing.embedding.byteLength / 4);
+        const incoming = new Float32Array(embeddingBuffer.buffer,
+          embeddingBuffer.byteOffset, embeddingBuffer.byteLength / 4);
+        const updated = stored.length ? new Float32Array(stored.length) : incoming;
+        if (stored.length) for (let i = 0; i < stored.length; i++)
+          updated[i] = 0.3 * incoming[i] + 0.7 * stored[i];
+        const updatedBuf = Buffer.from(updated.buffer, updated.byteOffset, updated.byteLength);
         const finalEmail = normalizedEmail || existing.email || null;
         this.db
           .prepare(
@@ -6494,14 +6493,6 @@ class DatabaseManager {
         const resolved = this.db
           .prepare("SELECT * FROM speaker_profiles WHERE id = ?")
           .get(existing.id);
-        if (normalizedEmail) {
-          const collision = this.db
-            .prepare("SELECT * FROM speaker_profiles WHERE lower(email) = ? AND id != ?")
-            .get(normalizedEmail, existing.id);
-          if (collision) {
-            return this.mergeSpeakerProfiles(resolved, collision);
-          }
-        }
         return resolved;
       }
       const result = this.db
@@ -6534,7 +6525,7 @@ class DatabaseManager {
 
       const collision = this._findProfileByEmail(normalizedEmail);
       if (collision && collision.id !== profileId) {
-        return this.mergeSpeakerProfiles(collision, profile);
+        throw new Error("A different speaker already has this email");
       }
 
       this.db
@@ -6600,7 +6591,7 @@ class DatabaseManager {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const query = includeEmbedding
-        ? "SELECT * FROM speaker_profiles"
+        ? "SELECT * FROM speaker_profiles WHERE sample_count > 0 AND length(embedding) > 0"
         : `SELECT id, display_name, email, sample_count, created_at, updated_at
            FROM speaker_profiles`;
       return this.db.prepare(query).all();
@@ -6608,6 +6599,29 @@ class DatabaseManager {
       debugLogger.error("Error getting speaker profiles", { error: error.message }, "database");
       throw error;
     }
+  }
+
+  createNamedSpeakerProfile(name, email = null) {
+    const clean = String(name || "").trim();
+    if (!clean || clean.length > 120) throw new Error("Invalid speaker name");
+    const normalizedEmail = this._normalizeEmail(email);
+    if (normalizedEmail && this._findProfileByEmail(normalizedEmail))
+      throw new Error("A different speaker already has this email");
+    const id = this.db.prepare(
+      "INSERT INTO speaker_profiles (display_name, email, embedding, sample_count) VALUES (?, ?, ?, 0)"
+    ).run(clean, normalizedEmail, Buffer.alloc(0)).lastInsertRowid;
+    return this.db.prepare("SELECT * FROM speaker_profiles WHERE id = ?").get(id);
+  }
+
+  removeUnusedNamedSpeakerProfile(profileId) {
+    const profile = this.db.prepare("SELECT sample_count, length(embedding) AS bytes FROM speaker_profiles WHERE id = ?").get(profileId);
+    if (!profile || profile.sample_count || profile.bytes) return;
+    for (const table of ["speaker_mappings", "speaker_run_mappings"])
+      if (this.db.prepare(`SELECT 1 FROM ${table} WHERE profile_id = ? LIMIT 1`).get(profileId)) return;
+    const { readTranscriptDocument } = require("./transcriptDocument");
+    for (const note of this.db.prepare("SELECT transcript FROM notes WHERE transcript IS NOT NULL").all())
+      if (readTranscriptDocument(note.transcript).rows.some((row) => row.suggestedProfileId === profileId && !row.deleted)) return;
+    this.db.prepare("DELETE FROM speaker_profiles WHERE id = ?").run(profileId);
   }
 
   setSpeakerMapping(noteId, speakerId, profileId, displayName) {

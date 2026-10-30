@@ -297,6 +297,15 @@ export default function NoteEditor({
       ? "transcript"
       : "raw";
   const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  const [peopleFocusRowId, setPeopleFocusRowId] = useState<string | undefined>(() => {
+    try {
+      const target = JSON.parse(window.sessionStorage.getItem("peopleReviewTarget") || "null");
+      if (target?.noteId !== note.id) return undefined;
+      window.sessionStorage.removeItem("peopleReviewTarget");
+      return target.rowId;
+    } catch { return undefined; }
+  });
+  useEffect(() => { if (peopleFocusRowId) setSelectedViewMode("transcript"); }, [peopleFocusRowId]);
   // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
   // rendering, and a tab that no longer renders can never be the current one.
   const viewMode: MeetingViewMode =
@@ -643,7 +652,16 @@ export default function NoteEditor({
         setDiarizedSegments(null);
         setIsDiarizing(false);
         setSpeakerMappings({});
-        setSelectedViewMode(defaultViewMode);
+        let reviewTarget: { noteId?: number; rowId?: string } | null = null;
+        try { reviewTarget = JSON.parse(window.sessionStorage.getItem("peopleReviewTarget") || "null"); } catch { /* Ignore stale navigation data. */ }
+        if (reviewTarget?.noteId === note.id && reviewTarget.rowId) {
+          window.sessionStorage.removeItem("peopleReviewTarget");
+          setPeopleFocusRowId(reviewTarget.rowId);
+          setSelectedViewMode("transcript");
+        } else {
+          setPeopleFocusRowId(undefined);
+          setSelectedViewMode(defaultViewMode);
+        }
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";
         }
@@ -717,7 +735,7 @@ export default function NoteEditor({
   const commitSpeakerCorrection = useCallback(async (request: {
     type: "apply" | "undo"; id: string; scope?: "row" | "selected" | "cluster";
     rowIds?: string[]; target?: { runId?: string; clusterId?: string };
-    name?: string | null; profileId?: number | null;
+    name?: string | null; profileId?: number | null; email?: string | null;
   }) => {
     const previousCorrection = correctionQueueRef.current;
     let releaseCorrection!: () => void;
@@ -773,7 +791,7 @@ export default function NoteEditor({
   }, [displaySegments, isRecording, note.id, refreshSpeakerProfiles, t]);
 
   const handleMapSpeaker = useCallback(async (
-    speakerId: string, displayName: string, _email?: string | null, profileId?: number | null
+    speakerId: string, displayName: string, email?: string | null, profileId?: number | null
   ) => {
     const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
     const anchor = rows.find((row) => row.speaker === speakerId);
@@ -782,7 +800,7 @@ export default function NoteEditor({
       rowIds: rows.filter((row) => row.speaker === speakerId &&
         row.diarizationRunId === anchor.diarizationRunId).map((row) => row.id),
       target: { runId: anchor.diarizationRunId, clusterId: speakerId },
-      name: displayName, profileId });
+      name: displayName, profileId, email });
   }, [commitSpeakerCorrection, displaySegments, isRecording]);
 
   const handleConfirmSuggestion = useCallback(
@@ -847,7 +865,7 @@ export default function NoteEditor({
   }, [selectedSegmentIds.size, handleClearSelection]);
 
   const handleAssignSpeakerScope = useCallback(async (
-    scope: "row" | "selected" | "cluster", rowId: string, displayName: string | null, profileId?: number
+    scope: "row" | "selected" | "cluster", rowId: string, displayName: string | null, profileId?: number, email?: string | null
   ) => {
     const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
     const row = rows.find((segment) => segment.id === rowId);
@@ -859,7 +877,7 @@ export default function NoteEditor({
     const ok = await commitSpeakerCorrection({ type: "apply", id: crypto.randomUUID(), scope,
       rowIds, target: scope === "cluster"
         ? { runId: row.diarizationRunId, clusterId: row.speaker } : undefined,
-      name: displayName, profileId });
+      name: displayName, profileId, email });
     if (ok && scope === "selected") handleClearSelection();
   }, [commitSpeakerCorrection, displaySegments, handleClearSelection, isRecording, selectedSegmentIds]);
 
@@ -1505,6 +1523,7 @@ export default function NoteEditor({
                 />
               ) : (
                 <MeetingTranscriptChat
+                  focusRowId={peopleFocusRowId}
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   noteId={note.id}
                   segments={displaySegments}

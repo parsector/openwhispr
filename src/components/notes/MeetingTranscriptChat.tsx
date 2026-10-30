@@ -342,7 +342,8 @@ function SpeakerPicker({
   const selectionRows = [
     ...(showSelf ? [selectSelf] : []),
     ...visibleParticipants.map(
-      (p) => () => onSelectName(p.displayName || p.email.split("@")[0], p.email)
+      (p) => () => onSelectName(p.displayName || p.email.split("@")[0], p.email,
+        speakerProfiles?.find(profile => profile.email?.toLowerCase() === p.email.toLowerCase())?.id)
     ),
     ...visibleProfiles.map((p) => () => onSelectName(p.display_name, p.email, p.id)),
   ];
@@ -530,7 +531,7 @@ function SpeakerLabel({
   isOriginallyYou: boolean;
   self?: "offer" | "exclude";
   onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
-  onAssignScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number) => void;
+  onAssignScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number, email?: string | null) => void;
   onUndoCorrection?: (id: string) => void;
   selectedRowIds?: Set<string>;
   clusterRowCount: number;
@@ -602,7 +603,7 @@ function SpeakerLabel({
           onSelectName={(name, email, profileId) => {
             if (scope === "cluster" || !onAssignScope) {
               if (segment.speaker) onMap?.(speakerId, name, email, profileId);
-            } else onAssignScope(scope, segment.id, name, profileId);
+            } else onAssignScope(scope, segment.id, name, profileId, email);
             setOpen(false);
           }}
           onClose={() => setOpen(false)}
@@ -757,7 +758,7 @@ interface SegmentRowProps {
   matchedProfile?: SpeakerProfileLite;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
-  onAssignSpeakerScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number) => void;
+  onAssignSpeakerScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number, email?: string | null) => void;
   onUndoCorrection?: (id: string) => void;
   selectedRowIds?: Set<string>;
   clusterRowCount: number;
@@ -931,7 +932,7 @@ interface MeetingTranscriptChatProps {
   userTouchedStepper?: boolean;
   onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
   onSetSessionExpectedCount?: (count: number) => void;
-  onAssignSpeakerScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number) => void;
+  onAssignSpeakerScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number, email?: string | null) => void;
   onUndoCorrection?: (id: string) => void;
   onMapSpeaker?: (
     speakerId: string,
@@ -945,6 +946,7 @@ interface MeetingTranscriptChatProps {
   onToggleSelect?: (segmentId: string) => void;
   reviewOnly?: boolean;
   contentClassName?: string;
+  focusRowId?: string;
 }
 
 export function MeetingTranscriptChat({
@@ -973,6 +975,7 @@ export function MeetingTranscriptChat({
   onAttachSpeakerEmail,
   onToggleSelect,
   reviewOnly = false,
+  focusRowId,
   contentClassName,
 }: MeetingTranscriptChatProps) {
   const segments = useMemo(() => normalizeTranscriptSegments(providedSegments), [providedSegments]);
@@ -1035,6 +1038,14 @@ export function MeetingTranscriptChat({
     overscan: 8,
   });
   const totalSize = virtualizer.getTotalSize();
+  useEffect(() => {
+    if (!focusRowId) return;
+    const index = shownIndexes.findIndex(i => segments[i]?.id === focusRowId);
+    if (index < 0) return;
+    virtualizer.scrollToIndex(index, { align: "center" });
+    const timer = window.setTimeout(() => document.querySelector<HTMLElement>(`[data-speaker-row-id="${CSS.escape(focusRowId)}"]`)?.focus(), 80);
+    return () => window.clearTimeout(timer);
+  }, [focusRowId, shownIndexes, segments, virtualizer]);
 
   const systemPartialSpeakerLabel =
     systemPartialSpeakerName ||
@@ -1206,9 +1217,11 @@ export function MeetingTranscriptChat({
               return (
                 <div
                   key={segment.id}
+                  data-speaker-row-id={segment.id}
+                  tabIndex={-1}
                   data-index={virtualItem.index}
                   ref={virtualizer.measureElement}
-                  className="pb-1.5"
+                  className="pb-1.5 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:rounded-md"
                   style={{
                     position: "absolute",
                     top: 0,

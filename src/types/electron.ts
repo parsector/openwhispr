@@ -3753,6 +3753,11 @@ declare global {
       ) => () => void;
 
       // Speaker name mapping
+      listPeople?: () => Promise<Array<{ id: number; displayName: string; email: string | null; noteCount: number; segmentCount: number; lastHeard: string | null; sampleCount: number; hasVoice: boolean; legacyVoice: boolean; usedOnce: boolean; duplicates: Array<{ id: number; name: string }> }>>;
+      listPeopleReview?: (profileId?: number | null) => Promise<Array<{ noteId: number; noteTitle: string; rowId: string; text: string; speakerName: string | null; profileId: number | null; reason: string; candidates: [string, string] | null; timestamp: string }>>;
+      previewPersonAction?: (request: { type: "rename" | "merge" | "delete" | "reset"; profileId: number; survivorId?: number; name?: string }) => Promise<{ success: boolean; error?: string; noteCount?: number; segmentCount?: number; pinnedCount?: number; voiceSamples?: number }>;
+      applyPersonAction?: (request: { type: "rename" | "merge" | "delete" | "reset"; profileId: number; survivorId?: number; name?: string; expected?: { noteCount: number; segmentCount: number; pinnedCount: number } }) => Promise<{ success: boolean; error?: string; id?: string; noteCount?: number; segmentCount?: number; pinnedCount?: number }>;
+      undoPersonAction?: (id: string) => Promise<{ success: boolean; error?: string }>;
       getSpeakerMappings?: (noteId: number) => Promise<
         Array<{
           note_id: number;
@@ -3770,6 +3775,7 @@ declare global {
         target?: { runId?: string; clusterId?: string };
         name?: string | null;
         profileId?: number | null;
+        email?: string | null;
         rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
       }) => Promise<{
         success: boolean;

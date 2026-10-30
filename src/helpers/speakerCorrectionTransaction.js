@@ -41,7 +41,7 @@ function applySpeakerCorrection(database, identifier, request) {
       if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
     let rows = [...byId.values()];
     if (request.type === "apply") {
-      const { scope, target, name, profileId } = request;
+      const { scope, target, name, profileId, email } = request;
       if (!["row", "selected", "cluster"].includes(scope))
         return { success: false, error: "invalid_request" };
       const ids = new Set(request.rowIds || []);
@@ -51,12 +51,15 @@ function applySpeakerCorrection(database, identifier, request) {
           : ids.has(row.id)
       ));
       if (!affected.length) return { success: false, error: "target_missing" };
+      const createdProfile = name && profileId == null && database.createNamedSpeakerProfile
+        ? database.createNamedSpeakerProfile(name, email) : null;
+      const chosenProfileId = profileId ?? createdProfile?.id ?? null;
       const key = scope === "cluster" ? mappingKey(target.runId, target.clusterId) : null;
       const before = key
         ? database.getSpeakerRunMapping(noteId, target.runId, target.clusterId)
         : null;
       // The empty string is the durable run-mapping sentinel for explicit Unknown.
-      const after = key ? { display_name: name ?? "", profile_id: profileId ?? null } : null;
+      const after = key ? { display_name: name ?? "", profile_id: chosenProfileId } : null;
       const affectedRowIds = affected.map((row) => row.id);
       const affectedSet = new Set(affectedRowIds);
       const snapshots = {};
@@ -74,7 +77,7 @@ function applySpeakerCorrection(database, identifier, request) {
           speakerLockSource: "user",
           correctionRevision: (Number(row.correctionRevision) || 0) + 1,
           suggestedName: undefined,
-          suggestedProfileId: profileId ?? undefined,
+          suggestedProfileId: chosenProfileId ?? undefined,
           uncertainty: undefined,
         };
         snapshots[row.id] = { previous, next: snapshot(next) };
@@ -93,6 +96,7 @@ function applySpeakerCorrection(database, identifier, request) {
         affectedRowIds, snapshots, mappingChanged: !!key,
         mappingBefore: before && { displayName: before.display_name, profileId: before.profile_id },
         mappingAfter: after && { displayName: after.display_name, profileId: after.profile_id },
+        createdProfileId: createdProfile?.id,
       };
       const anchor = rows.find((row) => row.id === affected[0].id);
       anchor.corrections[anchor.corrections.length - 1] = event;
@@ -148,6 +152,8 @@ function applySpeakerCorrection(database, identifier, request) {
     const result = database.updateNote(noteId, { transcript,
       speaker_action_log: JSON.stringify(nextLog), speaker_label_undo: null });
     if (!result?.success) throw Error(result?.error || "transcript_failed");
+    if (request.type === "undo" && log.actions.at(-1)?.event?.createdProfileId)
+      database.removeUnusedNamedSpeakerProfile?.(log.actions.at(-1).event.createdProfileId);
     if (committedMapping && identifier &&
       (identifier.activeRunId === undefined || identifier.activeRunId === committedMapping.runId)) {
       const { clusterId, value } = committedMapping;

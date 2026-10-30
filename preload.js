@@ -605,6 +605,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSpeakerMappings: (noteId) => ipcRenderer.invoke("get-speaker-mappings", noteId),
   applySpeakerCorrection: (request) => ipcRenderer.invoke("apply-speaker-correction", request),
   getSpeakerProfiles: () => ipcRenderer.invoke("get-speaker-profiles"),
+  listPeople: () => ipcRenderer.invoke("people-list"),
+  listPeopleReview: (profileId) => ipcRenderer.invoke("people-review", profileId),
+  previewPersonAction: (request) => ipcRenderer.invoke("people-preview", request),
+  applyPersonAction: (request) => ipcRenderer.invoke("people-apply", request),
+  undoPersonAction: (id) => ipcRenderer.invoke("people-undo", id),
   attachSpeakerEmail: (profileId, email) =>
     ipcRenderer.invoke("attach-speaker-email", profileId, email),
   saveNoteSpeakerEmbeddings: (noteId, embeddings) =>

@@ -58,9 +58,10 @@ interface SettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialSection?: string;
+  onOpenNote?: (noteId: number, rowId: string) => void;
 }
 
-export default function SettingsModal({ open, onOpenChange, initialSection }: SettingsModalProps) {
+export default function SettingsModal({ open, onOpenChange, initialSection, onOpenNote }: SettingsModalProps) {
   const { t } = useTranslation();
   const { isSignedIn, user } = useAuth();
   const policyManaged = usePolicyStore((s) => s.managed);
@@ -99,6 +100,13 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
         label: t("settingsModal.sections.toneStyle.label"),
         icon: SquareSparkle,
         description: t("settingsModal.sections.toneStyle.description"),
+        group: t("settingsModal.groups.app"),
+      },
+      {
+        id: "people",
+        label: t("people.title"),
+        icon: Users,
+        description: t("people.subtitle"),
         group: t("settingsModal.groups.app"),
       },
       {
@@ -195,6 +203,7 @@ export default function SettingsModal({ open, onOpenChange, initialSection }: Se
     >
       <SettingsPage
         activeSection={activeSection}
+        onOpenNote={(noteId, rowId) => { onOpenChange(false); onOpenNote?.(noteId, rowId); }}
         onNavigateToSection={handleSectionChange}
         initialSubTab={initialSubTab}
       />

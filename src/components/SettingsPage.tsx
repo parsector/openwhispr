@@ -91,6 +91,7 @@ import LinuxPttSetupInfo from "./ui/LinuxPttSetupInfo";
 import { Toggle } from "./ui/toggle";
 import DeveloperSection from "./DeveloperSection";
 import ChatAgentSettings from "./settings/ChatAgentSettings";
+import PeoplePage from "./settings/PeoplePage";
 import DictationAgentSettings from "./settings/DictationAgentSettings";
 import DictationTranslationSettings from "./settings/DictationTranslationSettings";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
@@ -162,6 +163,7 @@ import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview"
 export type SettingsSectionType =
   | "account"
   | "workspace"
+  | "people"
   | "general"
   | "hotkeys"
   | "toneStyle"
@@ -175,6 +177,7 @@ interface SettingsPageProps {
   onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
+  onOpenNote?: (noteId: number, rowId: string) => void;
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
@@ -1192,6 +1195,7 @@ export default function SettingsPage({
   activeSection = "general",
   onNavigateToSection,
   initialSubTab,
+  onOpenNote,
 }: SettingsPageProps) {
   const { isCompact } = useSettingsLayout();
   const {
@@ -2065,6 +2069,8 @@ export default function SettingsPage({
 
   const renderSectionContent = () => {
     switch (activeSection) {
+      case "people":
+        return <PeoplePage onOpenNote={onOpenNote} />;
       case "account":
         return (
           <div className="space-y-5">
