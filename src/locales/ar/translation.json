@@ -2604,6 +2604,7 @@
       "restore": "استعادة",
       "olderCorrections": "عرض {{n}} تصحيحات أقدم",
       "historyFull": "سجل تصحيحات هذه الملاحظة ممتلئ (16 ميغابايت). لا يزال بإمكانك التراجع عن التصحيحات القديمة.",
+      "historyQuarantined": "لا يمكن تحديد ترتيب إجراءات هذه الملاحظة. التراجع غير متاح.",
       "notAssessed": "لم يتم التقييم",
       "correctionHistoryUnresolved": "تحتاج {{n}} سجلات من سجل التصحيحات إلى المراجعة",
       "reviewStretches": "راجع {{n}} مقاطع",
@@ -5392,6 +5393,10 @@
     "archiveLabel": "مؤرشف"
   },
   "people": {
+    "clearVoice": "مسح جميع بيانات الصوت",
+    "clearPreview": "سيحتفظ {{people}} أشخاص بهوياتهم. سيتم حذف {{embeddings}} بصمات صوتية و{{mappings}} تعيينات.",
+    "clearDone": "تم مسح {{embeddings}} بصمات صوتية و{{mappings}} تعيينات. بقي {{people}} أشخاص.",
+    "deletePreview": "{{notes}} ملاحظات و{{segments}} مقاطع و{{history}} سجلات. لا يمكن التراجع عن حذف الشخص.",
     "title": "الأشخاص",
     "subtitle": "المتحدثون والأسماء المعروفة على هذا الجهاز.",
     "tabs": {
@@ -5447,6 +5452,7 @@
     "undo": "تراجع",
     "done": "{{action}} لـ {{name}}: تم تحديث {{notes}} ملاحظات و{{segments}} مقاطع.",
     "errors": {
+      "person_deleted": "تم حذف الشخص الذي يشير إليه هذا الإجراء.",
       "person_missing": "هذا الشخص لم يعد موجودًا. حدّث القائمة.",
       "survivor_missing": "اختر شخصًا للاحتفاظ به.",
       "invalid_name": "أدخل اسمًا لا يزيد عن ١٢٠ حرفًا.",

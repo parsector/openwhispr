@@ -3754,10 +3754,14 @@ declare global {
 
       // Speaker name mapping
       listPeople?: () => Promise<Array<{ id: number; displayName: string; email: string | null; noteCount: number; segmentCount: number; lastHeard: string | null; sampleCount: number; hasVoice: boolean; legacyVoice: boolean; usedOnce: boolean; duplicates: Array<{ id: number; name: string }> }>>;
+      speakerHistoryStatus?: (noteId: number) => Promise<{ quarantined: boolean }>;
       listPeopleReview?: (profileId?: number | null) => Promise<Array<{ noteId: number; noteTitle: string; rowId: string; text: string; speakerName: string | null; profileId: number | null; reason: string; candidates: [string, string] | null; timestamp: string }>>;
-      previewPersonAction?: (request: { type: "rename" | "merge" | "delete" | "reset"; profileId: number; survivorId?: number; name?: string }) => Promise<{ success: boolean; error?: string; noteCount?: number; segmentCount?: number; pinnedCount?: number; voiceSamples?: number }>;
-      applyPersonAction?: (request: { type: "rename" | "merge" | "delete" | "reset"; profileId: number; survivorId?: number; name?: string; expected?: { noteCount: number; segmentCount: number; pinnedCount: number } }) => Promise<{ success: boolean; error?: string; id?: string; noteCount?: number; segmentCount?: number; pinnedCount?: number }>;
+      previewPersonAction?: (request: { type: "rename" | "merge" | "delete" | "reset"; profileId: number; survivorId?: number; name?: string }) => Promise<{ success: boolean; error?: string; noteCount?: number; segmentCount?: number; pinnedCount?: number; voiceSamples?: number; historyCount?: number }>;
+      applyPersonAction?: (request: { type: "rename" | "merge" | "delete" | "reset"; profileId: number; survivorId?: number; name?: string; expected?: { noteCount: number; segmentCount: number; pinnedCount: number; historyCount?: number } }) => Promise<{ success: boolean; error?: string; id?: string | null; noteCount?: number; segmentCount?: number; pinnedCount?: number }>;
       undoPersonAction?: (id: string) => Promise<{ success: boolean; error?: string }>;
+      previewClearVoiceData?: () => Promise<{ success: boolean; personCount: number; embeddingCount: number; mappingCount: number }>;
+      clearVoiceData?: (expected: { personCount: number; embeddingCount: number; mappingCount: number }) => Promise<{ success: boolean; error?: string; id?: string; personCount?: number; embeddingCount?: number; mappingCount?: number }>;
+      undoClearVoiceData?: (id: string) => Promise<{ success: boolean; error?: string }>;
       getSpeakerMappings?: (noteId: number) => Promise<
         Array<{
           note_id: number;

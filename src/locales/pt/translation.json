@@ -3230,6 +3230,7 @@
       "restore": "Restaurar",
       "olderCorrections": "Mostrar {{n}} correções anteriores",
       "historyFull": "O histórico de correções desta nota está cheio (16 MB). As correções anteriores ainda podem ser desfeitas.",
+      "historyQuarantined": "Não é possível determinar a ordem das ações desta nota. Desfazer está indisponível.",
       "notAssessed": "Não avaliado",
       "correctionHistoryUnresolved": "{{n}} registros do histórico de correções precisam de revisão",
       "reviewStretches": "Rever {{n}} trechos",
@@ -5274,6 +5275,10 @@
     "archiveLabel": "Arquivado"
   },
   "people": {
+    "clearVoice": "Limpar todos os dados de voz",
+    "clearPreview": "{{people}} pessoas mantêm sua identidade. Excluir {{embeddings}} perfis de voz e {{mappings}} associações.",
+    "clearDone": "{{embeddings}} perfis de voz e {{mappings}} associações removidos. {{people}} pessoas permanecem.",
+    "deletePreview": "{{notes}} notas, {{segments}} segmentos, {{history}} entradas no histórico. A exclusão não pode ser desfeita.",
     "title": "Pessoas",
     "subtitle": "Oradores e nomes conhecidos neste dispositivo.",
     "tabs": {
@@ -5329,6 +5334,7 @@
     "undo": "Anular",
     "done": "{{action}} para {{name}}: {{notes}} notas e {{segments}} segmentos atualizados.",
     "errors": {
+      "person_deleted": "A pessoa a que esta ação se referia foi excluída.",
       "person_missing": "Esta pessoa já não existe. Atualize a lista.",
       "survivor_missing": "Escolha uma pessoa para manter.",
       "invalid_name": "Introduza um nome com até 120 caracteres.",

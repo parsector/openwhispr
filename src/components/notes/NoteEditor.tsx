@@ -453,6 +453,14 @@ export default function NoteEditor({
   const [reviewOnly, setReviewOnly] = useState(false);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerCorrectionError, setSpeakerCorrectionError] = useState<string | null>(null);
+  const [speakerHistoryQuarantined, setSpeakerHistoryQuarantined] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void window.electronAPI.speakerHistoryStatus?.(note.id).then(result => {
+      if (active) setSpeakerHistoryQuarantined(result.quarantined);
+    });
+    return () => { active = false; };
+  }, [note.id, note.speaker_action_log, note.speaker_label_undo]);
   const correctionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [speakerProfiles, setSpeakerProfiles] = useState<
     Array<{ id: number; display_name: string; email: string | null }>
@@ -750,7 +758,8 @@ export default function NoteEditor({
       });
       if (!result?.success || !result.rows) {
         if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();
-        setSpeakerCorrectionError(t(result?.error === "later_change"
+        setSpeakerCorrectionError(t(result?.error === "history_quarantined"
+          ? "notes.speaker.historyQuarantined" : result?.error === "later_change"
           ? "notes.speaker.laterChangeReplaced" : result?.error === "history_full"
             ? "notes.speaker.historyFull" : "notes.speaker.correctionSaveFailed"));
         return false;
@@ -1061,7 +1070,7 @@ export default function NoteEditor({
       await onFlushPendingSaves?.(note.id);
       const result = await window.electronAPI.takeCloudSpeakerLabels?.(note.id, undo);
       if (!result?.success || !result.note) {
-        setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
+        setSpeakerCorrectionError(t(result?.error === "history_quarantined" ? "notes.speaker.historyQuarantined" : "notes.speaker.correctionSaveFailed"));
         return;
       }
       updateNoteInStore(result.note);
@@ -1498,6 +1507,7 @@ export default function NoteEditor({
           </div>
         )}
 
+        {speakerHistoryQuarantined && <p role="status" className="px-4 py-2 text-sm text-destructive">{t("notes.speaker.historyQuarantined")}</p>}
         {speakerCorrectionError && <p role="alert" className="px-4 py-2 text-sm text-destructive">{speakerCorrectionError}</p>}
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">

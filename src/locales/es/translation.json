@@ -3282,6 +3282,7 @@
       "restore": "Restaurar",
       "olderCorrections": "Mostrar {{n}} correcciones anteriores",
       "historyFull": "El historial de correcciones de esta nota está lleno (16 MB). Las correcciones anteriores aún se pueden deshacer.",
+      "historyQuarantined": "No se puede establecer el orden de las acciones de esta nota. Deshacer no está disponible.",
       "notAssessed": "Sin evaluar",
       "correctionHistoryUnresolved": "{{n}} registros del historial de correcciones requieren revisión",
       "reviewStretches": "Revisar {{n}} fragmentos",
@@ -5274,6 +5275,10 @@
     "archiveLabel": "Archivado"
   },
   "people": {
+    "clearVoice": "Borrar todos los datos de voz",
+    "clearPreview": "{{people}} personas conservan su identidad. Se borrarán {{embeddings}} perfiles de voz y {{mappings}} asignaciones.",
+    "clearDone": "Se borraron {{embeddings}} perfiles de voz y {{mappings}} asignaciones. Quedan {{people}} personas.",
+    "deletePreview": "{{notes}} notas, {{segments}} segmentos y {{history}} entradas del historial. Esta eliminación no se puede deshacer.",
     "title": "Personas",
     "subtitle": "Voces y nombres conocidos en este dispositivo.",
     "tabs": {
@@ -5329,6 +5334,7 @@
     "undo": "Deshacer",
     "done": "{{action}} para {{name}}: se actualizaron {{notes}} notas y {{segments}} segmentos.",
     "errors": {
+      "person_deleted": "La persona a la que se refería esta acción fue eliminada.",
       "person_missing": "Esta persona ya no existe. Actualiza la lista.",
       "survivor_missing": "Elige una persona para conservar.",
       "invalid_name": "Escribe un nombre de 120 caracteres como máximo.",

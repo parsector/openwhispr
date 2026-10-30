@@ -13,7 +13,7 @@ Module._load = function(request, parent, isMain) {
 process.env.NODE_ENV = 'test';
 const DatabaseManager = require('../../src/helpers/database.js');
 const { skipOrFail } = require('./harness/db.js');
-const { listPeople, listReviewRows, previewPersonAction, applyPersonAction, undoPersonAction } = require('../../src/helpers/peopleActions');
+const { listPeople, listReviewRows, previewPersonAction, applyPersonAction, undoPersonAction, previewClearVoiceData, clearVoiceData, undoClearVoiceData } = require('../../src/helpers/peopleActions');
 const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
 const { readSpeakerActionLog } = require('../../src/helpers/speakerActionLog');
 function fixture(t) {
@@ -77,7 +77,7 @@ test('merge preserves survivor embedding, rewrites pinned rows, and restores los
   assert.equal(f.rows(note)[0].speakerName, 'Alexndra');
   assert.ok(f.db.db.prepare('SELECT id FROM speaker_profiles WHERE id = ?').get(loser.id));
 });
-test('delete allocates new unknown numbers and undo restores the person', t => {
+test('delete allocates new unknown numbers and cannot restore the person', t => {
   const f = fixture(t); if (!f) return;
   const person = f.person('Wrong', 3);
   const note = f.note('one', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Wrong' }, { id: 'b', speaker: 'speaker_1', speakerName: 'Unknown speaker 2', speakerIsPlaceholder: true, unknownNumber: 2 }], [['speaker_0', person]]);
@@ -86,8 +86,32 @@ test('delete allocates new unknown numbers and undo restores the person', t => {
   assert.equal(result.success, true);
   assert.equal(f.rows(note)[0].speakerName, undefined);
   assert.equal(f.rows(note)[0].unknownNumber, priorHighWater + 1);
-  assert.equal(undoPersonAction(f.db, result.id).success, true);
-  assert.equal(f.rows(note)[0].speakerName, 'Wrong');
+  assert.equal(undoPersonAction(f.db, result.id).success, false);
+  assert.equal(f.db.db.prepare('SELECT id FROM speaker_profiles WHERE id = ?').get(person.id), undefined);
+});
+test('deleting a person removes their history and reports deleted references honestly', t => {
+  const f = fixture(t); if (!f) return;
+  const person = f.person('Alex', 1);
+  const note = f.note('one', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Alex',
+    corrections: [{ id: 'old', profileId: person.id }] }], [['speaker_0', person]]);
+  assert.equal(f.db.setSpeakerMapping(note, 'speaker_0', person.id, 'Alex').success, true);
+  const preview = previewPersonAction(f.db, { type: 'delete', profileId: person.id });
+  assert.equal(preview.historyCount, 2);
+  const result = applyPersonAction(f.db, { type: 'delete', profileId: person.id, expected: preview });
+  assert.equal(result.success, true);
+  assert.equal(f.rows(note)[0].corrections, undefined);
+  assert.equal(f.db.undoSpeakerMapping(note).error, 'person_deleted');
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM speaker_mappings WHERE profile_id = ?').get(person.id).n, 0);
+  assert.equal(JSON.stringify(readSpeakerActionLog(f.db.getNote(note))).includes('"profileId":'+person.id), false);
+});
+test('deleting one of two people with the same name leaves unattributed rows alone', t => {
+  const f = fixture(t); if (!f) return;
+  const first = f.person('Alex', 1);
+  f.db.createNamedSpeakerProfile('Alex');
+  const note = f.note('one', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Alex' }], []);
+  assert.equal(previewPersonAction(f.db, { type: 'delete', profileId: first.id }).segmentCount, 0);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: first.id }).success, true);
+  assert.equal(f.rows(note)[0].speakerName, 'Alex');
 });
 test('reset voice removes embedding and samples but keeps name and labels', t => {
   const f = fixture(t); if (!f) return;
@@ -97,10 +121,60 @@ test('reset voice removes embedding and samples but keeps name and labels', t =>
   assert.equal(result.success, true);
   const saved = f.db.db.prepare('SELECT * FROM speaker_profiles WHERE id = ?').get(person.id);
   assert.equal(saved.embedding.length, 0); assert.equal(saved.sample_count, 0);
+  assert.equal(f.db.db.prepare('SELECT 1 FROM speaker_mappings WHERE profile_id = ?').get(person.id), undefined);
   assert.equal(listPeople(f.db).find(p => p.id === person.id).hasVoice, false);
   assert.equal(f.rows(note)[0].speakerName, 'Alex');
   assert.equal(undoPersonAction(f.db, result.id).success, true);
   assert.equal(f.db.db.prepare('SELECT sample_count FROM speaker_profiles WHERE id = ?').get(person.id).sample_count, 1);
+});
+test('reset voice with no notes can be undone', t => {
+  const f = fixture(t); if (!f) return;
+  const person = f.person('Solo', 4);
+  const preview = previewPersonAction(f.db, { type: 'reset', profileId: person.id });
+  assert.equal(preview.success, true);
+  const done = applyPersonAction(f.db, { type: 'reset', profileId: person.id });
+  assert.equal(done.success, true);
+  assert.equal(listPeople(f.db).find(p => p.id === person.id).hasVoice, false);
+  assert.equal(undoPersonAction(f.db, done.id).success, true);
+  assert.equal(listPeople(f.db).find(p => p.id === person.id).hasVoice, true);
+});
+test('clear voice evidence keeps identities, transcript labels, and action history, then allows reassignment', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1), sam = f.person('Sam', 2);
+  f.db.db.prepare('UPDATE speaker_profiles SET email = ? WHERE id = ?').run('alex@example.com', alex.id);
+  const note = f.note('one', [{ id: 'a', text: 'hello', source: 'system', speaker: 'speaker_0', speakerName: 'Alex' }], [['speaker_0', alex]]);
+  const log = { version: 1, nextSequence: 2, actions: [{ kind: 'mapping', id: 'older', sequence: 1, speakerId: 'speaker_0', before: null, after: { profile_id: alex.id, display_name: 'Alex' } }] };
+  f.db.db.prepare('UPDATE notes SET speaker_action_log = ? WHERE id = ?').run(JSON.stringify(log), note);
+  f.db.db.prepare("UPDATE notes SET sync_status = 'synced' WHERE id = ?").run(note);
+  const preview = previewClearVoiceData(f.db);
+  assert.equal(preview.personCount, 2);
+  assert.equal(preview.embeddingCount, 2);
+  const done = clearVoiceData(f.db, preview);
+  assert.equal(done.success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM speaker_mappings').get().n, 0);
+  assert.equal(listPeople(f.db).find(p => p.id === alex.id).email, 'alex@example.com');
+  assert.equal(listPeople(f.db).every(p => !p.hasVoice), true);
+  assert.equal(f.rows(note)[0].speakerName, 'Alex');
+  assert.equal(f.db.getNote(note).sync_status, 'synced');
+  assert.equal(readSpeakerActionLog(f.db.getNote(note)).actions[0].id, 'older');
+  assert.equal(undoClearVoiceData(f.db, done.id).success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM speaker_mappings').get().n, 1);
+  const clearedAgain = clearVoiceData(f.db, previewClearVoiceData(f.db));
+  assert.equal(clearedAgain.success, true);
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  assert.equal(applySpeakerCorrection(f.db, null, { type: 'apply', noteId: note, id: 'reassign', scope: 'row', rowIds: ['a'], name: 'Alex', profileId: alex.id }).success, true);
+  assert.equal(f.rows(note)[0].suggestedProfileId, alex.id);
+  assert.equal(listPeople(f.db).find(p => p.id === alex.id).hasVoice, false);
+});
+test('deleting after a global clear removes saved voice evidence and blocks its undo', t => {
+  const f = fixture(t); if (!f) return;
+  const person = f.person('Alex', 7);
+  const clear = clearVoiceData(f.db, previewClearVoiceData(f.db));
+  assert.equal(clear.success, true);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: person.id }).success, true);
+  const snapshot = f.db.db.prepare('SELECT snapshot FROM speaker_voice_clear_actions WHERE id = ?').get(clear.id).snapshot;
+  assert.equal(snapshot.includes(Buffer.alloc(2048, 7).toString('base64')), false);
+  assert.equal(undoClearVoiceData(f.db, clear.id).error, 'person_deleted');
 });
 test('person actions share ordered note history with an in-note correction', t => {
   const f = fixture(t); if (!f) return;
@@ -142,7 +216,7 @@ test('naming a new speaker creates a person without voice training', t => {
   assert.equal(applySpeakerCorrection(f.db, null, { type: 'undo', noteId: note, id: 'new-name' }).success, true);
   assert.equal(listPeople(f.db).some(p => p.displayName === 'Maya'), false);
 });
-test('rename, merge, delete, and reset log in order around a note correction and undo in reverse', t => {
+test('rename, merge, and reset log in order around a note correction and undo in reverse', t => {
   const f = fixture(t); if (!f) return;
   const a = f.person('Alec', 1), b = f.person('Typo', 2), c = f.person('Bad', 3), d = f.person('Voice', 4);
   const note = f.note('one', [
@@ -156,11 +230,10 @@ test('rename, merge, delete, and reset log in order around a note correction and
   const actions = [
     { type: 'rename', profileId: a.id, name: 'Alex' },
     { type: 'merge', profileId: b.id, survivorId: a.id },
-    { type: 'delete', profileId: c.id },
     { type: 'reset', profileId: d.id },
   ].map(request => applyPersonAction(f.db, request));
   assert.ok(actions.every(action => action.success));
-  assert.deepEqual(readSpeakerActionLog(f.db.getNote(note)).actions.map(action => action.kind), ['correction', 'person', 'person', 'person', 'person']);
+  assert.deepEqual(readSpeakerActionLog(f.db.getNote(note)).actions.map(action => action.kind), ['correction', 'person', 'person', 'person']);
   for (const action of actions.reverse()) assert.equal(undoPersonAction(f.db, action.id).success, true);
   assert.deepEqual(f.rows(note).map(row => row.speakerName), ['Alec', 'Typo', 'Bad', 'Voice']);
   assert.equal(applySpeakerCorrection(f.db, null, { type: 'undo', noteId: note, id: 'row-fix' }).success, true);

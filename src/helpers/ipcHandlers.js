@@ -13059,10 +13059,36 @@ class IPCHandlers {
     });
 
     ipcMain.handle("people-list", () => require("./peopleActions").listPeople(this.databaseManager));
+    ipcMain.handle("speaker-history-status", (_event, noteId) => {
+      const note = this.databaseManager.getNote(noteId);
+      return note ? { quarantined: !!require("./speakerActionLog").readSpeakerActionLog(note).quarantined } : { quarantined: false };
+    });
     ipcMain.handle("people-review", (_event, profileId) =>
       require("./peopleActions").listReviewRows(this.databaseManager, profileId));
     ipcMain.handle("people-preview", (_event, request) =>
       require("./peopleActions").previewPersonAction(this.databaseManager, request));
+    ipcMain.handle("people-clear-voice-preview", () =>
+      require("./peopleActions").previewClearVoiceData(this.databaseManager));
+    ipcMain.handle("people-clear-voice-apply", (_event, expected) => {
+      try {
+        const result = require("./peopleActions").clearVoiceData(this.databaseManager, expected);
+        if (result.success) this.notifyVectorChanges();
+        return result;
+      } catch (error) {
+        debugLogger.error("Clear voice data failed", { error: error.message }, "speaker");
+        return { success: false, error: "persistence_failed" };
+      }
+    });
+    ipcMain.handle("people-clear-voice-undo", (_event, id) => {
+      try {
+        const result = require("./peopleActions").undoClearVoiceData(this.databaseManager, id);
+        if (result.success) this.notifyVectorChanges();
+        return result;
+      } catch (error) {
+        debugLogger.error("Undo clear voice data failed", { error: error.message }, "speaker");
+        return { success: false, error: "persistence_failed" };
+      }
+    });
     ipcMain.handle("people-apply", (_event, request) => {
       try {
         const result = require("./peopleActions").applyPersonAction(this.databaseManager, request);

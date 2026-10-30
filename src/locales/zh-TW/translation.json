@@ -3230,6 +3230,7 @@
       "restore": "還原",
       "olderCorrections": "顯示較早的 {{n}} 項修正",
       "historyFull": "此筆記的修正記錄已滿（16 MB）。較早的修正仍可復原。",
+      "historyQuarantined": "無法確定此筆記的操作順序，因此無法復原。",
       "notAssessed": "未評估",
       "correctionHistoryUnresolved": "有 {{n}} 筆修正記錄需要檢查",
       "reviewStretches": "檢查 {{n}} 個片段",
@@ -5274,6 +5275,10 @@
     "archiveLabel": "已封存"
   },
   "people": {
+    "clearVoice": "清除所有語音資料",
+    "clearPreview": "保留 {{people}} 位人物的身分。刪除 {{embeddings}} 個語音檔案和 {{mappings}} 個對應。",
+    "clearDone": "已清除 {{embeddings}} 個語音檔案和 {{mappings}} 個對應。保留 {{people}} 位人物。",
+    "deletePreview": "{{notes}} 則筆記、{{segments}} 個片段、{{history}} 筆歷史紀錄。刪除身分後無法復原。",
     "title": "人物",
     "subtitle": "此裝置上已知的說話者與姓名。",
     "tabs": {
@@ -5329,6 +5334,7 @@
     "undo": "復原",
     "done": "已為 {{name}} 執行{{action}}：更新了 {{notes}} 則筆記與 {{segments}} 個片段。",
     "errors": {
+      "person_deleted": "此操作所涉及的人物已遭刪除。",
       "person_missing": "此人物已不存在，請重新整理清單。",
       "survivor_missing": "請選擇要保留的人物。",
       "invalid_name": "請輸入不超過 120 個字元的姓名。",

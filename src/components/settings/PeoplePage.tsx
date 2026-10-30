@@ -6,7 +6,7 @@ type Person = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listPeopl
 type Review = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listPeopleReview>>>[number];
 type Kind = "rename" | "merge" | "delete" | "reset";
 type Request = { type: Kind; profileId: number; survivorId?: number; name?: string };
-type Preview = { success: boolean; error?: string; noteCount?: number; segmentCount?: number; pinnedCount?: number; voiceSamples?: number };
+type Preview = { success: boolean; error?: string; noteCount?: number; segmentCount?: number; pinnedCount?: number; voiceSamples?: number; historyCount?: number };
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const button = "rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
@@ -35,6 +35,8 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState("");
   const [report, setReport] = useState<{ id: string; name: string; type: Kind; count: number; segments: number } | null>(null);
+  const [clearPreview, setClearPreview] = useState<{ success: boolean; personCount: number; embeddingCount: number; mappingCount: number } | null>(null);
+  const [clearReport, setClearReport] = useState<{ id: string; personCount: number; embeddingCount: number; mappingCount: number } | null>(null);
   const refresh = useCallback(async () => {
     setLoading(true); setError(false);
     try {
@@ -78,6 +80,8 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
     : row.reason === "close_match" && row.candidates ? t("notes.speaker.reason.closeMatch", { first: row.candidates[0], second: row.candidates[1] })
     : t(`notes.speaker.reason.${row.reason}`, { defaultValue: t("people.reasons.uncertain") });
   const filterReasonLabel = (value: string) => value === "close_match" ? t("people.reasons.close_match") : reasonLabel({ reason: value, candidates: null } as Review);
+  const actionErrorText = (value: string) => value === "history_quarantined" ? t("notes.speaker.historyQuarantined")
+    : t(`people.errors.${value}`, { defaultValue: t("people.actionError") });
   const start = (person: Person, action: Kind) => { setSelected(person); setKind(action); setName(person.displayName); setSurvivorId(0); setActionError(""); setReport(null); };
   const execute = async () => {
     if (!request || !preview?.success || working) return;
@@ -85,10 +89,10 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
     try {
       const result = await window.electronAPI.applyPersonAction?.({ ...request, expected: {
         noteCount: preview.noteCount || 0, segmentCount: preview.segmentCount || 0,
-        pinnedCount: preview.pinnedCount || 0,
+        pinnedCount: preview.pinnedCount || 0, historyCount: preview.historyCount || 0,
       } });
-      if (!result?.success || !result.id) throw Error(result?.error || "persistence_failed");
-      setReport({ id: result.id, name: selected!.displayName, type: kind, count: result.noteCount || 0, segments: result.segmentCount || 0 });
+      if (!result?.success || (kind !== "delete" && !result.id)) throw Error(result?.error || "persistence_failed");
+      setReport({ id: result.id || "", name: selected!.displayName, type: kind, count: result.noteCount || 0, segments: result.segmentCount || 0 });
       setSelected(null); await refresh();
     } catch (cause) { setActionError(String(cause instanceof Error ? cause.message : cause)); }
     finally { setWorking(false); }
@@ -103,6 +107,32 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
     } catch (cause) { setActionError(String(cause instanceof Error ? cause.message : cause)); }
     finally { setWorking(false); }
   };
+  const previewClear = async () => {
+    setActionError("");
+    try { setClearPreview(await window.electronAPI.previewClearVoiceData?.() || null); }
+    catch { setActionError("persistence_failed"); }
+  };
+  const applyClear = async () => {
+    if (!clearPreview || working) return;
+    setWorking(true); setActionError("");
+    try {
+      const result = await window.electronAPI.clearVoiceData?.(clearPreview);
+      if (!result?.success || !result.id) throw Error(result?.error || "persistence_failed");
+      setClearReport({ id: result.id, personCount: result.personCount || 0, embeddingCount: result.embeddingCount || 0, mappingCount: result.mappingCount || 0 });
+      setClearPreview(null); await refresh();
+    } catch (cause) { setActionError(String(cause instanceof Error ? cause.message : cause)); }
+    finally { setWorking(false); }
+  };
+  const undoClear = async () => {
+    if (!clearReport || working) return;
+    setWorking(true); setActionError("");
+    try {
+      const result = await window.electronAPI.undoClearVoiceData?.(clearReport.id);
+      if (!result?.success) throw Error(result?.error || "persistence_failed");
+      setClearReport(null); await refresh();
+    } catch (cause) { setActionError(String(cause instanceof Error ? cause.message : cause)); }
+    finally { setWorking(false); }
+  };
   const date = (value: string | null) => value ? new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`).toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" }) : t("people.never");
   return <div className="space-y-5 pb-8 text-foreground">
     <div><h2 className="text-xl font-semibold tracking-tight">{t("people.title")}</h2><p className="mt-1 text-sm text-muted-foreground">{t("people.subtitle")}</p></div>
@@ -112,6 +142,11 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
     {loading && <div role="status" className="space-y-2" aria-label={t("people.loading")}>{[0, 1, 2].map(i => <div key={i} className="h-16 animate-pulse rounded-lg bg-surface-2" />)}<p className="text-sm text-muted-foreground">{t("people.loading")}</p></div>}
     {error && !loading && <div role="alert" className="rounded-xl border border-destructive/30 p-5"><p className="font-medium">{t("people.loadError")}</p><button type="button" className={`${button} mt-3`} onClick={() => void refresh()}>{t("people.retry")}</button></div>}
     {!loading && !error && tab === "people" && <div role="tabpanel" className="space-y-4">
+      <div className="rounded-xl border border-border p-4"><button type="button" className={button} onClick={() => void previewClear()}>{t("people.clearVoice")}</button>
+        {clearPreview && <div role="region" aria-label={t("people.clearVoice")} className="mt-3 text-sm"><p>{t("people.clearPreview", { people: clearPreview.personCount, embeddings: clearPreview.embeddingCount, mappings: clearPreview.mappingCount })}</p><div className="mt-3 flex gap-2"><button type="button" className={button} onClick={() => setClearPreview(null)}>{t("people.cancel")}</button><button type="button" className={button} disabled={working} onClick={() => void applyClear()}>{working ? t("people.working") : t("people.clearVoice")}</button></div></div>}
+        {clearReport && <div role="status" className="mt-3 text-sm"><p>{t("people.clearDone", { people: clearReport.personCount, embeddings: clearReport.embeddingCount, mappings: clearReport.mappingCount })}</p><button type="button" className={`${button} mt-2`} disabled={working} onClick={() => void undoClear()}>{t("people.undo")}</button></div>}
+        {actionError && !selected && !report && <p role="alert" className="mt-2 text-sm text-destructive">{actionErrorText(actionError)}</p>}
+      </div>
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]"><input dir="auto" className={field} aria-label={t("people.search")} placeholder={t("people.search")} value={query} onChange={e => setQuery(e.target.value)} /><select className={field} aria-label={t("people.sort")} value={sort} onChange={e => setSort(e.target.value as typeof sort)}><option value="usage">{t("people.sortUsage")}</option><option value="heard">{t("people.sortHeard")}</option></select></div>
       {people.length === 0 && <div className="rounded-xl border border-border bg-surface-2/30 p-7"><h3 className="font-semibold">{t("people.emptyTitle")}</h3><p className="mt-2 max-w-prose text-sm text-muted-foreground">{t("people.emptyBody")}</p></div>}
       {people.length > 0 && shown.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">{t("people.noMatches")}</p>}
@@ -134,13 +169,15 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
       {kind === "rename" && <label className="mt-4 block text-sm">{t("people.newName")}<input dir="auto" className={`${field} mt-1`} value={name} onChange={e => setName(e.target.value)} maxLength={120} /></label>}
       {kind === "merge" && <label className="mt-4 block text-sm">{t("people.survivor")}<select className={`${field} mt-1`} value={survivorId} onChange={e => setSurvivorId(Number(e.target.value))}><option value={0}>{t("people.choosePerson")}</option>{people.filter(p => p.id !== selected.id).map(p => <option key={p.id} value={p.id}>{p.displayName}</option>)}</select></label>}
       {previewLoading && <p role="status" className="mt-4 text-sm">{t("people.loadingPreview")}</p>}
-      {preview?.success && <p className="mt-4 text-sm">{kind === "reset"
+      {preview?.success && <p className="mt-4 text-sm">{kind === "delete"
+        ? t("people.deletePreview", { notes: preview.noteCount, segments: preview.segmentCount, history: preview.historyCount })
+        : kind === "reset"
         ? t("people.resetPreview", { samples: preview.voiceSamples, notes: preview.noteCount, segments: preview.segmentCount })
         : t("people.previewCounts", { notes: preview.noteCount, segments: preview.segmentCount, pinned: preview.pinnedCount })} {t(`people.scope.${kind}`)}</p>}
       {preview && !preview.success && <p role="alert" className="mt-4 text-sm text-destructive">{t(`people.errors.${preview.error}`, { defaultValue: t("people.actionError") })}</p>}
-      {actionError && <p role="alert" className="mt-4 text-sm text-destructive">{t(`people.errors.${actionError}`, { defaultValue: t("people.actionError") })}</p>}
+      {actionError && <p role="alert" className="mt-4 text-sm text-destructive">{actionErrorText(actionError)}</p>}
       <div className="mt-4 flex gap-2"><button type="button" className={button} onClick={() => setSelected(null)}>{t("people.cancel")}</button><button type="button" className={`${button} bg-primary text-primary-foreground hover:bg-primary/90`} disabled={!preview?.success || working} onClick={() => void execute()}>{working ? t("people.working") : t(`people.actions.${kind}`)}</button></div>
     </div>}
-    {report && <div role="status" className="rounded-xl border border-border bg-surface-2/40 p-5"><p className="text-sm font-medium">{report.type === "reset" ? t("people.doneReset", { name: report.name }) : t("people.done", { action: t(`people.actions.${report.type}`), name: report.name, notes: report.count, segments: report.segments })}</p><button type="button" className={`${button} mt-3`} disabled={working} onClick={() => void undo()}>{t("people.undo")}</button>{actionError && <p role="alert" className="mt-2 text-sm text-destructive">{t(`people.errors.${actionError}`, { defaultValue: t("people.actionError") })}</p>}</div>}
+    {report && <div role="status" className="rounded-xl border border-border bg-surface-2/40 p-5"><p className="text-sm font-medium">{report.type === "reset" ? t("people.doneReset", { name: report.name }) : t("people.done", { action: t(`people.actions.${report.type}`), name: report.name, notes: report.count, segments: report.segments })}</p>{report.type !== "delete" && <button type="button" className={`${button} mt-3`} disabled={working} onClick={() => void undo()}>{t("people.undo")}</button>}{actionError && <p role="alert" className="mt-2 text-sm text-destructive">{actionErrorText(actionError)}</p>}</div>}
   </div>;
 }

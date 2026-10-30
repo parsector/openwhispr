@@ -3575,6 +3575,7 @@
       "restore": "Wiederherstellen",
       "olderCorrections": "{{n}} ältere Korrekturen anzeigen",
       "historyFull": "Der Korrekturverlauf dieser Notiz ist voll (16 MB). Ältere Korrekturen können weiterhin rückgängig gemacht werden.",
+      "historyQuarantined": "Die Reihenfolge der Aktionen dieser Notiz ist unklar. Rückgängig ist nicht verfügbar.",
       "notAssessed": "Nicht bewertet",
       "correctionHistoryUnresolved": "{{n}} Korrekturverlaufseinträge müssen geprüft werden",
       "reviewStretches": "{{n}} Abschnitte prüfen",
@@ -5274,6 +5275,10 @@
     "archiveLabel": "Archiviert"
   },
   "people": {
+    "clearVoice": "Alle Stimmdaten löschen",
+    "clearPreview": "{{people}} Personen behalten ihre Identität. {{embeddings}} Stimmprofile und {{mappings}} Zuordnungen löschen.",
+    "clearDone": "{{embeddings}} Stimmprofile und {{mappings}} Zuordnungen gelöscht. {{people}} Personen bleiben erhalten.",
+    "deletePreview": "{{notes}} Notizen, {{segments}} Segmente, {{history}} Verlaufseinträge. Das Löschen kann nicht rückgängig gemacht werden.",
     "title": "Personen",
     "subtitle": "Bekannte Sprecher und Namen auf diesem Gerät.",
     "tabs": {
@@ -5329,6 +5334,7 @@
     "undo": "Rückgängig",
     "done": "{{action}} für {{name}}: {{notes}} Notizen und {{segments}} Abschnitte aktualisiert.",
     "errors": {
+      "person_deleted": "Die Person, auf die sich diese Aktion bezog, wurde gelöscht.",
       "person_missing": "Diese Person existiert nicht mehr. Liste aktualisieren.",
       "survivor_missing": "Wählen Sie eine Person aus.",
       "invalid_name": "Geben Sie einen Namen mit höchstens 120 Zeichen ein.",

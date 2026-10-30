@@ -6657,7 +6657,9 @@ class DatabaseManager {
       const note = this.getNote(noteId);
       if (!note) return { success: false, error: 'note_missing' };
       const log = readSpeakerActionLog(note);
+      if (log.quarantined) return { success: false, error: 'history_quarantined' };
       const action = log.actions.at(-1);
+      if (action?.unavailableReason) return { success: false, error: action.unavailableReason };
       if (action?.kind !== 'mapping') return { success: false, error: 'later_change' };
       if (action.before) this.db.prepare(
         'INSERT OR REPLACE INTO speaker_mappings (note_id, speaker_id, profile_id, display_name) VALUES (?, ?, ?, ?)'
@@ -7078,6 +7080,7 @@ class DatabaseManager {
       const note = this.getNote(id);
       if (!note) return { success: false, error: "note_missing" };
       const log = readSpeakerActionLog(note);
+      if (log.quarantined) return { success: false, error: 'history_quarantined' };
       const stack = log.actions.filter((action) => action.kind === 'adoption').map((action) => action.record);
       // Commit 8 stored one whole-transcript snapshot. Convert it on use so
       // existing users keep its undo without restoring stale transcript text.
@@ -7091,6 +7094,7 @@ class DatabaseManager {
       }
       if (undo) {
         const action = log.actions.at(-1);
+        if (action?.unavailableReason) return { success: false, error: action.unavailableReason };
         if (action?.kind !== 'adoption') return { success: false, error: 'later_change' };
         const record = stack.at(-1);
         const document = readTranscriptDocument(note.transcript);

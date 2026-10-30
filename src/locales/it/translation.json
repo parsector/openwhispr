@@ -3230,6 +3230,7 @@
       "restore": "Ripristina",
       "olderCorrections": "Mostra {{n}} correzioni precedenti",
       "historyFull": "La cronologia delle correzioni di questa nota è piena (16 MB). Puoi ancora annullare le correzioni precedenti.",
+      "historyQuarantined": "Non è possibile stabilire l’ordine delle azioni di questa nota. Annulla non è disponibile.",
       "notAssessed": "Non valutato",
       "correctionHistoryUnresolved": "{{n}} record della cronologia delle correzioni da esaminare",
       "reviewStretches": "Rivedi {{n}} passaggi",
@@ -5274,6 +5275,10 @@
     "archiveLabel": "Archiviato"
   },
   "people": {
+    "clearVoice": "Cancella tutti i dati vocali",
+    "clearPreview": "{{people}} persone mantengono la propria identità. Elimina {{embeddings}} profili vocali e {{mappings}} associazioni.",
+    "clearDone": "Eliminati {{embeddings}} profili vocali e {{mappings}} associazioni. Restano {{people}} persone.",
+    "deletePreview": "{{notes}} note, {{segments}} segmenti, {{history}} voci della cronologia. Questa eliminazione non può essere annullata.",
     "title": "Persone",
     "subtitle": "Voci e nomi conosciuti su questo dispositivo.",
     "tabs": {
@@ -5329,6 +5334,7 @@
     "undo": "Annulla modifica",
     "done": "{{action}} per {{name}}: aggiornate {{notes}} note e {{segments}} segmenti.",
     "errors": {
+      "person_deleted": "La persona a cui si riferiva questa azione è stata eliminata.",
       "person_missing": "Questa persona non esiste più. Aggiorna la lista.",
       "survivor_missing": "Scegli una persona da mantenere.",
       "invalid_name": "Inserisci un nome di massimo 120 caratteri.",

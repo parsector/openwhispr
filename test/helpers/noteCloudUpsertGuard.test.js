@@ -750,6 +750,42 @@ test('legacy adoption before correction keeps its original order during migratio
   assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
   assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName, 'Alex');
 });
+test('whole-transcript legacy adoption after a correction restores Alex or quarantines undo', (t) => {
+  const db = createDb(t); if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const { readSpeakerActionLog } = require('../../src/helpers/speakerActionLog');
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Alex' }]) });
+  assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id: 'sam', scope: 'row', rowIds: ['row-1'], name: 'Sam' }).success, true);
+  const before = db.getNote(note.id).transcript;
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Jordan' }]) }, null);
+  assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
+  const after = db.getNote(note.id).transcript;
+  db.db.prepare('UPDATE notes SET speaker_action_log = NULL, speaker_label_undo = ? WHERE id = ?')
+    .run(JSON.stringify([{ before, after, timestamp: '2026-01-02T00:00:00.000Z' }]), note.id);
+  const migrated = readSpeakerActionLog(db.getNote(note.id));
+  if (migrated.quarantined) {
+    assert.equal(db.takeCloudSpeakerLabels(note.id, true).error, 'history_quarantined');
+  } else {
+    assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
+    assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id, id: 'sam' }).success, true);
+    assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName, 'Alex');
+  }
+});
+test('ambiguous separate histories are quarantined before undo', (t) => {
+  const db = createDb(t); if (!db) return;
+  const { readSpeakerActionLog } = require('../../src/helpers/speakerActionLog');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  const rows = [{ id: 'a', speakerName: 'Sam', corrections: [{ id: 'fix', sequence: 1,
+    timestamp: '2026-01-01T00:00:00.000Z', snapshots: { a: { previous: { speakerName: 'Alex' }, next: { speakerName: 'Sam' } } } }] },
+  { id: 'b', speakerName: 'Jordan' }];
+  db.updateNote(note.id, { transcript: JSON.stringify({ version: 2, rows }) });
+  db.db.prepare('UPDATE notes SET speaker_label_undo = ? WHERE id = ?').run(JSON.stringify([{ rows: [{ id: 'b', before: { speakerName: 'Taylor' }, after: { speakerName: 'Jordan' }, revision: 1 }] }]), note.id);
+  assert.equal(readSpeakerActionLog(db.getNote(note.id)).quarantined, true);
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).error, 'history_quarantined');
+});
 
 test('adopted cloud name rejects a stale automatic diarization completion', (t) => {
   const db = createDb(t);

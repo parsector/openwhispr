@@ -32,6 +32,7 @@ function applySpeakerCorrection(database, identifier, request) {
     const note = database.getNote(noteId);
     if (!note) return { success: false, error: "note_missing" };
     const log = readSpeakerActionLog(note);
+    if (log.quarantined) return { success: false, error: 'history_quarantined' };
     let nextLog = log;
     const saved = parse(note.transcript, note.client_note_id || noteId);
     const byId = new Map(saved.map((row) => [row.id, row]));
@@ -116,6 +117,7 @@ function applySpeakerCorrection(database, identifier, request) {
       }
     } else {
       const action = log.actions.at(-1);
+      if (action?.unavailableReason) return { success: false, error: action.unavailableReason };
       if (!log.actions.some((entry) => entry.kind === 'correction' && entry.id === id))
         return { success: false, error: 'correction_missing' };
       if (action.kind !== 'correction' || action.id !== id)

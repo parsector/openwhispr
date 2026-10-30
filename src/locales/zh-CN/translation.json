@@ -3230,6 +3230,7 @@
       "restore": "恢复",
       "olderCorrections": "显示较早的 {{n}} 项更正",
       "historyFull": "此笔记的更正记录已满（16 MB）。较早的更正仍可撤销。",
+      "historyQuarantined": "无法确定此笔记的操作顺序，因此无法撤销。",
       "notAssessed": "未评估",
       "correctionHistoryUnresolved": "有 {{n}} 条更正记录需要检查",
       "reviewStretches": "检查 {{n}} 个片段",
@@ -5274,6 +5275,10 @@
     "archiveLabel": "已归档"
   },
   "people": {
+    "clearVoice": "清除所有语音数据",
+    "clearPreview": "保留 {{people}} 位人员的身份。删除 {{embeddings}} 个语音档案和 {{mappings}} 个映射。",
+    "clearDone": "已清除 {{embeddings}} 个语音档案和 {{mappings}} 个映射。保留 {{people}} 位人员。",
+    "deletePreview": "{{notes}} 条笔记、{{segments}} 个片段、{{history}} 条历史记录。删除身份后无法撤销。",
     "title": "人物",
     "subtitle": "此设备上已知的说话人和姓名。",
     "tabs": {
@@ -5329,6 +5334,7 @@
     "undo": "撤销",
     "done": "已对 {{name}} 执行{{action}}：更新了 {{notes}} 条笔记和 {{segments}} 个片段。",
     "errors": {
+      "person_deleted": "此操作所涉及的人员已被删除。",
       "person_missing": "此人物已不存在，请刷新列表。",
       "survivor_missing": "请选择要保留的人物。",
       "invalid_name": "请输入不超过 120 个字符的姓名。",

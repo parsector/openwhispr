@@ -3158,6 +3158,7 @@
       "restore": "元に戻す",
       "olderCorrections": "以前の修正を{{n}}件表示",
       "historyFull": "このノートの修正履歴は上限（16 MB）に達しました。以前の修正は引き続き元に戻せます。",
+      "historyQuarantined": "このノートの操作順序を確定できません。元に戻す操作は利用できません。",
       "notAssessed": "未評価",
       "correctionHistoryUnresolved": "修正履歴の{{n}}件を確認してください",
       "reviewStretches": "{{n}} 件の発話を確認",
@@ -5274,6 +5275,10 @@
     "archiveLabel": "アーカイブ済み"
   },
   "people": {
+    "clearVoice": "すべての音声データを消去",
+    "clearPreview": "{{people}} 人の本人情報は残ります。{{embeddings}} 件の音声プロファイルと {{mappings}} 件の対応付けを削除します。",
+    "clearDone": "{{embeddings}} 件の音声プロファイルと {{mappings}} 件の対応付けを消去しました。{{people}} 人は残っています。",
+    "deletePreview": "{{notes}} 件のノート、{{segments}} 件のセグメント、{{history}} 件の履歴。本人情報の削除は元に戻せません。",
     "title": "人物",
     "subtitle": "この端末で認識されている話者と名前。",
     "tabs": {
@@ -5329,6 +5334,7 @@
     "undo": "元に戻す",
     "done": "{{name}} の{{action}}: {{notes}} 件のノートと {{segments}} 件の区間を更新しました。",
     "errors": {
+      "person_deleted": "この操作の対象者は削除されました。",
       "person_missing": "この人物は存在しません。リストを更新してください。",
       "survivor_missing": "残す人物を選んでください。",
       "invalid_name": "120 文字以内の名前を入力してください。",

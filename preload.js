@@ -608,6 +608,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   listPeople: () => ipcRenderer.invoke("people-list"),
   listPeopleReview: (profileId) => ipcRenderer.invoke("people-review", profileId),
   previewPersonAction: (request) => ipcRenderer.invoke("people-preview", request),
+  speakerHistoryStatus: (noteId) => ipcRenderer.invoke("speaker-history-status", noteId),
+  previewClearVoiceData: () => ipcRenderer.invoke("people-clear-voice-preview"),
+  clearVoiceData: (expected) => ipcRenderer.invoke("people-clear-voice-apply", expected),
+  undoClearVoiceData: (id) => ipcRenderer.invoke("people-clear-voice-undo", id),
   applyPersonAction: (request) => ipcRenderer.invoke("people-apply", request),
   undoPersonAction: (id) => ipcRenderer.invoke("people-undo", id),
   attachSpeakerEmail: (profileId, email) =>
