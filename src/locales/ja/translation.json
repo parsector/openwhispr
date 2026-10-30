@@ -5275,6 +5275,12 @@
     "archiveLabel": "アーカイブ済み"
   },
   "people": {
+    "actionHistory": "操作履歴",
+    "noActions": "操作はまだありません。",
+    "correctionAction": "文字起こしの修正",
+    "mappingAction": "話者の対応付け",
+    "adoptionAction": "クラウドのラベル",
+    "noteVoiceEvidence": "ノートの声紋 {{count}} 件。",
     "clearVoice": "すべての音声データを消去",
     "clearPreview": "{{people}} 人の本人情報は残ります。{{embeddings}} 件の音声プロファイルと {{mappings}} 件の対応付けを削除します。",
     "clearDone": "{{embeddings}} 件の音声プロファイルと {{mappings}} 件の対応付けを消去しました。{{people}} 人は残っています。",

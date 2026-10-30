@@ -286,6 +286,57 @@ test("deleting the AI summary moves the selection to Your notes", async (t) => {
   await unmount();
 });
 
+test("a mounted recording editor refreshes people and follows same-note row navigation", async (t) => {
+  const { render, latest } = await loadNoteEditor(t);
+  let profileReads = 0, mappingReads = 0, peopleChanged;
+  window.electronAPI.getSpeakerProfiles = async () => { profileReads++; return []; };
+  window.electronAPI.getSpeakerMappings = async () => { mappingReads++; return []; };
+  window.electronAPI.onPeopleChanged = (callback) => { peopleChanged = callback; return () => {}; };
+  const listeners = new Map();
+  window.addEventListener = (type, callback) => listeners.set(type, callback);
+  window.removeEventListener = (type) => listeners.delete(type);
+  window.dispatchEvent = (event) => listeners.get(event.type)?.(event);
+  window.setTimeout = setTimeout;
+  window.clearTimeout = clearTimeout;
+  window.sessionStorage = { removeItem() {}, getItem() { return null; } };
+  await render(null, { isRecording: true, note: { ...NOTE,
+    transcript: JSON.stringify([{ id: "row-1", text: "hello", source: "system", speaker: "speaker_0" }]) } });
+  assert.equal(typeof peopleChanged, "function");
+  const initialProfileReads = profileReads, initialMappingReads = mappingReads;
+  await React.act(async () => { peopleChanged(); await Promise.resolve(); });
+  assert.ok(profileReads > initialProfileReads);
+  assert.ok(mappingReads > initialMappingReads);
+  await React.act(async () => {
+    window.dispatchEvent({ type: "people-review-navigate", detail: { noteId: NOTE.id, rowId: "row-1" } });
+    await new Promise(resolve => setTimeout(resolve, 10));
+  });
+  let resolveOldProfiles, resolveOldMappings;
+  window.electronAPI.getSpeakerProfiles = () => new Promise(resolve => { resolveOldProfiles = resolve; });
+  window.electronAPI.getSpeakerMappings = () => new Promise(resolve => { resolveOldMappings = resolve; });
+  peopleChanged();
+  window.electronAPI.getSpeakerProfiles = async () => [{ id: 11, display_name: "Sam", email: null }];
+  window.electronAPI.getSpeakerMappings = async () => [{ speaker_id: "speaker_0", display_name: "Sam" }];
+  await React.act(async () => { peopleChanged(); await Promise.resolve(); });
+  await React.act(async () => {
+    resolveOldProfiles([{ id: 10, display_name: "Alex", email: null }]);
+    resolveOldMappings([{ speaker_id: "speaker_0", display_name: "Alex" }]);
+    await Promise.resolve();
+  });
+  const liveProps = [];
+  walk(latest(), node => { if (Array.isArray(node.props.speakerProfiles) && node.props.speakerMappings) liveProps.push(node.props); });
+  assert.ok(liveProps.some(props => props.speakerProfiles.some(profile => profile.display_name === "Sam")));
+  assert.ok(liveProps.some(props => props.speakerMappings.speaker_0 === "Sam"));
+  assert.ok(liveProps.every(props => !props.speakerProfiles.some(profile => profile.display_name === "Alex")));
+  await React.act(async () => {
+    window.dispatchEvent({ type: "people-review-navigate", detail: { noteId: NOTE.id, rowId: "row-1" } });
+    await new Promise(resolve => setTimeout(resolve, 10));
+  });
+  assert.equal(collectSegments(latest()).get("transcript") !== undefined, true);
+  let focusRow;
+  walk(latest(), node => { if (node.props.focusRowId) focusRow = node.props.focusRowId; });
+  assert.equal(focusRow, "row-1");
+});
+
 test("an uploaded transcript opens in Transcript and leaves Your notes available for writing", async (t) => {
   const { createDb } = require("../helpers/harness/db");
   const db = createDb(t);

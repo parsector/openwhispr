@@ -5275,6 +5275,12 @@
     "archiveLabel": "已封存"
   },
   "people": {
+    "actionHistory": "操作紀錄",
+    "noActions": "尚無操作。",
+    "correctionAction": "逐字稿修正",
+    "mappingAction": "說話者對應",
+    "adoptionAction": "雲端標籤",
+    "noteVoiceEvidence": "筆記聲紋 {{count}} 筆。",
     "clearVoice": "清除所有語音資料",
     "clearPreview": "保留 {{people}} 位人物的身分。刪除 {{embeddings}} 個語音檔案和 {{mappings}} 個對應。",
     "clearDone": "已清除 {{embeddings}} 個語音檔案和 {{mappings}} 個對應。保留 {{people}} 位人物。",

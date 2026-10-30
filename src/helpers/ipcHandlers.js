@@ -3303,7 +3303,10 @@ class IPCHandlers {
     });
     ipcMain.handle("db-take-cloud-speaker-labels", (_, noteId, undo) => {
       const result = this.databaseManager.takeCloudSpeakerLabels(noteId, undo);
-      if (result.success) setImmediate(() => broadcastToWindows("note-updated", result.note));
+      if (result.success) {
+        setImmediate(() => broadcastToWindows("note-updated", result.note));
+        broadcastToWindows('people-changed');
+      }
       return result;
     });
     ipcMain.handle(
@@ -13044,6 +13047,7 @@ class IPCHandlers {
         if (result.success) {
           const note = this.databaseManager.getNote(request.noteId);
           setImmediate(() => broadcastToWindows("note-updated", note));
+          broadcastToWindows('people-changed');
           this.notifyVectorChanges();
           this._asyncMirrorWrite(note);
         }
@@ -13059,6 +13063,15 @@ class IPCHandlers {
     });
 
     ipcMain.handle("people-list", () => require("./peopleActions").listPeople(this.databaseManager));
+    ipcMain.handle("people-action-history", () => require("./peopleActions").listPeopleActions(this.databaseManager));
+    ipcMain.handle("people-undo-mapping", (_event, noteId) => {
+      const result = this.databaseManager.undoSpeakerMapping(noteId);
+      if (result.success) {
+        broadcastToWindows('people-changed');
+        setImmediate(() => broadcastToWindows('note-updated', this.databaseManager.getNote(noteId)));
+      }
+      return result;
+    });
     ipcMain.handle("speaker-history-status", (_event, noteId) => {
       const note = this.databaseManager.getNote(noteId);
       return note ? { quarantined: !!require("./speakerActionLog").readSpeakerActionLog(note).quarantined } : { quarantined: false };
@@ -13072,7 +13085,11 @@ class IPCHandlers {
     ipcMain.handle("people-clear-voice-apply", (_event, expected) => {
       try {
         const result = require("./peopleActions").clearVoiceData(this.databaseManager, expected);
-        if (result.success) this.notifyVectorChanges();
+        if (result.success) {
+          liveSpeakerIdentifier.reconcilePeopleMutation({ type: 'clear_voice' });
+          this.notifyVectorChanges();
+          broadcastToWindows('people-changed');
+        }
         return result;
       } catch (error) {
         debugLogger.error("Clear voice data failed", { error: error.message }, "speaker");
@@ -13082,7 +13099,10 @@ class IPCHandlers {
     ipcMain.handle("people-clear-voice-undo", (_event, id) => {
       try {
         const result = require("./peopleActions").undoClearVoiceData(this.databaseManager, id);
-        if (result.success) this.notifyVectorChanges();
+        if (result.success) {
+          this.notifyVectorChanges();
+          broadcastToWindows('people-changed');
+        }
         return result;
       } catch (error) {
         debugLogger.error("Undo clear voice data failed", { error: error.message }, "speaker");
@@ -13093,6 +13113,14 @@ class IPCHandlers {
       try {
         const result = require("./peopleActions").applyPersonAction(this.databaseManager, request);
         if (result.success && request.type !== 'rename') this.notifyVectorChanges();
+        if (result.success) {
+          const displayName = request.type === 'merge'
+            ? this.databaseManager.db.prepare('SELECT display_name FROM speaker_profiles WHERE id = ?').get(request.survivorId)?.display_name
+            : request.type === 'rename' ? String(request.name).trim() : null;
+          liveSpeakerIdentifier.reconcilePeopleMutation({ type: request.type,
+            profileId: request.profileId, survivorId: request.survivorId, displayName });
+          broadcastToWindows('people-changed');
+        }
         if (result.success) for (const noteId of result.noteIds) {
           const note = this.databaseManager.getNote(noteId);
           setImmediate(() => broadcastToWindows("note-updated", note));
@@ -13107,7 +13135,11 @@ class IPCHandlers {
     ipcMain.handle("people-undo", (_event, id) => {
       try {
         const result = require("./peopleActions").undoPersonAction(this.databaseManager, id);
-        if (result.success) this.notifyVectorChanges();
+        if (result.success) {
+          if (result.personAction) liveSpeakerIdentifier.reconcilePeopleMutation(result.personAction);
+          this.notifyVectorChanges();
+          broadcastToWindows('people-changed');
+        }
         if (result.success) for (const noteId of result.noteIds) {
           const note = this.databaseManager.getNote(noteId);
           setImmediate(() => broadcastToWindows("note-updated", note));

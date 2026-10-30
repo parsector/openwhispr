@@ -5275,6 +5275,12 @@
     "archiveLabel": "Archived"
   },
   "people": {
+    "actionHistory": "Action history",
+    "noActions": "No actions yet.",
+    "correctionAction": "Transcript correction",
+    "mappingAction": "Speaker mapping",
+    "adoptionAction": "Cloud labels",
+    "noteVoiceEvidence": "{{count}} note voice embeddings.",
     "clearVoice": "Clear all voice data",
     "clearPreview": "{{people}} people keep their identities. Delete {{embeddings}} embeddings and {{mappings}} mappings. Transcript labels and action history stay.",
     "clearDone": "Cleared {{embeddings}} embeddings and {{mappings}} mappings. {{people}} people remain.",

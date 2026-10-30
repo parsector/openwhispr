@@ -170,6 +170,7 @@ class LiveSpeakerIdentifier {
     this.transientDisplayNames = new Map();
     this.transientProfileIds = new Map();
     this.transientNoteIds = new Map();
+    this.transientMergeOrigins = new Map();
     this.activeRunId = null;
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
@@ -429,6 +430,57 @@ class LiveSpeakerIdentifier {
     return true;
   }
 
+  reconcilePeopleMutation({ type, profileId, survivorId, displayName }) {
+    if (type === 'clear_voice') {
+      this.transientEmbeddings.clear();
+      this.transientCounts.clear();
+      this.transientDisplayNames.clear();
+      this.transientProfileIds.clear();
+      this.transientNoteIds.clear();
+      this.transientMergeOrigins.clear();
+      this.currentSegmentSpeakerId = null;
+      this.currentSegmentSpeakerName = null;
+      return;
+    }
+    if (type === 'undo_merge') {
+      for (const [speakerId, id] of this.transientProfileIds) {
+        const origins = this.transientMergeOrigins.get(speakerId);
+        if (id !== survivorId || origins?.at(-1)?.profileId !== profileId) continue;
+        const previous = origins.pop();
+        if (!origins.length) this.transientMergeOrigins.delete(speakerId);
+        this.transientProfileIds.set(speakerId, profileId);
+        this.transientDisplayNames.set(speakerId, previous.displayName || displayName);
+        if (this.currentSegmentSpeakerId === speakerId)
+          this.currentSegmentSpeakerName = previous.displayName || displayName;
+      }
+      return;
+    }
+    for (const [speakerId, id] of this.transientProfileIds) {
+      if (id !== profileId) continue;
+      if (type === 'delete' || type === 'reset') {
+        this.transientEmbeddings.delete(speakerId);
+        this.transientCounts.delete(speakerId);
+        this.transientDisplayNames.delete(speakerId);
+        this.transientProfileIds.delete(speakerId);
+        this.transientNoteIds.delete(speakerId);
+        this.transientMergeOrigins.delete(speakerId);
+        if (this.currentSegmentSpeakerId === speakerId) {
+          this.currentSegmentSpeakerId = null;
+          this.currentSegmentSpeakerName = null;
+        }
+      } else {
+        if (type === 'merge') {
+          const origins = this.transientMergeOrigins.get(speakerId) || [];
+          origins.push({ profileId, displayName: this.transientDisplayNames.get(speakerId) });
+          this.transientMergeOrigins.set(speakerId, origins);
+          this.transientProfileIds.set(speakerId, survivorId);
+        }
+        this.transientDisplayNames.set(speakerId, displayName);
+        if (this.currentSegmentSpeakerId === speakerId) this.currentSegmentSpeakerName = displayName;
+      }
+    }
+  }
+
   async _ensureLoaded() {
     if (this.session) return;
 
@@ -463,6 +515,7 @@ class LiveSpeakerIdentifier {
     this.transientDisplayNames = new Map();
     this.transientProfileIds = new Map();
     this.transientNoteIds = new Map();
+    this.transientMergeOrigins = new Map();
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;

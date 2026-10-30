@@ -5275,6 +5275,12 @@
     "archiveLabel": "已归档"
   },
   "people": {
+    "actionHistory": "操作历史",
+    "noActions": "暂无操作。",
+    "correctionAction": "转录修正",
+    "mappingAction": "说话人映射",
+    "adoptionAction": "云端标签",
+    "noteVoiceEvidence": "笔记声纹 {{count}} 条。",
     "clearVoice": "清除所有语音数据",
     "clearPreview": "保留 {{people}} 位人员的身份。删除 {{embeddings}} 个语音档案和 {{mappings}} 个映射。",
     "clearDone": "已清除 {{embeddings}} 个语音档案和 {{mappings}} 个映射。保留 {{people}} 位人员。",

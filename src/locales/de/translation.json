@@ -5275,6 +5275,12 @@
     "archiveLabel": "Archiviert"
   },
   "people": {
+    "actionHistory": "Aktionsverlauf",
+    "noActions": "Noch keine Aktionen.",
+    "correctionAction": "Transkriptkorrektur",
+    "mappingAction": "Sprecherzuordnung",
+    "adoptionAction": "Cloud Labels",
+    "noteVoiceEvidence": "{{count}} Stimmabdrücke in Notizen.",
     "clearVoice": "Alle Stimmdaten löschen",
     "clearPreview": "{{people}} Personen behalten ihre Identität. {{embeddings}} Stimmprofile und {{mappings}} Zuordnungen löschen.",
     "clearDone": "{{embeddings}} Stimmprofile und {{mappings}} Zuordnungen gelöscht. {{people}} Personen bleiben erhalten.",

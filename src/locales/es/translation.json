@@ -5275,6 +5275,12 @@
     "archiveLabel": "Archivado"
   },
   "people": {
+    "actionHistory": "Historial de acciones",
+    "noActions": "Aún no hay acciones.",
+    "correctionAction": "Corrección de transcripción",
+    "mappingAction": "Asignación de hablante",
+    "adoptionAction": "Etiquetas de la nube",
+    "noteVoiceEvidence": "{{count}} huellas de voz en notas.",
     "clearVoice": "Borrar todos los datos de voz",
     "clearPreview": "{{people}} personas conservan su identidad. Se borrarán {{embeddings}} perfiles de voz y {{mappings}} asignaciones.",
     "clearDone": "Se borraron {{embeddings}} perfiles de voz y {{mappings}} asignaciones. Quedan {{people}} personas.",

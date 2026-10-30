@@ -5319,6 +5319,12 @@
     "archiveLabel": "В архиве"
   },
   "people": {
+    "actionHistory": "История действий",
+    "noActions": "Действий пока нет.",
+    "correctionAction": "Исправление расшифровки",
+    "mappingAction": "Связь с говорящим",
+    "adoptionAction": "Метки облака",
+    "noteVoiceEvidence": "Голосовых отпечатков в заметках: {{count}}.",
     "clearVoice": "Удалить все голосовые данные",
     "clearPreview": "{{people}} человек сохранят свои данные. Будут удалены {{embeddings}} голосовых профилей и {{mappings}} привязок.",
     "clearDone": "Удалены {{embeddings}} голосовых профилей и {{mappings}} привязок. Осталось {{people}} человек.",

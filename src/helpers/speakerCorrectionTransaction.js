@@ -12,6 +12,7 @@ const FIELDS = [
 ];
 const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
 const { readSpeakerActionLog, appendAction, removeNewestAction, MAX_ACTION_LOG_BYTES } = require('./speakerActionLog');
+const globalHistory = require('./speakerGlobalHistory');
 const MAX_CORRECTION_BYTES = MAX_ACTION_LOG_BYTES;
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
 const snapshot = (row) =>
@@ -28,11 +29,16 @@ function applySpeakerCorrection(database, identifier, request) {
   if (!noteId || !id || !["apply", "undo"].includes(request.type))
     return { success: false, error: "invalid_request" };
   let committedMapping = null;
+  let committedProfileId = null;
   const run = database.db.transaction(() => {
     const note = database.getNote(noteId);
     if (!note) return { success: false, error: "note_missing" };
     const log = readSpeakerActionLog(note);
     if (log.quarantined) return { success: false, error: 'history_quarantined' };
+    const unavailable = request.type === 'undo' && globalHistory.status(database.db, id, noteId)?.unavailable_reason;
+    if (unavailable) return { success: false, error: unavailable };
+    if (request.type === 'undo' && !globalHistory.canUndo(database.db, id, noteId))
+      return { success: false, error: 'later_change' };
     let nextLog = log;
     const saved = parse(note.transcript, note.client_note_id || noteId);
     const byId = new Map(saved.map((row) => [row.id, row]));
@@ -43,6 +49,9 @@ function applySpeakerCorrection(database, identifier, request) {
     let rows = [...byId.values()];
     if (request.type === "apply") {
       const { scope, target, name, profileId, email } = request;
+      if (profileId != null && typeof database.db.prepare === 'function' &&
+          !database.db.prepare('SELECT 1 FROM speaker_profiles WHERE id = ?').get(profileId))
+        return { success: false, error: 'person_missing' };
       if (!["row", "selected", "cluster"].includes(scope))
         return { success: false, error: "invalid_request" };
       const ids = new Set(request.rowIds || []);
@@ -64,6 +73,7 @@ function applySpeakerCorrection(database, identifier, request) {
       const createdProfile = canPersistIdentity && !existingProfile
         ? database.createNamedSpeakerProfile(name, email) : null;
       const chosenProfileId = profileId ?? existingProfile?.id ?? createdProfile?.id ?? null;
+      committedProfileId = chosenProfileId;
       const key = scope === "cluster" ? mappingKey(target.runId, target.clusterId) : null;
       const before = key
         ? database.getSpeakerRunMapping(noteId, target.runId, target.clusterId)
@@ -163,6 +173,9 @@ function applySpeakerCorrection(database, identifier, request) {
     const result = database.updateNote(noteId, { transcript,
       speaker_action_log: JSON.stringify(nextLog), speaker_label_undo: null });
     if (!result?.success) throw Error(result?.error || "transcript_failed");
+    if (request.type === 'apply') globalHistory.add(database.db, { id, kind: 'correction',
+      profileId: committedProfileId, noteId, label: request.name || 'Unknown' });
+    else globalHistory.remove(database.db, id, noteId);
     if (request.type === "undo" && log.actions.at(-1)?.event?.createdProfileId)
       database.removeUnusedNamedSpeakerProfile?.(log.actions.at(-1).event.createdProfileId);
     if (committedMapping && identifier &&

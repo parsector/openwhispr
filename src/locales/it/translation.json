@@ -5275,6 +5275,12 @@
     "archiveLabel": "Archiviato"
   },
   "people": {
+    "actionHistory": "Cronologia delle azioni",
+    "noActions": "Nessuna azione.",
+    "correctionAction": "Correzione della trascrizione",
+    "mappingAction": "Associazione relatore",
+    "adoptionAction": "Etichette cloud",
+    "noteVoiceEvidence": "{{count}} impronte vocali nelle note.",
     "clearVoice": "Cancella tutti i dati vocali",
     "clearPreview": "{{people}} persone mantengono la propria identità. Elimina {{embeddings}} profili vocali e {{mappings}} associazioni.",
     "clearDone": "Eliminati {{embeddings}} profili vocali e {{mappings}} associazioni. Restano {{people}} persone.",

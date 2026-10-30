@@ -6662,6 +6662,8 @@ class DatabaseManager {
         ).run(noteId, speakerId, profileId, displayName);
         this.db.prepare('UPDATE notes SET speaker_action_log = ?, speaker_label_undo = NULL WHERE id = ?')
           .run(JSON.stringify(next), noteId);
+        require('./speakerGlobalHistory').add(this.db, { id: next.actions.at(-1).id,
+          kind: 'mapping', profileId, noteId, label: displayName || 'Unknown' });
         return { success: true };
       })();
     } catch (error) {
@@ -6680,6 +6682,8 @@ class DatabaseManager {
       const action = log.actions.at(-1);
       if (action?.unavailableReason) return { success: false, error: action.unavailableReason };
       if (action?.kind !== 'mapping') return { success: false, error: 'later_change' };
+      const globalHistory = require('./speakerGlobalHistory');
+      if (!globalHistory.canUndo(this.db, action.id, noteId)) return { success: false, error: 'later_change' };
       if (action.before) this.db.prepare(
         'INSERT OR REPLACE INTO speaker_mappings (note_id, speaker_id, profile_id, display_name) VALUES (?, ?, ?, ?)'
       ).run(noteId, action.speakerId, action.before.profile_id, action.before.display_name);
@@ -6687,6 +6691,7 @@ class DatabaseManager {
         .run(noteId, action.speakerId);
       this.db.prepare('UPDATE notes SET speaker_action_log = ?, speaker_label_undo = NULL WHERE id = ?')
         .run(JSON.stringify(removeNewestAction(log)), noteId);
+      globalHistory.remove(this.db, action.id, noteId);
       return { success: true };
     })();
   }
@@ -7115,6 +7120,14 @@ class DatabaseManager {
         const action = log.actions.at(-1);
         if (action?.unavailableReason) return { success: false, error: action.unavailableReason };
         if (action?.kind !== 'adoption') return { success: false, error: 'later_change' };
+        const globalHistory = require('./speakerGlobalHistory');
+        const latest = globalHistory.latest(this.db);
+        const migratedLegacy = action.id.startsWith('legacy-adoption-');
+        // A legacy note can synthesize a different adoption id while folding its
+        // row snapshot into the ordered note log. That note log is authoritative.
+        if (!migratedLegacy
+          ? !globalHistory.canUndo(this.db, action.id, id)
+          : latest && latest.note_id !== id) return { success: false, error: 'later_change' };
         const record = stack.at(-1);
         const document = readTranscriptDocument(note.transcript);
         const byId = new Map(document.rows.map((row) => [row.id, row]));
@@ -7138,6 +7151,9 @@ class DatabaseManager {
         this.db.prepare("UPDATE notes SET transcript = ?, speaker_action_log = ?, speaker_label_undo = NULL, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
           .run(writeTranscriptDocument(restored, document.unknownNumberHighWater),
             JSON.stringify(nextLog), id);
+        if (!migratedLegacy) globalHistory.remove(this.db, action.id, id);
+        else if (latest?.kind === 'adoption' && latest.note_id === id)
+          globalHistory.remove(this.db, latest.id, id);
       } else {
         if (!isTranscriptDocument(note.cloud_transcript) || !isTranscriptDocument(note.transcript))
           return { success: false, error: "cloud_labels_missing" };
@@ -7174,6 +7190,8 @@ class DatabaseManager {
         this.db.prepare("DELETE FROM speaker_run_mappings WHERE note_id = ?").run(id);
         this.db.prepare("UPDATE notes SET transcript = ?, speaker_action_log = ?, speaker_label_undo = NULL, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
           .run(after, JSON.stringify(nextLog), id);
+        require('./speakerGlobalHistory').add(this.db, { id: nextLog.actions.at(-1).id,
+          kind: 'adoption', noteId: id, label: note.title || 'Note' });
       }
       return { success: true, note: this.getNote(id) };
     })();
@@ -8818,6 +8836,8 @@ class DatabaseManager {
           .run(noteId, speakerId);
         this.db.prepare('UPDATE notes SET speaker_action_log = ?, speaker_label_undo = NULL WHERE id = ?')
           .run(JSON.stringify(next), noteId);
+        require('./speakerGlobalHistory').add(this.db, { id: next.actions.at(-1).id,
+          kind: 'mapping', profileId: before.profile_id, noteId, label: before.display_name || 'Unknown' });
         return { success: true };
       })();
     } catch (error) {

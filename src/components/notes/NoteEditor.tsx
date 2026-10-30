@@ -588,8 +588,12 @@ export default function NoteEditor({
     onNewChatUnsent: setChatDraft,
   });
 
+  const speakerProfileRequestRef = useRef(0);
+  const speakerMappingRequestRef = useRef(0);
   const refreshSpeakerProfiles = useCallback(() => {
+    const request = ++speakerProfileRequestRef.current;
     window.electronAPI?.getSpeakerProfiles?.().then((profiles) => {
+      if (request !== speakerProfileRequestRef.current) return;
       setSpeakerProfiles(
         (profiles || []).map((profile) => ({
           id: profile.id,
@@ -597,6 +601,15 @@ export default function NoteEditor({
           email: profile.email,
         }))
       );
+    });
+  }, []);
+  const refreshSpeakerMappings = useCallback((noteId: number) => {
+    const request = ++speakerMappingRequestRef.current;
+    void window.electronAPI?.getSpeakerMappings?.(noteId).then((mappings) => {
+      if (request !== speakerMappingRequestRef.current) return;
+      const map: Record<string, string> = {};
+      for (const mapping of mappings || []) map[mapping.speaker_id] = mapping.display_name;
+      setSpeakerMappings(map);
     });
   }, []);
 
@@ -679,13 +692,31 @@ export default function NoteEditor({
   }, [note.id, note.title, defaultViewMode, scheduleUiUpdate]);
 
   useEffect(() => {
-    window.electronAPI?.getSpeakerMappings?.(note.id).then((mappings) => {
-      const map: Record<string, string> = {};
-      for (const m of mappings || []) map[m.speaker_id] = m.display_name;
-      setSpeakerMappings(map);
-    });
+    refreshSpeakerMappings(note.id);
     refreshSpeakerProfiles();
-  }, [note.id, refreshSpeakerProfiles]);
+  }, [note.id, refreshSpeakerProfiles, refreshSpeakerMappings]);
+
+  useEffect(() => {
+    const refresh = () => {
+      refreshSpeakerMappings(note.id);
+      refreshSpeakerProfiles();
+    };
+    return window.electronAPI?.onPeopleChanged?.(refresh);
+  }, [note.id, refreshSpeakerProfiles, refreshSpeakerMappings]);
+
+  useEffect(() => {
+    let timer: number | undefined;
+    const navigate = (event: Event) => {
+      const target = (event as CustomEvent<{ noteId: number; rowId: string }>).detail;
+      if (target?.noteId !== note.id || !target.rowId) return;
+      window.sessionStorage.removeItem("peopleReviewTarget");
+      setSelectedViewMode("transcript");
+      setPeopleFocusRowId(undefined);
+      timer = window.setTimeout(() => setPeopleFocusRowId(target.rowId), 0);
+    };
+    window.addEventListener("people-review-navigate", navigate);
+    return () => { window.removeEventListener("people-review-navigate", navigate); if (timer !== undefined) window.clearTimeout(timer); };
+  }, [note.id]);
 
   useEffect(() => {
     if (titleRef.current && titleRef.current.textContent !== note.title) {
@@ -1514,6 +1545,7 @@ export default function NoteEditor({
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
+                  focusRowId={peopleFocusRowId}
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   speakerMappings={speakerMappings}
                   speakerProfiles={speakerProfiles}

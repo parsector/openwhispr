@@ -5393,6 +5393,12 @@
     "archiveLabel": "مؤرشف"
   },
   "people": {
+    "actionHistory": "سجل الإجراءات",
+    "noActions": "لا توجد إجراءات بعد.",
+    "correctionAction": "تصحيح النص",
+    "mappingAction": "ربط المتحدث",
+    "adoptionAction": "تسميات السحابة",
+    "noteVoiceEvidence": "{{count}} بصمات صوتية في الملاحظات.",
     "clearVoice": "مسح جميع بيانات الصوت",
     "clearPreview": "سيحتفظ {{people}} أشخاص بهوياتهم. سيتم حذف {{embeddings}} بصمات صوتية و{{mappings}} تعيينات.",
     "clearDone": "تم مسح {{embeddings}} بصمات صوتية و{{mappings}} تعيينات. بقي {{people}} أشخاص.",

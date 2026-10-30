@@ -982,6 +982,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             initialSection={settingsSection}
             onOpenNote={(id, rowId) => {
               window.sessionStorage.setItem("peopleReviewTarget", JSON.stringify({ noteId: id, rowId }));
+              window.dispatchEvent(new CustomEvent("people-review-navigate", { detail: { noteId: id, rowId } }));
               void window.electronAPI.getNote(id).then((note) => {
                 if (!note) return;
                 if (note.folder_id) {

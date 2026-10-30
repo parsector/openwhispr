@@ -13,7 +13,7 @@ Module._load = function(request, parent, isMain) {
 process.env.NODE_ENV = 'test';
 const DatabaseManager = require('../../src/helpers/database.js');
 const { skipOrFail } = require('./harness/db.js');
-const { listPeople, listReviewRows, previewPersonAction, applyPersonAction, undoPersonAction, previewClearVoiceData, clearVoiceData, undoClearVoiceData } = require('../../src/helpers/peopleActions');
+const { listPeople, listPeopleActions, listReviewRows, previewPersonAction, applyPersonAction, undoPersonAction, previewClearVoiceData, clearVoiceData, undoClearVoiceData } = require('../../src/helpers/peopleActions');
 const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
 const { readSpeakerActionLog } = require('../../src/helpers/speakerActionLog');
 function fixture(t) {
@@ -94,6 +94,16 @@ test('naming a speaker reuses an attendee identity and never names other rows', 
   assert.equal(f.rows(note)[0].suggestedProfileId, person.id);
   assert.equal(f.rows(note)[1].speakerName, undefined);
 });
+test('a correction rejects a deleted profile id inside its transaction', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const id = f.note('one', [{ id: 'a', speaker: 'speaker_0' }], []);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: alex.id }).success, true);
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const result = applySpeakerCorrection(f.db, null, { type: 'apply', noteId: id, id: 'stale', scope: 'row', rowIds: ['a'], name: 'Alex', profileId: alex.id });
+  assert.equal(result.error, 'person_missing');
+  assert.equal(f.rows(id)[0].speakerName, undefined);
+});
 test('deleting an attendee identity hides old attendance until a new meeting registers them', t => {
   const f = fixture(t); if (!f) return;
   const first = f.note('One', [], []);
@@ -170,6 +180,171 @@ test('merge preserves survivor embedding, rewrites pinned rows, and restores los
   assert.ok(f.db.db.prepare('SELECT id FROM speaker_profiles WHERE id = ?').get(loser.id));
   assert.equal(listPeople(f.db).find(p => p.id === loser.id).meetingCount, 1);
 });
+test('a user locked Unknown stays Unknown when its old cluster is merged or deleted', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1), sam = f.person('Sam', 2);
+  const id = f.note('one', [
+    { id: 'unknown', speaker: 'speaker_0', speakerName: undefined, speakerIsPlaceholder: true, speakerLocked: true, speakerLockSource: 'user' },
+    { id: 'known', speaker: 'speaker_0', speakerName: 'Alex' },
+  ], [['speaker_0', alex]]);
+  const request = { type: 'merge', profileId: alex.id, survivorId: sam.id };
+  assert.deepEqual([previewPersonAction(f.db, request).segmentCount, previewPersonAction(f.db, request).pinnedCount], [1, 0]);
+  assert.equal(applyPersonAction(f.db, request).success, true);
+  assert.equal(f.rows(id)[0].speakerName, undefined);
+  assert.equal(f.rows(id)[0].speakerLocked, true);
+});
+test('merge counts only owned rows across runs, duplicate names, and soft-deleted notes', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1), sam = f.person('Sam', 2);
+  f.db.createNamedSpeakerProfile('Alex');
+  const first = f.note('first', [
+    { id: 'owned', speaker: 'speaker_0', diarizationRunId: 'one', speakerName: 'Alex', speakerLocked: true, speakerLockSource: 'user', suggestedProfileId: alex.id },
+    { id: 'unknown', speaker: 'speaker_0', diarizationRunId: 'one', speakerIsPlaceholder: true, speakerLocked: true, speakerLockSource: 'user' },
+    { id: 'other-run', speaker: 'speaker_0', diarizationRunId: 'two', speakerName: 'Sam' },
+    { id: 'name-only', speaker: 'speaker_9', speakerName: 'Alex' },
+  ], [['speaker_0', alex]]);
+  f.db.db.prepare('INSERT INTO speaker_run_mappings (note_id, run_id, cluster_id, profile_id, display_name) VALUES (?, ?, ?, ?, ?)')
+    .run(first, 'two', 'speaker_0', sam.id, 'Sam');
+  const second = f.note('deleted', [{ id: 'deleted-owned', speaker: 'speaker_1', speakerName: 'Alex' }], [['speaker_1', alex]]);
+  f.db.db.prepare('UPDATE notes SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?').run(second);
+  const request = { type: 'merge', profileId: alex.id, survivorId: sam.id };
+  const preview = previewPersonAction(f.db, request);
+  assert.deepEqual([preview.noteCount, preview.segmentCount, preview.pinnedCount], [2, 2, 1]);
+  assert.equal(applyPersonAction(f.db, { ...request, expected: preview }).success, true);
+  assert.deepEqual(f.rows(first).map(r => r.speakerName), ['Sam', undefined, 'Sam', 'Alex']);
+  assert.equal(f.rows(first)[1].speakerLocked, true);
+  assert.equal(f.rows(second)[0].speakerName, 'Sam');
+});
+test('deletion clears suggestion-only notes and counts them', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const id = f.note('suggestion', [{ id: 'a', speaker: 'speaker_0', suggestedName: 'Alex', suggestedProfileId: alex.id }], []);
+  const preview = previewPersonAction(f.db, { type: 'delete', profileId: alex.id });
+  assert.equal(preview.noteCount, 1);
+  const result = applyPersonAction(f.db, { type: 'delete', profileId: alex.id, expected: preview });
+  assert.equal(result.success, true);
+  assert.deepEqual(result.noteIds, [id]);
+  assert.equal(f.rows(id)[0].suggestedProfileId, undefined);
+  assert.equal(f.rows(id)[0].suggestedName, undefined);
+});
+test('deleting a person invalidates name-only correction and legacy restores', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const id = f.note('history', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Sam',
+    corrections: [{ id: 'old', rowId: 'a', snapshots: { a: { previous: { speakerName: 'Alex' }, next: { speakerName: 'Sam' } } } }] }], []);
+  const log = { version: 1, nextSequence: 2, actions: [{ kind: 'correction', id: 'old', sequence: 1,
+    event: { id: 'old', snapshots: { a: { previous: { speakerName: 'Alex' }, next: { speakerName: 'Sam' } } } } }] };
+  f.db.db.prepare('UPDATE notes SET speaker_action_log = ?, speaker_label_undo = ? WHERE id = ?')
+    .run(JSON.stringify(log), JSON.stringify({ before: JSON.stringify([{ id: 'a', speakerName: 'Alex' }]), after: JSON.stringify([{ id: 'a', speakerName: 'Sam' }]) }), id);
+  const preview = previewPersonAction(f.db, { type: 'delete', profileId: alex.id });
+  assert.equal(preview.historyCount >= 1, true);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: alex.id, expected: preview }).success, true);
+  assert.equal(JSON.stringify(readSpeakerActionLog(f.db.getNote(id))).includes('Alex'), false);
+  assert.equal(f.db.getNote(id).speaker_label_undo, null);
+});
+test('deleting a person removes every row record for a name-only multi-row correction', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const event = { id: 'multi', snapshots: {
+    a: { previous: { speakerName: 'Alex' }, next: { speakerName: 'Sam' } },
+    b: { previous: { speakerName: 'Alex' }, next: { speakerName: 'Sam' } },
+  } };
+  const id = f.note('history', [
+    { id: 'a', speakerName: 'Sam', corrections: [event] },
+    { id: 'b', speakerName: 'Sam', corrections: [{ id: 'multi', rowId: 'b' }] },
+  ], []);
+  f.db.db.prepare('UPDATE notes SET speaker_action_log = ? WHERE id = ?')
+    .run(JSON.stringify({ version: 1, nextSequence: 2, actions: [{ kind: 'correction', id: 'multi', sequence: 1, event }] }), id);
+  const preview = previewPersonAction(f.db, { type: 'delete', profileId: alex.id });
+  assert.deepEqual([preview.noteCount, preview.historyCount], [1, 1]);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: alex.id, expected: preview }).success, true);
+  assert.deepEqual(f.rows(id).map(r => r.corrections), [undefined, undefined]);
+  assert.equal(readSpeakerActionLog(f.db.getNote(id)).actions.length, 0);
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  assert.equal(applySpeakerCorrection(f.db, null, { type: 'undo', noteId: id, id: 'multi' }).success, false);
+});
+test('clear voice deletes note embeddings and undo restores them', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const id = f.note('voice', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Alex' }], [['speaker_0', alex]]);
+  f.db.db.prepare('INSERT INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)').run(id, 'speaker_0', Buffer.alloc(2048, 5));
+  const preview = previewClearVoiceData(f.db);
+  assert.equal(preview.noteEmbeddingCount, 1);
+  const clear = clearVoiceData(f.db, preview);
+  assert.equal(clear.success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 0);
+  assert.equal(undoClearVoiceData(f.db, clear.id).success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 1);
+});
+test('reset and delete erase owned note embeddings, including soft-deleted notes', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1), sam = f.person('Sam', 2);
+  const first = f.note('first', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Alex' }], [['speaker_0', alex]]);
+  const second = f.note('second', [{ id: 'b', speaker: 'speaker_1', speakerName: 'Alex' }], [['speaker_1', alex]]);
+  const other = f.note('other', [{ id: 'c', speaker: 'speaker_2', speakerName: 'Sam' }], [['speaker_2', sam]]);
+  for (const [noteId, speaker] of [[first, 'speaker_0'], [second, 'speaker_1'], [other, 'speaker_2']])
+    f.db.db.prepare('INSERT INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)')
+      .run(noteId, speaker, Buffer.alloc(2048, noteId));
+  f.db.db.prepare("UPDATE notes SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?").run(second);
+  const preview = previewPersonAction(f.db, { type: 'reset', profileId: alex.id });
+  assert.equal(preview.noteEmbeddingCount, 2);
+  const reset = applyPersonAction(f.db, { type: 'reset', profileId: alex.id, expected: preview });
+  assert.equal(reset.success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 1);
+  assert.equal(undoPersonAction(f.db, reset.id).success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 3);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: alex.id }).success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 1);
+});
+test('reset owns name-only note voice evidence when the name is unique', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const id = f.note('name-only', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Alex' }], []);
+  f.db.db.prepare('INSERT INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)')
+    .run(id, 'speaker_0', Buffer.alloc(2048, 3));
+  const preview = previewPersonAction(f.db, { type: 'reset', profileId: alex.id });
+  assert.equal(preview.noteEmbeddingCount, 1);
+  const reset = applyPersonAction(f.db, { type: 'reset', profileId: alex.id, expected: preview });
+  assert.equal(reset.success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 0);
+  assert.equal(undoPersonAction(f.db, reset.id).success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 1);
+});
+test('persistent action history stays ordered across another database manager and cancelled previews', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const preview = previewPersonAction(f.db, { type: 'rename', profileId: alex.id, name: 'Alec' });
+  assert.equal(preview.success, true);
+  assert.deepEqual(listPeopleActions(f.db), []);
+  const first = applyPersonAction(f.db, { type: 'rename', profileId: alex.id, name: 'Alec' });
+  const second = applyPersonAction(f.db, { type: 'reset', profileId: alex.id });
+  assert.equal(second.success, true);
+  const reopened = new DatabaseManager();
+  t.after(() => reopened.db.close());
+  assert.deepEqual(listPeopleActions(reopened).slice(0, 2).map(a => a.id), [second.id, first.id]);
+  assert.equal(undoPersonAction(reopened, first.id).error, 'later_change');
+  assert.equal(undoPersonAction(reopened, second.id).success, true);
+  assert.equal(undoPersonAction(reopened, first.id).success, true);
+});
+test('global history distinguishes identical note-scoped adoption ids', t => {
+  const f = fixture(t); if (!f) return;
+  const history = require('../../src/helpers/speakerGlobalHistory');
+  const first = f.note('first', [], []), second = f.note('second', [], []);
+  history.add(f.db.db, { id: 'adoption-1', kind: 'adoption', noteId: first, label: 'first' });
+  history.add(f.db.db, { id: 'adoption-1', kind: 'adoption', noteId: second, label: 'second' });
+  assert.equal(history.canUndo(f.db.db, 'adoption-1', first), false);
+  assert.equal(history.canUndo(f.db.db, 'adoption-1', second), true);
+  history.remove(f.db.db, 'adoption-1', second);
+  assert.deepEqual(listPeopleActions(f.db).map(action => action.noteId), [first]);
+});
+test('a reset with no notes cannot undo after a later clear', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const reset = applyPersonAction(f.db, { type: 'reset', profileId: alex.id });
+  assert.equal(reset.success, true);
+  assert.equal(clearVoiceData(f.db, previewClearVoiceData(f.db)).success, true);
+  assert.equal(undoPersonAction(f.db, reset.id).error, 'later_change');
+});
 test('delete allocates new unknown numbers and cannot restore the person', t => {
   const f = fixture(t); if (!f) return;
   const person = f.person('Wrong', 3);
@@ -181,6 +356,8 @@ test('delete allocates new unknown numbers and cannot restore the person', t => 
   assert.equal(f.rows(note)[0].unknownNumber, priorHighWater + 1);
   assert.equal(undoPersonAction(f.db, result.id).success, false);
   assert.equal(f.db.db.prepare('SELECT id FROM speaker_profiles WHERE id = ?').get(person.id), undefined);
+  assert.equal(listPeopleActions(f.db)[0].kind, 'delete');
+  assert.equal(listPeopleActions(f.db)[0].unavailableReason, 'person_deleted');
 });
 test('deleting a person removes their history and reports deleted references honestly', t => {
   const f = fixture(t); if (!f) return;
@@ -267,6 +444,27 @@ test('deleting after a global clear removes saved voice evidence and blocks its 
   assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: person.id }).success, true);
   const snapshot = f.db.db.prepare('SELECT snapshot FROM speaker_voice_clear_actions WHERE id = ?').get(clear.id).snapshot;
   assert.equal(snapshot.includes(Buffer.alloc(2048, 7).toString('base64')), false);
+  assert.equal(undoClearVoiceData(f.db, clear.id).error, 'person_deleted');
+  assert.equal(listPeopleActions(f.db).find(action => action.id === clear.id).unavailableReason, 'person_deleted');
+});
+test('deleting a merge survivor invalidates a zero-note identity restore', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1), sam = f.person('Sam', 2);
+  const merge = applyPersonAction(f.db, { type: 'merge', profileId: alex.id, survivorId: sam.id });
+  assert.equal(merge.success, true);
+  const preview = previewPersonAction(f.db, { type: 'delete', profileId: sam.id });
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: sam.id, expected: preview }).success, true);
+  assert.equal(undoPersonAction(f.db, merge.id).error, 'person_deleted');
+  assert.equal(listPeopleActions(f.db).find(action => action.id === merge.id).unavailableReason, 'person_deleted');
+});
+test('deleting after a zero-note clear counts and invalidates its saved history', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const clear = clearVoiceData(f.db, previewClearVoiceData(f.db));
+  assert.equal(clear.success, true);
+  const preview = previewPersonAction(f.db, { type: 'delete', profileId: alex.id });
+  assert.equal(preview.historyCount, 1);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: alex.id, expected: preview }).success, true);
   assert.equal(undoClearVoiceData(f.db, clear.id).error, 'person_deleted');
 });
 test('person actions share ordered note history with an in-note correction', t => {
