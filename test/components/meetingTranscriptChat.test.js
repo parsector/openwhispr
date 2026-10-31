@@ -5,6 +5,9 @@ const path = require("node:path");
 const i18next = require("i18next");
 const { initReactI18next } = require("react-i18next");
 const { renderStatic } = require("../helpers/harness/reactSsr");
+const React = require("react");
+const { createRoot } = require("react-dom/client");
+const { createRendererServer, installBrowserGlobals, installHookDom } = require("../lib/rendererTestHarness");
 
 const SEGMENTS = [
   { id: "s1", text: "hello from mic", source: "mic", timestamp: 1 },
@@ -26,6 +29,44 @@ async function renderChat(props) {
   const mod = await import("../../src/components/notes/MeetingTranscriptChat.tsx");
   return renderStatic(mod.MeetingTranscriptChat, { segments: SEGMENTS, ...props });
 }
+
+test("read-only transcript offers no audio policy controls and explains why", async (t) => {
+  await renderChat({});
+  installBrowserGlobals(t, { window: { setInterval, clearInterval, electronAPI: {
+    meetingAudioStatus: async () => ({ state: "complete", bytes: 100 }),
+    meetingAudioUsage: async () => ({ usedBytes: 100, budgetBytes: 500_000_000,
+      days: 7, evictions: [] }),
+    meetingAudioSetPolicy: async () => { throw Error("read-only policy was changed"); },
+  } } });
+  const container = installHookDom(t);
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-audio-readonly-",
+    noExternal: ["react-i18next"], mockModules: { "react-i18next": `
+      export function useTranslation() { return { t: (key) => key === "meetingAudio.readOnlyPolicy"
+        ? "Audio settings cannot be changed in a read-only note." : key }; }
+    ` } });
+  const { MeetingTranscriptChat } = await vite.ssrLoadModule("/components/notes/MeetingTranscriptChat.tsx");
+  let tree;
+  function Harness() { tree = MeetingTranscriptChat({ segments: SEGMENTS, noteId: 1, readOnly: true }); return null; }
+  const root = createRoot(container);
+  const walk = (node, visit) => {
+    if (Array.isArray(node)) return node.forEach(child => walk(child, visit));
+    if (!node?.props) return;
+    visit(node);
+    walk(node.props.children, visit);
+  };
+  try {
+    await React.act(async () => { root.render(React.createElement(Harness)); });
+    const controls = [];
+    const visible = [];
+    walk(tree, node => {
+      if (node.props["aria-label"] === "Retention" || node.props["aria-label"] === "Disk budget")
+        controls.push(node);
+      if (typeof node.props.children === "string") visible.push(node.props.children);
+    });
+    assert.equal(controls.length, 0);
+    assert.ok(visible.some(text => /read.only/i.test(text)), "viewer sees why audio settings are unavailable");
+  } finally { await React.act(async () => root.unmount()); }
+});
 
 test("rows resolve speaker labels through the live mappings", async () => {
   const unmapped = await renderChat({ speakerMappings: {} });

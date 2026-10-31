@@ -104,6 +104,37 @@ const NOTE = {
 
 const ENHANCEMENT = { content: NOTE.enhanced_content, isStale: false, onChange() {} };
 
+test("imported and failed-analysis rows do not claim a post-final correction", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  window.requestAnimationFrame = (callback) => setTimeout(callback, 0);
+  window.cancelAnimationFrame = clearTimeout;
+  const requests = [];
+  globalThis.window.electronAPI.applySpeakerCorrection = async (request) => {
+    requests.push(request);
+    return { success: true, rows: request.rows };
+  };
+  const correctionControl = () => {
+    let control;
+    walk(latest(), (node) => {
+      if (node.type?.name === "MeetingTranscriptChat") control = node;
+    });
+    return control.props;
+  };
+  try {
+    for (const [index, [kind, completed]] of [["imported", false], ["failed", false], ["completed", true]].entries()) {
+      const note = { ...NOTE, id: index + 1, note_type: kind === "imported" ? "upload" : "meeting",
+        transcript: JSON.stringify([{ id: "row-a", text: "hello", source: "system",
+          speaker: "speaker_0", finalAnalysisCompleted: completed }]) };
+      await render(undefined, { note });
+      await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+      await click("transcript");
+      const control = correctionControl();
+      await React.act(async () => control.onAssignSpeakerScope("row", control.segments[0].id, "Sam"));
+    }
+    assert.deepEqual(requests.map(request => request.afterFinalAnalysis), [false, false, true]);
+  } finally { await unmount(); }
+});
+
 // The summary callout runs a template, so the note view needs one loaded.
 const TEMPLATE = {
   id: 1,

@@ -151,6 +151,7 @@ test("the same result publishes normally once the recording has stopped", async 
   const published = store.useMeetingRecordingStore.getState().completedDiarization;
   assert.equal(published?.noteId, NOTE_ID);
   assert.equal(published?.segments.length, 1);
+  assert.equal(JSON.parse(state.updatedTranscripts.at(-1).transcript).rows[0].finalAnalysisCompleted, true);
 });
 
 test("a live recording on another note does not suppress the publish", async (t) => {

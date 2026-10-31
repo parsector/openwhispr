@@ -816,7 +816,8 @@ export default function NoteEditor({
     try {
       const result = await window.electronAPI?.applySpeakerCorrection?.({
         ...request, noteId: note.id, rows: before,
-        afterFinalAnalysis: !isRecording && !isDiarizing,
+        afterFinalAnalysis: !isRecording && !isDiarizing && note.note_type === "meeting" &&
+          before.length > 0 && before.every((row) => row.finalAnalysisCompleted === true),
       });
       if (!result?.success || !result.rows) {
         if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();

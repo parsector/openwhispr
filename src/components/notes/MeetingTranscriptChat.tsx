@@ -1235,6 +1235,7 @@ export function MeetingTranscriptChat({
               used: ((audioUsage?.usedBytes || 0) / 1_000_000).toFixed(3),
               budget: ((audioUsage?.budgetBytes || 0) / 1_000_000).toFixed(3),
             })}
+          {audioUsage && readOnly && <span className="ms-2">{t("meetingAudio.readOnlyPolicy")}</span>}
           {!readOnly && (audioStatus.state === "complete" || audioStatus.state === "incomplete") &&
             <button type="button" onClick={() => void deleteAudio()} className="ms-2 underline focus-visible:ring-2 focus-visible:ring-ring">{t("meetingAudio.delete")}</button>}
         </div>}
@@ -1263,7 +1264,8 @@ export function MeetingTranscriptChat({
         })}</span>}
         {(audioStatus.state === "incomplete" || audioStatus.state === "key_unavailable") && <span>{audioStatus.reason?.includes("key")
           ? t("meetingAudio.keyUnavailable") : t("meetingAudio.incomplete")}</span>}
-        {audioUsage && <>
+        {audioUsage && readOnly && <span>{t("meetingAudio.readOnlyPolicy")}</span>}
+        {audioUsage && !readOnly && <>
           <span className="flex items-center gap-1">{t("meetingAudio.retention")}
             <Select value={String(audioUsage.days)} onValueChange={(value) => {
               void window.electronAPI?.meetingAudioSetPolicy?.({ days: Number(value) as 3 | 7 | 30,

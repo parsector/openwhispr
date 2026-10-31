@@ -216,6 +216,16 @@ test("legacy split and recognition events order with cloud adoption without losi
       [event.newClusterId ? "split" : "reconsideration", "adoption"]);
   }
 });
+test("migrated row-only correction names its affected row for transcript history", () => {
+  const { migrateSpeakerHistory } = require("../../src/helpers/speakerActionLog");
+  const note = { transcript: JSON.stringify([{ id: "a", text: "hello", source: "system", speakerName: "Sam",
+    corrections: [{ id: "old", rowId: "a", actor: "user", sequence: 1,
+      previous: { speakerName: "Alex" }, next: { speakerName: "Sam" } }] }]) };
+  const migrated = migrateSpeakerHistory(note);
+  const event = JSON.parse(migrated.speaker_action_log).actions[0].event;
+  assert.deepEqual(event.affectedRowIds, ["a"]);
+  assert.deepEqual(event.rowIds, ["a"]);
+});
 test("older correction on different target waits for newest action", () => {
   const f = fixture();
   applySpeakerCorrection(f.db, f.identifier, correction("c1", "a", "Alex"));

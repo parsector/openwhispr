@@ -5423,6 +5423,7 @@
     "unkeep": "Utiliser la durée normale",
     "storage": "L’audio utilise {{used}} Mo sur {{budget}} Mo",
     "retention": "Conservation",
+    "readOnlyPolicy": "La conservation audio et la limite de stockage ne peuvent pas être modifiées dans une note en lecture seule.",
     "days": "jours",
     "budget": "Limite de stockage",
     "evictedNotes": "Audio supprimé des notes : {{titles}}",

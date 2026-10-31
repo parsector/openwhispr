@@ -63,6 +63,7 @@ export interface TranscriptSegment {
   parentRowId?: string;
   splitStartWord?: number;
   changedAfterFinal?: boolean;
+  finalAnalysisCompleted?: boolean;
   finalRevision?: { fromSpeaker?: string; toSpeaker?: string; fromName?: string;
     toName?: string; splitFromRowId?: string };
   unknownNumber?: number;
@@ -599,7 +600,6 @@ function applySpeakerIdentification(
   if (
     segment.source !== "system" ||
     !isSegmentWithinIdentificationWindow(segment, identification) ||
-    (segment.speaker && !segment.speakerIsPlaceholder && segment.speakerStatus !== "provisional") ||
     segment.speakerLocked ||
     ["too_short", "overlapping_speech"].includes(segment.uncertainty?.reason || "")
   ) {
@@ -609,13 +609,23 @@ function applySpeakerIdentification(
   return normalizeTranscriptSegment({
     ...segment,
     speaker: identification.speakerId,
-    speakerName: identification.uncertainty ? undefined : identification.displayName ?? segment.speakerName,
-    suggestedName: identification.suggestedName ?? segment.suggestedName,
-    speakerIsPlaceholder: !identification.displayName,
+    speakerName: identification.uncertainty ? undefined : identification.displayName || undefined,
+    suggestedName: identification.uncertainty ? undefined : identification.suggestedName || undefined,
+    speakerIsPlaceholder: !!identification.uncertainty || !identification.displayName,
     speakerStatus: identification.uncertainty ? "provisional" : identification.displayName ? "confirmed" : "suggested",
     uncertainty: identification.uncertainty,
     speakerAssessmentAvailable: true,
   });
+}
+
+function applyNewestSpeakerIdentification(segment: TranscriptSegment): TranscriptSegment {
+  const newest = speakerIdentifications.reduce<SpeakerIdentification | null>((winner, item) => {
+    if (!isSegmentWithinIdentificationWindow(segment, item)) return winner;
+    return !winner || item.endTime > winner.endTime ||
+      (item.endTime === winner.endTime && (!winner.uncertainty || !!item.uncertainty))
+      ? item : winner;
+  }, null);
+  return newest ? applySpeakerIdentification(segment, newest) : segment;
 }
 
 function rememberSystemSpeaker(
@@ -1148,9 +1158,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               // still see the previous segments, exactly as before the reducer extraction.
               decorateFinal: (rawSegment) => {
                 let decorated: TranscriptSegment = { ...rawSegment, diarizationRunId: sessionId };
-                for (let i = speakerIdentifications.length - 1; i >= 0; i -= 1) {
-                  decorated = applySpeakerIdentification(decorated, speakerIdentifications[i]);
-                }
+                decorated = applyNewestSpeakerIdentification(decorated);
                 const provisional = assignProvisionalSpeaker(decorated);
                 reserveSpeakerIndex(provisional.speaker);
                 const lockedName = provisional.speaker
@@ -1232,8 +1240,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       const speakerCleanup = window.electronAPI?.onMeetingSpeakerIdentified?.((data) => {
         if (activeRecordingSessionId !== sessionId) return;
         reserveSpeakerIndex(data.speakerId);
-        setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
-        rememberSystemSpeaker(data.speakerId, data.displayName ?? null, !data.displayName, data.endTime);
+        const superseded = speakerIdentifications.some((item) => item.endTime > data.endTime ||
+          (item.endTime === data.endTime && !!item.uncertainty && !data.uncertainty));
+        if (!superseded) {
+          setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
+          rememberSystemSpeaker(data.speakerId, data.displayName ?? null, !data.displayName, data.endTime);
+        }
         speakerIdentifications = [
           ...speakerIdentifications.filter(
             (id) => id.endTime >= data.endTime - SPEAKER_IDENTIFICATION_RETENTION_MS
@@ -1242,7 +1254,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         ];
         const next = useMeetingRecordingStore
           .getState()
-          .segments.map((segment) => applySpeakerIdentification(segment, data));
+          .segments.map(applyNewestSpeakerIdentification);
         segmentsRefValue = next;
         useMeetingRecordingStore.setState({ segments: next });
       });
@@ -1852,6 +1864,7 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
 }
 
 export function assignLiveSpeakerRows(rowIds: ReadonlySet<string>, displayName: string | null, corrected?: TranscriptSegment[]): TranscriptSegment[] {
+  speakerIdentifications = [];
   const next = corrected ?? useMeetingRecordingStore.getState().segments.map((segment) =>
     rowIds.has(segment.id)
       ? lockTranscriptSpeaker(segment, {
@@ -1909,6 +1922,7 @@ export function unlockSpeaker(speakerId: string): void {
 }
 
 export function restoreSpeakerIdentityCache(speakerId: string, displayName: string | null): void {
+  speakerIdentifications = [];
   if (displayName) speakerLocks.set(speakerId, displayName);
   else speakerLocks.delete(speakerId);
   if (recentSystemSpeaker?.speakerId === speakerId) {
@@ -2030,7 +2044,8 @@ if (typeof window !== "undefined") {
         let saved = false;
         for (let attempt = 0; attempt < 3; attempt += 1) {
           const result = await window.electronAPI?.updateNote?.(targetNoteId, {
-            transcript: serializeTranscriptSegments(enriched, readTranscriptDocument(baseTranscript).unknownNumberHighWater),
+            transcript: serializeTranscriptSegments(enriched.map((row) => ({ ...row,
+              finalAnalysisCompleted: true })), readTranscriptDocument(baseTranscript).unknownNumberHighWater),
           }, { expectedTranscript: baseTranscript, reconcileTranscript: true });
           if (result?.success) {
             if (result.note?.transcript) enriched = parseSeedSegments(result.note.transcript, targetNoteId);

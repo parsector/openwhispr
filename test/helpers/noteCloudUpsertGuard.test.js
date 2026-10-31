@@ -845,6 +845,76 @@ test('ambiguous separate histories are quarantined before undo', (t) => {
   assert.equal(db.takeCloudSpeakerLabels(note.id, true).error, 'history_quarantined');
 });
 
+test('cyclic adoption and correction labels quarantine undo instead of claiming a restore', (t) => {
+  const db = createDb(t); if (!db) return;
+  const { readSpeakerActionLog } = require('../../src/helpers/speakerActionLog');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  const row = { id: 'a', text: 'hello', source: 'system', speakerName: 'Alex', corrections: [
+    { id: 'casey-blake', sequence: 2, timestamp: '2026-01-02T00:00:00.000Z',
+      snapshots: { a: { previous: { speakerName: 'Casey' }, next: { speakerName: 'Blake' } } } },
+    { id: 'blake-alex', sequence: 3, timestamp: '2026-01-03T00:00:00.000Z',
+      snapshots: { a: { previous: { speakerName: 'Blake' }, next: { speakerName: 'Alex' } } } },
+  ] };
+  db.updateNote(note.id, { transcript: JSON.stringify([row]) });
+  db.db.prepare('UPDATE notes SET speaker_label_undo = ? WHERE id = ?').run(JSON.stringify([{
+    timestamp: '2026-01-01T00:00:00.000Z', rows: [{ id: 'a', revision: 1,
+      before: { speakerName: 'Alex' }, after: { speakerName: 'Casey' } }],
+  }]), note.id);
+  assert.equal(readSpeakerActionLog(db.getNote(note.id)).quarantined, true);
+  assert.equal(db.takeCloudSpeakerLabels(note.id, true).error, 'history_quarantined');
+  assert.equal(JSON.parse(db.getNote(note.id).transcript).rows?.[0]?.speakerName ??
+    JSON.parse(db.getNote(note.id).transcript)[0].speakerName, 'Alex');
+});
+
+test('legacy row-id conversion remaps action snapshots so undo changes the corrected row', (t) => {
+  const db = createDb(t); if (!db) return;
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  const transcript = JSON.stringify([{ id: 'legacy-row', text: 'hello', source: 'system',
+    speaker: 'speaker_0', speakerName: 'Sam', speakerLocked: true }]);
+  const event = { id: 'legacy-fix', rowId: 'legacy-row', affectedRowIds: ['legacy-row'], rowIds: ['legacy-row'],
+    snapshots: { 'legacy-row': { previous: { speakerName: 'Alex' }, next: { speakerName: 'Sam' } } } };
+  const log = { version: 1, nextSequence: 2, actions: [{ kind: 'correction', id: 'legacy-fix',
+    sequence: 1, event }] };
+  db.db.prepare('UPDATE notes SET transcript = ?, speaker_action_log = ? WHERE id = ?')
+    .run(transcript, JSON.stringify(log), note.id);
+  const migrated = db.updateNote(note.id, {}, { expectedTranscript: transcript, migrateTranscript: true });
+  assert.equal(migrated.success, true);
+  assert.notEqual(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].id, 'legacy-row');
+  assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id, id: 'legacy-fix' }).success, true);
+  assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName, 'Alex');
+});
+
+test('legacy row-id conversion remaps every reference embedded in adoption snapshots', (t) => {
+  const db = createDb(t); if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  const oldId = 'legacy-row';
+  const transcript = JSON.stringify([{ id: oldId, text: 'hello', source: 'system' }]);
+  const embedded = JSON.stringify([{ id: oldId, parentRowId: oldId,
+    finalRevision: { splitFromRowId: oldId }, corrections: [{ rowId: oldId,
+      affectedRowIds: [oldId], rowIds: [oldId], target: { rowIds: [oldId] },
+      snapshots: { [oldId]: { previous: {}, next: {} } } }] }]);
+  const log = { version: 1, nextSequence: 3, actions: [
+    { kind: 'correction', id: 'fix', sequence: 1, event: { rowId: oldId,
+      affectedRowIds: [oldId], rowIds: [oldId], target: { rowIds: [oldId] },
+      snapshots: { [oldId]: { previous: {}, next: {} } } } },
+    { kind: 'adoption', id: 'adopt', sequence: 2, record: {
+      rows: [{ id: oldId, before: {}, after: {} }], before: embedded, after: embedded } },
+  ] };
+  db.db.prepare('UPDATE notes SET transcript = ?, speaker_action_log = ? WHERE id = ?')
+    .run(transcript, JSON.stringify(log), note.id);
+  assert.equal(db.updateNote(note.id, {}, { expectedTranscript: transcript, migrateTranscript: true }).success, true);
+  const saved = db.getNote(note.id);
+  const newId = readTranscriptDocument(saved.transcript).rows[0].id;
+  assert.notEqual(newId, oldId);
+  assert.equal(saved.speaker_action_log.includes(oldId), false, 'no action-log row reference stays stale');
+  const actions = JSON.parse(saved.speaker_action_log).actions;
+  assert.equal(actions[0].event.snapshots[newId] !== undefined, true);
+  assert.equal(JSON.parse(actions[1].record.before)[0].corrections[0].rowId, newId);
+});
+
 test('adopted cloud name rejects a stale automatic diarization completion', (t) => {
   const db = createDb(t);
   if (!db) return;

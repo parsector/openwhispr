@@ -4,7 +4,7 @@ import type { TranscriptCorrection } from "./transcriptCorrections";
 type LoggedAction = { id: string; kind: string; sequence: number; unavailableReason?: string;
   event?: { timestamp?: string; actor?: "user" | "machine"; initialAttribution?: boolean;
     afterFinalAnalysis?: boolean;
-    affectedRowIds?: string[]; rowIds?: string[]; snapshots?: Record<string, {
+    rowId?: string; affectedRowIds?: string[]; rowIds?: string[]; snapshots?: Record<string, {
       previous: TranscriptCorrection["previous"]; next: TranscriptCorrection["next"] }> } };
 
 export function projectSpeakerActions(rows: TranscriptSegment[], rawLog?: string | null): TranscriptSegment[] {
@@ -17,7 +17,8 @@ export function projectSpeakerActions(rows: TranscriptSegment[], rawLog?: string
   const byRow = new Map<string, TranscriptCorrection[]>();
   for (const action of actions) {
     if (!action.event || !["correction", "split", "reconsideration"].includes(action.kind)) continue;
-    for (const rowId of action.event.affectedRowIds || action.event.rowIds || []) {
+    for (const rowId of action.event.affectedRowIds || action.event.rowIds ||
+      (action.event.rowId ? [action.event.rowId] : [])) {
       const history = byRow.get(rowId) || [];
       history.push({ id: action.id, rowId, scope: "row", actor: action.event.actor || "user",
         timestamp: action.event.timestamp || "", sequence: action.sequence,

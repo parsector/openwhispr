@@ -3710,6 +3710,10 @@ class DatabaseManager {
         const { migrateTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
         const migration = migrateTranscriptDocument(previous.transcript, previous.client_note_id || id);
         updates.transcript = writeTranscriptDocument(migration.rows, migration.unknownNumberHighWater);
+        if (previous.speaker_action_log && migration.migrated) {
+          updates.speaker_action_log = require('./speakerActionLog').remapSpeakerActionLog(
+            previous.speaker_action_log, migration.idMap);
+        }
       }
       if (options?.reconcileTranscript && typeof updates.transcript === "string" &&
           require("./transcriptDocument").isTranscriptDocument(updates.transcript) &&

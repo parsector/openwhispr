@@ -107,7 +107,7 @@ function migrateTranscriptDocument(raw, noteId) {
     if (quarantined.length) row.quarantinedCorrections = quarantined;
   }
   return { rows, unknownNumberHighWater: doc.unknownNumberHighWater,
-    migrated, quarantinedCorrections };
+    idMap: ids, migrated, quarantinedCorrections };
 }
 
 // The only number allocator. Call it with the complete note and the note's

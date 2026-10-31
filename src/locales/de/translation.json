@@ -5423,6 +5423,7 @@
     "unkeep": "Normale Aufbewahrung",
     "storage": "Audio belegt {{used}} MB von {{budget}} MB",
     "retention": "Aufbewahrung",
+    "readOnlyPolicy": "Audioaufbewahrung und Speicherlimit sind in schreibgeschützten Notizen nicht verfügbar.",
     "days": "Tage",
     "budget": "Speicherlimit",
     "evictedNotes": "Audio aus Notizen entfernt: {{titles}}",

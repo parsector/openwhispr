@@ -3689,6 +3689,8 @@ declare global {
         callback: (data: {
           speakerId: string;
           displayName?: string | null;
+          suggestedName?: string | null;
+          uncertainty?: { reason: string };
           startTime: number;
           endTime: number;
         }) => void

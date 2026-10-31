@@ -271,6 +271,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       parentRowId: segment.parentRowId,
       splitStartWord: segment.splitStartWord,
       changedAfterFinal: segment.changedAfterFinal,
+      finalAnalysisCompleted: segment.finalAnalysisCompleted,
       finalRevision: segment.finalRevision,
       unknownNumber: segment.unknownNumber,
       unknownNumberHighWater: segment.unknownNumberHighWater,

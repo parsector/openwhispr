@@ -5423,6 +5423,7 @@
     "unkeep": "使用一般保留期限",
     "storage": "音訊佔用 {{used}} MB，共 {{budget}} MB",
     "retention": "保留期限",
+    "readOnlyPolicy": "唯讀筆記中無法變更音訊保留期限和磁碟空間上限。",
     "days": "天",
     "budget": "磁碟上限",
     "evictedNotes": "以下筆記的音訊已移除：{{titles}}",

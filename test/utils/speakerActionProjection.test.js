@@ -21,3 +21,14 @@ test('transcript change notes and available restore come from the action log', a
     event: { actor: 'user', affectedRowIds: ['row-a'], initialAttribution: false } }] });
   assert.equal(projectSpeakerActions([row], beforeFinal)[0].changedAfterFinal, false);
 });
+
+test('older row-only action log entries project onto their row', async () => {
+  const { projectSpeakerActions } = await import('../../src/utils/speakerActionProjection.ts');
+  const rows = [{ id: 'row-a', text: 'Hello', source: 'system' }];
+  const log = JSON.stringify({ actions: [{ kind: 'correction', id: 'old', sequence: 1,
+    event: { rowId: 'row-a', actor: 'user', afterFinalAnalysis: true,
+      snapshots: { 'row-a': { previous: { speakerName: 'Alex' }, next: { speakerName: 'Sam' } } } } }] });
+  const [row] = projectSpeakerActions(rows, log);
+  assert.deepEqual(row.corrections.map(action => action.id), ['old']);
+  assert.equal(row.changedAfterFinal, true);
+});

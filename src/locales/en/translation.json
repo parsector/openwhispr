@@ -5423,6 +5423,7 @@
     "unkeep": "Use normal retention",
     "storage": "Audio uses {{used}} MB of {{budget}} MB",
     "retention": "Retention",
+    "readOnlyPolicy": "Audio retention and disk budget cannot be changed in a read-only note.",
     "days": "days",
     "budget": "Disk budget",
     "evictedNotes": "Audio removed from notes: {{titles}}",

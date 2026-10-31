@@ -20,7 +20,8 @@ const START_ARGS = {
 
 function createElectronAPI({ startResult = {} } = {}) {
   const noopListener = () => () => {};
-  const state = { startOptions: [], segmentCallback: null };
+  const state = { startOptions: [], segmentCallback: null, identifiedCallback: null,
+    evidenceCallback: null, reconsidered: null };
   const api = {
     checkSystemAudioAccess: async () => ({
       granted: true,
@@ -50,7 +51,15 @@ function createElectronAPI({ startResult = {} } = {}) {
         state.segmentCallback = null;
       };
     },
-    onMeetingSpeakerIdentified: noopListener,
+    onMeetingSpeakerIdentified: (callback) => {
+      state.identifiedCallback = callback;
+      return () => { state.identifiedCallback = null; };
+    },
+    onMeetingSpeakerEvidenceChanged: (callback) => {
+      state.evidenceCallback = callback;
+      return () => { state.evidenceCallback = null; };
+    },
+    reconsiderLiveSpeakers: async () => state.reconsidered,
     onMeetingSpeakersMerged: noopListener,
     onMeetingSessionSpeakerConfigUpdated: noopListener,
     onMeetingTranscriptionError: noopListener,
@@ -103,6 +112,76 @@ function emitSystemFinal(state, text) {
 
 const segmentsOf = (store) => store.useMeetingRecordingStore.getState().segments;
 const segmentWithText = (store, text) => segmentsOf(store).find((s) => s.text === text);
+
+test("newer abstention withdraws an automatic name on a delayed final while an owner lock survives", async (t) => {
+  const { api, state } = createElectronAPI();
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const now = Date.now();
+  state.identifiedCallback({ speakerId: "speaker_0", displayName: "Alex", startTime: now - 100, endTime: now + 100 });
+  state.segmentCallback({ text: "already named", source: "system", type: "final", timestamp: now });
+  assert.equal(segmentWithText(store, "already named").speakerName, "Alex");
+  state.identifiedCallback({ speakerId: "speaker_0", uncertainty: { reason: "close_match" },
+    startTime: now - 100, endTime: now + 200 });
+  assert.equal(segmentWithText(store, "already named").speakerName, undefined);
+  assert.equal(segmentWithText(store, "already named").uncertainty?.reason, "close_match");
+  state.segmentCallback({ text: "delayed", source: "system", type: "final", timestamp: now });
+  assert.equal(segmentWithText(store, "delayed").speakerName, undefined);
+  assert.equal(segmentWithText(store, "delayed").uncertainty?.reason, "close_match");
+  state.identifiedCallback({ speakerId: "speaker_0", displayName: "Alex", startTime: now - 100,
+    endTime: now + 200 });
+  assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName, null);
+  state.identifiedCallback({ speakerId: "speaker_0", displayName: "Alex", startTime: now - 100,
+    endTime: now + 100 });
+  assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName, null,
+    "a late window cannot put stale certainty back in the live partial");
+  state.segmentCallback({ text: "later arrival", source: "system", type: "final", timestamp: now });
+  assert.equal(segmentWithText(store, "later arrival").speakerName, undefined);
+  assert.equal(segmentWithText(store, "later arrival").uncertainty?.reason, "close_match");
+  store.assignLiveSpeakerRows(new Set([segmentWithText(store, "already named").id]), "Sam");
+  state.identifiedCallback({ speakerId: "speaker_0", displayName: "Casey",
+    startTime: now - 100, endTime: now + 250 });
+  assert.equal(segmentWithText(store, "already named").speakerName, "Sam");
+  store.lockSpeaker("speaker_0", "Owner");
+  state.identifiedCallback({ speakerId: "speaker_0", displayName: "Casey", startTime: now - 100, endTime: now + 300 });
+  assert.equal(segmentWithText(store, "delayed").speakerName, "Owner");
+  await store.stopRecording();
+});
+
+test("undo invalidates reconsidered identification windows before a delayed final", async (t) => {
+  const { api, state } = createElectronAPI();
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const now = Date.now();
+  state.identifiedCallback({ speakerId: "speaker_0", displayName: "Alex", startTime: now - 100, endTime: now + 100 });
+  state.reconsidered = { rows: [{ id: "reconsidered", text: "first", source: "system",
+    timestamp: now, speaker: "speaker_0", speakerName: "Sam" }],
+    assignments: [{ speakerId: "speaker_0", displayName: "Sam" }] };
+  await state.evidenceCallback({ noteId: NOTE_ID, runId: store.getActiveRecordingSessionId() });
+  store.restoreSpeakerIdentityCache("speaker_0", null);
+  state.segmentCallback({ text: "delayed", source: "system", type: "final", timestamp: now });
+  assert.notEqual(segmentWithText(store, "delayed").speakerName, "Sam");
+  await store.stopRecording();
+});
+
+test("correction and adoption commits invalidate cached identification windows", async (t) => {
+  const { api, state } = createElectronAPI();
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const now = Date.now();
+  for (const [label, commit] of [
+    ["correction", () => store.assignLiveSpeakerRows(new Set(), null)],
+    ["adoption", () => store.mergeCommittedSpeakerRows(segmentsOf(store))],
+  ]) {
+    state.identifiedCallback({ speakerId: "speaker_0", displayName: "Alex",
+      startTime: now - 100, endTime: now + 100 });
+    commit();
+    state.segmentCallback({ text: label, source: "system", type: "final", timestamp: now });
+    assert.notEqual(segmentWithText(store, label).speakerAssessmentAvailable, true,
+      `${label} must retire the earlier identification window`);
+  }
+  await store.stopRecording();
+});
 
 test("a fresh meeting numbers its speakers from speaker_0", async (t) => {
   const { api, state } = createElectronAPI();

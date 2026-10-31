@@ -5423,6 +5423,7 @@
     "unkeep": "通常の保存期間を使用",
     "storage": "音声使用量: {{used}} MB / {{budget}} MB",
     "retention": "保存期間",
+    "readOnlyPolicy": "読み取り専用のノートでは、音声の保存期間とディスク容量を変更できません。",
     "days": "日",
     "budget": "ディスク上限",
     "evictedNotes": "次のノートの音声を削除しました: {{titles}}",

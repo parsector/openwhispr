@@ -44,40 +44,40 @@ function readSpeakerActionLog(note) {
   const label = (value) => JSON.stringify({ name: value?.speakerName,
     placeholder: !!value?.speakerIsPlaceholder, locked: !!value?.speakerLocked });
   let ambiguous = false;
-  const compare = (a, b) => {
-    if (a.kind === b.kind || (a.kind !== 'adoption' && b.kind !== 'adoption')) {
-      if (a.kind === 'adoption') return a.index - b.index;
-      if (a.order !== b.order) return a.order - b.order;
-      const aTime = Date.parse(a.event.timestamp), bTime = Date.parse(b.event.timestamp);
-      if (Number.isFinite(aTime) && Number.isFinite(bTime) && aTime !== bTime) return aTime - bTime;
-      ambiguous = true;
-      return 0;
+  // Revisions and event sequences are the recorded order. Names can repeat,
+  // so comparing them to sort actions can create a non-transitive comparator.
+  entries.sort((a, b) => a.order - b.order ||
+    (a.kind === 'adoption' && b.kind === 'adoption' ? a.index - b.index : 0));
+  for (let i = 1; i < entries.length; i++)
+    if (entries[i].order === entries[i - 1].order &&
+        !(entries[i].kind === 'adoption' && entries[i - 1].kind === 'adoption')) ambiguous = true;
+  const chains = new Map();
+  for (const entry of entries) {
+    const changes = entry.kind === 'adoption'
+      ? entry.rows.map(row => [row.id, row.before, row.after])
+      : Object.entries(entry.event.snapshots || {}).map(([id, saved]) =>
+        [id, saved.previous, saved.next]);
+    for (const [id, before, after] of changes) {
+      if (!before || !after) continue;
+      const previous = label(before), next = label(after);
+      const chain = chains.get(id);
+      if (chain && chain.last !== previous) ambiguous = true;
+      if (chain?.seen.has(next)) ambiguous = true;
+      chains.set(id, { last: next, seen: new Set([...(chain?.seen || []), previous, next]) });
     }
-    const correction = a.kind === 'adoption' ? b : a;
-    const adoption = a.kind === 'adoption' ? a : b;
-    const match = (side, other) => adoption.rows.some(row => {
-      const saved = correction.event.snapshots?.[row.id];
-      return saved && label(row[side]) === label(saved[other]);
-    });
-    const adoptionFirst = match('after', 'previous');
-    const correctionFirst = match('before', 'next');
-    let direction = 0;
-    if (adoptionFirst !== correctionFirst) direction = adoptionFirst ? -1 : 1;
-    else {
-      const correctionTime = Date.parse(correction.event.timestamp);
-      const adoptionTime = Date.parse(adoption.record.timestamp);
-      if (Number.isFinite(correctionTime) && Number.isFinite(adoptionTime) && correctionTime !== adoptionTime)
-        direction = adoptionTime < correctionTime ? -1 : 1;
-      else ambiguous = true;
-    }
-    return a === adoption ? direction : -direction;
-  };
-  for (let i = 0; i < entries.length; i++) for (let j = i + 1; j < entries.length; j++) compare(entries[i], entries[j]);
-  if (!ambiguous) entries.sort(compare);
+  }
+  for (const row of rows) {
+    const chain = chains.get(row.id);
+    if (chain && chain.last !== label(row)) ambiguous = true;
+  }
   let sequence = 0;
   const actions = entries.map(({ kind, id, event, record, order }) => ({
     sequence: sequence = Math.max(sequence + 1, order), kind, id,
-    ...(kind === 'adoption' ? { record } : { event }),
+    ...(kind === 'adoption' ? { record } : { event: {
+      ...event,
+      affectedRowIds: event.affectedRowIds || event.rowIds || (event.rowId ? [event.rowId] : []),
+      rowIds: event.rowIds || event.affectedRowIds || (event.rowId ? [event.rowId] : []),
+    } }),
   }));
   return { version: 1, nextSequence: sequence + 1, actions,
     ...(ambiguous ? { quarantined: true } : {}) };
@@ -97,6 +97,69 @@ function removeNewestAction(log) {
 
 function newestAvailableAction(log) {
   return log.actions.findLast(action => !action.unavailableReason);
+}
+
+function remapSpeakerActionLog(raw, idMap) {
+  if (!raw) return raw;
+  const log = JSON.parse(raw);
+  let unresolved = false;
+  const id = old => {
+    const next = idMap.get(old);
+    if (!next) unresolved = true;
+    return next || old;
+  };
+  const ids = values => values?.map(id);
+  const rowRefs = row => {
+    if (!row || typeof row !== 'object') return row;
+    return { ...row,
+      ...(row.id ? { id: id(row.id) } : {}),
+      ...(row.parentRowId ? { parentRowId: id(row.parentRowId) } : {}),
+      ...(row.finalRevision?.splitFromRowId ? { finalRevision: {
+        ...row.finalRevision, splitFromRowId: id(row.finalRevision.splitFromRowId),
+      } } : {}),
+    };
+  };
+  const eventRefs = event => {
+    if (!event) return event;
+    return { ...event,
+      ...(event.rowId ? { rowId: id(event.rowId) } : {}),
+      ...(event.affectedRowIds ? { affectedRowIds: ids(event.affectedRowIds) } : {}),
+      ...(event.rowIds ? { rowIds: ids(event.rowIds) } : {}),
+      ...(event.target?.rowIds ? { target: { ...event.target,
+        rowIds: ids(event.target.rowIds) } } : {}),
+      ...(event.snapshots ? { snapshots: Object.fromEntries(Object.entries(event.snapshots)
+        .map(([old, saved]) => [id(old), saved && typeof saved === 'object'
+          ? { ...saved, previous: rowRefs(saved.previous), next: rowRefs(saved.next) }
+          : saved])) } : {}),
+    };
+  };
+  const document = rawDocument => {
+    if (!rawDocument) return rawDocument;
+    try {
+      const parsed = JSON.parse(rawDocument);
+      const rows = Array.isArray(parsed) ? parsed : parsed.rows;
+      if (!Array.isArray(rows)) return rawDocument;
+      const mapped = rows.map(row => ({ ...rowRefs(row),
+        ...(row.corrections ? { corrections: row.corrections.map(record => ({
+          ...eventRefs(record),
+          ...(record.event ? { event: eventRefs(record.event) } : {}),
+        })) } : {}),
+      }));
+      return JSON.stringify(Array.isArray(parsed) ? mapped : { ...parsed, rows: mapped });
+    } catch { unresolved = true; return rawDocument; }
+  };
+  for (const action of log.actions || []) {
+    if (action.event) action.event = eventRefs(action.event);
+    const record = action.record;
+    if (record) {
+      if (record.rows) record.rows = record.rows.map(row => ({ ...rowRefs(row),
+        before: rowRefs(row.before), after: rowRefs(row.after) }));
+      if (record.before) record.before = document(record.before);
+      if (record.after) record.after = document(record.after);
+    }
+  }
+  if (unresolved) log.quarantined = true;
+  return JSON.stringify(log);
 }
 
 function migrateSpeakerHistory(note) {
@@ -127,4 +190,5 @@ function migrateSpeakerHistory(note) {
   return { transcript, speaker_action_log: serialized, speaker_label_undo: null };
 }
 
-module.exports = { readSpeakerActionLog, migrateSpeakerHistory, appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES };
+module.exports = { readSpeakerActionLog, migrateSpeakerHistory, remapSpeakerActionLog,
+  appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES };
