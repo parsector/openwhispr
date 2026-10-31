@@ -2939,7 +2939,7 @@ class IPCHandlers {
       const note = this.databaseManager.getNote(noteId);
       if (!note || note.deleted_at) return { state: "unavailable" };
       const result = this.meetingAudioStore.delete(noteId);
-      liveSpeakerIdentifier.revalidateAnchors();
+      if (result.state === 'deleted') liveSpeakerIdentifier.invalidateAnchor();
       return result;
     });
     ipcMain.handle("meeting-audio-policy", (_event, policy) =>
@@ -13126,7 +13126,7 @@ class IPCHandlers {
       require('./voiceEnrollment').listSamples(this.databaseManager, profileId));
     ipcMain.handle("voice-enrollment-remove", (_event, sampleId) => {
       const result = require('./voiceEnrollment').removeSample(this.databaseManager, sampleId);
-      if (result.success) { liveSpeakerIdentifier.revalidateAnchors(); this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
+      if (result.success) { liveSpeakerIdentifier.invalidateAnchor(); this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
       return result;
     });
     ipcMain.handle("voice-enrollment-play", (_event, id) => {
@@ -13136,12 +13136,12 @@ class IPCHandlers {
     ipcMain.handle("voice-enrollment-decide", async (_event, id, choice, token) => {
       const result = await require('./voiceEnrollment').decide(this.databaseManager, this.meetingAudioStore,
         require('./speakerEmbeddings'), id, choice, token);
-      if (result.success) { liveSpeakerIdentifier.revalidateAnchors(); this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
+      if (result.success) { liveSpeakerIdentifier.invalidateAnchor(); this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
       return result;
     });
     ipcMain.handle("voice-enrollment-undo", (_event, id) => {
       const result = require('./voiceEnrollment').undo(this.databaseManager, id);
-      if (result.success) { liveSpeakerIdentifier.revalidateAnchors(); this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
+      if (result.success) { liveSpeakerIdentifier.invalidateAnchor(); this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
       return result;
     });
     ipcMain.handle("people-action-history", () => require("./peopleActions").listPeopleActions(this.databaseManager));
