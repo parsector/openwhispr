@@ -46,7 +46,10 @@ class UpdateManager {
       repo: "openwhispr",
       private: false,
     });
-    this.updaterLog.write("INFO", "Feed: https://github.com/parsector/openwhispr/releases; provider=github");
+    this.updaterLog.write(
+      "INFO",
+      "Feed: https://github.com/parsector/openwhispr/releases; provider=github"
+    );
 
     // Use arch-specific update channel on macOS to prevent arm64/x64
     // from downloading mismatched artifacts. Both builds publish to the
@@ -92,7 +95,10 @@ class UpdateManager {
         this.notifyRenderers("checking-for-update");
       },
       "update-available": (info) => {
-        this.updaterLog.write("INFO", `Update available: ${info?.version}; files: ${(info?.files || []).map((file) => file.url).join(", ")}`);
+        this.updaterLog.write(
+          "INFO",
+          `Update available: ${info?.version}; files: ${(info?.files || []).map((file) => file.url).join(", ")}`
+        );
         this.updateAvailable = true;
         if (info) {
           this.lastUpdateInfo = {
@@ -118,7 +124,9 @@ class UpdateManager {
         this.updaterLog.write("ERROR", err?.stack || err?.message || String(err));
         if (this.backgroundCheck) return; // The scheduled check reports its own single log line.
         console.error("❌ Auto-updater error:", err);
-        const handoffFailed = this.updateDownloaded && process.platform === "darwin" &&
+        const handoffFailed =
+          this.updateDownloaded &&
+          process.platform === "darwin" &&
           autoUpdater.squirrelDownloadedUpdate !== true;
         if (this.isDownloading || handoffFailed) this.updateDownloaded = false;
         this.isDownloading = false;
@@ -129,7 +137,8 @@ class UpdateManager {
       },
       "download-progress": (progressObj) => {
         const milestone = Math.floor(progressObj.percent / 10) * 10;
-        if (milestone > this.downloadProgress) this.updaterLog.write("INFO", `Download progress: ${milestone}%`);
+        if (milestone > this.downloadProgress)
+          this.updaterLog.write("INFO", `Download progress: ${milestone}%`);
         this.downloadProgress = milestone;
         console.log(
           `📥 Download progress: ${progressObj.percent.toFixed(2)}% (${(progressObj.transferred / 1024 / 1024).toFixed(2)}MB / ${(progressObj.total / 1024 / 1024).toFixed(2)}MB)`
@@ -223,7 +232,10 @@ class UpdateManager {
           releaseNotes: result.updateInfo.releaseNotes,
         };
       } else {
-        this.updaterLog.write("INFO", `Check result: no update; latest ${result?.updateInfo?.version || "unknown"}`);
+        this.updaterLog.write(
+          "INFO",
+          `Check result: no update; latest ${result?.updateInfo?.version || "unknown"}`
+        );
         console.log("✅ Already on latest version");
         return {
           updateAvailable: false,
@@ -270,7 +282,11 @@ class UpdateManager {
       this.downloadProgress = 0;
       const files = this.lastUpdateInfo?.files || [];
       const arch = autoUpdater.channel === "latest-arm64" ? "arm64" : "x64";
-      const chosen = files.find((file) => typeof file.url === "string" && file.url.endsWith("-mac.zip") && file.url.includes(arch)) || files.find((file) => typeof file.url === "string" && file.url.endsWith(".zip"));
+      const chosen =
+        files.find(
+          (file) =>
+            typeof file.url === "string" && file.url.endsWith("-mac.zip") && file.url.includes(arch)
+        ) || files.find((file) => typeof file.url === "string" && file.url.endsWith(".zip"));
       this.updaterLog.write("INFO", `Download start; chosen file: ${chosen?.url || "unknown"}`);
       this.notifyRenderers("update-download-started", { isDownloading: true });
       console.log("📥 Starting update download...");
@@ -283,7 +299,8 @@ class UpdateManager {
       this.updateDownloaded = false;
       this.updaterLog.write("ERROR", error?.stack || error?.message || String(error));
       this.notifyRenderers("update-error", {
-        message: error?.message || String(error), updateDownloaded: false,
+        message: error?.message || String(error),
+        updateDownloaded: false,
       });
       console.error("❌ Update download error:", error);
       throw error;
@@ -421,7 +438,10 @@ class UpdateManager {
     // downloadUpdate() is a no-op while a download is in flight or complete;
     // failures surface through the shared "error" handler and the renderers.
     this.downloadUpdate().catch((error) => {
-      this.updaterLog.write("ERROR", `Automatic download failed: ${error?.stack || error?.message || String(error)}`);
+      this.updaterLog.write(
+        "ERROR",
+        `Automatic download failed: ${error?.stack || error?.message || String(error)}`
+      );
     });
   }
 

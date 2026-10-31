@@ -2,8 +2,10 @@ const { i18nMain } = require("./i18nMain");
 
 function resolveSpeaker(seg, speakerMappings) {
   if (seg.speakerLocked || seg.speakerLockSource === "user") {
-    return (seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : null) ||
-      i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+    return (
+      (seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : null) ||
+      i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 })
+    );
   }
   if (seg.diarizationRunId) {
     return seg.speakerName && !seg.speakerIsPlaceholder
@@ -14,14 +16,21 @@ function resolveSpeaker(seg, speakerMappings) {
   if (seg.speaker && !seg.speakerIsPlaceholder && speakerMappings[seg.speaker])
     return speakerMappings[seg.speaker];
   if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
-  if (typeof seg.speaker === "string" && !seg.speakerIsPlaceholder && !seg.speaker.startsWith("speaker_"))
+  if (
+    typeof seg.speaker === "string" &&
+    !seg.speakerIsPlaceholder &&
+    !seg.speaker.startsWith("speaker_")
+  )
     return seg.speaker;
   if (seg.speaker) {
     const num = parseInt(seg.speaker.replace("speaker_", ""), 10);
-    if (!isNaN(num)) return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || num + 1 });
+    if (!isNaN(num))
+      return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || num + 1 });
   }
-  if (seg.source === "mic") return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
-  if (seg.source === "system") return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+  if (seg.source === "mic")
+    return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+  if (seg.source === "system")
+    return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
   return typeof seg.speakerName === "string" && seg.speakerName
     ? i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 })
     : "";
@@ -32,7 +41,13 @@ function resolveSpeaker(seg, speakerMappings) {
 // otherwise absorb the un-named one beside it.
 function speakerKey(seg) {
   const named = seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : "";
-  return [seg.diarizationRunId || "", seg.speaker || "", seg.unknownNumber || "", named, seg.speaker ? "" : seg.source || ""].join("\u0000");
+  return [
+    seg.diarizationRunId || "",
+    seg.speaker || "",
+    seg.unknownNumber || "",
+    named,
+    seg.speaker ? "" : seg.source || "",
+  ].join("\u0000");
 }
 
 function parseNoteDate(createdAt) {
@@ -207,8 +222,10 @@ function formatJson(note, segments, speakerMappings) {
   return JSON.stringify(
     {
       unknownNumberHighWater: Math.max(
-        require("./transcriptDocument").readTranscriptDocument(note.transcript).unknownNumberHighWater,
-        ...segments.map((seg) => Math.max(seg.unknownNumber || 0, seg.unknownNumberHighWater || 0)), 0
+        require("./transcriptDocument").readTranscriptDocument(note.transcript)
+          .unknownNumberHighWater,
+        ...segments.map((seg) => Math.max(seg.unknownNumber || 0, seg.unknownNumberHighWater || 0)),
+        0
       ),
       metadata: {
         title,
@@ -223,9 +240,11 @@ function formatJson(note, segments, speakerMappings) {
         segment_count: merged.length,
       },
       speakers: [...speakersSet],
-      transcriptRows: JSON.parse(require("./transcriptDocument").publicTranscript(
-        require("./transcriptDocument").writeTranscriptDocument(segments)
-      )).rows,
+      transcriptRows: JSON.parse(
+        require("./transcriptDocument").publicTranscript(
+          require("./transcriptDocument").writeTranscriptDocument(segments)
+        )
+      ).rows,
       segments: merged.map((seg) => ({
         id: seg.id,
         speaker: untimed ? null : resolveSpeaker(seg, speakerMappings) || null,

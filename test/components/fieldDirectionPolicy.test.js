@@ -133,7 +133,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
   // Search and new speaker names may use any writing system.
-  "src/components/settings/PeoplePage.tsx": ["auto", "auto"],
+  // Numeric thresholds and report file paths are LTR; search and names accept any script.
+  "src/components/settings/PeoplePage.tsx": ["ltr", "ltr", "auto", "auto"],
   "src/components/todos/TodoMentionInput.tsx": ["auto"],
   "src/components/todos/TodoPersonPicker.tsx": ["auto"],
   "src/components/todos/TodoRow.tsx": ["auto", "ltr"],

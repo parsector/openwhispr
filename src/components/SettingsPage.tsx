@@ -1387,12 +1387,17 @@ export default function SettingsPage({
     totalBytes: number;
   }>({ fileCount: 0, totalBytes: 0 });
   const [meetingAudioUsage, setMeetingAudioUsage] = useState<{
-    usedBytes: number; budgetBytes: number; days: 3 | 7 | 30;
+    usedBytes: number;
+    budgetBytes: number;
+    days: 3 | 7 | 30;
     evictions: Array<{ noteId: number; title: string; at: number }>;
   } | null>(null);
 
   const refreshMeetingAudioUsage = useCallback(() => {
-    void window.electronAPI?.meetingAudioUsage?.().then(setMeetingAudioUsage).catch(() => {});
+    void window.electronAPI
+      ?.meetingAudioUsage?.()
+      .then(setMeetingAudioUsage)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -3533,41 +3538,72 @@ EOF`,
                     </Button>
                   </SettingsRow>
                 </SettingsPanelRow>
-                {meetingAudioUsage && <>
-                  <SettingsPanelRow>
-                    <SettingsRow label={t("meetingAudio.retention")}
-                      description={t("meetingAudio.storage", {
-                        used: (meetingAudioUsage.usedBytes / 1_000_000).toFixed(3),
-                        budget: (meetingAudioUsage.budgetBytes / 1_000_000).toFixed(3),
-                      })}>
-                      <select value={meetingAudioUsage.days} className={RETENTION_SELECT_CLASS}
-                        onChange={(event) => {
-                          void window.electronAPI?.meetingAudioSetPolicy?.({
-                            days: Number(event.target.value) as 3 | 7 | 30,
-                            budgetBytes: meetingAudioUsage.budgetBytes,
-                          }).then(refreshMeetingAudioUsage);
-                        }}>
-                        {[3, 7, 30].map((days) => <option key={days} value={days}>{days} {t("meetingAudio.days")}</option>)}
-                      </select>
-                    </SettingsRow>
-                  </SettingsPanelRow>
-                  <SettingsPanelRow>
-                    <SettingsRow label={t("meetingAudio.budget")}
-                      description={meetingAudioUsage.evictions.length
-                        ? t("meetingAudio.evictedNotes", { titles: meetingAudioUsage.evictions.slice(0, 3).map((item) => item.title).join(", ") })
-                        : undefined}>
-                      <select value={meetingAudioUsage.budgetBytes} className={RETENTION_SELECT_CLASS}
-                        onChange={(event) => {
-                          void window.electronAPI?.meetingAudioSetPolicy?.({
-                            days: meetingAudioUsage.days, budgetBytes: Number(event.target.value),
-                          }).then(refreshMeetingAudioUsage);
-                        }}>
-                        {[500_000_000, 2 * 1024 * 1024 * 1024, 10_000_000_000].map((bytes) =>
-                          <option key={bytes} value={bytes}>{(bytes / 1_000_000_000).toFixed(1)} GB</option>)}
-                      </select>
-                    </SettingsRow>
-                  </SettingsPanelRow>
-                </>}
+                {meetingAudioUsage && (
+                  <>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("meetingAudio.retention")}
+                        description={t("meetingAudio.storage", {
+                          used: (meetingAudioUsage.usedBytes / 1_000_000).toFixed(3),
+                          budget: (meetingAudioUsage.budgetBytes / 1_000_000).toFixed(3),
+                        })}
+                      >
+                        <select
+                          value={meetingAudioUsage.days}
+                          className={RETENTION_SELECT_CLASS}
+                          onChange={(event) => {
+                            void window.electronAPI
+                              ?.meetingAudioSetPolicy?.({
+                                days: Number(event.target.value) as 3 | 7 | 30,
+                                budgetBytes: meetingAudioUsage.budgetBytes,
+                              })
+                              .then(refreshMeetingAudioUsage);
+                          }}
+                        >
+                          {[3, 7, 30].map((days) => (
+                            <option key={days} value={days}>
+                              {days} {t("meetingAudio.days")}
+                            </option>
+                          ))}
+                        </select>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                    <SettingsPanelRow>
+                      <SettingsRow
+                        label={t("meetingAudio.budget")}
+                        description={
+                          meetingAudioUsage.evictions.length
+                            ? t("meetingAudio.evictedNotes", {
+                                titles: meetingAudioUsage.evictions
+                                  .slice(0, 3)
+                                  .map((item) => item.title)
+                                  .join(", "),
+                              })
+                            : undefined
+                        }
+                      >
+                        <select
+                          value={meetingAudioUsage.budgetBytes}
+                          className={RETENTION_SELECT_CLASS}
+                          onChange={(event) => {
+                            void window.electronAPI
+                              ?.meetingAudioSetPolicy?.({
+                                days: meetingAudioUsage.days,
+                                budgetBytes: Number(event.target.value),
+                              })
+                              .then(refreshMeetingAudioUsage);
+                          }}
+                        >
+                          {[500_000_000, 2 * 1024 * 1024 * 1024, 10_000_000_000].map((bytes) => (
+                            <option key={bytes} value={bytes}>
+                              {(bytes / 1_000_000_000).toFixed(1)} GB
+                            </option>
+                          ))}
+                        </select>
+                      </SettingsRow>
+                    </SettingsPanelRow>
+                  </>
+                )}
               </SettingsPanel>
             </div>
 

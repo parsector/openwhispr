@@ -23,6 +23,7 @@ export interface TranscriptCorrection {
   timestamp: string;
   sequence?: number;
   undoAvailable?: boolean;
+  unavailableReason?: string;
   initialAttribution?: boolean;
   afterFinalAnalysis?: boolean;
   kind?: "correction" | "split" | "reconsideration";

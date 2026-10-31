@@ -116,7 +116,7 @@ const withoutIds = (transcript) => {
   const rows = require("../../src/helpers/transcriptDocument").readTranscriptDocument(transcript).rows;
   assert.equal(new Set(rows.map((row) => row.id)).size, rows.length);
   for (const row of rows) assert.match(row.id, /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i);
-  return rows.map(({ id, ...row }) => row);
+  return rows.map(({ id: _id, ...row }) => row);
 };
 
 test("upload transcript crosses the actual preload and save IPC handler before broadcasting", async (t) => {

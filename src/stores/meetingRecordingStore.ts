@@ -24,9 +24,7 @@ import {
   getFallbackSystemAudioAccess,
   isRendererSystemAudioStrategy,
 } from "../utils/systemAudioAccess";
-import {
-  MAX_SPEAKER_COUNT,
-} from "../constants/speakerDetection.json";
+import { MAX_SPEAKER_COUNT } from "../constants/speakerDetection.json";
 import logger from "../utils/logger";
 import { isTranscriptionContextAllowed } from "./policyRules";
 import { usePolicyStore } from "./policyStore";
@@ -39,7 +37,10 @@ import {
   type TranscriptSpeakerStatus,
 } from "../utils/transcriptSpeakerState";
 import { parseSeedSegments } from "../utils/parseTranscriptSegments";
-import { readTranscriptDocument, reconcileAutomaticTranscript } from "../helpers/transcriptDocument";
+import {
+  readTranscriptDocument,
+  reconcileAutomaticTranscript,
+} from "../helpers/transcriptDocument";
 import {
   mergeSessionDiarization,
   resolveDiarizationTarget,
@@ -58,14 +59,24 @@ import { persistFinalTranscriptAroundStop } from "../helpers/meetingTranscriptPe
 
 export interface TranscriptSegment {
   id: string;
-  audioSpan?: { recordingId: string | number; trackId: "mic" | "system"; startSample: number; endSample: number };
+  audioSpan?: {
+    recordingId: string | number;
+    trackId: "mic" | "system";
+    startSample: number;
+    endSample: number;
+  };
   wordTimings?: Array<{ word: string; start: number; end: number }>;
   parentRowId?: string;
   splitStartWord?: number;
   changedAfterFinal?: boolean;
   finalAnalysisCompleted?: boolean;
-  finalRevision?: { fromSpeaker?: string; toSpeaker?: string; fromName?: string;
-    toName?: string; splitFromRowId?: string };
+  finalRevision?: {
+    fromSpeaker?: string;
+    toSpeaker?: string;
+    fromName?: string;
+    toName?: string;
+    splitFromRowId?: string;
+  };
   unknownNumber?: number;
   unknownNumberHighWater?: number;
   uncertainty?: { reason: string; candidates?: [string, string] };
@@ -78,6 +89,11 @@ export interface TranscriptSegment {
   text: string;
   source: "mic" | "system";
   timestamp?: number;
+  speechStart?: number;
+  speechEnd?: number;
+  recordingId?: string | number;
+  recordingOrigin?: number;
+  timebase?: "epoch" | "recording";
   speaker?: string;
   speakerName?: string;
   speakerIsPlaceholder?: boolean;
@@ -426,7 +442,6 @@ const flushAndDisconnectProcessor = async (processor: AudioWorkletNode | null) =
   processor.disconnect();
 };
 
-
 // Pipeline lives in module scope — not on React refs — so it survives
 // view changes and re-mounts of the consumer view.
 let micContext: AudioContext | null = null;
@@ -610,9 +625,15 @@ function applySpeakerIdentification(
     ...segment,
     speaker: identification.speakerId,
     speakerName: identification.uncertainty ? undefined : identification.displayName || undefined,
-    suggestedName: identification.uncertainty ? undefined : identification.suggestedName || undefined,
+    suggestedName: identification.uncertainty
+      ? undefined
+      : identification.suggestedName || undefined,
     speakerIsPlaceholder: !!identification.uncertainty || !identification.displayName,
-    speakerStatus: identification.uncertainty ? "provisional" : identification.displayName ? "confirmed" : "suggested",
+    speakerStatus: identification.uncertainty
+      ? "provisional"
+      : identification.displayName
+        ? "confirmed"
+        : "suggested",
     uncertainty: identification.uncertainty,
     speakerAssessmentAvailable: true,
   });
@@ -621,9 +642,11 @@ function applySpeakerIdentification(
 function applyNewestSpeakerIdentification(segment: TranscriptSegment): TranscriptSegment {
   const newest = speakerIdentifications.reduce<SpeakerIdentification | null>((winner, item) => {
     if (!isSegmentWithinIdentificationWindow(segment, item)) return winner;
-    return !winner || item.endTime > winner.endTime ||
+    return !winner ||
+      item.endTime > winner.endTime ||
       (item.endTime === winner.endTime && (!winner.uncertainty || !!item.uncertainty))
-      ? item : winner;
+      ? item
+      : winner;
   }, null);
   return newest ? applySpeakerIdentification(segment, newest) : segment;
 }
@@ -863,13 +886,19 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       args.diarizationEnabled ??
       (getSettings() as { speakerDiarizationEnabled?: boolean }).speakerDiarizationEnabled ??
       true;
-    const initialCount = args.expectedCount == null ? null : Math.max(1, Math.min(MAX_SPEAKER_COUNT, args.expectedCount));
+    const initialCount =
+      args.expectedCount == null
+        ? null
+        : Math.max(1, Math.min(MAX_SPEAKER_COUNT, args.expectedCount));
 
     logger.info("Meeting transcription starting...", {}, "meeting");
     const seed = args.seedSegments ?? [];
     sessionExpectedTranscript = args.seedTranscriptRaw;
-    sessionUnknownHighWater = Math.max(args.seedUnknownHighWater || 0,
-      ...seed.map((row) => row.unknownNumberHighWater || row.unknownNumber || 0), 0);
+    sessionUnknownHighWater = Math.max(
+      args.seedUnknownHighWater || 0,
+      ...seed.map((row) => row.unknownNumberHighWater || row.unknownNumber || 0),
+      0
+    );
     const locks = new Map<string, string>();
     let maxSpeakerIndex = -1;
     for (const s of seed) {
@@ -1177,8 +1206,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           );
 
           if (reduction.kind === "retract") {
-            const numbered = normalizeTranscriptSegments(reduction.state.segments, sessionUnknownHighWater);
-            sessionUnknownHighWater = Math.max(sessionUnknownHighWater, ...numbered.map((row) => row.unknownNumberHighWater || 0), 0);
+            const numbered = normalizeTranscriptSegments(
+              reduction.state.segments,
+              sessionUnknownHighWater
+            );
+            sessionUnknownHighWater = Math.max(
+              sessionUnknownHighWater,
+              ...numbered.map((row) => row.unknownNumberHighWater || 0),
+              0
+            );
             segmentsRefValue = numbered;
             useMeetingRecordingStore.setState({
               segments: numbered,
@@ -1211,8 +1247,15 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             seg.speakerIsPlaceholder = true;
             seg.speakerStatus = "provisional";
           }
-          const numbered = normalizeTranscriptSegments(reduction.state.segments, sessionUnknownHighWater);
-          sessionUnknownHighWater = Math.max(sessionUnknownHighWater, ...numbered.map((row) => row.unknownNumberHighWater || 0), 0);
+          const numbered = normalizeTranscriptSegments(
+            reduction.state.segments,
+            sessionUnknownHighWater
+          );
+          sessionUnknownHighWater = Math.max(
+            sessionUnknownHighWater,
+            ...numbered.map((row) => row.unknownNumberHighWater || 0),
+            0
+          );
           segmentsRefValue = numbered;
           // Only the cleared partial goes in the payload (spreading both partial fields would add a
           // key the pre-reducer code never wrote), so derive it from the inserted segment's source.
@@ -1240,11 +1283,19 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       const speakerCleanup = window.electronAPI?.onMeetingSpeakerIdentified?.((data) => {
         if (activeRecordingSessionId !== sessionId) return;
         reserveSpeakerIndex(data.speakerId);
-        const superseded = speakerIdentifications.some((item) => item.endTime > data.endTime ||
-          (item.endTime === data.endTime && !!item.uncertainty && !data.uncertainty));
+        const superseded = speakerIdentifications.some(
+          (item) =>
+            item.endTime > data.endTime ||
+            (item.endTime === data.endTime && !!item.uncertainty && !data.uncertainty)
+        );
         if (!superseded) {
           setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
-          rememberSystemSpeaker(data.speakerId, data.displayName ?? null, !data.displayName, data.endTime);
+          rememberSystemSpeaker(
+            data.speakerId,
+            data.displayName ?? null,
+            !data.displayName,
+            data.endTime
+          );
         }
         speakerIdentifications = [
           ...speakerIdentifications.filter(
@@ -1260,24 +1311,34 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       });
       if (speakerCleanup) ipcCleanups.push(speakerCleanup);
 
-      const evidenceCleanup = window.electronAPI?.onMeetingSpeakerEvidenceChanged?.(async (data) => {
-        if (activeRecordingSessionId !== sessionId || data.runId !== sessionId ||
-            data.noteId !== useMeetingRecordingStore.getState().recordingNoteId) return;
-        const result = await window.electronAPI?.reconsiderLiveSpeakers?.({
-          noteId: data.noteId, runId: data.runId,
-          rows: useMeetingRecordingStore.getState().segments,
-        });
-        if (activeRecordingSessionId !== sessionId || !result?.rows?.length) return;
-        mergeCommittedSpeakerRows(result.rows);
-        for (const assignment of result.assignments || []) {
-          speakerIdentifications = speakerIdentifications.map(item => item.speakerId === assignment.speakerId
-            ? { ...item, displayName: assignment.displayName } : item);
-          if (recentSystemSpeaker?.speakerId === assignment.speakerId)
-            recentSystemSpeaker.speakerName = assignment.displayName;
-          if (systemPartialSpeakerIdValue === assignment.speakerId)
-            setSystemPartialSpeakerIdentity(assignment.speakerId, assignment.displayName);
+      const evidenceCleanup = window.electronAPI?.onMeetingSpeakerEvidenceChanged?.(
+        async (data) => {
+          if (
+            activeRecordingSessionId !== sessionId ||
+            data.runId !== sessionId ||
+            data.noteId !== useMeetingRecordingStore.getState().recordingNoteId
+          )
+            return;
+          const result = await window.electronAPI?.reconsiderLiveSpeakers?.({
+            noteId: data.noteId,
+            runId: data.runId,
+            rows: useMeetingRecordingStore.getState().segments,
+          });
+          if (activeRecordingSessionId !== sessionId || !result?.rows?.length) return;
+          mergeCommittedSpeakerRows(result.rows);
+          for (const assignment of result.assignments || []) {
+            speakerIdentifications = speakerIdentifications.map((item) =>
+              item.speakerId === assignment.speakerId
+                ? { ...item, displayName: assignment.displayName }
+                : item
+            );
+            if (recentSystemSpeaker?.speakerId === assignment.speakerId)
+              recentSystemSpeaker.speakerName = assignment.displayName;
+            if (systemPartialSpeakerIdValue === assignment.speakerId)
+              setSystemPartialSpeakerIdentity(assignment.speakerId, assignment.displayName);
+          }
         }
-      });
+      );
       if (evidenceCleanup) ipcCleanups.push(evidenceCleanup);
 
       const mergeCleanup = window.electronAPI?.onMeetingSpeakersMerged?.((merges) => {
@@ -1306,7 +1367,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           for (const id of speakerIdentifications) {
             if (id.speakerId === remove) id.speakerId = keep;
           }
-
         }
       });
       if (mergeCleanup) ipcCleanups.push(mergeCleanup);
@@ -1675,8 +1735,10 @@ export async function persistLiveTranscript(): Promise<void> {
   if (!isRecordingFlag || recordingNoteDeleted || recordingNoteId == null) return;
   if (segments.length === 0) return;
   try {
-    await persistAutomaticTranscript(recordingNoteId,
-      serializeTranscriptSegments(segments, sessionUnknownHighWater));
+    await persistAutomaticTranscript(
+      recordingNoteId,
+      serializeTranscriptSegments(segments, sessionUnknownHighWater)
+    );
   } catch (err) {
     logger.error(
       "Failed to persist live meeting transcript",
@@ -1688,17 +1750,21 @@ export async function persistLiveTranscript(): Promise<void> {
 
 async function persistAutomaticTranscript(noteId: number, transcript: string) {
   // Post before the first await so beforeunload still flushes the recording.
-  const options = sessionExpectedTranscript === undefined
-    ? { reconcileTranscript: true }
-    : { expectedTranscript: sessionExpectedTranscript, reconcileTranscript: true };
+  const options =
+    sessionExpectedTranscript === undefined
+      ? { reconcileTranscript: true }
+      : { expectedTranscript: sessionExpectedTranscript, reconcileTranscript: true };
   let result = await window.electronAPI?.updateNote?.(noteId, { transcript }, options);
   if (result?.error === "transcript_changed") {
     const current = await window.electronAPI?.getNote?.(noteId);
     if (!current || current.deleted_at) throw Error("transcript_note_missing");
     if (reconcileAutomaticTranscript(transcript, current.transcript) === null)
       throw Error("stale_automatic_transcript");
-    result = await window.electronAPI?.updateNote?.(noteId, { transcript },
-      { expectedTranscript: current.transcript, reconcileTranscript: true });
+    result = await window.electronAPI?.updateNote?.(
+      noteId,
+      { transcript },
+      { expectedTranscript: current.transcript, reconcileTranscript: true }
+    );
   }
   if (!result?.success) throw Error(result?.error || "transcript_save_failed");
   sessionExpectedTranscript = result.note?.transcript ?? transcript;
@@ -1757,7 +1823,11 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     // Persist here, not in a notes-view effect: an auto-end stop can fire while
     // that view is unmounted, and any view-scoped saver dies with it. (Delayed
     // diarization results are persisted by the module-level listener below.)
-    const { recordingNoteId, segments: finalSegments, sessionDiarizationEnabled } = useMeetingRecordingStore.getState();
+    const {
+      recordingNoteId,
+      segments: finalSegments,
+      sessionDiarizationEnabled,
+    } = useMeetingRecordingStore.getState();
     const hasNewSegments = finalSegments.length > sessionSeedLength;
     let stopTranscript = "";
     const persistTranscript = async (transcript: string) => {
@@ -1782,7 +1852,10 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
         stopTranscript &&
         (finalSegments.length === 0
           ? stopTranscript
-          : serializeTranscriptSegments(useMeetingRecordingStore.getState().segments, sessionUnknownHighWater)),
+          : serializeTranscriptSegments(
+              useMeetingRecordingStore.getState().segments,
+              sessionUnknownHighWater
+            )),
       stop: async () => {
         // Set before cleanup's awaits: the final transcript write is already
         // posted, so an earlier session's result can land from here on.
@@ -1854,7 +1927,10 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
     if (recordingNoteId != null) {
       window.electronAPI?.meetingNoteStopped?.(recordingNoteId);
       if (!sessionDiarizationEnabled || !diarizationSessionId)
-        window.electronAPI?.meetingNoteFinalized?.({ noteId: recordingNoteId, diarized: "skipped" });
+        window.electronAPI?.meetingNoteFinalized?.({
+          noteId: recordingNoteId,
+          diarized: "skipped",
+        });
     }
     // Reaching here means this call ended a live recording and its transcript
     // was written above. A failed main-side teardown is surfaced by
@@ -1863,18 +1939,24 @@ export async function stopRecording(expectedSessionId?: string): Promise<StopRec
   });
 }
 
-export function assignLiveSpeakerRows(rowIds: ReadonlySet<string>, displayName: string | null, corrected?: TranscriptSegment[]): TranscriptSegment[] {
+export function assignLiveSpeakerRows(
+  rowIds: ReadonlySet<string>,
+  displayName: string | null,
+  corrected?: TranscriptSegment[]
+): TranscriptSegment[] {
   speakerIdentifications = [];
-  const next = corrected ?? useMeetingRecordingStore.getState().segments.map((segment) =>
-    rowIds.has(segment.id)
-      ? lockTranscriptSpeaker(segment, {
-          speakerName: displayName || undefined,
-          speakerIsPlaceholder: !displayName,
-          suggestedName: undefined,
-          suggestedProfileId: undefined,
-        })
-      : segment
-  );
+  const next =
+    corrected ??
+    useMeetingRecordingStore.getState().segments.map((segment) =>
+      rowIds.has(segment.id)
+        ? lockTranscriptSpeaker(segment, {
+            speakerName: displayName || undefined,
+            speakerIsPlaceholder: !displayName,
+            suggestedName: undefined,
+            suggestedProfileId: undefined,
+          })
+        : segment
+    );
   segmentsRefValue = next;
   useMeetingRecordingStore.setState({ segments: next, transcript: buildTranscriptText(next) });
   return next;
@@ -1926,8 +2008,11 @@ export function restoreSpeakerIdentityCache(speakerId: string, displayName: stri
   if (displayName) speakerLocks.set(speakerId, displayName);
   else speakerLocks.delete(speakerId);
   if (recentSystemSpeaker?.speakerId === speakerId) {
-    recentSystemSpeaker = { ...recentSystemSpeaker, speakerName: displayName,
-      speakerIsPlaceholder: !displayName };
+    recentSystemSpeaker = {
+      ...recentSystemSpeaker,
+      speakerName: displayName,
+      speakerIsPlaceholder: !displayName,
+    };
   }
   if (systemPartialSpeakerIdValue === speakerId) {
     setSystemPartialSpeakerIdentity(speakerId, displayName);
@@ -2014,7 +2099,9 @@ if (typeof window !== "undefined") {
       }
 
       const existing = selectBaseSegments({
-        persistedSegments: persisted.transcript ? parseSeedSegments(persisted.transcript, targetNoteId) : null,
+        persistedSegments: persisted.transcript
+          ? parseSeedSegments(persisted.transcript, targetNoteId)
+          : null,
         liveSegments,
         recordingNoteId,
         targetNoteId,
@@ -2043,24 +2130,34 @@ if (typeof window !== "undefined") {
         let baseTranscript = persisted.transcript;
         let saved = false;
         for (let attempt = 0; attempt < 3; attempt += 1) {
-          const result = await window.electronAPI?.updateNote?.(targetNoteId, {
-            transcript: serializeTranscriptSegments(enriched.map((row) => ({ ...row,
-              finalAnalysisCompleted: true })), readTranscriptDocument(baseTranscript).unknownNumberHighWater),
-          }, { expectedTranscript: baseTranscript, reconcileTranscript: true });
+          const result = await window.electronAPI?.updateNote?.(
+            targetNoteId,
+            {
+              transcript: serializeTranscriptSegments(
+                enriched.map((row) => ({ ...row, finalAnalysisCompleted: true })),
+                readTranscriptDocument(baseTranscript).unknownNumberHighWater
+              ),
+            },
+            { expectedTranscript: baseTranscript, reconcileTranscript: true }
+          );
           if (result?.success) {
-            if (result.note?.transcript) enriched = parseSeedSegments(result.note.transcript, targetNoteId);
+            if (result.note?.transcript)
+              enriched = parseSeedSegments(result.note.transcript, targetNoteId);
             saved = true;
             break;
           }
-          if (result?.error !== "transcript_changed") throw Error(result?.error || "finalisation_save_failed");
+          if (result?.error !== "transcript_changed")
+            throw Error(result?.error || "finalisation_save_failed");
           const latest = await window.electronAPI?.getNote?.(targetNoteId);
           if (!latest || latest.deleted_at) throw Error("finalisation_note_missing");
           baseTranscript = latest.transcript;
           const retried = mergeSessionDiarization({
             existing: parseSeedSegments(baseTranscript || "", targetNoteId),
             unknownNumberHighWater: readTranscriptDocument(baseTranscript).unknownNumberHighWater,
-            seedLength, fallbackTranscript: seed?.fallbackTranscript,
-            segments: data.segments, removedSegments: data.removedSegments,
+            seedLength,
+            fallbackTranscript: seed?.fallbackTranscript,
+            segments: data.segments,
+            removedSegments: data.removedSegments,
           });
           enriched = retried.segments;
           removedCount = retried.removedCount;

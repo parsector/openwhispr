@@ -595,7 +595,7 @@ test('reset voice with no notes can be undone', t => {
 });
 test('clear voice evidence keeps identities, transcript labels, and action history, then allows reassignment', t => {
   const f = fixture(t); if (!f) return;
-  const alex = f.person('Alex', 1), sam = f.person('Sam', 2);
+  const alex = f.person('Alex', 1); f.person('Sam', 2);
   f.db.db.prepare('UPDATE speaker_profiles SET email = ? WHERE id = ?').run('alex@example.com', alex.id);
   const note = f.note('one', [{ id: 'a', text: 'hello', source: 'system', speaker: 'speaker_0', speakerName: 'Alex' }], [['speaker_0', alex]]);
   const log = { version: 1, nextSequence: 2, actions: [{ kind: 'mapping', id: 'older', sequence: 1, speakerId: 'speaker_0', before: null, after: { profile_id: alex.id, display_name: 'Alex' } }] };

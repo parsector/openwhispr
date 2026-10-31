@@ -280,11 +280,16 @@ export default function NoteEditor({
   onFlushPendingSaves,
 }: NoteEditorProps) {
   const { t } = useTranslation();
-  const [routineLinks, setRoutineLinks] = useState<Awaited<ReturnType<Window["electronAPI"]["routineNoteLinks"]>>>(null);
+  const [routineLinks, setRoutineLinks] =
+    useState<Awaited<ReturnType<Window["electronAPI"]["routineNoteLinks"]>>>(null);
   useEffect(() => {
     let active = true;
-    void window.electronAPI.routineNoteLinks?.(note.id).then((links) => { if (active) setRoutineLinks(links); });
-    return () => { active = false; };
+    void window.electronAPI.routineNoteLinks?.(note.id).then((links) => {
+      if (active) setRoutineLinks(links);
+    });
+    return () => {
+      active = false;
+    };
   }, [note.id]);
   const locale = useUiLocale();
   // An upload's transcription lives in its transcript, so until the user writes
@@ -303,9 +308,13 @@ export default function NoteEditor({
       if (target?.noteId !== note.id) return undefined;
       window.sessionStorage.removeItem("peopleReviewTarget");
       return target.rowId;
-    } catch { return undefined; }
+    } catch {
+      return undefined;
+    }
   });
-  useEffect(() => { if (peopleFocusRowId) setSelectedViewMode("transcript"); }, [peopleFocusRowId]);
+  useEffect(() => {
+    if (peopleFocusRowId) setSelectedViewMode("transcript");
+  }, [peopleFocusRowId]);
   // Stored as chosen, clamped on read: AI Summary is the only tab that can stop
   // rendering, and a tab that no longer renders can never be the current one.
   const viewMode: MeetingViewMode =
@@ -453,26 +462,34 @@ export default function NoteEditor({
   const [reviewOnly, setReviewOnly] = useState(false);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerCorrectionError, setSpeakerCorrectionError] = useState<string | null>(null);
-  const [speakerAnchorStatus, setSpeakerAnchorStatus] = useState<{ state: "active" | "refused"; reason: string | null } | null>(null);
+  const [speakerAnchorStatus, setSpeakerAnchorStatus] = useState<{
+    state: "active" | "refused";
+    reason: string | null;
+  } | null>(null);
   useEffect(() => {
     let cancelled = false;
     setSpeakerAnchorStatus(null);
     if (isRecording) {
-      void window.electronAPI?.getLiveSpeakerAnchorState?.(note.id, getActiveRecordingSessionId())
+      void window.electronAPI
+        ?.getLiveSpeakerAnchorState?.(note.id, getActiveRecordingSessionId())
         .then((active) => {
           if (!cancelled && active) setSpeakerAnchorStatus({ state: "active", reason: null });
         });
     }
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [note.id, isRecording]);
   const [speakerSplitReport, setSpeakerSplitReport] = useState<string | null>(null);
   const [speakerHistoryQuarantined, setSpeakerHistoryQuarantined] = useState(false);
   useEffect(() => {
     let active = true;
-    void window.electronAPI.speakerHistoryStatus?.(note.id).then(result => {
+    void window.electronAPI.speakerHistoryStatus?.(note.id).then((result) => {
       if (active) setSpeakerHistoryQuarantined(result.quarantined);
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [note.id, note.speaker_action_log, note.speaker_label_undo]);
   const correctionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [speakerProfiles, setSpeakerProfiles] = useState<
@@ -509,25 +526,31 @@ export default function NoteEditor({
 
   const storedTranscript = useMemo(
     () => parseTranscriptSegmentsWithMigration(note.transcript || "", note.client_note_id),
-    [note.client_note_id, note.id, note.transcript]
+    [note.client_note_id, note.transcript]
   );
   const displaySegments = diarizedSegments?.length ? diarizedSegments : storedTranscript.segments;
-  const reviewCount = displaySegments.filter((segment) =>
-    segment.uncertainty || segment.quarantinedCorrections?.length).length;
+  const reviewCount = displaySegments.filter(
+    (segment) => segment.uncertainty || segment.quarantinedCorrections?.length
+  ).length;
   const canUndoCloudLabels = (() => {
     if (!note.speaker_action_log) return !!note.speaker_label_undo;
     try {
       const actions = JSON.parse(note.speaker_action_log).actions;
       return Array.isArray(actions) && actions.at(-1)?.kind === "adoption";
-    } catch { return false; }
+    } catch {
+      return false;
+    }
   })();
 
   useEffect(() => {
     if (storedTranscript.migrated) {
-      void window.electronAPI?.updateNote?.(note.id, {},
-        { expectedTranscript: note.transcript, migrateTranscript: true });
+      void window.electronAPI?.updateNote?.(
+        note.id,
+        {},
+        { expectedTranscript: note.transcript, migrateTranscript: true }
+      );
     }
-  }, [note.id, storedTranscript]);
+  }, [note.id, note.transcript, storedTranscript]);
 
   const templates = useActionsOfKind("template");
   const noteActions = useActionsOfKind("action");
@@ -687,7 +710,11 @@ export default function NoteEditor({
         setIsDiarizing(false);
         setSpeakerMappings({});
         let reviewTarget: { noteId?: number; rowId?: string } | null = null;
-        try { reviewTarget = JSON.parse(window.sessionStorage.getItem("peopleReviewTarget") || "null"); } catch { /* Ignore stale navigation data. */ }
+        try {
+          reviewTarget = JSON.parse(window.sessionStorage.getItem("peopleReviewTarget") || "null");
+        } catch {
+          /* Ignore stale navigation data. */
+        }
         if (reviewTarget?.noteId === note.id && reviewTarget.rowId) {
           window.sessionStorage.removeItem("peopleReviewTarget");
           setPeopleFocusRowId(reviewTarget.rowId);
@@ -714,9 +741,11 @@ export default function NoteEditor({
       refreshSpeakerMappings(note.id);
       refreshSpeakerProfiles();
       if (isRecording && speakerAnchorStatus?.state === "active") {
-        void window.electronAPI?.getLiveSpeakerAnchorState?.(note.id, getActiveRecordingSessionId())
+        void window.electronAPI
+          ?.getLiveSpeakerAnchorState?.(note.id, getActiveRecordingSessionId())
           .then((active) => {
-            if (!active) setSpeakerAnchorStatus((current) => current?.state === "active" ? null : current);
+            if (!active)
+              setSpeakerAnchorStatus((current) => (current?.state === "active" ? null : current));
           });
       }
     };
@@ -726,9 +755,11 @@ export default function NoteEditor({
   useEffect(() => {
     if (!isRecording) return;
     return window.electronAPI?.onMeetingSpeakersMerged?.(() => {
-      void window.electronAPI?.getLiveSpeakerAnchorState?.(note.id, getActiveRecordingSessionId())
+      void window.electronAPI
+        ?.getLiveSpeakerAnchorState?.(note.id, getActiveRecordingSessionId())
         .then((active) => {
-          if (!active) setSpeakerAnchorStatus((current) => current?.state === "active" ? null : current);
+          if (!active)
+            setSpeakerAnchorStatus((current) => (current?.state === "active" ? null : current));
         });
     });
   }, [note.id, isRecording]);
@@ -744,7 +775,10 @@ export default function NoteEditor({
       timer = window.setTimeout(() => setPeopleFocusRowId(target.rowId), 0);
     };
     window.addEventListener("people-review-navigate", navigate);
-    return () => { window.removeEventListener("people-review-navigate", navigate); if (timer !== undefined) window.clearTimeout(timer); };
+    return () => {
+      window.removeEventListener("people-review-navigate", navigate);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [note.id]);
 
   useEffect(() => {
@@ -788,9 +822,13 @@ export default function NoteEditor({
 
   const persistDisplaySegments = useCallback(
     async (nextSegments: TranscriptSegment[], updateOverlay = true) => {
-      const result = await window.electronAPI?.updateNote(note.id, {
-        transcript: serializeTranscriptSegments(nextSegments),
-      }, { expectedTranscript: note.transcript });
+      const result = await window.electronAPI?.updateNote(
+        note.id,
+        {
+          transcript: serializeTranscriptSegments(nextSegments),
+        },
+        { expectedTranscript: note.transcript }
+      );
       if (!result?.success) {
         setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
         return;
@@ -800,89 +838,134 @@ export default function NoteEditor({
     [note.id, note.transcript, t]
   );
 
-  const commitSpeakerCorrection = useCallback(async (request: {
-    type: "apply" | "split" | "undo"; id: string; scope?: "row" | "selected" | "cluster";
-    rowIds?: string[]; target?: { runId?: string; clusterId?: string };
-    name?: string | null; profileId?: number | null; email?: string | null;
-  }) => {
-    const previousCorrection = correctionQueueRef.current;
-    let releaseCorrection!: () => void;
-    correctionQueueRef.current = new Promise<void>((resolve) => { releaseCorrection = resolve; });
-    await previousCorrection;
-    const before = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
-    setSpeakerCorrectionError(null);
-    setSpeakerSplitReport(null);
-    if (isRecording) setSpeakerCorrectionPending(true);
-    try {
-      const result = await window.electronAPI?.applySpeakerCorrection?.({
-        ...request, noteId: note.id, rows: before,
-        afterFinalAnalysis: !isRecording && !isDiarizing && note.note_type === "meeting" &&
-          before.length > 0 && before.every((row) => row.finalAnalysisCompleted === true),
+  const commitSpeakerCorrection = useCallback(
+    async (request: {
+      type: "apply" | "split" | "undo";
+      id: string;
+      scope?: "row" | "selected" | "cluster";
+      rowIds?: string[];
+      target?: { runId?: string; clusterId?: string };
+      name?: string | null;
+      profileId?: number | null;
+      email?: string | null;
+    }) => {
+      const previousCorrection = correctionQueueRef.current;
+      let releaseCorrection!: () => void;
+      correctionQueueRef.current = new Promise<void>((resolve) => {
+        releaseCorrection = resolve;
       });
-      if (!result?.success || !result.rows) {
-        if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();
-        setSpeakerCorrectionError(t(result?.error === "history_quarantined"
-          ? "notes.speaker.historyQuarantined" : result?.error === "later_change"
-          ? "notes.speaker.laterChangeReplaced" : result?.error === "history_full"
-            ? "notes.speaker.historyFull" : "notes.speaker.correctionSaveFailed"));
-        return false;
-      }
-      const committed = result.rows;
-      if (isRecording) {
-        if (result.anchor) setSpeakerAnchorStatus(result.anchor);
-        else if (request.type === "undo" || request.type === "split" || result.anchorInvalidated)
-          setSpeakerAnchorStatus(null);
-      }
-      if (result.report) setSpeakerSplitReport(t("notes.speaker.splitReport", {
-        moved: result.report.movedRows, retained: result.report.retainedRows,
-        acoustic: result.report.acousticRows,
-      }));
-      if (isRecording) {
-        // Merge after the await: a transcription row may have arrived during IPC.
-        const liveNow = useMeetingRecordingStore.getState().segments;
-        const committedById = new Map(committed.map((row) => [row.id, row]));
-        mergeCommittedSpeakerRows(committed);
-        const saveDeferred = setSpeakerCorrectionPending(false);
-        if (saveDeferred || liveNow.some((row) => !committedById.has(row.id))) {
-          await persistLiveTranscript();
-        }
-      } else {
-        setDiarizedSegments(committed);
-      }
-      if (result.mapping && (!isRecording || result.mapping.runId === getActiveRecordingSessionId())) {
-        const { clusterId, value } = result.mapping;
-        const name = value?.display_name || value?.displayName || null;
-        if (isRecording) restoreSpeakerIdentityCache(clusterId, name);
-        setSpeakerMappings((current) => {
-          const next = { ...current };
-          if (name) next[clusterId] = name;
-          else delete next[clusterId];
-          return next;
+      await previousCorrection;
+      const before = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+      setSpeakerCorrectionError(null);
+      setSpeakerSplitReport(null);
+      if (isRecording) setSpeakerCorrectionPending(true);
+      try {
+        const result = await window.electronAPI?.applySpeakerCorrection?.({
+          ...request,
+          noteId: note.id,
+          rows: before,
+          afterFinalAnalysis:
+            !isRecording &&
+            !isDiarizing &&
+            note.note_type === "meeting" &&
+            before.length > 0 &&
+            before.every((row) => row.finalAnalysisCompleted === true),
         });
+        if (!result?.success || !result.rows) {
+          if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();
+          setSpeakerCorrectionError(
+            t(
+              result?.error === "history_quarantined"
+                ? "notes.speaker.historyQuarantined"
+                : result?.error === "later_change"
+                  ? "notes.speaker.laterChangeReplaced"
+                  : result?.error === "history_full"
+                    ? "notes.speaker.historyFull"
+                    : "notes.speaker.correctionSaveFailed"
+            )
+          );
+          return false;
+        }
+        const committed = result.rows;
+        if (isRecording) {
+          if (result.anchor) setSpeakerAnchorStatus(result.anchor);
+          else if (request.type === "undo" || request.type === "split" || result.anchorInvalidated)
+            setSpeakerAnchorStatus(null);
+        }
+        if (result.report)
+          setSpeakerSplitReport(
+            t("notes.speaker.splitReport", {
+              moved: result.report.movedRows,
+              retained: result.report.retainedRows,
+              acoustic: result.report.acousticRows,
+            })
+          );
+        if (isRecording) {
+          // Merge after the await: a transcription row may have arrived during IPC.
+          const liveNow = useMeetingRecordingStore.getState().segments;
+          const committedById = new Map(committed.map((row) => [row.id, row]));
+          mergeCommittedSpeakerRows(committed);
+          const saveDeferred = setSpeakerCorrectionPending(false);
+          if (saveDeferred || liveNow.some((row) => !committedById.has(row.id))) {
+            await persistLiveTranscript();
+          }
+        } else {
+          setDiarizedSegments(committed);
+        }
+        if (
+          result.mapping &&
+          (!isRecording || result.mapping.runId === getActiveRecordingSessionId())
+        ) {
+          const { clusterId, value } = result.mapping;
+          const name = value?.display_name || value?.displayName || null;
+          if (isRecording) restoreSpeakerIdentityCache(clusterId, name);
+          setSpeakerMappings((current) => {
+            const next = { ...current };
+            if (name) next[clusterId] = name;
+            else delete next[clusterId];
+            return next;
+          });
+        }
+        refreshSpeakerProfiles();
+        return true;
+      } catch {
+        if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();
+        setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
+        return false;
+      } finally {
+        releaseCorrection();
       }
-      refreshSpeakerProfiles();
-      return true;
-    } catch {
-      if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();
-      setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
-      return false;
-    } finally {
-      releaseCorrection();
-    }
-  }, [displaySegments, isRecording, isDiarizing, note.id, refreshSpeakerProfiles, t]);
+    },
+    [displaySegments, isRecording, isDiarizing, note.id, note.note_type, refreshSpeakerProfiles, t]
+  );
 
-  const handleMapSpeaker = useCallback(async (
-    speakerId: string, displayName: string, email?: string | null, profileId?: number | null
-  ) => {
-    const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
-    const anchor = rows.find((row) => row.speaker === speakerId);
-    if (!anchor) return;
-    await commitSpeakerCorrection({ type: "apply", id: crypto.randomUUID(), scope: "cluster",
-      rowIds: rows.filter((row) => row.speaker === speakerId &&
-        row.diarizationRunId === anchor.diarizationRunId).map((row) => row.id),
-      target: { runId: anchor.diarizationRunId, clusterId: speakerId },
-      name: displayName, profileId, email });
-  }, [commitSpeakerCorrection, displaySegments, isRecording]);
+  const handleMapSpeaker = useCallback(
+    async (
+      speakerId: string,
+      displayName: string,
+      email?: string | null,
+      profileId?: number | null
+    ) => {
+      const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+      const anchor = rows.find((row) => row.speaker === speakerId);
+      if (!anchor) return;
+      await commitSpeakerCorrection({
+        type: "apply",
+        id: crypto.randomUUID(),
+        scope: "cluster",
+        rowIds: rows
+          .filter(
+            (row) => row.speaker === speakerId && row.diarizationRunId === anchor.diarizationRunId
+          )
+          .map((row) => row.id),
+        target: { runId: anchor.diarizationRunId, clusterId: speakerId },
+        name: displayName,
+        profileId,
+        email,
+      });
+    },
+    [commitSpeakerCorrection, displaySegments, isRecording]
+  );
 
   const handleConfirmSuggestion = useCallback(
     async (speakerId: string, suggestedName: string, profileId: number) => {
@@ -945,49 +1028,101 @@ export default function NoteEditor({
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedSegmentIds.size, handleClearSelection]);
 
-  const handleAssignSpeakerScope = useCallback(async (
-    scope: "row" | "selected" | "cluster", rowId: string, displayName: string | null, profileId?: number, email?: string | null
-  ) => {
-    const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
-    const row = rows.find((segment) => segment.id === rowId);
-    if (!row) return;
-    const rowIds = scope === "selected" ? [...selectedSegmentIds] : scope === "cluster"
-      ? rows.filter((segment) => segment.speaker === row.speaker &&
-          segment.diarizationRunId === row.diarizationRunId).map((segment) => segment.id)
-      : [rowId];
-    const ok = await commitSpeakerCorrection({ type: "apply", id: crypto.randomUUID(), scope,
-      rowIds, target: scope === "cluster"
-        ? { runId: row.diarizationRunId, clusterId: row.speaker } : undefined,
-      name: displayName, profileId, email });
-    if (ok && scope === "selected") handleClearSelection();
-  }, [commitSpeakerCorrection, displaySegments, handleClearSelection, isRecording, selectedSegmentIds]);
+  const handleAssignSpeakerScope = useCallback(
+    async (
+      scope: "row" | "selected" | "cluster",
+      rowId: string,
+      displayName: string | null,
+      profileId?: number,
+      email?: string | null
+    ) => {
+      const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+      const row = rows.find((segment) => segment.id === rowId);
+      if (!row) return;
+      const rowIds =
+        scope === "selected"
+          ? [...selectedSegmentIds]
+          : scope === "cluster"
+            ? rows
+                .filter(
+                  (segment) =>
+                    segment.speaker === row.speaker &&
+                    segment.diarizationRunId === row.diarizationRunId
+                )
+                .map((segment) => segment.id)
+            : [rowId];
+      const ok = await commitSpeakerCorrection({
+        type: "apply",
+        id: crypto.randomUUID(),
+        scope,
+        rowIds,
+        target:
+          scope === "cluster" ? { runId: row.diarizationRunId, clusterId: row.speaker } : undefined,
+        name: displayName,
+        profileId,
+        email,
+      });
+      if (ok && scope === "selected") handleClearSelection();
+    },
+    [
+      commitSpeakerCorrection,
+      displaySegments,
+      handleClearSelection,
+      isRecording,
+      selectedSegmentIds,
+    ]
+  );
 
-  const handleUndoSpeakerCorrection = useCallback(async (correctionId: string) => {
-    await commitSpeakerCorrection({ type: "undo", id: correctionId });
-  }, [commitSpeakerCorrection]);
+  const handleUndoSpeakerCorrection = useCallback(
+    async (correctionId: string) => {
+      await commitSpeakerCorrection({ type: "undo", id: correctionId });
+    },
+    [commitSpeakerCorrection]
+  );
 
-  const handleSplitCluster = useCallback(async (rowId: string) => {
-    const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
-    const row = rows.find((segment) => segment.id === rowId);
-    if (!row?.speaker) return;
-    const cluster = rows.filter((segment) => segment.speaker === row.speaker &&
-      segment.diarizationRunId === row.diarizationRunId);
-    const selected = cluster.filter((segment) => selectedSegmentIds.has(segment.id));
-    const seeds = selected.length > 0 && selected.length < cluster.length ? selected : [row];
-    const ok = await commitSpeakerCorrection({ type: "split", id: crypto.randomUUID(),
-      target: { runId: row.diarizationRunId, clusterId: row.speaker },
-      rowIds: seeds.map((segment) => segment.id) });
-    if (ok) handleClearSelection();
-  }, [commitSpeakerCorrection, displaySegments, handleClearSelection, isRecording, selectedSegmentIds]);
+  const handleSplitCluster = useCallback(
+    async (rowId: string) => {
+      const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+      const row = rows.find((segment) => segment.id === rowId);
+      if (!row?.speaker) return;
+      const cluster = rows.filter(
+        (segment) =>
+          segment.speaker === row.speaker && segment.diarizationRunId === row.diarizationRunId
+      );
+      const selected = cluster.filter((segment) => selectedSegmentIds.has(segment.id));
+      const seeds = selected.length > 0 && selected.length < cluster.length ? selected : [row];
+      const ok = await commitSpeakerCorrection({
+        type: "split",
+        id: crypto.randomUUID(),
+        target: { runId: row.diarizationRunId, clusterId: row.speaker },
+        rowIds: seeds.map((segment) => segment.id),
+      });
+      if (ok) handleClearSelection();
+    },
+    [
+      commitSpeakerCorrection,
+      displaySegments,
+      handleClearSelection,
+      isRecording,
+      selectedSegmentIds,
+    ]
+  );
 
-  const handleBulkAssignName = useCallback(async (
-    displayName: string, _email?: string | null, profileId?: number
-  ) => {
-    if (!selectedSegmentIds.size) return;
-    const ok = await commitSpeakerCorrection({ type: "apply", id: crypto.randomUUID(),
-      scope: "selected", rowIds: [...selectedSegmentIds], name: displayName, profileId });
-    if (ok) handleClearSelection();
-  }, [commitSpeakerCorrection, selectedSegmentIds, handleClearSelection]);
+  const handleBulkAssignName = useCallback(
+    async (displayName: string, _email?: string | null, profileId?: number) => {
+      if (!selectedSegmentIds.size) return;
+      const ok = await commitSpeakerCorrection({
+        type: "apply",
+        id: crypto.randomUUID(),
+        scope: "selected",
+        rowIds: [...selectedSegmentIds],
+        name: displayName,
+        profileId,
+      });
+      if (ok) handleClearSelection();
+    },
+    [commitSpeakerCorrection, selectedSegmentIds, handleClearSelection]
+  );
 
   const handleTitleInput = useCallback(() => {
     if (titleRef.current) {
@@ -1151,23 +1286,35 @@ export default function NoteEditor({
     if (fresh) updateNoteInStore(fresh);
   }, [conflict, note.client_note_id, note.folder_id, note.id, note.space_id, onCancelPendingSaves]);
 
-  const handleCloudLabels = useCallback(async (undo = false) => {
-    try {
-      await onFlushPendingSaves?.(note.id);
-      const result = await window.electronAPI.takeCloudSpeakerLabels?.(note.id, undo);
-      if (!result?.success || !result.note) {
-        setSpeakerCorrectionError(t(result?.error === "history_quarantined" ? "notes.speaker.historyQuarantined" : "notes.speaker.correctionSaveFailed"));
-        return;
+  const handleCloudLabels = useCallback(
+    async (undo = false) => {
+      try {
+        await onFlushPendingSaves?.(note.id);
+        const result = await window.electronAPI.takeCloudSpeakerLabels?.(note.id, undo);
+        if (!result?.success || !result.note) {
+          setSpeakerCorrectionError(
+            t(
+              result?.error === "history_quarantined"
+                ? "notes.speaker.historyQuarantined"
+                : "notes.speaker.correctionSaveFailed"
+            )
+          );
+          return;
+        }
+        updateNoteInStore(result.note);
+        setDiarizedSegments(null);
+        const mappings = await window.electronAPI.getSpeakerMappings?.(note.id);
+        setSpeakerMappings(
+          Object.fromEntries(
+            (mappings || []).map((mapping) => [mapping.speaker_id, mapping.display_name])
+          )
+        );
+      } catch {
+        setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
       }
-      updateNoteInStore(result.note);
-      setDiarizedSegments(null);
-      const mappings = await window.electronAPI.getSpeakerMappings?.(note.id);
-      setSpeakerMappings(Object.fromEntries((mappings || []).map((mapping) =>
-        [mapping.speaker_id, mapping.display_name])));
-    } catch {
-      setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
-    }
-  }, [note.id, onFlushPendingSaves, t]);
+    },
+    [note.id, onFlushPendingSaves, t]
+  );
 
   // Keep the local edits, overwriting the cloud revision the user just saw.
   // Advancing the base first is what lets the next push succeed instead of
@@ -1238,14 +1385,29 @@ export default function NoteEditor({
             aria-label={t("notes.editor.noteTitle")}
           />
           <div className="mt-3 flex flex-wrap items-center gap-2 [&>*]:max-w-full">
-            {routineLinks?.source && <button type="button" className={NOTE_META_CHIP_CLASS}
-              onClick={() => void window.electronAPI.routineOpenLinkedNote(routineLinks.source!.id)}>
-              {routineLinks.source.title}
-            </button>}
-            {routineLinks?.event && (routineLinks.event.url
-              ? <button type="button" className={NOTE_META_CHIP_CLASS}
-                  onClick={() => void window.electronAPI.openExternal(routineLinks.event!.url!)}>{routineLinks.event.title}</button>
-              : <span className={NOTE_META_CHIP_CLASS}>{routineLinks.event.title}</span>)}
+            {routineLinks?.source && (
+              <button
+                type="button"
+                className={NOTE_META_CHIP_CLASS}
+                onClick={() =>
+                  void window.electronAPI.routineOpenLinkedNote(routineLinks.source!.id)
+                }
+              >
+                {routineLinks.source.title}
+              </button>
+            )}
+            {routineLinks?.event &&
+              (routineLinks.event.url ? (
+                <button
+                  type="button"
+                  className={NOTE_META_CHIP_CLASS}
+                  onClick={() => void window.electronAPI.openExternal(routineLinks.event!.url!)}
+                >
+                  {routineLinks.event.title}
+                </button>
+              ) : (
+                <span className={NOTE_META_CHIP_CLASS}>{routineLinks.event.title}</span>
+              ))}
             <NoteParticipants
               noteId={note.id}
               participants={parsedParticipants}
@@ -1507,21 +1669,39 @@ export default function NoteEditor({
               </div>
             </div>
             <div className="flex w-full shrink-0 flex-wrap items-center gap-2 @[650px]/note-editor:w-auto">
-              {viewMode === "transcript" && !isRecording && note.cloud_transcript &&
-                <button type="button" onClick={() => void handleCloudLabels(false)}
-                  className="rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5">
+              {viewMode === "transcript" && !isRecording && note.cloud_transcript && (
+                <button
+                  type="button"
+                  onClick={() => void handleCloudLabels(false)}
+                  className="rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5"
+                >
                   {t("notes.speaker.useCloudLabels")}
-                </button>}
-              {viewMode === "transcript" && !isRecording && canUndoCloudLabels &&
-                <button type="button" onClick={() => void handleCloudLabels(true)}
-                  className="rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5">
+                </button>
+              )}
+              {viewMode === "transcript" && !isRecording && canUndoCloudLabels && (
+                <button
+                  type="button"
+                  onClick={() => void handleCloudLabels(true)}
+                  className="rounded-md border border-border/70 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5"
+                >
                   {t("notes.speaker.undoCloudLabels")}
-                </button>}
-              {reviewCount > 0 && !isRecording && <button type="button" aria-pressed={reviewOnly}
-                onClick={() => { setSelectedViewMode("transcript"); setReviewOnly((current) => !current); }}
-                className="rounded-md border border-border/70 bg-surface-2/40 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-ring">
-                {reviewOnly ? t("notes.speaker.showAll") : t("notes.speaker.reviewStretches", { n: reviewCount })}
-              </button>}
+                </button>
+              )}
+              {reviewCount > 0 && !isRecording && (
+                <button
+                  type="button"
+                  aria-pressed={reviewOnly}
+                  onClick={() => {
+                    setSelectedViewMode("transcript");
+                    setReviewOnly((current) => !current);
+                  }}
+                  className="rounded-md border border-border/70 bg-surface-2/40 px-2.5 py-1.5 text-xs font-medium hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  {reviewOnly
+                    ? t("notes.speaker.showAll")
+                    : t("notes.speaker.reviewStretches", { n: reviewCount })}
+                </button>
+              )}
               {canEditNote && (
                 <NoteRecordControl
                   isRecording={isRecording}
@@ -1593,14 +1773,30 @@ export default function NoteEditor({
           </div>
         )}
 
-        {speakerHistoryQuarantined && <p role="status" className="px-4 py-2 text-sm text-destructive">{t("notes.speaker.historyQuarantined")}</p>}
-        {speakerCorrectionError && <p role="alert" className="px-4 py-2 text-sm text-destructive">{speakerCorrectionError}</p>}
-        {isRecording && speakerAnchorStatus && <p role="status" className="px-4 py-2 text-xs text-muted-foreground">
-          {speakerAnchorStatus.state === "active"
-            ? t("notes.speaker.anchorActive")
-            : t(`notes.speaker.anchorReason.${speakerAnchorStatus.reason || "not_current_meeting"}`)}
-        </p>}
-        {speakerSplitReport && <p role="status" className="px-4 py-2 text-sm text-muted-foreground">{speakerSplitReport}</p>}
+        {speakerHistoryQuarantined && (
+          <p role="status" className="px-4 py-2 text-sm text-destructive">
+            {t("notes.speaker.historyQuarantined")}
+          </p>
+        )}
+        {speakerCorrectionError && (
+          <p role="alert" className="px-4 py-2 text-sm text-destructive">
+            {speakerCorrectionError}
+          </p>
+        )}
+        {isRecording && speakerAnchorStatus && (
+          <p role="status" className="px-4 py-2 text-xs text-muted-foreground">
+            {speakerAnchorStatus.state === "active"
+              ? t("notes.speaker.anchorActive")
+              : t(
+                  `notes.speaker.anchorReason.${speakerAnchorStatus.reason || "not_current_meeting"}`
+                )}
+          </p>
+        )}
+        {speakerSplitReport && (
+          <p role="status" className="px-4 py-2 text-sm text-muted-foreground">
+            {speakerSplitReport}
+          </p>
+        )}
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
@@ -1618,7 +1814,9 @@ export default function NoteEditor({
                   sessionDiarizationEnabled={sessionDiarizationEnabled}
                   sessionExpectedCount={sessionExpectedCount}
                   userTouchedStepper={userTouchedStepper}
-                  onSetSessionDiarizationEnabled={canEditNote ? onSetSessionDiarizationEnabled : undefined}
+                  onSetSessionDiarizationEnabled={
+                    canEditNote ? onSetSessionDiarizationEnabled : undefined
+                  }
                   onSetSessionExpectedCount={canEditNote ? onSetSessionExpectedCount : undefined}
                   onMapSpeaker={canEditNote ? handleMapSpeaker : undefined}
                   onAssignSpeakerScope={canEditNote ? handleAssignSpeakerScope : undefined}
@@ -1643,7 +1841,9 @@ export default function NoteEditor({
                   sessionDiarizationEnabled={sessionDiarizationEnabled}
                   sessionExpectedCount={sessionExpectedCount}
                   userTouchedStepper={userTouchedStepper}
-                  onSetSessionDiarizationEnabled={canEditNote ? onSetSessionDiarizationEnabled : undefined}
+                  onSetSessionDiarizationEnabled={
+                    canEditNote ? onSetSessionDiarizationEnabled : undefined
+                  }
                   onSetSessionExpectedCount={canEditNote ? onSetSessionExpectedCount : undefined}
                   onMapSpeaker={canEditNote ? handleMapSpeaker : undefined}
                   onAssignSpeakerScope={canEditNote ? handleAssignSpeakerScope : undefined}

@@ -125,16 +125,25 @@ async function consolidateClusters(segments, expectedCount, wavPath, embeddings,
   }
   if (!(centroids instanceof Map)) return { segments, producedCount, finalCount: producedCount };
   const ids = [...new Set(segments.map((segment) => segment.speaker))];
-  const scores = (id) => ids.filter((other) => other !== id && centroids.has(other))
-    .map((other) => ({ other, score: embeddings.cosineSimilarity(centroids.get(id), centroids.get(other)) }))
-    .sort((a, b) => b.score - a.score);
+  const scores = (id) =>
+    ids
+      .filter((other) => other !== id && centroids.has(other))
+      .map((other) => ({
+        other,
+        score: embeddings.cosineSimilarity(centroids.get(id), centroids.get(other)),
+      }))
+      .sort((a, b) => b.score - a.score);
   const proposals = [];
   for (const id of ids) {
     if (!centroids.has(id)) continue;
     const [best, second] = scores(id);
     if (!best || best.score < 0.93 || best.score - (second?.score ?? 0) < 0.08) continue;
     const reverse = scores(best.other);
-    if (reverse[0]?.other === id && reverse[0].score - (reverse[1]?.score ?? 0) >= 0.08 && id < best.other) {
+    if (
+      reverse[0]?.other === id &&
+      reverse[0].score - (reverse[1]?.score ?? 0) >= 0.08 &&
+      id < best.other
+    ) {
       proposals.push({ keep: id, remove: best.other, score: best.score });
     }
   }
@@ -145,8 +154,11 @@ async function consolidateClusters(segments, expectedCount, wavPath, embeddings,
     if (replacements.has(proposal.keep) || replacements.has(proposal.remove)) continue;
     replacements.set(proposal.remove, proposal.keep);
   }
-  const result = segments.map((segment) => replacements.has(segment.speaker)
-    ? { ...segment, speaker: replacements.get(segment.speaker) } : segment);
+  const result = segments.map((segment) =>
+    replacements.has(segment.speaker)
+      ? { ...segment, speaker: replacements.get(segment.speaker) }
+      : segment
+  );
   return { segments: result, producedCount, finalCount: producedCount - replacements.size };
 }
 

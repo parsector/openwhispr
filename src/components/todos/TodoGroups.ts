@@ -16,9 +16,18 @@ export function groupFor(row: Commitment, now = new Date()): TodoGroup {
   return "upcoming";
 }
 
-export function groupTodos(rows: Commitment[], now = new Date()): Array<{ key: TodoGroup; rows: Commitment[] }> {
+export function groupTodos(
+  rows: Commitment[],
+  now = new Date()
+): Array<{ key: TodoGroup; rows: Commitment[] }> {
   return GROUP_ORDER.map((key) => ({ key, rows: rows.filter((row) => groupFor(row, now) === key) }))
     .filter((group) => group.rows.length)
-    .map((group) => ({ ...group, rows: group.rows.sort((a, b) =>
-      (a.due_date || "9999").localeCompare(b.due_date || "9999") || a.created_at.localeCompare(b.created_at)) }));
+    .map((group) => ({
+      ...group,
+      rows: group.rows.sort(
+        (a, b) =>
+          (a.due_date || "9999").localeCompare(b.due_date || "9999") ||
+          a.created_at.localeCompare(b.created_at)
+      ),
+    }));
 }

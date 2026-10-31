@@ -1,6 +1,14 @@
 const { searchNotes } = require("../../../helpers/noteSearch");
-const { definitions: todoDefinitions, listTodos, getTodo } = require("../../../helpers/commitments/toolRead");
-const { definitions: todoWriteDefinitions, createTodo, updateTodo } = require("../../../helpers/commitments/toolWrite");
+const {
+  definitions: todoDefinitions,
+  listTodos,
+  getTodo,
+} = require("../../../helpers/commitments/toolRead");
+const {
+  definitions: todoWriteDefinitions,
+  createTodo,
+  updateTodo,
+} = require("../../../helpers/commitments/toolWrite");
 
 const definitions = [
   {
@@ -39,8 +47,18 @@ const definitions = [
       additionalProperties: false,
     },
   },
-  ...todoDefinitions.map(({ name, description, parameters }) => ({ name, description, inputSchema: parameters, scope: null })),
-  ...todoWriteDefinitions.map(({ name, description, parameters, scope }) => ({ name, description, inputSchema: parameters, scope })),
+  ...todoDefinitions.map(({ name, description, parameters }) => ({
+    name,
+    description,
+    inputSchema: parameters,
+    scope: null,
+  })),
+  ...todoWriteDefinitions.map(({ name, description, parameters, scope }) => ({
+    name,
+    description,
+    inputSchema: parameters,
+    scope,
+  })),
 ];
 
 function capResult(value) {
@@ -84,7 +102,12 @@ function createTools(database, getSemanticSearch, onTodosChanged = () => {}) {
     const definition = definitions.find((tool) => tool.name === name);
     if (!definition) throw new Error("Unknown tool");
     if (keys.some((key) => !(key in definition.inputSchema.properties)))
-      throw Object.assign(new Error(`Unknown argument. Allowed: ${Object.keys(definition.inputSchema.properties).join(", ")}.`), { code: -32602 });
+      throw Object.assign(
+        new Error(
+          `Unknown argument. Allowed: ${Object.keys(definition.inputSchema.properties).join(", ")}.`
+        ),
+        { code: -32602 }
+      );
     const spaces = database.getSpaces();
     const spaceNames = new Map(spaces.map((space) => [space.id, space.name]));
     let result;

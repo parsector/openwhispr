@@ -111,13 +111,17 @@ export function mergeSessionDiarization(params: {
       counts.set(row.speaker, (counts.get(row.speaker) || 0) + 1);
       groups.set(key, counts);
     }
-    const winners = new Map([...groups].map(([key, counts]) =>
-      [key, [...counts].sort((a, b) => b[1] - a[1])[0][0]]));
-    return normalizeTranscriptSegments(rows.map((row) => {
-      if (!row.unknownNumber || !row.speaker) return row;
-      const key = `${row.diarizationRunId || "legacy"}:${row.unknownNumber}`;
-      return winners.get(key) === row.speaker ? row : { ...row, unknownNumber: undefined };
-    }), params.unknownNumberHighWater);
+    const winners = new Map(
+      [...groups].map(([key, counts]) => [key, [...counts].sort((a, b) => b[1] - a[1])[0][0]])
+    );
+    return normalizeTranscriptSegments(
+      rows.map((row) => {
+        if (!row.unknownNumber || !row.speaker) return row;
+        const key = `${row.diarizationRunId || "legacy"}:${row.unknownNumber}`;
+        return winners.get(key) === row.speaker ? row : { ...row, unknownNumber: undefined };
+      }),
+      params.unknownNumberHighWater
+    );
   };
   const seededCount = Math.min(seedLength, existing.length);
   const sessionRows = existing.slice(seededCount);
@@ -137,7 +141,10 @@ export function mergeSessionDiarization(params: {
   }
   const keptRows = withoutRemovedSegments(sessionRows, removedSegments);
   return {
-    segments: complete([...existing.slice(0, seededCount), ...mergeTranscriptSegments(keptRows, incoming, params.unknownNumberHighWater, true)]),
+    segments: complete([
+      ...existing.slice(0, seededCount),
+      ...mergeTranscriptSegments(keptRows, incoming, params.unknownNumberHighWater, true),
+    ]),
     removedCount: sessionRows.length - keptRows.length,
   };
 }

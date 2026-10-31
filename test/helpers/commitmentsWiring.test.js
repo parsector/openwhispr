@@ -12,7 +12,7 @@ test("meeting finalize schedules extraction after returning from the IPC listene
   assert.match(handler, /setImmediate\(\(\) => \{/);
   assert.match(handler, /extractCommitments\(/);
   assert.doesNotMatch(handler, /await\s+extractCommitments\(/);
-  assert.match(handler, /\.catch\(\(error\) => debugLogger\.error/);
+  assert.match(handler, /\.catch\(\(error\) =>\s*debugLogger\.error\(/);
 });
 
 test("note scoped lookup and Todos navigation use narrow IPC channels", () => {

@@ -131,12 +131,22 @@ export default function MeetingNotificationOverlay(): ReactElement {
       return;
     }
     let active = true;
-    const refresh = () => { void window.electronAPI.commitmentsList().then((rows) => {
-      if (active) setBriefRows(rows);
-    }).catch(() => { if (active) setBriefRows([]); }); };
+    const refresh = () => {
+      void window.electronAPI
+        .commitmentsList()
+        .then((rows) => {
+          if (active) setBriefRows(rows);
+        })
+        .catch(() => {
+          if (active) setBriefRows([]);
+        });
+    };
     refresh();
     const off = window.electronAPI.onCommitmentsUpdated(refresh);
-    return () => { active = false; off(); };
+    return () => {
+      active = false;
+      off();
+    };
   }, [data]);
   useEffect(() => {
     const offClose = window.electronAPI.onMeetingNotificationSurfaceClosed?.((state) => {
@@ -463,57 +473,87 @@ export default function MeetingNotificationOverlay(): ReactElement {
         <div data-meeting-region="card">
           {isPostMeetingCommitments(data) ? (
             <div className="relative rounded-xl bg-background p-4 shadow-[0_20px_42px_color-mix(in_srgb,var(--color-foreground)_18%,transparent)]">
-              <button type="button" onClick={() => void respond("dismiss")}
+              <button
+                type="button"
+                onClick={() => void respond("dismiss")}
                 aria-label={t("meetingNotification.folders.dismiss")}
-                className="absolute end-3 top-2 text-sm text-muted-foreground hover:text-foreground"><X size={14} /></button>
+                className="absolute end-3 top-2 text-sm text-muted-foreground hover:text-foreground"
+              >
+                <X size={14} />
+              </button>
               <ProposalsBanner noteId={data!.commitmentsNoteId} compact />
             </div>
           ) : (
-          <MeetingNotificationCard
-            title={title}
-            body={body}
-            startLabel={t(presentation.actionKey)}
-            onStart={() => void respond(presentation.action)}
-            busy={busy}
-            dismissLabel={t("meetingNotification.folders.dismiss")}
-            picker={
-              data ? (
-                <button
-                  type="button"
-                  className={`meeting-folder-trigger feedback-${feedback}`}
-                  aria-label={t("meetingNotification.folders.choose")}
-                  aria-haspopup="dialog"
-                  aria-expanded={mode !== "closed"}
-                  disabled={busy}
-                  onClick={() => {
-                    if (modeRef.current === "closed") {
-                      changeMode("list");
-                      void loadContext();
-                    } else changeMode("closed");
-                  }}
-                >
-                  <ChevronDown className="meeting-folder-chevron size-3" />
-                  <Check className="meeting-folder-confirmation size-3" />
-                </button>
-              ) : undefined
-            }
-            prepAction={data?.variant === "starting" && data.prepNoteId ? (
-              <button type="button" className="text-xs text-primary underline" onClick={() => void window.electronAPI.meetingNotificationOpenPrep?.(data.prepNoteId!)}>
-                {t("meetingNotification.openPrep")}
-              </button>
-            ) : undefined}
-            prepCommitments={data?.variant === "starting" ? <PreMeetingBrief
-              people={buildPreMeetingBrief(parseBriefAttendees(data.event?.attendees), briefRows)}
-              onComplete={(row) => { void window.electronAPI.commitmentsUpdate(row.id, { status: "completed" }).then(() => {
-                setBriefRows((current) => current.filter((item) => item.id !== row.id));
-              }); }}
-              onMore={(person) => { void window.electronAPI.commitmentsOpenTodos({ kind: "person", value: person.label, email: person.email }); }}
-            /> : undefined}
-            onDismiss={presentation.dismissible ? dismiss : undefined}
-            closeVisible={isHovered}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-          />
+            <MeetingNotificationCard
+              title={title}
+              body={body}
+              startLabel={t(presentation.actionKey)}
+              onStart={() => void respond(presentation.action)}
+              busy={busy}
+              dismissLabel={t("meetingNotification.folders.dismiss")}
+              picker={
+                data ? (
+                  <button
+                    type="button"
+                    className={`meeting-folder-trigger feedback-${feedback}`}
+                    aria-label={t("meetingNotification.folders.choose")}
+                    aria-haspopup="dialog"
+                    aria-expanded={mode !== "closed"}
+                    disabled={busy}
+                    onClick={() => {
+                      if (modeRef.current === "closed") {
+                        changeMode("list");
+                        void loadContext();
+                      } else changeMode("closed");
+                    }}
+                  >
+                    <ChevronDown className="meeting-folder-chevron size-3" />
+                    <Check className="meeting-folder-confirmation size-3" />
+                  </button>
+                ) : undefined
+              }
+              prepAction={
+                data?.variant === "starting" && data.prepNoteId ? (
+                  <button
+                    type="button"
+                    className="text-xs text-primary underline"
+                    onClick={() =>
+                      void window.electronAPI.meetingNotificationOpenPrep?.(data.prepNoteId!)
+                    }
+                  >
+                    {t("meetingNotification.openPrep")}
+                  </button>
+                ) : undefined
+              }
+              prepCommitments={
+                data?.variant === "starting" ? (
+                  <PreMeetingBrief
+                    people={buildPreMeetingBrief(
+                      parseBriefAttendees(data.event?.attendees),
+                      briefRows
+                    )}
+                    onComplete={(row) => {
+                      void window.electronAPI
+                        .commitmentsUpdate(row.id, { status: "completed" })
+                        .then(() => {
+                          setBriefRows((current) => current.filter((item) => item.id !== row.id));
+                        });
+                    }}
+                    onMore={(person) => {
+                      void window.electronAPI.commitmentsOpenTodos({
+                        kind: "person",
+                        value: person.label,
+                        email: person.email,
+                      });
+                    }}
+                  />
+                ) : undefined
+              }
+              onDismiss={presentation.dismissible ? dismiss : undefined}
+              closeVisible={isHovered}
+              onMouseEnter={handleMouseEnter}
+              onMouseLeave={handleMouseLeave}
+            />
           )}
         </div>
         {mode !== "closed" && !isPostMeetingCommitments(data) && (

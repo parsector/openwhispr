@@ -7,7 +7,7 @@ const withoutIds = (transcript) => {
   const rows = JSON.parse(transcript);
   assert.equal(new Set(rows.map((row) => row.id)).size, rows.length);
   for (const row of rows) assert.match(row.id, /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i);
-  return rows.map(({ id, ...row }) => row);
+  return rows.map(({ id: _id, ...row }) => row);
 };
 
 test("maps the diarization settings onto the note columns", async () => {

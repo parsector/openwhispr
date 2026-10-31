@@ -22,7 +22,16 @@ fs.closeSync(fd);
 if (input.subarray(0, 4).toString() !== 'RIFF' || input.readUInt32LE(40) !== input.length - 44) process.exit(2);
 process.stdout.write('0 -- 1 speaker_0\\n');
 `, { mode: 0o700 });
-  const manager = new DiarizationManager();
+  const manager = new DiarizationManager({
+    pcmConverter(pcm, fromRate, toRate) {
+      assert.equal(fromRate, 24000);
+      assert.equal(toRate, 16000);
+      const converted = Buffer.alloc(Math.round(pcm.length / 2 * toRate / fromRate) * 2);
+      for (let i = 0; i < converted.length / 2; i++)
+        converted.writeInt16LE(pcm.readInt16LE(Math.floor(i * fromRate / toRate) * 2), i * 2);
+      return converted;
+    },
+  });
   manager.getBinaryPath = () => mock;
   manager.isModelDownloaded = () => true;
   manager._resolveModelPath = () => mock;
@@ -32,6 +41,7 @@ process.stdout.write('0 -- 1 speaker_0\\n');
   assert.equal(wav.subarray(0, 4).toString(), "RIFF");
   assert.equal(wav.readUInt32LE(24), 16000);
   assert.equal(wav.readUInt32LE(40), wav.length - 44);
+  assert.equal(wav.length - 44, 2 * 16000 * 2);
   assert.deepEqual(await manager.diarize(wav, { pipeRoot: root }), [{ start: 0, end: 1, speaker: "speaker_0" }]);
   assert.deepEqual(fs.readdirSync(root), ["diarizer"]);
 });

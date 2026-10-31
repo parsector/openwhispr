@@ -10,7 +10,11 @@ export const getTodoTool: ToolDefinition = {
     try {
       return await window.electronAPI.todosToolGet(args);
     } catch (error) {
-      return { success: false, data: null, displayText: `Failed to get todo: ${(error as Error).message}` };
+      return {
+        success: false,
+        data: null,
+        displayText: `Failed to get todo: ${(error as Error).message}`,
+      };
     }
   },
 };

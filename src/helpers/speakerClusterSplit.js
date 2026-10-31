@@ -3,9 +3,13 @@ const { getFFmpegPath } = require("./ffmpegUtils");
 
 function cosine(a, b) {
   if (!a || !b || a.length !== b.length) return -1;
-  let dot = 0, aa = 0, bb = 0;
+  let dot = 0,
+    aa = 0,
+    bb = 0;
   for (let i = 0; i < a.length; i += 1) {
-    dot += a[i] * b[i]; aa += a[i] * a[i]; bb += b[i] * b[i];
+    dot += a[i] * b[i];
+    aa += a[i] * a[i];
+    bb += b[i] * b[i];
   }
   return aa && bb ? dot / Math.sqrt(aa * bb) : -1;
 }
@@ -23,8 +27,12 @@ function partitionClusterByVoice(clusterIds, selectedIds, embeddings) {
   const bVectors = selectedIds.map((id) => embeddings.get(id)).filter(Boolean);
   const b = bVectors.length ? centroid(bVectors) : null;
   const possibleA = clusterIds.filter((id) => !selected.has(id) && embeddings.has(id));
-  const aId = b && possibleA.length ? possibleA.sort((left, right) =>
-    cosine(embeddings.get(left), b) - cosine(embeddings.get(right), b))[0] : null;
+  const aId =
+    b && possibleA.length
+      ? possibleA.sort(
+          (left, right) => cosine(embeddings.get(left), b) - cosine(embeddings.get(right), b)
+        )[0]
+      : null;
   if (aId) {
     const a = embeddings.get(aId);
     const seedSimilarity = cosine(a, b);
@@ -36,15 +44,34 @@ function partitionClusterByVoice(clusterIds, selectedIds, embeddings) {
         moved.add(id);
     }
   }
-  return { movedIds: clusterIds.filter((id) => moved.has(id)),
+  return {
+    movedIds: clusterIds.filter((id) => moved.has(id)),
     retainedIds: clusterIds.filter((id) => !moved.has(id)),
-    acousticRows: [...moved].filter((id) => !selected.has(id)).length };
+    acousticRows: [...moved].filter((id) => !selected.has(id)).length,
+  };
 }
 
 function wavTo16kSamples(wav) {
-  const result = spawnSync(getFFmpegPath(), ["-hide_banner", "-loglevel", "error",
-    "-f", "wav", "-i", "pipe:0", "-f", "f32le", "-ar", "16000", "-ac", "1", "pipe:1"],
-  { input: wav, maxBuffer: 2 * 1024 * 1024, windowsHide: true });
+  const result = spawnSync(
+    getFFmpegPath(),
+    [
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-f",
+      "wav",
+      "-i",
+      "pipe:0",
+      "-f",
+      "f32le",
+      "-ar",
+      "16000",
+      "-ac",
+      "1",
+      "pipe:1",
+    ],
+    { input: wav, maxBuffer: 2 * 1024 * 1024, windowsHide: true }
+  );
   if (result.status !== 0 || !result.stdout?.length) return null;
   const samples = new Float32Array(result.stdout.length / 4);
   for (let i = 0; i < samples.length; i += 1) samples[i] = result.stdout.readFloatLE(i * 4);
@@ -59,8 +86,13 @@ async function proposeClusterSplit(rows, selectedIds, noteId, audioStore, extrac
   if (track && extractor?.isAvailable?.()) {
     for (const row of rows) {
       const span = row.audioSpan;
-      if (!span || span.recordingId !== (audioStore.status(noteId).recordingId ?? noteId) || span.trackId !== track ||
-        row.uncertainty?.reason === "overlapping_speech") continue;
+      if (
+        !span ||
+        span.recordingId !== (audioStore.status(noteId).recordingId ?? noteId) ||
+        span.trackId !== track ||
+        row.uncertainty?.reason === "overlapping_speech"
+      )
+        continue;
       const end = span.endSample / 24000;
       const start = Math.max(span.startSample / 24000, end - 8);
       if (end - start < 1.5) continue;

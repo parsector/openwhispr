@@ -27,7 +27,9 @@ function writeAutoUpdatesEnabled(userData, enabled) {
     fs.writeFileSync(temporary, JSON.stringify({ autoUpdatesEnabled: enabled }), { mode: 0o600 });
     fs.renameSync(temporary, file);
   } finally {
-    try { fs.unlinkSync(temporary); } catch (error) {
+    try {
+      fs.unlinkSync(temporary);
+    } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
   }

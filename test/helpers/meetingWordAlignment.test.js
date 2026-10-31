@@ -45,6 +45,29 @@ test("retained mic audio is decoded in bounded windows with recording-relative w
   ]);
 });
 
+test("word alignment resumes after a stopped recording gap", async () => {
+  const requests = [];
+  const words = await timedWordsFromStoredTrack({
+    noteId: 7, track: "system", durationSeconds: 605,
+    store: {
+      status: () => ({ tracks: { system: { chunks: [
+        { startSample: 0, sampleCount: 5 * 24000 },
+        { startSample: 600 * 24000, sampleCount: 5 * 24000 },
+      ] } } }),
+      span: (_id, _track, start, end) => {
+        requests.push([start, end]);
+        return { state: "available", wav: Buffer.from(String(start)) };
+      },
+    },
+    transcribe: async () => ({ segments: [{ text: "hello", start: 1, end: 1.6 }] }),
+  });
+  assert.deepEqual(requests, [[0, 5], [600, 605]]);
+  assert.deepEqual(words, [
+    { text: "hello", start: 1, end: 1.6 },
+    { text: "hello", start: 601, end: 601.6 },
+  ]);
+});
+
 test("aligned rows get exact spans even when speaker diarization is disabled", () => {
   const rows = withAudioSpans([{ id: "a", source: "mic", text: "hello",
     wordTimings: [{ word: "hello", start: 2, end: 2.4 }] },

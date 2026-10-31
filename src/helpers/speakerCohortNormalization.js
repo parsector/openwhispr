@@ -2,10 +2,11 @@
 // that resembles every voice in the room gets less credit than one distinctive
 // to this cluster. The raw cosine remains the safety gate for automatic naming.
 function rankProfiles(query, otherVoices, profiles, cosine) {
-  const ranked = profiles.map(profile => {
+  const ranked = profiles.map((profile) => {
     const raw = cosine(query, profile.embedding);
     const baseline = otherVoices.length
-      ? otherVoices.reduce((sum, voice) => sum + cosine(voice, profile.embedding), 0) / otherVoices.length
+      ? otherVoices.reduce((sum, voice) => sum + cosine(voice, profile.embedding), 0) /
+        otherVoices.length
       : 0;
     return { ...profile, raw, normalized: raw - baseline };
   });
@@ -13,6 +14,10 @@ function rankProfiles(query, otherVoices, profiles, cosine) {
   const cohortBest = otherVoices.length
     ? [...ranked].sort((a, b) => b.normalized - a.normalized)[0] || null
     : rawBest;
-  return { rawBest, cohortBest, changed: !!rawBest && !!cohortBest && rawBest.id !== cohortBest.id };
+  return {
+    rawBest,
+    cohortBest,
+    changed: !!rawBest && !!cohortBest && rawBest.id !== cohortBest.id,
+  };
 }
 module.exports = { rankProfiles };

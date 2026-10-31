@@ -187,9 +187,7 @@ const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
 const postMigrationDetector = require("./postMigrationDetector");
 const screenContextCapture = require("./screenContextCapture");
 const { classifyToneAppCategory } = require("./toneAppCategories");
-const {
-  MAX_SPEAKER_COUNT,
-} = require("../constants/speakerDetection.json");
+const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
 const { UPLOAD_AUDIO_EXTENSIONS } = require("../constants/uploadAudioFormats.json");
 const { providerContentType, prepareProviderUpload } = require("./providerUploadAudio");
 const {
@@ -708,17 +706,29 @@ class IPCHandlers {
     this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
+    require("./speakerDecisionThresholds").configure(
+      path.join(app.getPath("userData"), "speaker-decision-thresholds.json")
+    );
     this.meetingAudioStore = new MeetingAudioStore(
       path.join(app.getPath("userData"), "meeting-audio"),
-      { database: this.databaseManager, onChanged: (change) =>
-        broadcastToWindows("meeting-audio-changed", change), onEvicted: ({ title }) => {
-        try {
-          new Notification({ title: i18nMain.t("meetingAudio.evicted"),
-            body: i18nMain.t("meetingAudio.evictedNotes", { titles: title }) }).show();
-        } catch (error) {
-          debugLogger.warn("Could not notify audio eviction", { error: error.message }, "meeting");
-        }
-      } }
+      {
+        database: this.databaseManager,
+        onChanged: (change) => broadcastToWindows("meeting-audio-changed", change),
+        onEvicted: ({ title }) => {
+          try {
+            new Notification({
+              title: i18nMain.t("meetingAudio.evicted"),
+              body: i18nMain.t("meetingAudio.evictedNotes", { titles: title }),
+            }).show();
+          } catch (error) {
+            debugLogger.warn(
+              "Could not notify audio eviction",
+              { error: error.message },
+              "meeting"
+            );
+          }
+        },
+      }
     );
     this.localModelDownloadStatus = new LocalModelDownloadStatus();
     this._retentionCleanupInterval = null;
@@ -769,7 +779,16 @@ class IPCHandlers {
     } catch {
       this._routineModelChoice = null;
     }
-    const infer = async ({ model, prompt, toolsAvailable, registry, context, systemPrompt, responseFormat, maxTokens = 1800 }) => {
+    const infer = async ({
+      model,
+      prompt,
+      toolsAvailable,
+      registry,
+      context,
+      systemPrompt,
+      responseFormat,
+      maxTokens = 1800,
+    }) => {
       if (!model?.model) throw new Error("Choose a chat model before running a routine");
       let localRoute = null;
       if (model.mode === "local" && toolsAvailable) {
@@ -790,7 +809,9 @@ class IPCHandlers {
           }),
         };
       }
-      const customEndpoint = require("./routines/routineCustomEndpoint").routineCustomEndpoint(model);
+      const customEndpoint = require("./routines/routineCustomEndpoint").routineCustomEndpoint(
+        model
+      );
       if (model.mode === "openwhispr") {
         let runtimeUrl = "";
         try {
@@ -893,18 +914,20 @@ class IPCHandlers {
         return { text: noteText, toolsAvailable };
       }
       const customBaseUrl = customEndpoint?.baseUrl;
-      const route = localRoute || (customEndpoint
-        ? [null, customEndpoint.completionsUrl] : providers[model.provider]);
+      const route =
+        localRoute ||
+        (customEndpoint ? [null, customEndpoint.completionsUrl] : providers[model.provider]);
       if (!route && model.provider !== "tinfoil")
         throw new Error(`Routine model provider ${model.provider || model.mode} is unavailable`);
       const customChoice = this._routineModelChoice;
-      const matchesChosenEndpoint = customEndpoint &&
-        customBaseUrl === (customChoice?.cloudBaseUrl || customChoice?.remoteUrl);
-      const customKeySetting = matchesChosenEndpoint && customChoice?.useRoutinesEndpointKey
-        ? "Routines"
-        : matchesChosenEndpoint && customChoice?.useChatEndpointKey
-          ? "Chat"
-          : null;
+      const matchesChosenEndpoint =
+        customEndpoint && customBaseUrl === (customChoice?.cloudBaseUrl || customChoice?.remoteUrl);
+      const customKeySetting =
+        matchesChosenEndpoint && customChoice?.useRoutinesEndpointKey
+          ? "Routines"
+          : matchesChosenEndpoint && customChoice?.useChatEndpointKey
+            ? "Chat"
+            : null;
       const key = customEndpoint
         ? customKeySetting === "Routines"
           ? this.environmentManager.getRoutinesCustomKey()
@@ -918,7 +941,9 @@ class IPCHandlers {
             : null;
       if (customEndpoint && !key) {
         const setting = customKeySetting || "Routines";
-        throw new Error(`${setting} custom endpoint API key is missing. Set it in Settings → ${setting}.`);
+        throw new Error(
+          `${setting} custom endpoint API key is missing. Set it in Settings → ${setting}.`
+        );
       }
       if ((route?.[0] || model.provider === "tinfoil") && !key)
         throw new Error(`${model.provider} key is missing`);
@@ -1111,53 +1136,106 @@ class IPCHandlers {
       if (Number.isSafeInteger(noteId) && noteId > 0) this.routineScheduler.meetingStopped(noteId);
     });
     ipcMain.on("meeting-note-finalized", (_event, data) => {
-      if (Number.isSafeInteger(data?.noteId) && data.noteId > 0 &&
-        [true, false, "skipped"].includes(data.diarized)) {
+      if (
+        Number.isSafeInteger(data?.noteId) &&
+        data.noteId > 0 &&
+        [true, false, "skipped"].includes(data.diarized)
+      ) {
         this.routineScheduler.meetingFinalized(data.noteId, data.diarized);
         setImmediate(() => {
-          Promise.resolve().then(() => {
-            const note = this.databaseManager.getNote(data.noteId);
-            if (!note || note.deleted_at) return { skipped: true };
-            const { extractCommitments } = require("./commitments/extract");
-            return extractCommitments({ note, database: this.databaseManager,
-              model: this._routineModelChoice, infer: (options) => infer({ ...options, toolsAvailable: false }) });
-          })
+          Promise.resolve()
+            .then(() => {
+              const note = this.databaseManager.getNote(data.noteId);
+              if (!note || note.deleted_at) return { skipped: true };
+              const { extractCommitments } = require("./commitments/extract");
+              return extractCommitments({
+                note,
+                database: this.databaseManager,
+                model: this._routineModelChoice,
+                infer: (options) => infer({ ...options, toolsAvailable: false }),
+              });
+            })
             .then(async (result) => {
               if (result.skipped) return;
               broadcastToWindows("commitments-updated");
               if (result.proposals > 0 && !shownCommitmentCards.has(data.noteId)) {
                 shownCommitmentCards.add(data.noteId);
-                await this.windowManager.showMeetingNotification({
-                  detectionId: `commitments:${data.noteId}`, source: "commitments",
-                  key: `commitments:${data.noteId}`, event: null, variant: "commitments",
-                  joinUrl: null, commitmentsNoteId: data.noteId,
-                }, { autoDismiss: false });
+                await this.windowManager.showMeetingNotification(
+                  {
+                    detectionId: `commitments:${data.noteId}`,
+                    source: "commitments",
+                    key: `commitments:${data.noteId}`,
+                    event: null,
+                    variant: "commitments",
+                    joinUrl: null,
+                    commitmentsNoteId: data.noteId,
+                  },
+                  { autoDismiss: false }
+                );
               }
             })
-            .catch((error) => debugLogger.error("Commitment extraction failed", { error: error.message }, "commitments"));
+            .catch((error) =>
+              debugLogger.error(
+                "Commitment extraction failed",
+                { error: error.message },
+                "commitments"
+              )
+            );
         });
       }
     });
     const { CommitmentStore } = require("./commitments/store");
     const commitments = () => new CommitmentStore(this.databaseManager);
-    const changed = (value) => { if (value) broadcastToWindows("commitments-updated"); return value; };
-    ipcMain.handle("commitments-list", (_event, includeArchived = false) => commitments().list(includeArchived === true));
+    const changed = (value) => {
+      if (value) broadcastToWindows("commitments-updated");
+      return value;
+    };
+    ipcMain.handle("commitments-list", (_event, includeArchived = false) =>
+      commitments().list(includeArchived === true)
+    );
     ipcMain.handle("is-debug-enabled", () => debugLogger.isDebugEnabled());
     ipcMain.handle("commitments-delete", (_event, id) =>
-      require("./commitments/delete").deleteCommitment({
-        store: commitments(), debugLogger, broadcast: broadcastToWindows,
-      }, id));
-    ipcMain.handle("todos-tool-list", (_event, args) => require("./commitments/toolRead").listTodos(this.databaseManager, args));
-    ipcMain.handle("todos-tool-get", (_event, args) => require("./commitments/toolRead").getTodo(this.databaseManager, args));
-    ipcMain.handle("todos-tool-create", (_event, args) => changed(require("./commitments/toolWrite").createTodo(this.databaseManager, args, "Assistant")));
-    ipcMain.handle("todos-tool-update", (_event, args) => changed(require("./commitments/toolWrite").updateTodo(this.databaseManager, args, "Assistant")));
+      require("./commitments/delete").deleteCommitment(
+        {
+          store: commitments(),
+          debugLogger,
+          broadcast: broadcastToWindows,
+        },
+        id
+      )
+    );
+    ipcMain.handle("todos-tool-list", (_event, args) =>
+      require("./commitments/toolRead").listTodos(this.databaseManager, args)
+    );
+    ipcMain.handle("todos-tool-get", (_event, args) =>
+      require("./commitments/toolRead").getTodo(this.databaseManager, args)
+    );
+    ipcMain.handle("todos-tool-create", (_event, args) =>
+      changed(
+        require("./commitments/toolWrite").createTodo(this.databaseManager, args, "Assistant")
+      )
+    );
+    ipcMain.handle("todos-tool-update", (_event, args) =>
+      changed(
+        require("./commitments/toolWrite").updateTodo(this.databaseManager, args, "Assistant")
+      )
+    );
     ipcMain.handle("commitments-for-note", (_event, noteId) =>
-      Number.isSafeInteger(noteId) ? commitments().forNote(noteId) : []);
+      Number.isSafeInteger(noteId) ? commitments().forNote(noteId) : []
+    );
     ipcMain.handle("commitments-open-todos", async (_event, filter) => {
-      if (!filter || !["note", "person"].includes(filter.kind) ||
-          typeof filter.value !== "string" || !filter.value.trim()) return false;
-      this.windowManager._pendingTodosFilter = { kind: filter.kind, value: filter.value,
-        email: typeof filter.email === "string" ? filter.email : null };
+      if (
+        !filter ||
+        !["note", "person"].includes(filter.kind) ||
+        typeof filter.value !== "string" ||
+        !filter.value.trim()
+      )
+        return false;
+      this.windowManager._pendingTodosFilter = {
+        kind: filter.kind,
+        value: filter.value,
+        email: typeof filter.email === "string" ? filter.email : null,
+      };
       await this.windowManager.createControlPanelWindow();
       this.windowManager.showControlPanel();
       this.windowManager.sendToControlPanel("todos-navigation-pending");
@@ -1168,18 +1246,34 @@ class IPCHandlers {
       this.windowManager._pendingTodosFilter = null;
       return filter;
     });
-    ipcMain.handle("commitments-create", (_event, input) => changed(commitments().create({
-      text: input?.text, person: input?.person, due_date: input?.due_date,
-      direction: input?.direction,
-    }, { user: true })));
+    ipcMain.handle("commitments-create", (_event, input) =>
+      changed(
+        commitments().create(
+          {
+            text: input?.text,
+            person: input?.person,
+            due_date: input?.due_date,
+            direction: input?.direction,
+          },
+          { user: true }
+        )
+      )
+    );
     ipcMain.handle("commitments-update", (_event, id, patch) => {
       if (typeof id !== "string" || !patch || typeof patch !== "object") return null;
       const allowed = ["text", "person", "status", "rejected_reason"];
-      const selected = Object.fromEntries(Object.entries(patch).filter(([key]) => allowed.includes(key)));
+      const selected = Object.fromEntries(
+        Object.entries(patch).filter(([key]) => allowed.includes(key))
+      );
       return changed(commitments().update(id, selected, { user: true }));
     });
     ipcMain.handle("commitments-set-agent-job", (_event, id, jobId) => {
-      if (typeof id !== "string" || typeof jobId !== "string" || !/^[a-zA-Z0-9-]{1,100}$/.test(jobId)) return null;
+      if (
+        typeof id !== "string" ||
+        typeof jobId !== "string" ||
+        !/^[a-zA-Z0-9-]{1,100}$/.test(jobId)
+      )
+        return null;
       return changed(commitments().setAgentJob(id, jobId));
     });
     ipcMain.handle("commitments-set-due", (_event, id, input) => {
@@ -1187,7 +1281,8 @@ class IPCHandlers {
       const row = typeof id === "string" && store.get(id);
       if (!row) return null;
       let date = null;
-      if (input?.action === "pick" && /^\d{4}-\d{2}-\d{2}$/.test(input.date || "")) date = input.date;
+      if (input?.action === "pick" && /^\d{4}-\d{2}-\d{2}$/.test(input.date || ""))
+        date = input.date;
       else if (input?.action === "push") {
         const base = row.due_date ? new Date(`${row.due_date}T12:00:00`) : new Date();
         base.setDate(base.getDate() + 1);
@@ -1195,9 +1290,12 @@ class IPCHandlers {
       } else if (input?.action !== "clear") return null;
       return changed(store.setDue(id, date));
     });
-    ipcMain.handle("commitments-proposals-list", (_event, noteId) => commitments().proposals(noteId));
+    ipcMain.handle("commitments-proposals-list", (_event, noteId) =>
+      commitments().proposals(noteId)
+    );
     ipcMain.handle("commitments-resolve-proposal", (_event, id, accept) =>
-      changed(commitments().resolveProposal(id, accept === true)));
+      changed(commitments().resolveProposal(id, accept === true))
+    );
     ipcMain.handle("commitments-overdue-count", () => commitments().overdueCount());
     ipcMain.handle("routines-list", () => this.databaseManager.listRoutines());
     ipcMain.handle("routines-people", () => this.databaseManager.listRoutinePeople());
@@ -1207,12 +1305,22 @@ class IPCHandlers {
     });
     ipcMain.handle("routines-note-links", (_event, noteId) => {
       if (!Number.isSafeInteger(noteId) || !this.databaseManager.getNote(noteId)) return null;
-      const run = this.databaseManager.db.prepare("SELECT source_note_id,event_id FROM routine_runs WHERE note_id=?").get(noteId);
+      const run = this.databaseManager.db
+        .prepare("SELECT source_note_id,event_id FROM routine_runs WHERE note_id=?")
+        .get(noteId);
       if (!run) return null;
       const source = run.source_note_id ? this.databaseManager.getNote(run.source_note_id) : null;
       const event = run.event_id ? this.databaseManager.getCalendarEventById(run.event_id) : null;
-      return { source: source ? { id: source.id, title: source.title } : null,
-        event: event ? { id: event.id, title: event.summary, url: event.web_link || event.hangout_link || null } : null };
+      return {
+        source: source ? { id: source.id, title: source.title } : null,
+        event: event
+          ? {
+              id: event.id,
+              title: event.summary,
+              url: event.web_link || event.hangout_link || null,
+            }
+          : null,
+      };
     });
     ipcMain.handle("routines-open-linked-note", async (_event, noteId) => {
       if (!Number.isSafeInteger(noteId)) return false;
@@ -1223,7 +1331,11 @@ class IPCHandlers {
     });
     ipcMain.handle("meeting-notification-open-prep", async (_event, noteId) => {
       if (!Number.isSafeInteger(noteId)) return false;
-      const run = this.databaseManager.db.prepare("SELECT note_id FROM routine_runs WHERE note_id=? AND event_id IS NOT NULL AND status IN ('done','partial')").get(noteId);
+      const run = this.databaseManager.db
+        .prepare(
+          "SELECT note_id FROM routine_runs WHERE note_id=? AND event_id IS NOT NULL AND status IN ('done','partial')"
+        )
+        .get(noteId);
       const note = run && this.databaseManager.getNote(noteId);
       if (!note) return false;
       this.windowManager.showControlPanel();
@@ -1238,18 +1350,36 @@ class IPCHandlers {
       const api = routineMcpApi(this.mcpClientManager);
       const servers = (await api.list()).servers;
       const eligible = await loadRoutineMcpTools(api, 32000).catch(() => []);
-      const ownerOf = (name) => servers.filter((item) => name.startsWith(`${item.name}__`))
-        .sort((left, right) => right.name.length - left.name.length)[0]?.name;
-      return Promise.all(servers.map(async (server) => {
-        const tools = eligible.filter((tool) => ownerOf(tool.name) === server.name)
-          .map((tool) => ({ name: tool.name, description: tool.description }));
-        const available = server.enabled && server.status === "connected"
-          ? await api.tools(server.name).catch(() => []) : [];
-        return { name: server.name, tools, reason: !server.enabled || server.status !== "connected"
-          ? "notConnected" : tools.length ? null
-            : available.some((tool) => tool.annotations?.readOnlyHint !== true && !server.allowWithoutAsking)
-              ? "needsApproval" : "noTools" };
-      }));
+      const ownerOf = (name) =>
+        servers
+          .filter((item) => name.startsWith(`${item.name}__`))
+          .sort((left, right) => right.name.length - left.name.length)[0]?.name;
+      return Promise.all(
+        servers.map(async (server) => {
+          const tools = eligible
+            .filter((tool) => ownerOf(tool.name) === server.name)
+            .map((tool) => ({ name: tool.name, description: tool.description }));
+          const available =
+            server.enabled && server.status === "connected"
+              ? await api.tools(server.name).catch(() => [])
+              : [];
+          return {
+            name: server.name,
+            tools,
+            reason:
+              !server.enabled || server.status !== "connected"
+                ? "notConnected"
+                : tools.length
+                  ? null
+                  : available.some(
+                        (tool) =>
+                          tool.annotations?.readOnlyHint !== true && !server.allowWithoutAsking
+                      )
+                    ? "needsApproval"
+                    : "noTools",
+          };
+        })
+      );
     });
     ipcMain.handle("routines-presets", () => PRESETS);
     ipcMain.handle("routines-save", (_event, input) => {
@@ -1290,13 +1420,32 @@ class IPCHandlers {
       broadcastToWindows("routines-updated");
     });
     ipcMain.handle("routines-model-choice", (_event, choice) => {
-      const { mode, provider, model, remoteUrl = "", cloudBaseUrl = "",
-        useChatEndpointKey = false, useRoutinesEndpointKey = false } = choice || {};
+      const {
+        mode,
+        provider,
+        model,
+        remoteUrl = "",
+        cloudBaseUrl = "",
+        useChatEndpointKey = false,
+        useRoutinesEndpointKey = false,
+      } = choice || {};
       if (![mode, provider, model].every((value) => typeof value === "string")) return false;
-      if (typeof remoteUrl !== "string" || typeof cloudBaseUrl !== "string" ||
-          typeof useChatEndpointKey !== "boolean" || typeof useRoutinesEndpointKey !== "boolean") return false;
-      this._routineModelChoice = { mode, provider, model, remoteUrl, cloudBaseUrl,
-        useChatEndpointKey, useRoutinesEndpointKey };
+      if (
+        typeof remoteUrl !== "string" ||
+        typeof cloudBaseUrl !== "string" ||
+        typeof useChatEndpointKey !== "boolean" ||
+        typeof useRoutinesEndpointKey !== "boolean"
+      )
+        return false;
+      this._routineModelChoice = {
+        mode,
+        provider,
+        model,
+        remoteUrl,
+        cloudBaseUrl,
+        useChatEndpointKey,
+        useRoutinesEndpointKey,
+      };
       fs.writeFileSync(choicePath, JSON.stringify(this._routineModelChoice));
       return true;
     });
@@ -1785,7 +1934,11 @@ class IPCHandlers {
     if (noteId == null || this._activeMeetingNoteId !== noteId) return;
 
     const expectedCount = this._noteExpectedSpeakerCountOrNull(note);
-    if (expectedCount == null || (config.expectedCount != null && expectedCount <= config.expectedCount)) return;
+    if (
+      expectedCount == null ||
+      (config.expectedCount != null && expectedCount <= config.expectedCount)
+    )
+      return;
 
     this.activeMeetingSpeakerConfig = { ...config, expectedCount };
     liveSpeakerIdentifier.setMaxSpeakers(MAX_SPEAKER_COUNT);
@@ -2905,9 +3058,12 @@ class IPCHandlers {
 
     ipcMain.handle("db-update-note", async (event, id, updates, options) => {
       const write = () => this.databaseManager.updateNote(id, updates, options);
-      const result = options?.reconcileTranscript || options?.migrateTranscript ||
+      const result =
+        options?.reconcileTranscript ||
+        options?.migrateTranscript ||
         Object.prototype.hasOwnProperty.call(options || {}, "expectedTranscript")
-        ? this.databaseManager.db.transaction(write)() : write();
+          ? this.databaseManager.db.transaction(write)()
+          : write();
       if (result?.success && result?.note) {
         setImmediate(() => broadcastToWindows("note-updated", result.note));
         this.notifyVectorChanges();
@@ -2927,28 +3083,106 @@ class IPCHandlers {
     ipcMain.handle("meeting-audio-status", (_event, noteId) => {
       const note = this.databaseManager.getNote(noteId);
       return note && !note.deleted_at
-        ? this.meetingAudioStore.status(noteId) : { state: "unavailable", bytes: 0 };
+        ? this.meetingAudioStore.status(noteId)
+        : { state: "unavailable", bytes: 0 };
     });
     ipcMain.handle("meeting-audio-usage", () => this.meetingAudioStore.usage());
+    ipcMain.handle("speaker-calibration-settings", () =>
+      require("./speakerDecisionThresholds").current()
+    );
+    ipcMain.handle("speaker-calibration-apply", (_event, values, report) => {
+      if (
+        report &&
+        Object.keys(values || {}).some((key) => report.recommended?.[key] !== values[key])
+      )
+        return { success: false, error: "Values differ from the selected report" };
+      try {
+        return { success: true, ...require("./speakerDecisionThresholds").apply(values, report) };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
     ipcMain.handle("meeting-audio-span", (_event, noteId, track, start, end) => {
       const note = this.databaseManager.getNote(noteId);
       if (!note || note.deleted_at) return { state: "unavailable" };
       const result = this.meetingAudioStore.span(noteId, track, start, end);
       return result.wav ? { ...result, wav: result.wav.toString("base64") } : result;
     });
+    ipcMain.handle("export-meeting-calibration", async (_event, noteId) => {
+      const note = this.databaseManager.getNote(noteId);
+      if (!note || note.deleted_at) return { success: false, error: "Meeting not found" };
+      const status = this.meetingAudioStore.status(noteId);
+      const unavailable = {
+        deleted: "Audio was deleted. Start a new recording to export calibration data.",
+        expired:
+          "Audio retention expired. Start a new recording, or keep its audio before it expires.",
+        evicted:
+          "Audio was removed to free space. Start a new recording and increase the audio budget.",
+        key_unavailable:
+          "The audio encryption key cannot be read. Restore keychain access and try again.",
+        recording: "Stop the recording before exporting calibration data.",
+        unavailable:
+          "No retained audio is available. Record a new meeting and enable audio retention.",
+      };
+      if (!["complete", "incomplete"].includes(status.state) || !status.bytes)
+        return { success: false, error: unavailable[status.state] || unavailable.unavailable };
+      const { dialog } = require("electron");
+      const choice = await dialog.showOpenDialog({
+        properties: ["openDirectory", "createDirectory"],
+        title: "Choose where to export calibration data",
+      });
+      if (choice.canceled || !choice.filePaths?.[0]) return { success: false, canceled: true };
+      let folder;
+      try {
+        folder = fs.mkdtempSync(path.join(choice.filePaths[0], `openwhispr-meeting-${noteId}-`));
+        const audio = {};
+        for (const track of ["mic", "system"]) {
+          const file = `${track}.wav`;
+          const duration = this.meetingAudioStore.exportTrack(
+            noteId,
+            track,
+            path.join(folder, file)
+          );
+          if (duration) audio[track] = { file, durationSeconds: duration };
+        }
+        if (!Object.keys(audio).length) throw Error("No stored audio track could be exported");
+        const labels = require("./speakerCalibrationExport").buildCalibrationLabels(
+          note,
+          audio,
+          status
+        );
+        if (!labels.rows.length) throw Error("No transcript rows to label");
+        if (labels.rows.every((row) => row.unavailableReason))
+          throw Error(
+            "Transcript rows fall only in audio gaps or mismatched tracks. Select rows from a recorded section or record a new meeting."
+          );
+        fs.writeFileSync(path.join(folder, "labels.json"), JSON.stringify(labels, null, 2), {
+          mode: 0o600,
+        });
+        return { success: true, folder };
+      } catch (error) {
+        if (folder) fs.rmSync(folder, { recursive: true, force: true });
+        return {
+          success: false,
+          error: `${error.message}. Check the destination folder and try again.`,
+        };
+      }
+    });
     ipcMain.handle("meeting-audio-delete", (_event, noteId) => {
       const note = this.databaseManager.getNote(noteId);
       if (!note || note.deleted_at) return { state: "unavailable" };
       const result = this.meetingAudioStore.delete(noteId);
-      if (result.state === 'deleted') liveSpeakerIdentifier.invalidateAnchor();
+      if (result.state === "deleted") liveSpeakerIdentifier.invalidateAnchor();
       return result;
     });
     ipcMain.handle("meeting-audio-policy", (_event, policy) =>
-      this.meetingAudioStore.setPolicy(policy));
+      this.meetingAudioStore.setPolicy(policy)
+    );
     ipcMain.handle("meeting-audio-keep", (_event, noteId, keep) => {
       const note = this.databaseManager.getNote(noteId);
       return note && !note.deleted_at
-        ? this.meetingAudioStore.setKeep(noteId, keep) : { state: "unavailable" };
+        ? this.meetingAudioStore.setKeep(noteId, keep)
+        : { state: "unavailable" };
     });
 
     ipcMain.handle("db-search-notes", async (event, query, limit, spaceId, folderId) => {
@@ -3347,7 +3581,7 @@ class IPCHandlers {
       const result = this.databaseManager.takeCloudSpeakerLabels(noteId, undo);
       if (result.success) {
         setImmediate(() => broadcastToWindows("note-updated", result.note));
-        broadcastToWindows('people-changed');
+        broadcastToWindows("people-changed");
       }
       return result;
     });
@@ -3415,7 +3649,13 @@ class IPCHandlers {
           const { CommitmentStore } = require("./commitments/store");
           new CommitmentStore(this.databaseManager).sourceRemoved(id);
           broadcastToWindows("commitments-updated");
-        } catch (error) { debugLogger.error("Commitment source cleanup failed", { error: error.message }, "commitments"); }
+        } catch (error) {
+          debugLogger.error(
+            "Commitment source cleanup failed",
+            { error: error.message },
+            "commitments"
+          );
+        }
         this.notifyVectorChanges();
         this._asyncMirrorDelete(id);
         setImmediate(() => broadcastToWindows("note-deleted", { id }));
@@ -3631,9 +3871,17 @@ class IPCHandlers {
         const note = this.databaseManager.getNote(noteId);
         if (!note) return { success: false, error: "Note not found" };
 
-        const segments = require("./transcriptDocument").readTranscriptDocument(note.transcript).rows;
-        if (!segments.length && !(format === "json" &&
-          require("./transcriptDocument").readTranscriptDocument(note.transcript).unknownNumberHighWater > 0))
+        const segments = require("./transcriptDocument").readTranscriptDocument(
+          note.transcript
+        ).rows;
+        if (
+          !segments.length &&
+          !(
+            format === "json" &&
+            require("./transcriptDocument").readTranscriptDocument(note.transcript)
+              .unknownNumberHighWater > 0
+          )
+        )
           return { success: false, error: "No transcript available" };
 
         const speakerMappings = this._buildSpeakerMappings(noteId);
@@ -4723,12 +4971,22 @@ class IPCHandlers {
           // voice even when an explicit count was lower.
           segments = dropNegligibleClusters(segments);
           const advice = await consolidateClusters(
-            segments, requestedSpeakers, wavPath, require("./speakerEmbeddings"), signal
+            segments,
+            requestedSpeakers,
+            wavPath,
+            require("./speakerEmbeddings"),
+            signal
           );
           segments = advice.segments;
-          debugLogger.info("Speaker count advice", {
-            expected: requestedSpeakers, produced: advice.producedCount, final: advice.finalCount,
-          }, "speaker");
+          debugLogger.info(
+            "Speaker count advice",
+            {
+              expected: requestedSpeakers,
+              produced: advice.producedCount,
+              final: advice.finalCount,
+            },
+            "speaker"
+          );
           // Callers persist this as audio_duration_seconds: for picked files
           // the renderer has no other duration source.
           return { success: true, segments, durationSeconds };
@@ -7876,7 +8134,13 @@ class IPCHandlers {
         .join(" ")
         .trim();
 
-    const storeMeetingDiarizationSegment = (text, source, timestamp, micSuppression = null) => {
+    const storeMeetingDiarizationSegment = (
+      text,
+      source,
+      timestamp,
+      micSuppression = null,
+      timing = {}
+    ) => {
       const id = crypto.randomUUID();
       meetingDiarizationSegments.push({
         id,
@@ -7884,6 +8148,7 @@ class IPCHandlers {
         text,
         source,
         timestamp,
+        ...timing,
         committedAt: Date.now(),
         suppressionReason: source === "mic" ? micSuppression?.reason || null : null,
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
@@ -7896,6 +8161,8 @@ class IPCHandlers {
       text,
       source,
       timestamp,
+      speechStart = timestamp,
+      speechEnd = null,
       micSuppression = null,
       send = null,
       includeInLocalTranscript = false,
@@ -7904,7 +8171,16 @@ class IPCHandlers {
         appendMeetingLocalTranscript(text);
       }
 
-      const id = storeMeetingDiarizationSegment(text, source, timestamp, micSuppression);
+      const audioStatus =
+        meetingNoteId != null ? this.meetingAudioStore.status(meetingNoteId) : null;
+      const timing = {
+        speechStart,
+        speechEnd,
+        recordingId: audioStatus?.recordingId,
+        recordingOrigin: audioStatus?.startedAt,
+        timebase: "epoch",
+      };
+      const id = storeMeetingDiarizationSegment(text, source, timestamp, micSuppression, timing);
 
       if (send) {
         send("meeting-transcription-segment", {
@@ -7912,6 +8188,7 @@ class IPCHandlers {
           source,
           type: "final",
           timestamp,
+          ...timing,
           id,
         });
       }
@@ -8040,11 +8317,12 @@ class IPCHandlers {
       });
       return {
         diarizationPcmPath: pcmPath ? Buffer.concat(pcmPath) : null,
-        otherTrackAudio: diarizedSource === "system" && micPcmPath
-          ? { source: "mic", pcm: Buffer.concat(micPcmPath), startedAt: micStartedAt }
-          : diarizedSource === "mic" && systemPcmPath
-            ? { source: "system", pcm: Buffer.concat(systemPcmPath), startedAt: systemStartedAt }
-            : null,
+        otherTrackAudio:
+          diarizedSource === "system" && micPcmPath
+            ? { source: "mic", pcm: Buffer.concat(micPcmPath), startedAt: micStartedAt }
+            : diarizedSource === "mic" && systemPcmPath
+              ? { source: "system", pcm: Buffer.concat(systemPcmPath), startedAt: systemStartedAt }
+              : null,
         diarizationSegments,
         retractedSegments,
         diarizationStartedAt: startedAt,
@@ -8625,6 +8903,10 @@ class IPCHandlers {
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
+    let meetingLocalCapture = {
+      mic: { start: null, end: null },
+      system: { start: null, end: null },
+    };
     let meetingLocalTimer = null;
     let meetingLocalWin = null;
     let meetingLocalTranscript = "";
@@ -8673,6 +8955,13 @@ class IPCHandlers {
         // Large synthetic gaps would dilute speech and inflate the next batch.
         if (synthetic) return;
         meetingLocalBuffers[source].push(buffer);
+        if (capturedAt != null && Number.isFinite(capturedAt)) {
+          meetingLocalCapture[source] = require("./meetingAudioTimebase").extendBatchCapture(
+            meetingLocalCapture[source],
+            capturedAt,
+            buffer.length
+          );
+        }
         return;
       }
 
@@ -8814,7 +9103,7 @@ class IPCHandlers {
           continue;
         }
 
-        dispatchMeetingAudioBuffer(next.buffer, "mic");
+        dispatchMeetingAudioBuffer(next.buffer, "mic", false, next.captureTime);
       }
     };
 
@@ -8923,7 +9212,9 @@ class IPCHandlers {
               ) {
                 const patch = {
                   speaker: identification.speakerId,
-                  speakerName: identification.uncertainty ? undefined : displayName || seg.speakerName,
+                  speakerName: identification.uncertainty
+                    ? undefined
+                    : displayName || seg.speakerName,
                   speakerIsPlaceholder: !displayName,
                   suggestedName: meetingOneOnOneAttendee?.displayName,
                   uncertainty: identification.uncertainty,
@@ -8936,9 +9227,15 @@ class IPCHandlers {
           {
             getSpeakerProfiles: getLiveSpeakerProfiles,
             onEvidenceChanged: () => {
-              if (meetingNoteId != null && liveSpeakerIdentifier.activeRunId && win && !win.isDestroyed())
+              if (
+                meetingNoteId != null &&
+                liveSpeakerIdentifier.activeRunId &&
+                win &&
+                !win.isDestroyed()
+              )
                 win.webContents.send("meeting-speaker-evidence-changed", {
-                  noteId: meetingNoteId, runId: liveSpeakerIdentifier.activeRunId,
+                  noteId: meetingNoteId,
+                  runId: liveSpeakerIdentifier.activeRunId,
                 });
             },
             maxSpeakers: resolveSessionMaxSpeakers(),
@@ -8992,6 +9289,8 @@ class IPCHandlers {
 
       const pcm24k = Buffer.concat(chunks);
       meetingLocalBuffers[source] = [];
+      const capture = meetingLocalCapture[source];
+      meetingLocalCapture[source] = { start: null, end: null };
 
       const pcm16k = downsample24kTo16k(pcm24k);
 
@@ -9139,6 +9438,8 @@ class IPCHandlers {
                   text,
                   source,
                   timestamp: segTimestamp,
+                  speechStart: capture.start,
+                  speechEnd: capture.end,
                   micSuppression,
                   send: sendLocalSegment,
                   includeInLocalTranscript: true,
@@ -9151,6 +9452,8 @@ class IPCHandlers {
             text,
             source,
             timestamp: segTimestamp,
+            speechStart: capture.start,
+            speechEnd: capture.end,
             micSuppression,
             send: sendLocalSegment,
             includeInLocalTranscript: true,
@@ -9195,8 +9498,11 @@ class IPCHandlers {
 
     const resetMeetingLocalState = () => {
       if (meetingNoteId != null) {
-        try { this.meetingAudioStore.finish(meetingNoteId); }
-        catch (error) { this.meetingAudioStore.fail(meetingNoteId, error.message); }
+        try {
+          this.meetingAudioStore.finish(meetingNoteId);
+        } catch (error) {
+          this.meetingAudioStore.fail(meetingNoteId, error.message);
+        }
       }
       if (meetingLocalTimer) {
         clearInterval(meetingLocalTimer);
@@ -9215,6 +9521,7 @@ class IPCHandlers {
       this._activeMeetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
+      meetingLocalCapture = { mic: { start: null, end: null }, system: { start: null, end: null } };
       meetingDiarizationBuffers = [];
       meetingDiarizationStartedAt = null;
       dropMeetingMicDiarizationCapture();
@@ -9802,10 +10109,15 @@ class IPCHandlers {
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingNoteId = options.noteId ?? null;
         if (meetingNoteId != null) {
-          try { this.meetingAudioStore.begin(meetingNoteId, meetingStartedAt); }
-          catch (error) {
+          try {
+            this.meetingAudioStore.begin(meetingNoteId, meetingStartedAt);
+          } catch (error) {
             this.meetingAudioStore.fail(meetingNoteId, error.message);
-            debugLogger.warn("Meeting audio retention unavailable", { error: error.message }, "meeting");
+            debugLogger.warn(
+              "Meeting audio retention unavailable",
+              { error: error.message },
+              "meeting"
+            );
           }
         }
         meetingSpeakerIndexBase = this._resolveMeetingSpeakerIndexBase(
@@ -9860,6 +10172,10 @@ class IPCHandlers {
           meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
+          meetingLocalCapture = {
+            mic: { start: null, end: null },
+            system: { start: null, end: null },
+          };
           meetingLocalTranscript = "";
 
           await startLiveSpeakerIdentification(meetingLocalWin, systemAudioMode);
@@ -9919,9 +10235,11 @@ class IPCHandlers {
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      const captureTime = capturedAt ?? Date.now();
       if (meetingNoteId != null && (source === "mic" || source === "system")) {
-        try { this.meetingAudioStore.append(meetingNoteId, source, outboundBuffer, capturedAt || Date.now()); }
-        catch (error) {
+        try {
+          this.meetingAudioStore.append(meetingNoteId, source, outboundBuffer, captureTime);
+        } catch (error) {
           this.meetingAudioStore.fail(meetingNoteId, error.message);
           debugLogger.warn("Meeting audio retention failed", { error: error.message }, "meeting");
         }
@@ -9975,7 +10293,7 @@ class IPCHandlers {
           }
         }
 
-        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, capturedAt);
+        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, captureTime);
         return;
       }
 
@@ -9999,6 +10317,7 @@ class IPCHandlers {
         meetingPendingMicChunks.push({
           buffer: outboundBuffer,
           queuedAt: Date.now(),
+          captureTime,
         });
         flushPendingMeetingMicChunks();
         return;
@@ -10206,8 +10525,11 @@ class IPCHandlers {
 
         const liveSpeakerState = await stopLiveSpeakerIdentification().catch(() => null);
         if (meetingNoteId != null) {
-          try { this.meetingAudioStore.finish(meetingNoteId); }
-          catch (error) { this.meetingAudioStore.fail(meetingNoteId, error.message); }
+          try {
+            this.meetingAudioStore.finish(meetingNoteId);
+          } catch (error) {
+            this.meetingAudioStore.fail(meetingNoteId, error.message);
+          }
         }
 
         const diarizationSessionId = `diar-${Date.now()}`;
@@ -13104,24 +13426,36 @@ class IPCHandlers {
     });
 
     ipcMain.handle("get-live-speaker-anchor-state", (_event, noteId, runId) =>
-      liveSpeakerIdentifier.hasActiveAnchor(noteId, runId));
+      liveSpeakerIdentifier.hasActiveAnchor(noteId, runId)
+    );
 
     ipcMain.handle("reconsider-live-speakers", (_event, request) => {
-      if (request?.noteId !== this._activeMeetingNoteId ||
-          request?.runId !== liveSpeakerIdentifier.activeRunId)
-        return { assignments: [], rows: [], skipped: [{ reason: 'not_current_meeting' }] };
+      if (
+        request?.noteId !== this._activeMeetingNoteId ||
+        request?.runId !== liveSpeakerIdentifier.activeRunId
+      )
+        return { assignments: [], rows: [], skipped: [{ reason: "not_current_meeting" }] };
       try {
-        const result = require('./liveSpeakerReconsideration').reconsiderLiveClusters(
-          this.databaseManager, liveSpeakerIdentifier, request.noteId, request.runId, request.rows);
+        const result = require("./liveSpeakerReconsideration").reconsiderLiveClusters(
+          this.databaseManager,
+          liveSpeakerIdentifier,
+          request.noteId,
+          request.runId,
+          request.rows
+        );
         if (result.changed) {
           const note = this.databaseManager.getNote(request.noteId);
-          setImmediate(() => broadcastToWindows('note-updated', note));
+          setImmediate(() => broadcastToWindows("note-updated", note));
           this._asyncMirrorWrite(note);
         }
         return result;
       } catch (error) {
-        debugLogger.error('Live speaker reconsideration failed', { error: error.message }, 'speaker');
-        return { assignments: [], rows: [], skipped: [{ reason: 'persistence_failed' }] };
+        debugLogger.error(
+          "Live speaker reconsideration failed",
+          { error: error.message },
+          "speaker"
+        );
+        return { assignments: [], rows: [], skipped: [{ reason: "persistence_failed" }] };
       }
     });
 
@@ -13131,21 +13465,36 @@ class IPCHandlers {
           const note = this.databaseManager.getNote(request.noteId);
           if (!note || note.deleted_at) return { success: false, error: "note_missing" };
           const rows = require("./transcriptDocument").readTranscriptDocument(note.transcript).rows;
-          const cluster = rows.filter((row) => !row.deleted &&
-            row.diarizationRunId === request.target?.runId && row.speaker === request.target?.clusterId);
+          const cluster = rows.filter(
+            (row) =>
+              !row.deleted &&
+              row.diarizationRunId === request.target?.runId &&
+              row.speaker === request.target?.clusterId
+          );
           const { proposeClusterSplit } = require("./speakerClusterSplit");
-          const proposal = await proposeClusterSplit(cluster, request.rowIds || [], request.noteId,
-            this.meetingAudioStore, require("./speakerEmbeddings"));
-          request = { ...request, expectedTranscript: note.transcript,
-            evidenceRowIds: proposal.movedIds.filter((id) => !(request.rowIds || []).includes(id) &&
-              !cluster.find((row) => row.id === id)?.speakerLocked) };
+          const proposal = await proposeClusterSplit(
+            cluster,
+            request.rowIds || [],
+            request.noteId,
+            this.meetingAudioStore,
+            require("./speakerEmbeddings")
+          );
+          request = {
+            ...request,
+            expectedTranscript: note.transcript,
+            evidenceRowIds: proposal.movedIds.filter(
+              (id) =>
+                !(request.rowIds || []).includes(id) &&
+                !cluster.find((row) => row.id === id)?.speakerLocked
+            ),
+          };
         }
         const { applySpeakerCorrection } = require("./speakerCorrectionTransaction");
         const result = applySpeakerCorrection(this.databaseManager, liveSpeakerIdentifier, request);
         if (result.success) {
           const note = this.databaseManager.getNote(request.noteId);
           setImmediate(() => broadcastToWindows("note-updated", note));
-          broadcastToWindows('people-changed');
+          broadcastToWindows("people-changed");
           this.notifyVectorChanges();
           this._asyncMirrorWrite(note);
         }
@@ -13160,65 +13509,122 @@ class IPCHandlers {
       return this.databaseManager.getSpeakerProfiles();
     });
 
-    ipcMain.handle("people-list", () => require("./peopleActions").listPeople(this.databaseManager));
+    ipcMain.handle("people-list", () =>
+      require("./peopleActions").listPeople(this.databaseManager)
+    );
     ipcMain.handle("voice-enrollment-candidates", (_event, profileId) =>
-      require('./voiceEnrollment').listCandidates(this.databaseManager, this.meetingAudioStore, profileId));
+      require("./voiceEnrollment").listCandidates(
+        this.databaseManager,
+        this.meetingAudioStore,
+        profileId
+      )
+    );
     ipcMain.handle("voice-enrollment-samples", (_event, profileId) =>
-      require('./voiceEnrollment').listSamples(this.databaseManager, profileId));
+      require("./voiceEnrollment").listSamples(this.databaseManager, profileId)
+    );
     ipcMain.handle("voice-enrollment-remove", (_event, sampleId) => {
-      const result = require('./voiceEnrollment').removeSample(this.databaseManager, sampleId);
-      if (result.success) { liveSpeakerIdentifier.invalidateAnchor(); this.notifyVectorChanges(); broadcastToWindows('people-changed');
-        if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId) broadcastToWindows('meeting-speaker-evidence-changed',
-          { noteId: this._activeMeetingNoteId, runId: liveSpeakerIdentifier.activeRunId }); }
+      const result = require("./voiceEnrollment").removeSample(this.databaseManager, sampleId);
+      if (result.success) {
+        liveSpeakerIdentifier.invalidateAnchor();
+        this.notifyVectorChanges();
+        broadcastToWindows("people-changed");
+        if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
+          broadcastToWindows("meeting-speaker-evidence-changed", {
+            noteId: this._activeMeetingNoteId,
+            runId: liveSpeakerIdentifier.activeRunId,
+          });
+      }
       return result;
     });
     ipcMain.handle("voice-enrollment-play", (event, id) => {
-      const result = require('./voiceEnrollment').play(this.databaseManager, this.meetingAudioStore, id, event.sender);
-      return result.wav ? { ...result, wav: result.wav.toString('base64') } : result;
+      const result = require("./voiceEnrollment").play(
+        this.databaseManager,
+        this.meetingAudioStore,
+        id,
+        event.sender
+      );
+      return result.wav ? { ...result, wav: result.wav.toString("base64") } : result;
     });
     ipcMain.handle("voice-enrollment-complete", (event, id, token) =>
-      require('./voiceEnrollment').complete(this.databaseManager, this.meetingAudioStore, id, token, event.sender));
+      require("./voiceEnrollment").complete(
+        this.databaseManager,
+        this.meetingAudioStore,
+        id,
+        token,
+        event.sender
+      )
+    );
     ipcMain.handle("voice-enrollment-decide", async (event, id, choice, token) => {
-      const result = await require('./voiceEnrollment').decide(this.databaseManager, this.meetingAudioStore,
-        require('./speakerEmbeddings'), id, choice, token, event.sender);
-      if (result.success) { liveSpeakerIdentifier.invalidateAnchor(); this.notifyVectorChanges(); broadcastToWindows('people-changed');
-        if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId) broadcastToWindows('meeting-speaker-evidence-changed',
-          { noteId: this._activeMeetingNoteId, runId: liveSpeakerIdentifier.activeRunId }); }
+      const result = await require("./voiceEnrollment").decide(
+        this.databaseManager,
+        this.meetingAudioStore,
+        require("./speakerEmbeddings"),
+        id,
+        choice,
+        token,
+        event.sender
+      );
+      if (result.success) {
+        liveSpeakerIdentifier.invalidateAnchor();
+        this.notifyVectorChanges();
+        broadcastToWindows("people-changed");
+        if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
+          broadcastToWindows("meeting-speaker-evidence-changed", {
+            noteId: this._activeMeetingNoteId,
+            runId: liveSpeakerIdentifier.activeRunId,
+          });
+      }
       return result;
     });
     ipcMain.handle("voice-enrollment-undo", (_event, id) => {
-      const result = require('./voiceEnrollment').undo(this.databaseManager, id);
-      if (result.success) { liveSpeakerIdentifier.invalidateAnchor(); this.notifyVectorChanges(); broadcastToWindows('people-changed');
-        if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId) broadcastToWindows('meeting-speaker-evidence-changed',
-          { noteId: this._activeMeetingNoteId, runId: liveSpeakerIdentifier.activeRunId }); }
+      const result = require("./voiceEnrollment").undo(this.databaseManager, id);
+      if (result.success) {
+        liveSpeakerIdentifier.invalidateAnchor();
+        this.notifyVectorChanges();
+        broadcastToWindows("people-changed");
+        if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
+          broadcastToWindows("meeting-speaker-evidence-changed", {
+            noteId: this._activeMeetingNoteId,
+            runId: liveSpeakerIdentifier.activeRunId,
+          });
+      }
       return result;
     });
-    ipcMain.handle("people-action-history", () => require("./peopleActions").listPeopleActions(this.databaseManager));
+    ipcMain.handle("people-action-history", () =>
+      require("./peopleActions").listPeopleActions(this.databaseManager)
+    );
     ipcMain.handle("people-undo-mapping", (_event, noteId) => {
       const result = this.databaseManager.undoSpeakerMapping(noteId);
       if (result.success) {
-        broadcastToWindows('people-changed');
-        setImmediate(() => broadcastToWindows('note-updated', this.databaseManager.getNote(noteId)));
+        broadcastToWindows("people-changed");
+        setImmediate(() =>
+          broadcastToWindows("note-updated", this.databaseManager.getNote(noteId))
+        );
       }
       return result;
     });
     ipcMain.handle("speaker-history-status", (_event, noteId) => {
       const note = this.databaseManager.getNote(noteId);
-      return note ? { quarantined: !!require("./speakerActionLog").readSpeakerActionLog(note).quarantined } : { quarantined: false };
+      return note
+        ? { quarantined: !!require("./speakerActionLog").readSpeakerActionLog(note).quarantined }
+        : { quarantined: false };
     });
     ipcMain.handle("people-review", (_event, profileId) =>
-      require("./peopleActions").listReviewRows(this.databaseManager, profileId));
+      require("./peopleActions").listReviewRows(this.databaseManager, profileId)
+    );
     ipcMain.handle("people-preview", (_event, request) =>
-      require("./peopleActions").previewPersonAction(this.databaseManager, request));
+      require("./peopleActions").previewPersonAction(this.databaseManager, request)
+    );
     ipcMain.handle("people-clear-voice-preview", () =>
-      require("./peopleActions").previewClearVoiceData(this.databaseManager));
+      require("./peopleActions").previewClearVoiceData(this.databaseManager)
+    );
     ipcMain.handle("people-clear-voice-apply", (_event, expected) => {
       try {
         const result = require("./peopleActions").clearVoiceData(this.databaseManager, expected);
         if (result.success) {
-          liveSpeakerIdentifier.reconcilePeopleMutation({ type: 'clear_voice' });
+          liveSpeakerIdentifier.reconcilePeopleMutation({ type: "clear_voice" });
           this.notifyVectorChanges();
-          broadcastToWindows('people-changed');
+          broadcastToWindows("people-changed");
         }
         return result;
       } catch (error) {
@@ -13231,7 +13637,7 @@ class IPCHandlers {
         const result = require("./peopleActions").undoClearVoiceData(this.databaseManager, id);
         if (result.success) {
           this.notifyVectorChanges();
-          broadcastToWindows('people-changed');
+          broadcastToWindows("people-changed");
         }
         return result;
       } catch (error) {
@@ -13242,22 +13648,35 @@ class IPCHandlers {
     ipcMain.handle("people-apply", (_event, request) => {
       try {
         const result = require("./peopleActions").applyPersonAction(this.databaseManager, request);
-        if (result.success && request.type !== 'rename') this.notifyVectorChanges();
+        if (result.success && request.type !== "rename") this.notifyVectorChanges();
         if (result.success) {
-          const displayName = request.type === 'merge'
-            ? this.databaseManager.db.prepare('SELECT display_name FROM speaker_profiles WHERE id = ?').get(request.survivorId)?.display_name
-            : request.type === 'rename' ? String(request.name).trim() : null;
-          liveSpeakerIdentifier.reconcilePeopleMutation({ type: request.type,
-            profileId: request.profileId, survivorId: request.survivorId, displayName });
-          broadcastToWindows('people-changed');
-          if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId) broadcastToWindows('meeting-speaker-evidence-changed',
-            { noteId: this._activeMeetingNoteId, runId: liveSpeakerIdentifier.activeRunId });
+          const displayName =
+            request.type === "merge"
+              ? this.databaseManager.db
+                  .prepare("SELECT display_name FROM speaker_profiles WHERE id = ?")
+                  .get(request.survivorId)?.display_name
+              : request.type === "rename"
+                ? String(request.name).trim()
+                : null;
+          liveSpeakerIdentifier.reconcilePeopleMutation({
+            type: request.type,
+            profileId: request.profileId,
+            survivorId: request.survivorId,
+            displayName,
+          });
+          broadcastToWindows("people-changed");
+          if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
+            broadcastToWindows("meeting-speaker-evidence-changed", {
+              noteId: this._activeMeetingNoteId,
+              runId: liveSpeakerIdentifier.activeRunId,
+            });
         }
-        if (result.success) for (const noteId of result.noteIds) {
-          const note = this.databaseManager.getNote(noteId);
-          setImmediate(() => broadcastToWindows("note-updated", note));
-          this._asyncMirrorWrite(note);
-        }
+        if (result.success)
+          for (const noteId of result.noteIds) {
+            const note = this.databaseManager.getNote(noteId);
+            setImmediate(() => broadcastToWindows("note-updated", note));
+            this._asyncMirrorWrite(note);
+          }
         return result;
       } catch (error) {
         debugLogger.error("People action failed", { error: error.message }, "speaker");
@@ -13268,17 +13687,22 @@ class IPCHandlers {
       try {
         const result = require("./peopleActions").undoPersonAction(this.databaseManager, id);
         if (result.success) {
-          if (result.personAction) liveSpeakerIdentifier.reconcilePeopleMutation(result.personAction);
+          if (result.personAction)
+            liveSpeakerIdentifier.reconcilePeopleMutation(result.personAction);
           this.notifyVectorChanges();
-          broadcastToWindows('people-changed');
-          if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId) broadcastToWindows('meeting-speaker-evidence-changed',
-            { noteId: this._activeMeetingNoteId, runId: liveSpeakerIdentifier.activeRunId });
+          broadcastToWindows("people-changed");
+          if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
+            broadcastToWindows("meeting-speaker-evidence-changed", {
+              noteId: this._activeMeetingNoteId,
+              runId: liveSpeakerIdentifier.activeRunId,
+            });
         }
-        if (result.success) for (const noteId of result.noteIds) {
-          const note = this.databaseManager.getNote(noteId);
-          setImmediate(() => broadcastToWindows("note-updated", note));
-          this._asyncMirrorWrite(note);
-        }
+        if (result.success)
+          for (const noteId of result.noteIds) {
+            const note = this.databaseManager.getNote(noteId);
+            setImmediate(() => broadcastToWindows("note-updated", note));
+            this._asyncMirrorWrite(note);
+          }
         return result;
       } catch (error) {
         debugLogger.error("People undo failed", { error: error.message }, "speaker");
@@ -13354,7 +13778,9 @@ class IPCHandlers {
               const note = this.databaseManager.getNote(noteId);
               if (note?.transcript) {
                 try {
-                  const segments = require("./transcriptDocument").readTranscriptDocument(note.transcript).rows;
+                  const segments = require("./transcriptDocument").readTranscriptDocument(
+                    note.transcript
+                  ).rows;
                   let changed = false;
                   for (const seg of segments) {
                     if (seg.speaker === emb.speaker_id && !seg.speakerName) {
@@ -13369,7 +13795,11 @@ class IPCHandlers {
                   }
                   if (changed) {
                     this.databaseManager.updateNote(noteId, {
-                      transcript: require("./transcriptDocument").writeTranscriptDocument(segments, require("./transcriptDocument").readTranscriptDocument(note.transcript).unknownNumberHighWater),
+                      transcript: require("./transcriptDocument").writeTranscriptDocument(
+                        segments,
+                        require("./transcriptDocument").readTranscriptDocument(note.transcript)
+                          .unknownNumberHighWater
+                      ),
                     });
                   }
                 } catch (_) {}
@@ -13397,7 +13827,9 @@ class IPCHandlers {
         const existingMappings = this.databaseManager.getSpeakerMappings(noteId);
         const mappedSpeakers = new Set(existingMappings.map((m) => m.speaker_id));
 
-        const transcript = note.transcript ? require("./transcriptDocument").readTranscriptDocument(note.transcript).rows : [];
+        const transcript = note.transcript
+          ? require("./transcriptDocument").readTranscriptDocument(note.transcript).rows
+          : [];
         const systemSpeakers = new Set(
           transcript.filter((s) => s.source !== "mic" && s.speaker).map((s) => s.speaker)
         );
@@ -13418,7 +13850,13 @@ class IPCHandlers {
         }
 
         if (changed) {
-          this.databaseManager.updateNote(noteId, { transcript: require("./transcriptDocument").writeTranscriptDocument(transcript, require("./transcriptDocument").readTranscriptDocument(note.transcript).unknownNumberHighWater) });
+          this.databaseManager.updateNote(noteId, {
+            transcript: require("./transcriptDocument").writeTranscriptDocument(
+              transcript,
+              require("./transcriptDocument").readTranscriptDocument(note.transcript)
+                .unknownNumberHighWater
+            ),
+          });
           const updated = this.databaseManager.getNote(noteId);
           if (updated) broadcastToWindows("note-updated", updated);
         }
@@ -13513,15 +13951,14 @@ class IPCHandlers {
       let profileId = bestEntry.profileId;
 
       if (bestEntry.noteId) {
-        const hasLockedRow = enrichedSegments.some((segment) =>
-          segment.speaker === mappedId && isSpeakerLocked(segment)
+        const hasLockedRow = enrichedSegments.some(
+          (segment) => segment.speaker === mappedId && isSpeakerLocked(segment)
         );
         const mappedRows = enrichedSegments.filter((segment) => segment.speaker === mappedId);
-        const allAbstained = mappedRows.length > 0 && mappedRows.every((segment) =>
-          !canAutoRelabelSpeaker(segment)
-        );
-        const finalNameDiffers = mappedRows.some((segment) =>
-          segment.speakerName && displayName && segment.speakerName !== displayName
+        const allAbstained =
+          mappedRows.length > 0 && mappedRows.every((segment) => !canAutoRelabelSpeaker(segment));
+        const finalNameDiffers = mappedRows.some(
+          (segment) => segment.speakerName && displayName && segment.speakerName !== displayName
         );
         const noteMappingsForId = getMappingsForNote(bestEntry.noteId);
         const existingTarget = noteMappingsForId.find((mapping) => mapping.speaker_id === mappedId);
@@ -13535,7 +13972,12 @@ class IPCHandlers {
           displayName = liveMapping.display_name || displayName;
           profileId = liveMapping.profile_id ?? profileId;
           this.databaseManager.transferLegacySpeakerMapping(
-            bestEntry.noteId, bestEntry.speakerId, mappedId, profileId, displayName);
+            bestEntry.noteId,
+            bestEntry.speakerId,
+            mappedId,
+            profileId,
+            displayName
+          );
         }
       }
 
@@ -13641,16 +14083,31 @@ class IPCHandlers {
     // re-segmentation so a corrected row is never cut or relabelled.
     try {
       const saved = noteId != null ? this.databaseManager?.getNote?.(noteId) : null;
-      const locked = new Map(require("./transcriptDocument").readTranscriptDocument(saved?.transcript).rows
-        .filter(isSpeakerLocked).map((row) => [row.id, row]));
+      const locked = new Map(
+        require("./transcriptDocument")
+          .readTranscriptDocument(saved?.transcript)
+          .rows.filter(isSpeakerLocked)
+          .map((row) => [row.id, row])
+      );
       kept = kept.map((row) => {
         const prior = locked.get(row.id);
-        return prior ? { ...row, speaker: prior.speaker, speakerName: prior.speakerName,
-          speakerIsPlaceholder: prior.speakerIsPlaceholder, speakerStatus: "locked",
-          speakerLocked: true, speakerLockSource: "user", unknownNumber: prior.unknownNumber } : row;
+        return prior
+          ? {
+              ...row,
+              speaker: prior.speaker,
+              speakerName: prior.speakerName,
+              speakerIsPlaceholder: prior.speakerIsPlaceholder,
+              speakerStatus: "locked",
+              speakerLocked: true,
+              speakerLockSource: "user",
+              unknownNumber: prior.unknownNumber,
+            }
+          : row;
       });
     } catch (error) {
-      debugLogger.warn("Could not read saved speaker locks for final pass", { error: error.message });
+      debugLogger.warn("Could not read saved speaker locks for final pass", {
+        error: error.message,
+      });
     }
     const echoDuplicateSet = new Set(echoDuplicates);
     const isEchoDuplicate = (index) => echoDuplicateSet.has(normalized[index]);
@@ -13676,27 +14133,46 @@ class IPCHandlers {
         .map((segment) => ({ ...segment, id: segment.id || require("crypto").randomUUID() }))
         .filter((_, index) => !isEchoDuplicate(index));
       const localWhisper = this.whisperManager?.serverManager;
-      if (noteId != null && this.meetingAudioStore && localWhisper?.ready &&
-        !localWhisper.isRemote && this.whisperManager.currentServerModel) {
+      if (
+        noteId != null &&
+        this.meetingAudioStore &&
+        localWhisper?.ready &&
+        !localWhisper.isRemote &&
+        this.whisperManager.currentServerModel
+      ) {
         try {
-          const { alignTranscriptRows, timedWordsFromStoredTrack,
-            withAudioSpans } = require("./meetingWordAlignment");
+          const {
+            alignTranscriptRows,
+            timedWordsFromStoredTrack,
+          } = require("./meetingWordAlignment");
           const tracks = this.meetingAudioStore.status(noteId).tracks || {};
           for (const source of new Set(rows.map((row) => row.source))) {
             const durationSeconds = tracks[source]?.sampleCount / 24000;
             if (!(durationSeconds > 0)) continue;
             const words = await timedWordsFromStoredTrack({
-              noteId, track: source, durationSeconds, store: this.meetingAudioStore,
+              noteId,
+              track: source,
+              durationSeconds,
+              store: this.meetingAudioStore,
               transcribe: (wav) => localWhisper.transcribe(wav, { wordTimestamps: true }),
             });
-            const aligned = alignTranscriptRows(rows.filter((row) => row.source === source), words);
+            const aligned = alignTranscriptRows(
+              rows.filter((row) => row.source === source),
+              words
+            );
             const byId = new Map(aligned.map((row) => [row.id, row]));
             rows = rows.map((row) => byId.get(row.id) || row);
           }
-          rows = withAudioSpans(rows, noteId);
+          rows = require("./meetingAudioTimebase").attachUndiarizedAudioSpans(
+            rows,
+            this.meetingAudioStore.status(noteId)
+          );
         } catch (error) {
-          debugLogger.warn("Undiarized meeting word alignment unavailable",
-            { error: error.message }, "speaker");
+          debugLogger.warn(
+            "Undiarized meeting word alignment unavailable",
+            { error: error.message },
+            "speaker"
+          );
         }
       }
       send({ segments: rows });
@@ -13747,92 +14223,148 @@ class IPCHandlers {
         tmpWav = Buffer.isBuffer(rawPcmPath)
           ? await this.diarizationManager.convertRawPcmToWavBuffer(rawPcmPath, 24000)
           : await this.diarizationManager.convertRawPcmToWav(rawPcmPath, 24000);
-        let diarizationSegments = await this.diarizationManager.diarize(
-          tmpWav,
-          { pipeRoot: this.meetingAudioStore?.root }
-        );
+        let diarizationSegments = await this.diarizationManager.diarize(tmpWav, {
+          pipeRoot: this.meetingAudioStore?.root,
+        });
         const producedCount = new Set(diarizationSegments.map((segment) => segment.speaker)).size;
         if (numSpeakers > 0 && !kept.some(isSpeakerLocked)) {
           const advice = await require("./diarizationPolicy").consolidateClusters(
-            diarizationSegments, numSpeakers, tmpWav, require("./speakerEmbeddings")
+            diarizationSegments,
+            numSpeakers,
+            tmpWav,
+            require("./speakerEmbeddings")
           );
           diarizationSegments = advice.segments;
         }
-        debugLogger.info("Meeting speaker count advice", {
-          expected: numSpeakers > 0 ? numSpeakers : null,
-          produced: producedCount,
-          final: new Set(diarizationSegments.map((segment) => segment.speaker)).size,
-        }, "speaker");
+        debugLogger.info(
+          "Meeting speaker count advice",
+          {
+            expected: numSpeakers > 0 ? numSpeakers : null,
+            produced: producedCount,
+            final: new Set(diarizationSegments.map((segment) => segment.speaker)).size,
+          },
+          "speaker"
+        );
 
-        const recordingStartedAt = noteId != null
-          ? this.meetingAudioStore?.status(noteId).startedAt : null;
-        const recordingOffset = (startedAt) => recordingStartedAt != null && startedAt != null
-          ? Math.max(0, (startedAt - recordingStartedAt) / 1000) : 0;
+        const recordingStartedAt =
+          noteId != null ? this.meetingAudioStore?.status(noteId).startedAt : null;
+        const recordingOffset = (startedAt) =>
+          recordingStartedAt != null && startedAt != null
+            ? Math.max(0, (startedAt - recordingStartedAt) / 1000)
+            : 0;
         const audioStartOffsets = { [diarizedSource]: recordingOffset(audioStartedAt) };
-        if (otherTrackAudio) audioStartOffsets[otherTrackAudio.source] = recordingOffset(otherTrackAudio.startedAt);
+        if (otherTrackAudio)
+          audioStartOffsets[otherTrackAudio.source] = recordingOffset(otherTrackAudio.startedAt);
         let alignedRows = kept;
         const localWhisper = this.whisperManager?.serverManager;
-        if (localWhisper?.ready && !localWhisper.isRemote && this.whisperManager.currentServerModel) {
+        if (
+          localWhisper?.ready &&
+          !localWhisper.isRemote &&
+          this.whisperManager.currentServerModel
+        ) {
           try {
             const alignmentStartedAt = Date.now();
-            const { alignTranscriptRows, timedWordsFromWhisper,
-              timedWordsFromStoredTrack } = require("./meetingWordAlignment");
+            const {
+              alignTranscriptRows,
+              timedWordsFromWhisper,
+              timedWordsFromStoredTrack,
+            } = require("./meetingWordAlignment");
             const byId = new Map();
             const alignSource = (source, words) => {
-              for (const row of alignTranscriptRows(kept.filter((candidate) => candidate.source === source), words))
+              for (const row of alignTranscriptRows(
+                kept.filter((candidate) => candidate.source === source),
+                words
+              ))
                 byId.set(row.id, row);
             };
-            const decodeWords = async (wav) => timedWordsFromWhisper(
-              await localWhisper.transcribe(wav, { wordTimestamps: true }));
-            alignSource(diarizedSource, await decodeWords(
-              Buffer.isBuffer(tmpWav) ? tmpWav : await fs.promises.readFile(tmpWav)));
+            const decodeWords = async (wav) =>
+              timedWordsFromWhisper(await localWhisper.transcribe(wav, { wordTimestamps: true }));
+            alignSource(
+              diarizedSource,
+              await decodeWords(
+                Buffer.isBuffer(tmpWav) ? tmpWav : await fs.promises.readFile(tmpWav)
+              )
+            );
             if (otherTrackAudio?.pcm?.length) {
               try {
                 const otherWav = await this.diarizationManager.convertRawPcmToWavBuffer(
-                  otherTrackAudio.pcm, 24000);
+                  otherTrackAudio.pcm,
+                  24000
+                );
                 alignSource(otherTrackAudio.source, await decodeWords(otherWav));
               } catch (error) {
-                debugLogger.warn("Other meeting track alignment unavailable", { error: error.message }, "speaker");
+                debugLogger.warn(
+                  "Other meeting track alignment unavailable",
+                  { error: error.message },
+                  "speaker"
+                );
               }
             } else if (noteId != null) {
               // Once a call becomes audible the live mic diarization buffer is
               // intentionally dropped. Use the already retained local audio.
               const otherSource = diarizedSource === "system" ? "mic" : "system";
-              const durationSeconds = this.meetingAudioStore?.status(noteId)
-                .tracks?.[otherSource]?.sampleCount / 24000;
+              const durationSeconds =
+                this.meetingAudioStore?.status(noteId).tracks?.[otherSource]?.sampleCount / 24000;
               if (durationSeconds > 0) {
                 try {
                   const words = await timedWordsFromStoredTrack({
-                    noteId, track: otherSource, durationSeconds, store: this.meetingAudioStore,
+                    noteId,
+                    track: otherSource,
+                    durationSeconds,
+                    store: this.meetingAudioStore,
                     transcribe: (wav) => localWhisper.transcribe(wav, { wordTimestamps: true }),
                   });
                   alignSource(otherSource, words);
                   audioStartOffsets[otherSource] = 0;
                 } catch (error) {
-                  debugLogger.warn("Retained meeting track alignment unavailable",
-                    { error: error.message }, "speaker");
+                  debugLogger.warn(
+                    "Retained meeting track alignment unavailable",
+                    { error: error.message },
+                    "speaker"
+                  );
                 }
               }
             }
             alignedRows = kept.map((row) => byId.get(row.id) || row);
-            debugLogger.info("Local meeting word alignment", {
-              elapsedMs: Date.now() - alignmentStartedAt,
-              alignedRows: alignedRows.filter((row) => row.wordTimings?.length).length,
-              eligibleRows: kept.length,
-            }, "speaker");
+            debugLogger.info(
+              "Local meeting word alignment",
+              {
+                elapsedMs: Date.now() - alignmentStartedAt,
+                alignedRows: alignedRows.filter((row) => row.wordTimings?.length).length,
+                eligibleRows: kept.length,
+              },
+              "speaker"
+            );
           } catch (error) {
-            debugLogger.warn("Local word alignment unavailable", { error: error.message }, "speaker");
+            debugLogger.warn(
+              "Local word alignment unavailable",
+              { error: error.message },
+              "speaker"
+            );
           }
         }
-        const enrichedSegments = this.diarizationManager.mergeWithTranscript(
+        let enrichedSegments = this.diarizationManager.mergeWithTranscript(
           alignedRows,
           diarizationSegments,
-          { diarizedSource, speakerIndexBase,
-            recordingId: recordingStartedAt != null
-              ? this.meetingAudioStore.status(noteId).recordingId : null,
+          {
+            diarizedSource,
+            speakerIndexBase,
+            recordingId:
+              recordingStartedAt != null ? this.meetingAudioStore.status(noteId).recordingId : null,
             audioStartOffsetSeconds: audioStartOffsets[diarizedSource],
-            audioStartOffsets }
+            audioStartOffsets,
+          }
         );
+        // The diarizer operates in session seconds. Persist all rows in the
+        // manifest's recording seconds, including rows it could not align.
+        const recordingId =
+          recordingStartedAt != null ? this.meetingAudioStore.status(noteId).recordingId : null;
+        enrichedSegments = require("./meetingAudioTimebase").rebaseDiarizedRows(enrichedSegments, {
+          sessionOrigin: isEpochMs ? startMs : null,
+          recordingOrigin: recordingStartedAt,
+          recordingId,
+          audioStartOffsets,
+        });
 
         const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
         const speakerRenumber = buildSpeakerRenumber(speakerSet, speakerIndexBase);
@@ -13872,19 +14404,21 @@ class IPCHandlers {
           debugLogger.debug("Speaker embedding extraction skipped", { error: err.message });
         }
 
-        this._reconcileLiveSpeakerState(
-          liveSpeakerState,
-          speakerEmbeddingsMap,
-          enrichedSegments
-        );
+        this._reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments);
 
         if (speakerEmbeddingsMap) {
           try {
-            const profiles = this.databaseManager.getSpeakerProfiles(true, { includeProvisional: true });
+            const profiles = this.databaseManager.getSpeakerProfiles(true, {
+              includeProvisional: true,
+            });
 
             if (profiles.length > 0) {
               for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
-                if (enrichedSegments.every((segment) => segment.speaker !== mappedId || isSpeakerLocked(segment))) {
+                if (
+                  enrichedSegments.every(
+                    (segment) => segment.speaker !== mappedId || isSpeakerLocked(segment)
+                  )
+                ) {
                   continue;
                 }
 
@@ -13912,29 +14446,41 @@ class IPCHandlers {
                   }
                 }
 
-                const cohort = require('./speakerCohortNormalization').rankProfiles(
+                const cohort = require("./speakerCohortNormalization").rankProfiles(
                   emb,
-                  Object.entries(speakerEmbeddingsMap).filter(([id]) => id !== mappedId)
+                  Object.entries(speakerEmbeddingsMap)
+                    .filter(([id]) => id !== mappedId)
                     .map(([, values]) => new Float32Array(values)),
-                  profiles.map(profile => ({ id: profile.id, display_name: profile.display_name,
-                    embedding: new Float32Array(profile.embedding.buffer, profile.embedding.byteOffset,
-                      profile.embedding.byteLength / 4) })),
+                  profiles.map((profile) => ({
+                    id: profile.id,
+                    display_name: profile.display_name,
+                    embedding: new Float32Array(
+                      profile.embedding.buffer,
+                      profile.embedding.byteOffset,
+                      profile.embedding.byteLength / 4
+                    ),
+                  })),
                   (left, right) => speakerEmb.cosineSimilarity(left, right)
                 );
                 // A changed cohort ranking is a review suggestion. It never
                 // upgrades a weak raw cosine into a silent name.
                 if (cohort.changed) {
-                  for (const seg of enrichedSegments) if (seg.speaker === mappedId &&
-                    !isSpeakerLocked(seg) && seg.uncertainty?.reason !== 'too_short') {
-                    seg.speakerAssessmentAvailable = true;
-                    seg.speakerName = undefined;
-                    seg.speakerIsPlaceholder = true;
-                    seg.speakerStatus = 'provisional';
-                    if (cohort.cohortBest.raw > 0.5) applySuggestedSpeaker(seg, {
-                      suggestedName: cohort.cohortBest.display_name,
-                      suggestedProfileId: cohort.cohortBest.id,
-                    });
-                  }
+                  for (const seg of enrichedSegments)
+                    if (
+                      seg.speaker === mappedId &&
+                      !isSpeakerLocked(seg) &&
+                      seg.uncertainty?.reason !== "too_short"
+                    ) {
+                      seg.speakerAssessmentAvailable = true;
+                      seg.speakerName = undefined;
+                      seg.speakerIsPlaceholder = true;
+                      seg.speakerStatus = "provisional";
+                      if (cohort.cohortBest.raw > 0.5)
+                        applySuggestedSpeaker(seg, {
+                          suggestedName: cohort.cohortBest.display_name,
+                          suggestedProfileId: cohort.cohortBest.id,
+                        });
+                    }
                   continue;
                 }
 
@@ -13953,7 +14499,8 @@ class IPCHandlers {
                 if (reason) {
                   for (const seg of enrichedSegments) {
                     if (seg.speaker === mappedId && !isSpeakerLocked(seg)) {
-                      if (!["too_short", "overlapping_speech"].includes(seg.uncertainty?.reason)) seg.uncertainty = reason;
+                      if (!["too_short", "overlapping_speech"].includes(seg.uncertainty?.reason))
+                        seg.uncertainty = reason;
                       seg.speakerAssessmentAvailable = true;
                       seg.speakerName = undefined;
                       seg.speakerIsPlaceholder = true;
@@ -13998,26 +14545,40 @@ class IPCHandlers {
 
         for (const seg of enrichedSegments) {
           seg.diarizationRunId = sessionId;
-          const prior = transcriptSegments.find((row) => row.id && row.id === seg.id) ||
+          const prior =
+            transcriptSegments.find((row) => row.id && row.id === seg.id) ||
             (seg.parentRowId && transcriptSegments.find((row) => row.id === seg.parentRowId));
           const { changedAfterFinalReason } = require("./speakerUncertainty");
           const changed = changedAfterFinalReason(prior?.speakerName, seg.speakerName);
-          if (prior && !isSpeakerLocked(seg) &&
-            (changed || prior.speaker !== seg.speaker ||
+          if (
+            prior &&
+            !isSpeakerLocked(seg) &&
+            (changed ||
+              prior.speaker !== seg.speaker ||
               !!prior.speakerIsPlaceholder !== !!seg.speakerIsPlaceholder ||
-              (seg.parentRowId && seg.parentRowId !== seg.id))) {
+              (seg.parentRowId && seg.parentRowId !== seg.id))
+          ) {
             seg.changedAfterFinal = true;
-            seg.finalRevision = { fromSpeaker: prior.speaker, toSpeaker: seg.speaker,
-              fromName: prior.speakerName, toName: seg.speakerName,
+            seg.finalRevision = {
+              fromSpeaker: prior.speaker,
+              toSpeaker: seg.speaker,
+              fromName: prior.speakerName,
+              toName: seg.speakerName,
               ...(seg.parentRowId && seg.parentRowId !== seg.id
-                ? { splitFromRowId: seg.parentRowId } : {}) };
+                ? { splitFromRowId: seg.parentRowId }
+                : {}),
+            };
             if (!seg.uncertainty) seg.uncertainty = { reason: "changed_after_final" };
             seg.speakerAssessmentAvailable = true;
           }
         }
-        const audioRemoved = noteId != null && ["deleted", "expired", "evicted"]
-          .includes(this.meetingAudioStore?.status(noteId).state);
-        send({ segments: enrichedSegments, speakerEmbeddings: audioRemoved ? null : speakerEmbeddingsMap });
+        const audioRemoved =
+          noteId != null &&
+          ["deleted", "expired", "evicted"].includes(this.meetingAudioStore?.status(noteId).state);
+        send({
+          segments: enrichedSegments,
+          speakerEmbeddings: audioRemoved ? null : speakerEmbeddingsMap,
+        });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
         this._diarizationSpeakerReservations.delete(sessionId);
@@ -14026,7 +14587,9 @@ class IPCHandlers {
         sendUndiarized();
       } finally {
         if (typeof rawPcmPath === "string") {
-          try { fs.unlinkSync(rawPcmPath); } catch (_) {}
+          try {
+            fs.unlinkSync(rawPcmPath);
+          } catch (_) {}
         }
         if (typeof tmpWav === "string") {
           try {
@@ -14056,7 +14619,13 @@ class IPCHandlers {
         const { CommitmentStore } = require("./commitments/store");
         new CommitmentStore(this.databaseManager).sourceRemoved(id);
         broadcastToWindows("commitments-updated");
-      } catch (error) { debugLogger.error("Commitment source cleanup failed", { error: error.message }, "commitments"); }
+      } catch (error) {
+        debugLogger.error(
+          "Commitment source cleanup failed",
+          { error: error.message },
+          "commitments"
+        );
+      }
       setImmediate(() => broadcastToWindows("note-deleted", { id }));
       this.notifyVectorChanges();
       this._asyncMirrorDelete(id);

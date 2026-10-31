@@ -68,7 +68,8 @@ const START_MS = 1792414000000;
 // Runs main's real _startOrSkipDiarization and resolves with the payload it
 // sends. `outcome` picks the diarized, skipped or failed path.
 const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized", finalName,
-  sessionConfig = null, diarizedSegments = null, onDiarize = null } = {}) =>
+  sessionConfig = null, diarizedSegments = null, onDiarize = null,
+  audioStore = null, whisperManager = null } = {}) =>
   new Promise((resolve) => {
     const diarizationManager = new DiarizationManager();
     diarizationManager.isAvailable = () => outcome !== "skipped";
@@ -91,6 +92,8 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
       speakerDiarizationEnabled: true,
       _diarizationSpeakerReservations: new Map(),
       _reconcileLiveSpeakerState: () => new Map(),
+      meetingAudioStore: audioStore,
+      whisperManager,
     });
     const win = {
       isDestroyed: () => false,
@@ -166,7 +169,8 @@ test("main final analysis finds the prior row by its ingestion id", async () => 
   visit(source);
   const stored = [];
   const sent = [];
-  const context = { crypto, meetingConnectionOptions: { sessionId: "diar-1" }, meetingDiarizationSegments: stored, appendMeetingLocalTranscript() {} };
+  const context = { crypto, meetingConnectionOptions: { sessionId: "diar-1" }, meetingNoteId: null,
+    meetingDiarizationSegments: stored, appendMeetingLocalTranscript() {} };
   const store = vm.runInNewContext(`(${arrows.get("storeMeetingDiarizationSegment")})`, context);
   const sendFinal = vm.runInNewContext(`(${arrows.get("sendMeetingFinalSegment")})`, {
     ...context, storeMeetingDiarizationSegment: store,
@@ -289,4 +293,36 @@ test("post-session mic dedupe only looks at system text within 6 seconds", () =>
 
   assert.deepEqual(removed, [nearEcho]);
   assert.deepEqual(kept, [system, later]);
+});
+
+test("resumed diarization persists recording-relative seconds instead of session seconds", async () => {
+  const payload = await runMainDiarization([
+    { id: "resumed", source: "system", text: "hello", timestamp: START_MS + 10000 },
+  ], {
+    audioStore: { status: () => ({ startedAt: START_MS - 600000, recordingId: "recording-uuid" }) },
+  });
+  const [row] = runRendererCompletion([], payload);
+  assert.equal(row.timestamp, 610);
+  assert.equal(row.recordingOrigin, START_MS - 600000);
+  assert.equal(row.recordingId, "recording-uuid");
+  assert.equal(row.timebase, "recording");
+});
+
+test("undiarized alignment uses the manifest UUID and keeps its source track", async () => {
+  const audioStore = {
+    status: () => ({ startedAt: START_MS, recordingId: "recording-uuid", tracks: {
+      system: { sampleCount: 5 * 24000, chunks: [{ startSample: 0, sampleCount: 5 * 24000 }] },
+    } }),
+    span: () => ({ state: "available", wav: Buffer.from("wav"), partial: false }),
+  };
+  const whisperManager = { currentServerModel: "tiny", serverManager: {
+    ready: true, isRemote: false,
+    transcribe: async () => ({ segments: [{ text: "hello", start: 1, end: 1.6 }] }),
+  } };
+  const payload = await runMainDiarization([
+    { id: "undiarized", source: "system", text: "hello", timestamp: START_MS + 3000 },
+  ], { outcome: "skipped", audioStore, whisperManager });
+  assert.deepEqual(payload.segments[0].audioSpan, {
+    recordingId: "recording-uuid", trackId: "system", startSample: 24000, endSample: 38400,
+  });
 });

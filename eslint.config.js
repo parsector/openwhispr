@@ -41,4 +41,8 @@ module.exports = [
       "no-var": "off",
     },
   },
+  {
+    files: ["test/components/noteEditorSummaryDeletion.test.js"],
+    languageOptions: { globals: globals.browser },
+  },
 ];

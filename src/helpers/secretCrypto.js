@@ -167,8 +167,9 @@ function clearDeviceKey() {
   try {
     const { Entry } = require("@napi-rs/keyring");
     const entry = new Entry(SERVICE, ACCOUNT);
-    try { entry.deletePassword(); }
-    catch (error) {
+    try {
+      entry.deletePassword();
+    } catch (error) {
       if (!/NoEntry|no entry|not found/i.test(String(error?.message))) throw error;
     }
   } finally {

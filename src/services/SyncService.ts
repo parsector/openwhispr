@@ -2176,13 +2176,21 @@ export class SyncService {
           // kept the text would never arrive.
           const cleanPreRevision = preRevision && local.sync_status === "synced";
           if (!local || cleanPreRevision || isCloudNoteNewer(cloudNote, local)) {
-            const transcriptOnlyPending = !!local && local.sync_status === "pending" &&
-              !!local.cloud_id && !!local.transcript && !!cloudNote.transcript &&
-              local.title === cloudNote.title && local.content === cloudNote.content &&
+            const transcriptOnlyPending =
+              !!local &&
+              local.sync_status === "pending" &&
+              !!local.cloud_id &&
+              !!local.transcript &&
+              !!cloudNote.transcript &&
+              local.title === cloudNote.title &&
+              local.content === cloudNote.content &&
               local.enhanced_content === cloudNote.enhanced_content &&
-              !local.content_sync_operation && !local.enhanced_content_sync_operation &&
-              !local.folder_sync_operation && !local.participants_sync_operation &&
-              local.folder_id === resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId) &&
+              !local.content_sync_operation &&
+              !local.enhanced_content_sync_operation &&
+              !local.folder_sync_operation &&
+              !local.participants_sync_operation &&
+              local.folder_id ===
+                resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId) &&
               local.space_id === space.id &&
               local.participants === cloudNote.participants;
             if (local && local.sync_status !== "synced" && !transcriptOnlyPending) {

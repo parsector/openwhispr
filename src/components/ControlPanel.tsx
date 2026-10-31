@@ -147,11 +147,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
   useEffect(() => {
-    const drain = () => { void window.electronAPI.commitmentsPendingTodosFilter().then((filter) => {
-      if (!filter) return;
-      useTodosStore.getState().setFilter(filter);
-      setActiveView("todos");
-    }); };
+    const drain = () => {
+      void window.electronAPI.commitmentsPendingTodosFilter().then((filter) => {
+        if (!filter) return;
+        useTodosStore.getState().setFilter(filter);
+        setActiveView("todos");
+      });
+    };
     drain();
     const off = window.electronAPI.onTodosNavigationPending(drain);
     return () => off();
@@ -981,8 +983,13 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             }}
             initialSection={settingsSection}
             onOpenNote={(id, rowId) => {
-              window.sessionStorage.setItem("peopleReviewTarget", JSON.stringify({ noteId: id, rowId }));
-              window.dispatchEvent(new CustomEvent("people-review-navigate", { detail: { noteId: id, rowId } }));
+              window.sessionStorage.setItem(
+                "peopleReviewTarget",
+                JSON.stringify({ noteId: id, rowId })
+              );
+              window.dispatchEvent(
+                new CustomEvent("people-review-navigate", { detail: { noteId: id, rowId } })
+              );
               void window.electronAPI.getNote(id).then((note) => {
                 if (!note) return;
                 if (note.folder_id) {
@@ -1104,7 +1111,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 <div className="flex items-center gap-2">
                   <NewNoteMenu
                     onNewNote={handleNewNote}
-                    onNewTodo={() => { useTodosStore.getState().requestComposer(); setActiveView("todos"); }}
+                    onNewTodo={() => {
+                      useTodosStore.getState().requestComposer();
+                      setActiveView("todos");
+                    }}
                     onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
                   />
                   <ProfileMenu
@@ -1289,17 +1299,23 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               )}
               {activeView === "todos" && (
                 <Suspense fallback={null}>
-                  <TodosView onOpenAgentJob={() => { setIntegrationsSection("agents"); setActiveView("integrations"); }} onOpenNote={(id) => {
-                    void window.electronAPI.getNote(id).then((note) => {
-                      if (!note) return;
-                      if (note.folder_id) {
-                        setActiveFolderId(note.folder_id);
-                        void initializeNotes(null, 50, note.folder_id);
-                      }
-                      setActiveNoteId(id);
-                      setActiveView("personal-notes");
-                    });
-                  }} />
+                  <TodosView
+                    onOpenAgentJob={() => {
+                      setIntegrationsSection("agents");
+                      setActiveView("integrations");
+                    }}
+                    onOpenNote={(id) => {
+                      void window.electronAPI.getNote(id).then((note) => {
+                        if (!note) return;
+                        if (note.folder_id) {
+                          setActiveFolderId(note.folder_id);
+                          void initializeNotes(null, 50, note.folder_id);
+                        }
+                        setActiveNoteId(id);
+                        setActiveView("personal-notes");
+                      });
+                    }}
+                  />
                 </Suspense>
               )}
               {activeView === "dictionary" && (

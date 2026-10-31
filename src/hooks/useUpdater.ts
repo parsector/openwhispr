@@ -128,7 +128,9 @@ function registerEventListeners() {
   if (window.electronAPI.onUpdateError) {
     const dispose = window.electronAPI.onUpdateError((_event, error) => {
       updateGlobalState({
-        isChecking: false, isDownloading: false, isInstalling: false,
+        isChecking: false,
+        isDownloading: false,
+        isInstalling: false,
         status: {
           ...globalState.status,
           isDownloading: false,
@@ -204,7 +206,9 @@ export function useUpdater() {
     try {
       const result = await window.electronAPI.downloadUpdate();
       if (!result.success) {
-        throw new Error(`${result.message}\nUpdater log: ${result.logPath || state.status.logPath}`);
+        throw new Error(
+          `${result.message}\nUpdater log: ${result.logPath || state.status.logPath}`
+        );
       }
       return result;
     } catch (error) {

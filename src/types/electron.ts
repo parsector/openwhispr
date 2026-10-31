@@ -1571,19 +1571,48 @@ declare global {
     electronAPI: {
       commitmentsList: (includeArchived?: boolean) => Promise<Commitment[]>;
       isDebugEnabled: () => Promise<boolean>;
-      commitmentsDelete: (id: string) => Promise<{ success: true } | { success: false; error: string }>;
-      todosToolList: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
-      todosToolGet: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
-      todosToolCreate: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
-      todosToolUpdate: (args: Record<string, unknown>) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      commitmentsDelete: (
+        id: string
+      ) => Promise<{ success: true } | { success: false; error: string }>;
+      todosToolList: (
+        args: Record<string, unknown>
+      ) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      todosToolGet: (
+        args: Record<string, unknown>
+      ) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      todosToolCreate: (
+        args: Record<string, unknown>
+      ) => Promise<{ success: boolean; data: unknown; displayText: string }>;
+      todosToolUpdate: (
+        args: Record<string, unknown>
+      ) => Promise<{ success: boolean; data: unknown; displayText: string }>;
       commitmentsForNote: (noteId: number) => Promise<Commitment[]>;
-      commitmentsOpenTodos: (filter: { kind: "note" | "person"; value: string; email?: string | null }) => Promise<boolean>;
-      commitmentsPendingTodosFilter: () => Promise<{ kind: "note" | "person"; value: string; email?: string | null } | null>;
+      commitmentsOpenTodos: (filter: {
+        kind: "note" | "person";
+        value: string;
+        email?: string | null;
+      }) => Promise<boolean>;
+      commitmentsPendingTodosFilter: () => Promise<{
+        kind: "note" | "person";
+        value: string;
+        email?: string | null;
+      } | null>;
       onTodosNavigationPending: (callback: () => void) => () => void;
-      commitmentsCreate: (input: { text: string; person?: string | string[]; due_date?: string | null; direction?: "owe" | "waiting" }) => Promise<Commitment>;
-      commitmentsUpdate: (id: string, patch: Partial<Pick<Commitment, "status" | "person" | "rejected_reason" | "text">>) => Promise<Commitment | null>;
+      commitmentsCreate: (input: {
+        text: string;
+        person?: string | string[];
+        due_date?: string | null;
+        direction?: "owe" | "waiting";
+      }) => Promise<Commitment>;
+      commitmentsUpdate: (
+        id: string,
+        patch: Partial<Pick<Commitment, "status" | "person" | "rejected_reason" | "text">>
+      ) => Promise<Commitment | null>;
       commitmentsSetAgentJob: (id: string, jobId: string) => Promise<Commitment | null>;
-      commitmentsSetDue: (id: string, input: { action: "push" | "pick" | "clear"; date?: string }) => Promise<Commitment | null>;
+      commitmentsSetDue: (
+        id: string,
+        input: { action: "push" | "pick" | "clear"; date?: string }
+      ) => Promise<Commitment | null>;
       commitmentsProposalsList: (noteId?: number) => Promise<CommitmentProposal[]>;
       commitmentsResolveProposal: (id: string, accept: boolean) => Promise<Commitment | null>;
       commitmentsOverdueCount: () => Promise<number>;
@@ -1606,7 +1635,11 @@ declare global {
             folder_ids?: number[];
           };
           allowed_tools: string[];
-          source_config: { folder_ids: number[] | null; people: string[] | null; lookback_days: number } | null;
+          source_config: {
+            folder_ids: number[] | null;
+            people: string[] | null;
+            lookback_days: number;
+          } | null;
           model_override: {
             mode: string;
             provider: string;
@@ -1640,12 +1673,22 @@ declare global {
           };
           trigger_type?: string;
           suggested_tools: string[];
-          source_config?: { folder_ids: number[] | null; people: string[] | null; lookback_days: number };
+          source_config?: {
+            folder_ids: number[] | null;
+            people: string[] | null;
+            lookback_days: number;
+          };
           required_selection?: string[];
           needs: string[];
         }>
       >;
-      routineMcpSources: () => Promise<Array<{ name: string; tools: Array<{ name: string; description: string }>; reason: "notConnected" | "needsApproval" | "noTools" | null }>>;
+      routineMcpSources: () => Promise<
+        Array<{
+          name: string;
+          tools: Array<{ name: string; description: string }>;
+          reason: "notConnected" | "needsApproval" | "noTools" | null;
+        }>
+      >;
       routinePeople: () => Promise<Array<{ email: string; name: string }>>;
       routineModelUsable: (choice: {
         mode: string;
@@ -1664,7 +1707,11 @@ declare global {
         name: string;
         prompt: string;
         allowed_tools?: string[];
-        source_config?: { folder_ids: number[] | null; people: string[] | null; lookback_days: number } | null;
+        source_config?: {
+          folder_ids: number[] | null;
+          people: string[] | null;
+          lookback_days: number;
+        } | null;
         model_override?: {
           mode: string;
           provider: string;
@@ -1674,13 +1721,33 @@ declare global {
         catch_up_window_hours?: number;
         voice_hint?: string;
         trigger_type?: string;
-        trigger_config: { schema_version: number; slots?: Array<{ days: number[]; time: string }>; minutes_before?: number; title_pattern?: string; title_template?: string; has_attendees?: boolean; has_meeting_link?: boolean; skip_declined?: boolean; folder_ids?: number[] };
+        trigger_config: {
+          schema_version: number;
+          slots?: Array<{ days: number[]; time: string }>;
+          minutes_before?: number;
+          title_pattern?: string;
+          title_template?: string;
+          has_attendees?: boolean;
+          has_meeting_link?: boolean;
+          skip_declined?: boolean;
+          folder_ids?: number[];
+        };
       }) => Promise<{ success: boolean; error?: string }>;
-      routineMeetingPreview: (config: { schema_version: number; folder_ids: number[]; title_pattern: string }) => Promise<number>;
-      routineNoteLinks: (noteId: number) => Promise<{ source: { id: number; title: string } | null; event: { id: string; title: string; url: string | null } | null } | null>;
+      routineMeetingPreview: (config: {
+        schema_version: number;
+        folder_ids: number[];
+        title_pattern: string;
+      }) => Promise<number>;
+      routineNoteLinks: (noteId: number) => Promise<{
+        source: { id: number; title: string } | null;
+        event: { id: string; title: string; url: string | null } | null;
+      } | null>;
       routineOpenLinkedNote: (noteId: number) => Promise<boolean>;
       pauseRoutine: (id: string, paused: boolean) => Promise<{ success: boolean }>;
-      deleteRoutine: (id: string, deleteFolder: boolean) => Promise<{ success: boolean; error?: string }>;
+      deleteRoutine: (
+        id: string,
+        deleteFolder: boolean
+      ) => Promise<{ success: boolean; error?: string }>;
       runRoutineNow: (id: string) => Promise<{ success: boolean }>;
       routineHistory: (id: string) => Promise<
         Array<{
@@ -1708,12 +1775,19 @@ declare global {
       localMcpState: () => Promise<{
         enabled: boolean;
         url: string | null;
-        tokens: Array<{ id: string; label: string; createdAt: string; lastUsedAt: string | null; scopes: string[] }>;
+        tokens: Array<{
+          id: string;
+          label: string;
+          createdAt: string;
+          lastUsedAt: string | null;
+          scopes: string[];
+        }>;
         activity: Array<{ clientName: string; tool: string; timestamp: string }>;
       }>;
       localMcpEnable: (enabled: boolean) => Promise<{ enabled: boolean; url: string | null }>;
       localMcpCreateToken: (
-        label: string, scopes: string[]
+        label: string,
+        scopes: string[]
       ) => Promise<{ id: string; label: string; plaintext: string; scopes: string[] }>;
       localMcpRevokeToken: (id: string) => Promise<boolean>;
       // Basic window operations
@@ -2117,8 +2191,14 @@ declare global {
           updated_by_user_id?: string | null;
           left_team?: number;
         },
-        options?: { undoable?: boolean; expected?: NoteItem; turn?: string;
-          expectedTranscript?: string | null; reconcileTranscript?: boolean; migrateTranscript?: boolean }
+        options?: {
+          undoable?: boolean;
+          expected?: NoteItem;
+          turn?: string;
+          expectedTranscript?: string | null;
+          reconcileTranscript?: boolean;
+          migrateTranscript?: boolean;
+        }
       ) => Promise<{ success: boolean; note?: NoteItem; error?: string }>;
       getNoteUndos: () => Promise<Array<{ token: string; noteId: number; title: string }>>;
       claimNoteUndo: (token: string) => Promise<boolean>;
@@ -3655,26 +3735,86 @@ declare global {
         reason?: "recording-active";
       }>;
       meetingAudioStatus?: (noteId: number) => Promise<{
-        state: "recording" | "complete" | "incomplete" | "deleted" | "expired" | "evicted" | "unavailable" | "key_unavailable";
+        state:
+          | "recording"
+          | "complete"
+          | "incomplete"
+          | "deleted"
+          | "expired"
+          | "evicted"
+          | "unavailable"
+          | "key_unavailable";
         reason?: string | null;
         bytes: number;
         startedAt?: number;
         recordingId?: string | number;
+        tracks?: Partial<
+          Record<"mic" | "system", { chunks: Array<{ startSample: number; sampleCount: number }> }>
+        >;
         keep?: boolean;
       }>;
-      meetingAudioUsage?: () => Promise<{ usedBytes: number; budgetBytes: number; days: 3 | 7 | 30; evictions: Array<{ noteId: number; title: string; at: number }> }>;
-      meetingAudioSpan?: (noteId: number, track: "mic" | "system", startSeconds: number, endSeconds: number) => Promise<{
+      meetingAudioUsage?: () => Promise<{
+        usedBytes: number;
+        budgetBytes: number;
+        days: 3 | 7 | 30;
+        evictions: Array<{ noteId: number; title: string; at: number }>;
+      }>;
+      speakerCalibrationSettings?: () => Promise<{
+        values: {
+          similarityFloor: number;
+          runnerUpMargin: number;
+          minimumVoicedSeconds: number;
+          overlapToleranceSeconds: number;
+        };
+        status: string;
+        evidence?: unknown;
+      }>;
+      applySpeakerCalibration?: (
+        values: {
+          similarityFloor: number;
+          runnerUpMargin: number;
+          minimumVoicedSeconds: number;
+          overlapToleranceSeconds: number;
+        },
+        report?: unknown
+      ) => Promise<{
+        success: boolean;
+        values?: {
+          similarityFloor: number;
+          runnerUpMargin: number;
+          minimumVoicedSeconds: number;
+          overlapToleranceSeconds: number;
+        };
+        status?: string;
+        error?: string;
+      }>;
+      meetingAudioSpan?: (
+        noteId: number,
+        track: "mic" | "system",
+        startSeconds: number,
+        endSeconds: number
+      ) => Promise<{
         state: string;
         wav?: string;
         durationSeconds?: number;
         partial?: boolean;
       }>;
       meetingAudioDelete?: (noteId: number) => Promise<{ state: string; freedBytes?: number }>;
-      onMeetingAudioChanged?: (callback: (change: { noteId: number; state: string }) => void) => () => void;
+      exportMeetingCalibration?: (
+        noteId: number
+      ) => Promise<{ success: boolean; folder?: string; error?: string; canceled?: boolean }>;
+      onMeetingAudioChanged?: (
+        callback: (change: { noteId: number; state: string }) => void
+      ) => () => void;
       meetingAudioSetPolicy?: (policy: { days: 3 | 7 | 30; budgetBytes: number }) => Promise<{
-        usedBytes: number; budgetBytes: number; removed: Array<{ noteId: number; reason: string }>;
+        usedBytes: number;
+        budgetBytes: number;
+        removed: Array<{ noteId: number; reason: string }>;
       }>;
-      meetingAudioSetKeep?: (noteId: number, keep: boolean) => Promise<{ state: string; keep?: boolean }>;
+      meetingAudioSetKeep?: (
+        noteId: number,
+        keep: boolean
+      ) => Promise<{ state: string; keep?: boolean }>;
       meetingNoteStopped?: (noteId: number) => void;
       meetingNoteFinalized?: (data: { noteId: number; diarized: boolean | "skipped" }) => void;
       onMeetingTranscriptionSegment?: (
@@ -3699,9 +3839,13 @@ declare global {
         callback: (data: { noteId: number; runId: string }) => void
       ) => () => void;
       reconsiderLiveSpeakers?: (request: {
-        noteId: number; runId: string; rows: import("../stores/meetingRecordingStore").TranscriptSegment[];
-      }) => Promise<{ assignments: Array<{ speakerId: string; displayName: string; actionId: string }>;
-        rows: import("../stores/meetingRecordingStore").TranscriptSegment[] }>;
+        noteId: number;
+        runId: string;
+        rows: import("../stores/meetingRecordingStore").TranscriptSegment[];
+      }) => Promise<{
+        assignments: Array<{ speakerId: string; displayName: string; actionId: string }>;
+        rows: import("../stores/meetingRecordingStore").TranscriptSegment[];
+      }>;
       onMeetingSpeakersMerged?: (
         callback: (
           merges: Array<{
@@ -3783,24 +3927,160 @@ declare global {
       ) => () => void;
 
       // Speaker name mapping
-      listPeople?: () => Promise<Array<{ id: number; displayName: string; email: string | null; searchAliases: string[]; noteCount: number; meetingCount: number; segmentCount: number; lastHeard: string | null; lastSeen: string | null; sampleCount: number; hasVoice: boolean; legacyVoice: boolean; needsReapproval: boolean; voiceProgress: { cleanSpans: number; meetings: number; approvedSpans: number; conflict: boolean; usable: boolean; requiredSpans: number; requiredMeetings: number }; usedOnce: boolean; duplicates: Array<{ id: number; name: string }> }>>;
-      listVoiceEnrollmentCandidates?: (profileId: number) => Promise<Array<{ id: string; profileId: number; noteId: number; noteTitle: string; meetingDate: string; rowIds: string[]; track: 'mic' | 'system'; startSample: number; endSample: number; durationSeconds: number; everCorrected: boolean }>>;
-      listVoiceEnrollmentSamples?: (profileId: number) => Promise<Array<{ id: string; profileId: number; noteId: number; noteTitle: string; meetingDate: string; rowIds: string[]; durationSeconds: number; odd: boolean }>>;
+      listPeople?: () => Promise<
+        Array<{
+          id: number;
+          displayName: string;
+          email: string | null;
+          searchAliases: string[];
+          noteCount: number;
+          meetingCount: number;
+          segmentCount: number;
+          lastHeard: string | null;
+          lastSeen: string | null;
+          sampleCount: number;
+          hasVoice: boolean;
+          legacyVoice: boolean;
+          needsReapproval: boolean;
+          voiceProgress: {
+            cleanSpans: number;
+            meetings: number;
+            approvedSpans: number;
+            conflict: boolean;
+            usable: boolean;
+            requiredSpans: number;
+            requiredMeetings: number;
+          };
+          usedOnce: boolean;
+          duplicates: Array<{ id: number; name: string }>;
+        }>
+      >;
+      listVoiceEnrollmentCandidates?: (profileId: number) => Promise<
+        Array<{
+          id: string;
+          profileId: number;
+          noteId: number;
+          noteTitle: string;
+          meetingDate: string;
+          rowIds: string[];
+          track: "mic" | "system";
+          startSample: number;
+          endSample: number;
+          durationSeconds: number;
+          everCorrected: boolean;
+        }>
+      >;
+      listVoiceEnrollmentSamples?: (profileId: number) => Promise<
+        Array<{
+          id: string;
+          profileId: number;
+          noteId: number;
+          noteTitle: string;
+          meetingDate: string;
+          rowIds: string[];
+          durationSeconds: number;
+          odd: boolean;
+        }>
+      >;
       removeVoiceEnrollmentSample?: (id: string) => Promise<{ success: boolean; error?: string }>;
-      playVoiceEnrollmentCandidate?: (id: string) => Promise<{ state: string; wav?: string; token?: string }>;
-      completeVoiceEnrollmentCandidate?: (id: string, token: string) => Promise<{ success: boolean; error?: string }>;
-      decideVoiceEnrollmentCandidate?: (id: string, choice: 'approve' | 'reject', token: string) => Promise<{ success: boolean; error?: string }>;
+      playVoiceEnrollmentCandidate?: (
+        id: string
+      ) => Promise<{ state: string; wav?: string; token?: string }>;
+      completeVoiceEnrollmentCandidate?: (
+        id: string,
+        token: string
+      ) => Promise<{ success: boolean; error?: string }>;
+      decideVoiceEnrollmentCandidate?: (
+        id: string,
+        choice: "approve" | "reject",
+        token: string
+      ) => Promise<{ success: boolean; error?: string }>;
       undoVoiceEnrollmentAction?: (id: string) => Promise<{ success: boolean; error?: string }>;
-      listPeopleActions?: () => Promise<Array<{ id: string; kind: string; profileId: number | null; noteId: number | null; label: string; unavailableReason: string | null; noteInTrash: 0 | 1; createdAt: string }>>;
+      listPeopleActions?: () => Promise<
+        Array<{
+          id: string;
+          kind: string;
+          profileId: number | null;
+          noteId: number | null;
+          label: string;
+          unavailableReason: string | null;
+          noteInTrash: 0 | 1;
+          createdAt: string;
+        }>
+      >;
       undoPeopleMapping?: (noteId: number) => Promise<{ success: boolean; error?: string }>;
       onPeopleChanged?: (callback: () => void) => () => void;
       speakerHistoryStatus?: (noteId: number) => Promise<{ quarantined: boolean }>;
-      listPeopleReview?: (profileId?: number | null) => Promise<Array<{ noteId: number; noteTitle: string; rowId: string; text: string; speakerName: string | null; profileId: number | null; reason: string; candidates: [string, string] | null; timestamp: string }>>;
-      previewPersonAction?: (request: { type: "rename" | "merge" | "delete" | "reset"; profileId: number; survivorId?: number; name?: string }) => Promise<{ success: boolean; error?: string; noteCount?: number; segmentCount?: number; pinnedCount?: number; voiceSamples?: number; historyCount?: number; noteEmbeddingCount?: number }>;
-      applyPersonAction?: (request: { type: "rename" | "merge" | "delete" | "reset"; profileId: number; survivorId?: number; name?: string; expected?: { noteCount: number; segmentCount: number; pinnedCount: number; historyCount?: number; noteEmbeddingCount?: number } }) => Promise<{ success: boolean; error?: string; id?: string | null; noteCount?: number; segmentCount?: number; pinnedCount?: number }>;
+      listPeopleReview?: (profileId?: number | null) => Promise<
+        Array<{
+          noteId: number;
+          noteTitle: string;
+          rowId: string;
+          text: string;
+          speakerName: string | null;
+          profileId: number | null;
+          reason: string;
+          candidates: [string, string] | null;
+          timestamp: string;
+        }>
+      >;
+      previewPersonAction?: (request: {
+        type: "rename" | "merge" | "delete" | "reset";
+        profileId: number;
+        survivorId?: number;
+        name?: string;
+      }) => Promise<{
+        success: boolean;
+        error?: string;
+        noteCount?: number;
+        segmentCount?: number;
+        pinnedCount?: number;
+        voiceSamples?: number;
+        historyCount?: number;
+        noteEmbeddingCount?: number;
+      }>;
+      applyPersonAction?: (request: {
+        type: "rename" | "merge" | "delete" | "reset";
+        profileId: number;
+        survivorId?: number;
+        name?: string;
+        expected?: {
+          noteCount: number;
+          segmentCount: number;
+          pinnedCount: number;
+          historyCount?: number;
+          noteEmbeddingCount?: number;
+        };
+      }) => Promise<{
+        success: boolean;
+        error?: string;
+        id?: string | null;
+        noteCount?: number;
+        segmentCount?: number;
+        pinnedCount?: number;
+      }>;
       undoPersonAction?: (id: string) => Promise<{ success: boolean; error?: string }>;
-      previewClearVoiceData?: () => Promise<{ success: boolean; personCount: number; embeddingCount: number; mappingCount: number; noteEmbeddingCount: number }>;
-      clearVoiceData?: (expected: { personCount: number; embeddingCount: number; mappingCount: number; noteEmbeddingCount: number }) => Promise<{ success: boolean; error?: string; id?: string; personCount?: number; embeddingCount?: number; mappingCount?: number; noteEmbeddingCount?: number }>;
+      previewClearVoiceData?: () => Promise<{
+        success: boolean;
+        personCount: number;
+        embeddingCount: number;
+        mappingCount: number;
+        noteEmbeddingCount: number;
+      }>;
+      clearVoiceData?: (expected: {
+        personCount: number;
+        embeddingCount: number;
+        mappingCount: number;
+        noteEmbeddingCount: number;
+      }) => Promise<{
+        success: boolean;
+        error?: string;
+        id?: string;
+        personCount?: number;
+        embeddingCount?: number;
+        mappingCount?: number;
+        noteEmbeddingCount?: number;
+      }>;
       undoClearVoiceData?: (id: string) => Promise<{ success: boolean; error?: string }>;
       getSpeakerMappings?: (noteId: number) => Promise<
         Array<{
@@ -3826,9 +4106,18 @@ declare global {
         success: boolean;
         error?: string;
         rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
-        mapping?: { runId?: string; clusterId: string; value: { display_name?: string; displayName?: string } | null } | null;
-        report?: { movedRows: number; retainedRows: number; acousticRows: number;
-          newClusterId: string; evidence: string } | null;
+        mapping?: {
+          runId?: string;
+          clusterId: string;
+          value: { display_name?: string; displayName?: string } | null;
+        } | null;
+        report?: {
+          movedRows: number;
+          retainedRows: number;
+          acousticRows: number;
+          newClusterId: string;
+          evidence: string;
+        } | null;
         anchor?: { state: "active" | "refused"; reason: string | null };
         anchorInvalidated?: boolean;
       }>;
@@ -4041,8 +4330,13 @@ declare global {
         localFolderId: number | null,
         localSpaceId?: number | null
       ) => Promise<NoteItem | null>;
-      takeCloudSpeakerLabels?: (noteId: number, undo?: boolean) => Promise<{
-        success: boolean; error?: string; note?: NoteItem;
+      takeCloudSpeakerLabels?: (
+        noteId: number,
+        undo?: boolean
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        note?: NoteItem;
       }>;
       acknowledgeNoteCreate?: (
         id: number,

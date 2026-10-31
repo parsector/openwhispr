@@ -3,7 +3,11 @@ import type { Commitment, CommitmentProposal } from "../types/electron";
 
 const ARCHIVE_KEY = "todos-show-archived";
 function savedArchivePreference(): boolean {
-  try { return localStorage.getItem(ARCHIVE_KEY) === "true"; } catch { return false; }
+  try {
+    return localStorage.getItem(ARCHIVE_KEY) === "true";
+  } catch {
+    return false;
+  }
 }
 
 type TodosState = {
@@ -22,8 +26,14 @@ type TodosState = {
 };
 
 export const useTodosStore = create<TodosState>((set, get) => ({
-  rows: [], proposals: [], overdueCount: 0, showArchived: savedArchivePreference(),
-  loading: false, error: null, filter: null, composerRequestAt: 0,
+  rows: [],
+  proposals: [],
+  overdueCount: 0,
+  showArchived: savedArchivePreference(),
+  loading: false,
+  error: null,
+  filter: null,
+  composerRequestAt: 0,
   requestComposer: () => set({ composerRequestAt: Date.now() }),
   setFilter: (filter) => set({ filter }),
   refresh: async () => {
@@ -40,7 +50,11 @@ export const useTodosStore = create<TodosState>((set, get) => ({
     }
   },
   setShowArchived: (show) => {
-    try { localStorage.setItem(ARCHIVE_KEY, String(show)); } catch { /* unavailable */ }
+    try {
+      localStorage.setItem(ARCHIVE_KEY, String(show));
+    } catch {
+      /* unavailable */
+    }
     set({ showArchived: show });
     void get().refresh();
   },
