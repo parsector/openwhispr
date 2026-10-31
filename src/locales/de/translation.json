@@ -3604,6 +3604,7 @@
         "overlapping_speech": "Überlappende Sprache",
         "possible_mixed_speakers": "Möglicherweise mehrere Sprecher",
         "changed_after_final": "Nach der abschließenden Analyse geändert",
+        "approved_voice": "Erkannt, nachdem du diese Stimme bestätigt hast",
         "not_sure": "Unsicher"
       }
     },

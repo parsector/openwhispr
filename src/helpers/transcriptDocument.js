@@ -283,7 +283,8 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
     const own = byId.get(row.id);
     if (!own) return row;
     seen.add(row.id);
-    const protectedAssignment = own.speakerLockSource === "user";
+    const protectedAssignment = own.speakerLockSource === "user" ||
+      (own.machineReason === "approved_voice" && own.speaker === row.speaker);
     return protectedAssignment ? {
       ...row,
       speakerName: own.speakerName,
@@ -295,10 +296,11 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
       quarantinedCorrections: own.quarantinedCorrections,
       suggestedName: own.suggestedName,
       suggestedProfileId: own.suggestedProfileId,
+      machineReason: own.machineReason,
     } : row;
   });
   rows.push(...current.rows.filter((row) => !seen.has(row.id) &&
-    (row.speakerLockSource === "user" || row.deleted)));
+    (row.speakerLockSource === "user" || row.machineReason === "approved_voice" || row.deleted)));
   return writeTranscriptDocument(rows, Math.max(proposed.unknownNumberHighWater,
     current.unknownNumberHighWater));
 }

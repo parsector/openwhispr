@@ -180,6 +180,9 @@ class LiveSpeakerIdentifier {
     this.transientObservations = new Map();
     this.transientMinimumSimilarity = new Map();
     this.anchors = new Map();
+    this.clusterEligibility = new Map();
+    this.dismissedReconsiderations = new Set();
+    this.onEvidenceChanged = null;
     this.activeRunId = null;
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
@@ -226,14 +229,54 @@ class LiveSpeakerIdentifier {
     return this.anchors.get(speakerId)?.state || null;
   }
 
+  getEligibilityState(speakerId) {
+    return this.clusterEligibility.get(speakerId) || null;
+  }
+
+  setEligibilityState(speakerId, state) {
+    this.clusterEligibility.set(speakerId, state);
+  }
+
+  dismissReconsideration(speakerId) {
+    this.dismissedReconsiderations.add(speakerId);
+    this.clusterEligibility.set(speakerId, 'owner-rejected');
+  }
+
+  matchEligibleCluster(speakerId) {
+    if (this.clusterEligibility.get(speakerId) !== 'eligible-unmatched') return null;
+    const centroid = this.transientEmbeddings.get(speakerId);
+    if (!centroid) return null;
+    let profiles;
+    try { profiles = this.getSpeakerProfiles?.() || []; }
+    catch { return { reason: 'profile_unavailable' }; }
+    const ranked = profiles.filter(profile => profile.voice_usable === 1 && profile.embedding)
+      .map(profile => ({ profile, similarity: speakerEmbeddings.cosineSimilarity(centroid,
+        profile.embedding instanceof Float32Array ? profile.embedding :
+          Array.isArray(profile.embedding) ? Float32Array.from(profile.embedding) : getBufferFloat32View(profile.embedding)) }))
+      .sort((a, b) => b.similarity - a.similarity);
+    const best = ranked[0];
+    if (!best || best.similarity < MATCH_THRESHOLD) return { reason: 'no_match' };
+    let runnerUp = ranked[1]?.similarity || 0;
+    for (const [id, other] of this.transientEmbeddings) if (id !== speakerId &&
+        (this.transientCohorts.get(id) || 'system') === (this.transientCohorts.get(speakerId) || 'system'))
+      runnerUp = Math.max(runnerUp, speakerEmbeddings.cosineSimilarity(centroid, other));
+    if (best.similarity - runnerUp < ANCHOR_MARGIN) return { reason: 'close_match' };
+    return { profile: best.profile };
+  }
+
   hasActiveAnchor(noteId, runId) {
     this.revalidateAnchors();
     return [...this.anchors.values()].some(anchor => anchor.noteId === noteId && anchor.runId === runId);
   }
 
   invalidateAnchor(speakerId) {
-    if (speakerId) this.anchors.delete(speakerId);
-    else this.anchors.clear();
+    if (speakerId) {
+      this.anchors.delete(speakerId);
+      if (this.clusterEligibility.get(speakerId) === 'anchored') this.clusterEligibility.delete(speakerId);
+    } else {
+      this.anchors.clear();
+      for (const [id, state] of this.clusterEligibility) if (state === 'anchored') this.clusterEligibility.delete(id);
+    }
   }
 
   revalidateAnchors() {
@@ -245,7 +288,7 @@ class LiveSpeakerIdentifier {
     for (const [id, anchor] of this.anchors) {
       const profile = profiles.find(item => item.id === anchor.profileId && item.voice_usable === 1);
       if (!profile?.embedding || !Buffer.from(profile.embedding).equals(anchor.profileBytes)) {
-        this.anchors.delete(id);
+        this.invalidateAnchor(id);
         removed.push(id);
       }
     }
@@ -294,6 +337,7 @@ class LiveSpeakerIdentifier {
     const state = { state: 'active', reason: null };
     this.anchors.set(speakerId, { state, centroid, profileId, runId, noteId, cohort: 'system',
       profileBytes: Buffer.from(profile.embedding) });
+    this.clusterEligibility.set(speakerId, 'anchored');
     return state;
   }
 
@@ -303,6 +347,7 @@ class LiveSpeakerIdentifier {
     const {
       onSpeakerIdentified = null,
       getSpeakerProfiles = null,
+      onEvidenceChanged = null,
       maxSpeakers = MAX_SPEAKER_COUNT,
       enabled = true,
       speakerIndexBase = 0,
@@ -311,6 +356,7 @@ class LiveSpeakerIdentifier {
     this.onSpeakerIdentified =
       typeof onSpeakerIdentified === "function" ? onSpeakerIdentified : null;
     this.getSpeakerProfiles = typeof getSpeakerProfiles === "function" ? getSpeakerProfiles : null;
+    this.onEvidenceChanged = typeof onEvidenceChanged === "function" ? onEvidenceChanged : null;
     this.maxSpeakers = clampMaxSpeakers(maxSpeakers);
     this.enabled = enabled !== false;
     this._resetMeetingState();
@@ -347,6 +393,7 @@ class LiveSpeakerIdentifier {
     this._resetMeetingState();
     this.onSpeakerIdentified = null;
     this.getSpeakerProfiles = null;
+    this.onEvidenceChanged = null;
     return transientState;
   }
 
@@ -411,12 +458,16 @@ class LiveSpeakerIdentifier {
 
         this.transientEmbeddings.set(keepId, merged);
         this.transientCounts.set(keepId, totalCount);
+        this.onEvidenceChanged?.(keepId);
         this.transientEmbeddings.delete(removeId);
         this.transientCounts.delete(removeId);
         this.transientCohorts.delete(removeId);
         this.transientVoicedSamples.delete(removeId);
         this.transientObservations.delete(removeId);
         this.transientMinimumSimilarity.delete(removeId);
+        this.clusterEligibility.delete(removeId);
+        if (this.dismissedReconsiderations.has(removeId)) this.dismissedReconsiderations.add(keepId);
+        this.dismissedReconsiderations.delete(removeId);
         this.invalidateAnchor(keepId);
         this.invalidateAnchor(removeId);
 
@@ -536,6 +587,8 @@ class LiveSpeakerIdentifier {
       this.transientProfileIds.clear();
       this.transientNoteIds.clear();
       this.transientMergeOrigins.clear();
+      this.clusterEligibility.clear();
+      this.dismissedReconsiderations.clear();
       this.currentSegmentSpeakerId = null;
       this.currentSegmentSpeakerName = null;
       return;
@@ -566,6 +619,8 @@ class LiveSpeakerIdentifier {
         this.transientProfileIds.delete(speakerId);
         this.transientNoteIds.delete(speakerId);
         this.transientMergeOrigins.delete(speakerId);
+        this.clusterEligibility.delete(speakerId);
+        this.dismissedReconsiderations.delete(speakerId);
         if (this.currentSegmentSpeakerId === speakerId) {
           this.currentSegmentSpeakerId = null;
           this.currentSegmentSpeakerName = null;
@@ -623,6 +678,8 @@ class LiveSpeakerIdentifier {
     this.transientObservations = new Map();
     this.transientMinimumSimilarity = new Map();
     this.anchors = new Map();
+    this.clusterEligibility = new Map();
+    this.dismissedReconsiderations = new Set();
     this.nextLiveIndex = 0;
     this.currentSegmentSpeakerId = null;
     this.currentSegmentSpeakerName = null;
@@ -1043,6 +1100,8 @@ class LiveSpeakerIdentifier {
     this.transientVoicedSamples.set(speakerId, voicedSamples);
     this.transientObservations.set(speakerId, voicedSamples ? 1 : 0);
     this.transientMinimumSimilarity.set(speakerId, 1);
+    this.clusterEligibility.set(speakerId, 'insufficient-evidence');
+    this.onEvidenceChanged?.(speakerId);
     return speakerId;
   }
 
@@ -1070,6 +1129,7 @@ class LiveSpeakerIdentifier {
 
     this.transientEmbeddings.set(speakerId, nextCentroid);
     this.transientCounts.set(speakerId, count + 1);
+    this.onEvidenceChanged?.(speakerId);
   }
 }
 

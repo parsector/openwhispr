@@ -3693,6 +3693,13 @@ declare global {
           endTime: number;
         }) => void
       ) => () => void;
+      onMeetingSpeakerEvidenceChanged?: (
+        callback: (data: { noteId: number; runId: string }) => void
+      ) => () => void;
+      reconsiderLiveSpeakers?: (request: {
+        noteId: number; runId: string; rows: import("../stores/meetingRecordingStore").TranscriptSegment[];
+      }) => Promise<{ assignments: Array<{ speakerId: string; displayName: string; actionId: string }>;
+        rows: import("../stores/meetingRecordingStore").TranscriptSegment[] }>;
       onMeetingSpeakersMerged?: (
         callback: (
           merges: Array<{

@@ -891,7 +891,7 @@ const SegmentRow = memo(function SegmentRow({
       style={isNewest ? { animation: "agent-message-in 200ms ease-out both" } : undefined}
     >
       {labelElement}
-      {(segment.uncertainty || segment.changedAfterFinal || latestCorrection(segment) || segment.quarantinedCorrections?.length ||
+      {(segment.uncertainty || segment.changedAfterFinal || segment.machineReason || latestCorrection(segment) || segment.quarantinedCorrections?.length ||
         (!segment.speakerAssessmentAvailable && !segment.speakerLocked && !segment.speakerName)) && <div className="flex items-center gap-2 px-1 pb-0.5 text-[11px] text-muted-foreground">
         {segment.importedUnlabeled && !segment.speakerName &&
           <span>{t("notes.speaker.importedUnlabeled")}</span>}
@@ -903,6 +903,8 @@ const SegmentRow = memo(function SegmentRow({
           : t(`notes.speaker.reason.${segment.uncertainty.reason}`)}</span>}
         {segment.changedAfterFinal && segment.uncertainty?.reason !== "changed_after_final" &&
           <span>{t("notes.speaker.reason.changed_after_final")}</span>}
+        {segment.machineReason === "approved_voice" &&
+          <span>{t("notes.speaker.reason.approved_voice")}</span>}
         {latestCorrection(segment) && <button type="button" className="underline underline-offset-2 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
           onClick={() => onUndoCorrection?.(latestCorrection(segment)!.id)}>{t("notes.speaker.restore")}</button>}
       </div>}

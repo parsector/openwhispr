@@ -3604,6 +3604,7 @@
         "overlapping_speech": "Paroles qui se chevauchent",
         "possible_mixed_speakers": "Plusieurs voix possibles",
         "changed_after_final": "Modifié après l’analyse finale",
+        "approved_voice": "Reconnu après votre approbation de cette voix",
         "not_sure": "Incertain"
       }
     },

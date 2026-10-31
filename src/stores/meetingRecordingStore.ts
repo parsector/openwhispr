@@ -85,6 +85,7 @@ export interface TranscriptSegment {
   speakerStatus?: TranscriptSpeakerStatus;
   speakerLocked?: boolean;
   speakerLockSource?: TranscriptSpeakerLockSource;
+  machineReason?: "approved_voice";
 }
 
 export const SIDE_PANEL_BREAKPOINT_PX = 1024;
@@ -1246,6 +1247,26 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         useMeetingRecordingStore.setState({ segments: next });
       });
       if (speakerCleanup) ipcCleanups.push(speakerCleanup);
+
+      const evidenceCleanup = window.electronAPI?.onMeetingSpeakerEvidenceChanged?.(async (data) => {
+        if (activeRecordingSessionId !== sessionId || data.runId !== sessionId ||
+            data.noteId !== useMeetingRecordingStore.getState().recordingNoteId) return;
+        const result = await window.electronAPI?.reconsiderLiveSpeakers?.({
+          noteId: data.noteId, runId: data.runId,
+          rows: useMeetingRecordingStore.getState().segments,
+        });
+        if (activeRecordingSessionId !== sessionId || !result?.rows?.length) return;
+        mergeCommittedSpeakerRows(result.rows);
+        for (const assignment of result.assignments || []) {
+          speakerIdentifications = speakerIdentifications.map(item => item.speakerId === assignment.speakerId
+            ? { ...item, displayName: assignment.displayName } : item);
+          if (recentSystemSpeaker?.speakerId === assignment.speakerId)
+            recentSystemSpeaker.speakerName = assignment.displayName;
+          if (systemPartialSpeakerIdValue === assignment.speakerId)
+            setSystemPartialSpeakerIdentity(assignment.speakerId, assignment.displayName);
+        }
+      });
+      if (evidenceCleanup) ipcCleanups.push(evidenceCleanup);
 
       const mergeCleanup = window.electronAPI?.onMeetingSpeakersMerged?.((merges) => {
         if (activeRecordingSessionId !== sessionId) return;

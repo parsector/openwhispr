@@ -3259,6 +3259,7 @@
         "overlapping_speech": "语音重叠",
         "possible_mixed_speakers": "可能混有多位说话人",
         "changed_after_final": "最终分析后发生变化",
+        "approved_voice": "在您批准此声音后识别",
         "not_sure": "不确定"
       }
     },

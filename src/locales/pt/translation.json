@@ -3259,6 +3259,7 @@
         "overlapping_speech": "Falas sobrepostas",
         "possible_mixed_speakers": "Possíveis vozes misturadas",
         "changed_after_final": "Alterado após a análise final",
+        "approved_voice": "Reconhecido após a sua aprovação desta voz",
         "not_sure": "Não há certeza"
       }
     },

@@ -89,3 +89,16 @@ test("own-voice segments are unaffected by a mapping on another cluster", async 
   assert.equal(resolveSegmentSpeakerName(you, { speaker_0: "Alice" }), undefined);
   assert.equal(groupKey(you, { speaker_0: "Alice" }, resolveSegmentSpeakerName), "id:you");
 });
+
+test("final analysis keeps a same-cluster name recognised after voice approval", async () => {
+  const { mergeTranscriptSegments, resolveSegmentSpeakerName } = await load();
+  const existing = [{ id: "live-row", text: "Hello", source: "system", speaker: "speaker_3",
+    speakerName: "Alex", speakerIsPlaceholder: false, speakerStatus: "confirmed",
+    machineReason: "approved_voice" }];
+  const incoming = [{ id: "live-row", text: "Hello", source: "system", speaker: "speaker_3",
+    speakerIsPlaceholder: true, speakerStatus: "provisional" }];
+  const [merged] = mergeTranscriptSegments(existing, incoming);
+  assert.equal(resolveSegmentSpeakerName(merged), "Alex");
+  assert.equal(merged.machineReason, "approved_voice");
+  assert.equal(merged.speakerIsPlaceholder, false);
+});

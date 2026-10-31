@@ -13,6 +13,7 @@ const SPEAKER_STATE_FIELDS = [
   "speakerStatus",
   "speakerLocked",
   "speakerLockSource",
+  "machineReason",
 ] as const;
 
 type SpeakerStateField = (typeof SPEAKER_STATE_FIELDS)[number];
@@ -110,18 +111,25 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
     merged.audioSpan = existing.audioSpan;
   const existingFields = existing as Record<SpeakerStateField, unknown>;
   const mergedFields = merged as Record<SpeakerStateField, unknown>;
+  const preserveMachineName = existing.machineReason === "approved_voice" &&
+    existing.speaker === incoming.speaker && !isTranscriptSpeakerLocked(existing);
 
   for (const field of SPEAKER_STATE_FIELDS) {
     if (mergedFields[field] === undefined && existingFields[field] !== undefined) {
       if ((field === "speakerName" || field === "speakerStatus") &&
-        incoming.speakerIsPlaceholder && !isTranscriptSpeakerLocked(existing)) continue;
+        incoming.speakerIsPlaceholder && !isTranscriptSpeakerLocked(existing) && !preserveMachineName) continue;
       mergedFields[field] = existingFields[field];
     }
   }
 
-  if (incoming.speakerIsPlaceholder && !isTranscriptSpeakerLocked(existing)) {
+  if (incoming.speakerIsPlaceholder && !isTranscriptSpeakerLocked(existing) && !preserveMachineName) {
     merged.speakerName = undefined;
     if (incoming.speakerStatus !== "confirmed") merged.speakerStatus = "provisional";
+  }
+
+  if (preserveMachineName && incoming.speakerIsPlaceholder) {
+    merged.speakerIsPlaceholder = false;
+    merged.speakerStatus = "confirmed";
   }
 
   if (isTranscriptSpeakerLocked(existing)) {
@@ -285,6 +293,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       speakerStatus: segment.speakerStatus,
       speakerLocked: segment.speakerLocked,
       speakerLockSource: segment.speakerLockSource,
+      machineReason: segment.machineReason,
     })), Math.max(noteHighWater, ...normalized.map((segment) => segment.unknownNumberHighWater || 0), 0)
   );
 };

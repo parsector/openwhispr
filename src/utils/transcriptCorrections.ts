@@ -11,6 +11,7 @@ export interface SpeakerValue {
   suggestedName?: string;
   suggestedProfileId?: number;
   uncertainty?: TranscriptSegment["uncertainty"];
+  machineReason?: TranscriptSegment["machineReason"];
 }
 export interface TranscriptCorrection {
   id: string;
@@ -19,7 +20,7 @@ export interface TranscriptCorrection {
   scope: CorrectionScope;
   previous: SpeakerValue;
   next: SpeakerValue;
-  actor: "user";
+  actor: "user" | "machine";
   timestamp: string;
   sequence?: number;
   diarizationRunId?: string;
@@ -40,6 +41,7 @@ const value = (row: TranscriptSegment): SpeakerValue => ({
   suggestedName: row.suggestedName,
   suggestedProfileId: row.suggestedProfileId,
   uncertainty: row.uncertainty,
+  machineReason: row.machineReason,
 });
 
 export function correctTranscriptRows(

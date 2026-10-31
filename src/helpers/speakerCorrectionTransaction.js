@@ -9,6 +9,7 @@ const FIELDS = [
   "suggestedName",
   "suggestedProfileId",
   "uncertainty",
+  "machineReason",
 ];
 const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
 const { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES } = require('./speakerActionLog');
@@ -16,7 +17,7 @@ const globalHistory = require('./speakerGlobalHistory');
 const debugLogger = require('./debugLogger');
 const MAX_CORRECTION_BYTES = MAX_ACTION_LOG_BYTES;
 const SPLIT_FIELDS = ["speaker", "speakerName", "speakerIsPlaceholder", "speakerStatus",
-  "unknownNumber", "uncertainty", "speakerLocked", "speakerLockSource"];
+  "unknownNumber", "uncertainty", "speakerLocked", "speakerLockSource", "machineReason"];
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
 const snapshot = (row) =>
   Object.fromEntries(FIELDS.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
@@ -34,6 +35,7 @@ function applySpeakerCorrection(database, identifier, request) {
   let committedMapping = null;
   let committedProfileId = null;
   let anchorInput = null;
+  let dismissedReconsideration = null;
   const invalidatedClusters = new Set();
   const run = database.db.transaction(() => {
     const note = database.getNote(noteId);
@@ -112,6 +114,7 @@ function applySpeakerCorrection(database, identifier, request) {
           suggestedName: undefined,
           suggestedProfileId: chosenProfileId ?? undefined,
           uncertainty: undefined,
+          machineReason: undefined,
         };
         snapshots[row.id] = { previous, next: snapshot(next) };
         const record = {
@@ -185,6 +188,7 @@ function applySpeakerCorrection(database, identifier, request) {
           next.speakerIsPlaceholder = true;
           next.speakerStatus = "provisional";
           next.uncertainty = { reason: "possible_mixed_speakers" };
+          next.machineReason = undefined;
         }
         next.corrections = [...(row.corrections || []), { id, rowId: row.id,
           sequence: log.nextSequence }];
@@ -203,10 +207,10 @@ function applySpeakerCorrection(database, identifier, request) {
         evidence: selected.size > reviewed.size ? "voice_embeddings" : "selected_rows" };
     } else {
       const action = newestAvailableAction(log);
-      if (!log.actions.some((entry) => ['correction', 'split'].includes(entry.kind) && entry.id === id))
+      if (!log.actions.some((entry) => ['correction', 'split', 'reconsideration'].includes(entry.kind) && entry.id === id))
         return { success: false, error: 'correction_missing' };
       if (!action) return { success: false, error: log.actions.at(-1)?.unavailableReason || 'later_change' };
-      if (!['correction', 'split'].includes(action.kind) || action.id !== id)
+      if (!['correction', 'split', 'reconsideration'].includes(action.kind) || action.id !== id)
         return { success: false, error: 'later_change' };
       if (note.deleted_at) database.db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(noteId);
       const event = action.event;
@@ -252,6 +256,10 @@ function applySpeakerCorrection(database, identifier, request) {
         if (!result?.success) throw Error(result?.error || "mapping_failed");
         committedMapping = { runId: event.diarizationRunId, clusterId: event.clusterId,
           value: before || null };
+      }
+      if (action.kind === 'reconsideration') {
+        committedMapping = { runId: event.diarizationRunId, clusterId: event.clusterId, value: null };
+        dismissedReconsideration = event.clusterId;
       }
       }
     }
@@ -311,6 +319,7 @@ function applySpeakerCorrection(database, identifier, request) {
         result.anchor = { state: 'refused', reason: 'unavailable' };
       }
     }
+    if (result.success && dismissedReconsideration) identifier?.dismissReconsideration?.(dismissedReconsideration);
     return result;
   } catch (error) {
     for (const [key, snapshot] of caches || []) {

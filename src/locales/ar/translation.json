@@ -2633,6 +2633,7 @@
         "overlapping_speech": "كلام متداخل",
         "possible_mixed_speakers": "ربما اختلط صوتا متحدثين",
         "changed_after_final": "تغيّر بعد التحليل النهائي",
+        "approved_voice": "تم التعرّف عليه بعد موافقتك على هذا الصوت",
         "not_sure": "غير متأكد"
       }
     },

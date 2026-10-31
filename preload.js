@@ -1043,6 +1043,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "meeting-speaker-identified",
     (callback) => (_event, data) => callback(data)
   ),
+  onMeetingSpeakerEvidenceChanged: registerListener(
+    "meeting-speaker-evidence-changed",
+    (callback) => (_event, data) => callback(data)
+  ),
+  reconsiderLiveSpeakers: (request) => ipcRenderer.invoke("reconsider-live-speakers", request),
   onMeetingSpeakersMerged: registerListener(
     "meeting-speakers-merged",
     (callback) => (_event, data) => callback(data)

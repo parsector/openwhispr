@@ -3259,6 +3259,7 @@
         "overlapping_speech": "語音重疊",
         "possible_mixed_speakers": "可能混有多位說話者",
         "changed_after_final": "最終分析後有所變更",
+        "approved_voice": "在您核准此聲音後辨識",
         "not_sure": "不確定"
       }
     },

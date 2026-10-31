@@ -549,7 +549,7 @@ function deletePerson(database, built) {
     const invalidCorrectionIds = new Set();
     for (const row of doc.rows) for (const record of row.corrections || [])
       if (referencesPerson(record, current, uniqueName)) invalidCorrectionIds.add(record.id);
-    for (const action of log.actions) if (action.kind === 'correction' &&
+    for (const action of log.actions) if (['correction', 'reconsideration'].includes(action.kind) &&
       referencesPerson(action, current, uniqueName)) invalidCorrectionIds.add(action.id);
     const targetRows = rowIdsByNote.get(note.id) || new Set();
     const suggestionRows = suggestionIdsByNote.get(note.id) || new Set();
@@ -569,6 +569,7 @@ function deletePerson(database, built) {
         delete next.suggestedName;
         next.speakerName = undefined;
         next.speakerIsPlaceholder = true;
+        next.machineReason = undefined;
         next.unknownNumber = highWater;
         next.speakerLocked = false;
         next.speakerLockSource = undefined;
