@@ -13,7 +13,7 @@ Module._load = function(request, parent, isMain) {
 process.env.NODE_ENV = 'test';
 const DatabaseManager = require('../../src/helpers/database.js');
 const { skipOrFail } = require('./harness/db.js');
-const { listPeople, listPeopleActions, listReviewRows, previewPersonAction, applyPersonAction, undoPersonAction, previewClearVoiceData, clearVoiceData, undoClearVoiceData } = require('../../src/helpers/peopleActions');
+const { listPeople, backfillPeopleIdentities, listPeopleActions, listReviewRows, previewPersonAction, applyPersonAction, undoPersonAction, previewClearVoiceData, clearVoiceData, undoClearVoiceData } = require('../../src/helpers/peopleActions');
 const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
 const { readSpeakerActionLog } = require('../../src/helpers/speakerActionLog');
 function fixture(t) {
@@ -174,6 +174,45 @@ test('calendar and manual attendees become identity-only people, deduped against
   }
   assert.equal(f.rows(id).length, 0);
 });
+test('upgrade backfills three meeting notes once and People finds picker contacts by name and email', t => {
+  const f = fixture(t); if (!f) return;
+  for (const [title, attendees] of [
+    ['One', [{ email: 'kostas@example.test', displayName: 'Kostas Rapantzikos' }, { email: 'as@workable.com', displayName: null }]],
+    ['Two', [{ email: 'KOSTAS@example.test', displayName: 'Kostas Rapantzikos' }, { email: 'nikos@example.test', displayName: 'Níkos Pappas' }]],
+    ['Three', [{ email: 'zach@example.test', displayName: 'Kostas Zacharakis' }, { email: 'contact@workable.com', displayName: 'Different note name' }]],
+  ]) {
+    const id = f.note(title, [], []);
+    f.db.db.prepare('UPDATE notes SET participants = ? WHERE id = ?').run(JSON.stringify(attendees), id);
+  }
+  f.db.upsertContacts([
+    { email: 'kostas@example.test', displayName: 'Kostas Rapantzikos' },
+    { email: 'as@workable.com', displayName: null },
+    { email: 'nikos@example.test', displayName: 'Níkos Pappas' },
+    { email: 'zach@example.test', displayName: 'Kostas Zacharakis' },
+    { email: 'contact@workable.com', displayName: 'Asa Contact' },
+  ]);
+  f.db.db.prepare('DELETE FROM person_identity_backfill WHERE version = 1').run();
+  const transcriptsBefore = f.db.db.prepare('SELECT id, transcript FROM notes ORDER BY id').all();
+  const upgraded = new DatabaseManager();
+  t.after(() => upgraded.db.close());
+  assert.equal(upgraded.peopleBackfillCount, 5);
+  assert.equal(backfillPeopleIdentities(upgraded).created, 0);
+  const people = listPeople(upgraded);
+  assert.equal(people.length, 5);
+  assert.equal(people.find(p => p.email === 'kostas@example.test').meetingCount, 2);
+  assert.equal(people.find(p => p.email === 'contact@workable.com').meetingCount, 1);
+  assert.deepEqual(upgraded.db.prepare('SELECT id, transcript FROM notes ORDER BY id').all(), transcriptsBefore);
+  const matched = people.filter(p => `${p.displayName} ${p.email || ''}`.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().includes('as'));
+  const picker = upgraded.searchContacts('as');
+  assert.deepEqual(new Set(matched.map(p => p.email)), new Set(picker.map(p => p.email)));
+  assert.ok(upgraded.searchContacts('nikos').some(p => p.email === 'nikos@example.test'));
+  assert.ok(people.filter(p => require('../../src/utils/personSearch').matchesPerson(p, 'nikos'))
+    .some(p => p.email === 'nikos@example.test'));
+  assert.ok(people.every(p => !p.hasVoice && p.segmentCount === 0));
+  const attendee = people.find(p => p.email === 'kostas@example.test');
+  upgraded.db.prepare('UPDATE speaker_profiles SET embedding = ?, sample_count = 1 WHERE id = ?').run(Buffer.alloc(2048, 1), attendee.id);
+  assert.equal(listPeople(upgraded).find(p => p.id === attendee.id).hasVoice, true);
+});
 test('one attendee across two meetings is one person with two meetings', t => {
   const f = fixture(t); if (!f) return;
   for (const title of ['One', 'Two']) {
@@ -184,6 +223,46 @@ test('one attendee across two meetings is one person with two meetings', t => {
   assert.equal(people.length, 1);
   assert.equal(people[0].meetingCount, 2);
   assert.equal(people[0].noteCount, 2);
+});
+test('picker-only contacts keep merge undo and explicit deletion across restart', t => {
+  const f = fixture(t); if (!f) return;
+  f.db.upsertContacts([
+    { email: 'asa@example.test', displayName: 'Asa' },
+    { email: 'sam@example.test', displayName: 'Sam' },
+  ]);
+  const people = listPeople(f.db);
+  const asa = people.find(p => p.email === 'asa@example.test');
+  const sam = people.find(p => p.email === 'sam@example.test');
+  const merged = applyPersonAction(f.db, { type: 'merge', profileId: asa.id, survivorId: sam.id });
+  assert.equal(merged.success, true);
+  assert.equal(listPeople(f.db).length, 1);
+  assert.equal(undoPersonAction(f.db, merged.id).success, true);
+  assert.equal(listPeople(f.db).length, 2);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: asa.id }).success, true);
+  const reopened = new DatabaseManager();
+  t.after(() => reopened.db.close());
+  assert.equal(listPeople(reopened).some(p => p.email === 'asa@example.test'), false);
+  assert.equal(reopened.searchContacts('asa').length, 1);
+});
+test('People searches every linked picker name and email when contacts share an identity', t => {
+  const f = fixture(t); if (!f) return;
+  f.db.upsertContacts([
+    { email: 'primary@example.test', displayName: 'Zoë Ashton' },
+    { email: 'alias@workable.com', displayName: 'Zoë Ashton' },
+  ]);
+  const original = listPeople(f.db);
+  assert.equal(original.length, 1);
+  assert.equal(applyPersonAction(f.db, { type: 'rename', profileId: original[0].id, name: 'Z. Ashton' }).success, true);
+  const noteId = f.note('New meeting', [], []);
+  f.db.updateNote(noteId, { participants: JSON.stringify([{ email: 'alias@workable.com', displayName: 'Zoe A.' }]) });
+  const people = listPeople(f.db);
+  assert.equal(people.length, 1);
+  assert.equal(people[0].meetingCount, 1);
+  const { matchesPerson } = require('../../src/utils/personSearch');
+  for (const query of ['as', 'alias@', 'zoe']) {
+    assert.equal(f.db.searchContacts(query).length > 0, true);
+    assert.equal(people.some(p => matchesPerson(p, query)), true);
+  }
 });
 test('naming a speaker reuses an attendee identity and never names other rows', t => {
   const f = fixture(t); if (!f) return;

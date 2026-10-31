@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useSettingsLayout } from "./useSettingsLayout";
 import type { InferenceMode } from "../../types/electron";
 
+export const SETTINGS_ROW_TITLE_CLASS = "text-xs font-medium text-foreground";
+
 interface SettingsSectionProps {
   title: string;
   description?: string;
@@ -78,7 +80,7 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
       } ${className}`}
     >
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-foreground">{label}</p>
+        <p className={SETTINGS_ROW_TITLE_CLASS}>{label}</p>
         {description && (
           <p className="text-xs text-muted-foreground/80 mt-0.5 leading-relaxed">{description}</p>
         )}

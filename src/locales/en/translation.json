@@ -5325,7 +5325,7 @@
     "clearDone": "Cleared {{embeddings}} embeddings and {{mappings}} mappings. {{people}} people remain.",
     "deletePreview": "{{notes}} notes, {{segments}} segments, {{history}} history entries. Deletion cannot be undone because the identity is gone.",
     "title": "People",
-    "subtitle": "Known speakers and names on this device.",
+    "subtitle": "Meeting attendees, contacts, and known speakers on this device.",
     "tabs": {
       "people": "People",
       "review": "Review rows"
@@ -5338,7 +5338,7 @@
     "sortUsage": "Most used",
     "sortHeard": "Last seen",
     "emptyTitle": "No people yet",
-    "emptyBody": "People appear when you name a speaker on a transcript chip or when a meeting has known attendees. Open a transcript and use its speaker chip to name someone.",
+    "emptyBody": "People appear from meeting attendees, saved contacts, or named transcript speakers. Add attendees to a meeting or connect a calendar to get started.",
     "noMatches": "No people match your search.",
     "usage": "{{notes}} notes · {{segments}} segments",
     "lastHeard": "Last heard {{date}}",

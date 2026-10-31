@@ -5338,7 +5338,7 @@
     "sortUsage": "Plus utilisées",
     "sortHeard": "Dernière présence",
     "emptyTitle": "Aucune personne pour le moment",
-    "emptyBody": "Les personnes apparaissent lorsque vous nommez un locuteur dans une transcription ou qu’une réunion compte des participants connus. Ouvrez une transcription et utilisez la pastille du locuteur.",
+    "emptyBody": "Les personnes apparaissent depuis les participants aux réunions, les contacts enregistrés ou les locuteurs nommés dans une transcription. Ajoutez des participants à une réunion ou connectez un calendrier.",
     "noMatches": "Aucune personne ne correspond.",
     "usage": "{{notes}} notes · {{segments}} segments",
     "lastHeard": "Dernière écoute : {{date}}",

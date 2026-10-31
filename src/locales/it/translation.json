@@ -5338,7 +5338,7 @@
     "sortUsage": "Più usate",
     "sortHeard": "Ultima presenza",
     "emptyTitle": "Nessuna persona ancora",
-    "emptyBody": "Le persone compaiono quando assegni un nome a un parlante nella trascrizione o quando una riunione ha partecipanti noti. Apri una trascrizione e usa il chip del parlante.",
+    "emptyBody": "Le persone compaiono dai partecipanti alle riunioni, dai contatti salvati o dai parlanti nominati nelle trascrizioni. Aggiungi partecipanti a una riunione o collega un calendario.",
     "noMatches": "Nessuna persona corrisponde alla ricerca.",
     "usage": "{{notes}} note · {{segments}} segmenti",
     "lastHeard": "Ultimo ascolto: {{date}}",

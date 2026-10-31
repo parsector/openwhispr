@@ -5338,7 +5338,7 @@
     "sortUsage": "Más usadas",
     "sortHeard": "Visto por última vez",
     "emptyTitle": "Todavía no hay personas",
-    "emptyBody": "Las personas aparecen al nombrar a un hablante en una transcripción o cuando una reunión tiene asistentes conocidos. Abre una transcripción y usa la etiqueta del hablante.",
+    "emptyBody": "Las personas aparecen a partir de asistentes a reuniones, contactos guardados o hablantes nombrados en transcripciones. Añade asistentes a una reunión o conecta un calendario para empezar.",
     "noMatches": "No hay personas que coincidan.",
     "usage": "{{notes}} notas · {{segments}} segmentos",
     "lastHeard": "Última vez: {{date}}",

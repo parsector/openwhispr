@@ -118,7 +118,9 @@ function registerAttendees(database, onlyNoteId = null) {
       present.add(key);
       if (current.has(key)) continue;
       const profiles = db.prepare('SELECT id, display_name, email FROM speaker_profiles ORDER BY id').all();
-      const match = profiles.find(p => email && normalized(p.email) === email)
+      const linkedProfileId = email && db.prepare('SELECT profile_id FROM person_contact_links WHERE email = ?').get(email)?.profile_id;
+      const match = profiles.find(p => p.id === linkedProfileId)
+        || profiles.find(p => email && normalized(p.email) === email)
         || profiles.find(p => name && normalized(p.display_name) === normalized(name));
       let id = match?.id;
       if (!id) id = db.prepare('INSERT INTO speaker_profiles (display_name, email, embedding, sample_count) VALUES (?, ?, ?, 0)')
@@ -129,9 +131,58 @@ function registerAttendees(database, onlyNoteId = null) {
     for (const key of current.keys()) if (!present.has(key)) remove.run(note.id, key);
   }
 }
+// A contact is a person the attendee picker can offer, even before a meeting
+// uses it. A nullable link remembers an explicit deletion across launches.
+function registerContacts(database) {
+  const db = database.db;
+  db.exec(`CREATE TABLE IF NOT EXISTS person_contact_links (
+    email TEXT PRIMARY KEY, profile_id INTEGER REFERENCES speaker_profiles(id) ON DELETE SET NULL
+  )`);
+  const linked = db.prepare('SELECT 1 FROM person_contact_links WHERE email = ?');
+  const profiles = db.prepare('SELECT id, display_name, email FROM speaker_profiles ORDER BY id').all();
+  const byEmail = new Map(profiles.filter(p => p.email).map(p => [normalized(p.email), p]));
+  const byName = new Map();
+  for (const profile of profiles) if (!byName.has(normalized(profile.display_name)))
+    byName.set(normalized(profile.display_name), profile);
+  const insertProfile = db.prepare('INSERT INTO speaker_profiles (display_name, email, embedding, sample_count) VALUES (?, ?, ?, 0)');
+  const insertLink = db.prepare('INSERT INTO person_contact_links (email, profile_id) VALUES (?, ?)');
+  let created = 0;
+  for (const contact of db.prepare('SELECT email, display_name FROM contacts').all()) {
+    const email = normalized(contact.email);
+    if (!email || linked.get(email)) continue;
+    const name = String(contact.display_name || '').normalize('NFKC').trim().replace(/\s+/g, ' ').slice(0, 120);
+    const match = byEmail.get(email) || (name && byName.get(normalized(name)));
+    const id = match?.id || insertProfile.run(name || email, email, Buffer.alloc(0)).lastInsertRowid;
+    if (!match) {
+      created++;
+      const profile = { id, display_name: name || email, email };
+      byEmail.set(email, profile);
+      if (!byName.has(normalized(profile.display_name))) byName.set(normalized(profile.display_name), profile);
+    } else if (!match.email) {
+      db.prepare('UPDATE speaker_profiles SET email = ? WHERE id = ?').run(email, id);
+      match.email = email;
+      byEmail.set(email, match);
+    }
+    insertLink.run(email, id);
+  }
+  return created;
+}
+function backfillPeopleIdentities(database) {
+  const db = database.db;
+  return db.transaction(() => {
+    db.exec('CREATE TABLE IF NOT EXISTS person_identity_backfill (version INTEGER PRIMARY KEY, created INTEGER NOT NULL)');
+    if (db.prepare('SELECT 1 FROM person_identity_backfill WHERE version = 1').get()) return { created: 0, ran: false };
+    const before = db.prepare('SELECT COUNT(*) AS count FROM speaker_profiles').get().count;
+    registerContacts(database);
+    registerAttendees(database);
+    const created = db.prepare('SELECT COUNT(*) AS count FROM speaker_profiles').get().count - before;
+    db.prepare('INSERT INTO person_identity_backfill (version, created) VALUES (1, ?)').run(created);
+    return { created, ran: true };
+  })();
+}
 function listPeople(database) {
   const db = database.db;
-  db.transaction(() => registerAttendees(database))();
+  db.transaction(() => { registerContacts(database); registerAttendees(database); })();
   const profiles = db.prepare('SELECT id, display_name, email, sample_count, embedding, voice_usable, voice_needs_reapproval, created_at, updated_at FROM speaker_profiles').all();
   const byName = new Map();
   for (const p of profiles) {
@@ -139,6 +190,15 @@ function listPeople(database) {
     byName.set(key, byName.has(key) ? null : p.id);
   }
   const usage = new Map(profiles.map(p => [p.id, { notes: new Set(), meetings: new Set(), segmentCount: 0, lastHeard: null, lastSeen: null }]));
+  const searchAliases = new Map(profiles.map(p => [p.id, new Set()]));
+  for (const contact of db.prepare(`SELECT pcl.profile_id, c.email, c.display_name
+    FROM person_contact_links pcl JOIN contacts c ON c.email = pcl.email
+    WHERE pcl.profile_id IS NOT NULL`).all()) {
+    const aliases = searchAliases.get(contact.profile_id);
+    if (aliases) { aliases.add(contact.email); if (contact.display_name) aliases.add(contact.display_name); }
+  }
+  for (const attendance of db.prepare("SELECT profile_id, identity_key FROM person_attendance WHERE profile_id IS NOT NULL AND identity_key LIKE 'e:%'").all())
+    searchAliases.get(attendance.profile_id)?.add(attendance.identity_key.slice(2));
   const identity = profiles.map(p => ({ id: p.id, name: normalized(p.display_name), email: normalized(p.email) }));
   const duplicates = new Map(profiles.map(p => [p.id, []]));
   for (let i = 0; i < profiles.length; i++) for (let j = i + 1; j < profiles.length; j++) {
@@ -180,7 +240,7 @@ function listPeople(database) {
   }
   return profiles.map(p => {
     const hit = usage.get(p.id);
-    return { id: p.id, displayName: p.display_name, email: p.email, noteCount: hit.notes.size,
+    return { id: p.id, displayName: p.display_name, email: p.email, searchAliases: [...searchAliases.get(p.id)], noteCount: hit.notes.size,
       meetingCount: hit.meetings.size, segmentCount: hit.segmentCount,
       lastHeard: hit.lastHeard, lastSeen: later(hit.lastSeen, hit.lastHeard),
       sampleCount: p.sample_count || 0,
@@ -296,14 +356,16 @@ function applyPersonAction(database, request) {
       require('./voiceEnrollment').snapshotEvidence(db, id, current.id, survivor?.id);
     const nextName = request.type === 'merge' ? survivor.display_name : request.type === 'rename' ? String(request.name).trim() : null;
     const attendanceBefore = db.prepare('SELECT note_id, identity_key FROM person_attendance WHERE profile_id = ?').all(current.id);
+    const contactBefore = db.prepare('SELECT email FROM person_contact_links WHERE profile_id = ?').all(current.id);
     if (!affected.length && ['rename', 'merge'].includes(request.type)) {
       db.prepare('INSERT INTO person_identity_actions (id, action, profile_id, survivor_id, snapshot) VALUES (?, ?, ?, ?, ?)')
         .run(id, request.type, current.id, survivor?.id || null, JSON.stringify({
-          profile: serializedProfile(current), afterName: nextName, attendanceBefore,
+          profile: serializedProfile(current), afterName: nextName, attendanceBefore, contactBefore,
         }));
       if (request.type === 'rename') db.prepare('UPDATE speaker_profiles SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(nextName, current.id);
       else {
         db.prepare('UPDATE person_attendance SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
+        db.prepare('UPDATE person_contact_links SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
         db.prepare('UPDATE voice_exemplars SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
         db.prepare('UPDATE voice_enrollment_candidates SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
         if (db.prepare('SELECT 1 FROM voice_exemplars WHERE profile_id = ? LIMIT 1').get(survivor.id))
@@ -341,6 +403,7 @@ function applyPersonAction(database, request) {
       action.survivorId = survivor?.id || null;
       action.affectedNoteIds = affected.map(a => a.note.id);
       if (request.type === 'merge') action.attendanceBefore = attendanceBefore;
+      if (request.type === 'merge') action.contactBefore = contactBefore;
       if (request.type === 'reset') action.embeddingBefore = affected.find(a => a.note.id === record.noteId).embeddingRows.map(savedEmbedding);
       if (Buffer.byteLength(JSON.stringify(record.nextLog)) > 16 * 1024 * 1024)
         return { success: false, error: 'history_full' };
@@ -358,8 +421,13 @@ function applyPersonAction(database, request) {
     }
     if (request.type === 'rename') db.prepare('UPDATE speaker_profiles SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(nextName, current.id);
     if (request.type === 'merge' || request.type === 'delete') {
-      if (request.type === 'merge') db.prepare('UPDATE person_attendance SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
-      else db.prepare('UPDATE person_attendance SET profile_id = NULL WHERE profile_id = ?').run(current.id);
+      if (request.type === 'merge') {
+        db.prepare('UPDATE person_attendance SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
+        db.prepare('UPDATE person_contact_links SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
+      } else {
+        db.prepare('UPDATE person_attendance SET profile_id = NULL WHERE profile_id = ?').run(current.id);
+        db.prepare('UPDATE person_contact_links SET profile_id = NULL WHERE profile_id = ?').run(current.id);
+      }
       for (const table of ['speaker_mappings', 'speaker_run_mappings']) db.prepare(
         `UPDATE ${table} SET profile_id = ?, display_name = ? WHERE profile_id = ?`)
         .run(survivor?.id || null, nextName || '', current.id);
@@ -417,6 +485,9 @@ function undoPersonAction(database, id) {
             db.prepare('UPDATE person_attendance SET profile_id = ? WHERE note_id = ? AND identity_key = ?')
               .run(identity.profile_id, row.note_id, row.identity_key);
           }
+          for (const row of saved.contactBefore || [])
+            db.prepare('UPDATE person_contact_links SET profile_id = ? WHERE email = ? AND profile_id = ?')
+              .run(identity.profile_id, row.email, identity.survivor_id);
           require('./voiceEnrollment').restoreEvidence(db, id);
         }
         db.prepare('DELETE FROM person_identity_actions WHERE id = ?').run(id);
@@ -457,6 +528,9 @@ function undoPersonAction(database, id) {
     if (action.action === 'merge') for (const row of action.attendanceBefore || [])
       db.prepare('UPDATE person_attendance SET profile_id = ? WHERE note_id = ? AND identity_key = ? AND profile_id = ?')
         .run(person.id, row.note_id, row.identity_key, action.survivorId);
+    if (action.action === 'merge') for (const row of action.contactBefore || [])
+      db.prepare('UPDATE person_contact_links SET profile_id = ? WHERE email = ? AND profile_id = ?')
+        .run(person.id, row.email, action.survivorId);
     for (const { note, log } of affected) {
       const entry = newestAvailableAction(log);
       const doc = readTranscriptDocument(note.transcript);
@@ -605,6 +679,7 @@ function deletePerson(database, built) {
   for (const item of affected) for (const row of item.embeddingRows)
     db.prepare('DELETE FROM note_speaker_embeddings WHERE note_id = ? AND speaker_id = ?').run(row.note_id, row.speaker_id);
   db.prepare('UPDATE person_attendance SET profile_id = NULL WHERE profile_id = ?').run(current.id);
+  db.prepare('UPDATE person_contact_links SET profile_id = NULL WHERE profile_id = ?').run(current.id);
   require('./voiceEnrollment').pruneSnapshots(db, 'profile_id', current.id);
   db.prepare('DELETE FROM voice_enrollment_actions WHERE profile_id = ?').run(current.id);
   db.prepare('DELETE FROM speaker_profiles WHERE id = ?').run(current.id);
@@ -722,5 +797,5 @@ function listReviewRows(database, selectedProfileId = null) {
   }
   return result;
 }
-module.exports = { listPeople, registerAttendees, listReviewRows, previewPersonAction, applyPersonAction, undoPersonAction,
+module.exports = { listPeople, registerAttendees, registerContacts, backfillPeopleIdentities, listReviewRows, previewPersonAction, applyPersonAction, undoPersonAction,
   previewClearVoiceData, clearVoiceData, undoClearVoiceData, listPeopleActions, scrubDeletedRecordingSnapshots };

@@ -5338,7 +5338,7 @@
     "sortUsage": "Mais usadas",
     "sortHeard": "Visto pela última vez",
     "emptyTitle": "Ainda não há pessoas",
-    "emptyBody": "As pessoas surgem quando dá um nome a um orador numa transcrição ou quando uma reunião tem participantes conhecidos. Abra uma transcrição e use a etiqueta do orador.",
+    "emptyBody": "As pessoas aparecem a partir de participantes de reuniões, contactos guardados ou oradores identificados nas transcrições. Adicione participantes a uma reunião ou ligue um calendário.",
     "noMatches": "Nenhuma pessoa corresponde à pesquisa.",
     "usage": "{{notes}} notas · {{segments}} segmentos",
     "lastHeard": "Ouvido pela última vez: {{date}}",

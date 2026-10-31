@@ -5338,7 +5338,7 @@
     "sortUsage": "Meistgenutzt",
     "sortHeard": "Zuletzt gesehen",
     "emptyTitle": "Noch keine Personen",
-    "emptyBody": "Personen erscheinen, wenn Sie über einen Sprecherchip im Transkript einen Namen vergeben oder eine Besprechung bekannte Teilnehmende hat. Öffnen Sie ein Transkript und benennen Sie jemanden über den Sprecherchip.",
+    "emptyBody": "Personen erscheinen durch Besprechungsteilnehmende, gespeicherte Kontakte oder benannte Sprecher im Transkript. Fügen Sie einer Besprechung Teilnehmende hinzu oder verbinden Sie einen Kalender.",
     "noMatches": "Keine passenden Personen.",
     "usage": "{{notes}} Notizen · {{segments}} Abschnitte",
     "lastHeard": "Zuletzt gehört: {{date}}",

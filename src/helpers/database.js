@@ -1215,6 +1215,10 @@ class DatabaseManager {
           PRIMARY KEY (note_id, identity_key)
         );
         CREATE INDEX IF NOT EXISTS idx_person_attendance_profile ON person_attendance(profile_id);
+        CREATE TABLE IF NOT EXISTS person_contact_links (
+          email TEXT PRIMARY KEY,
+          profile_id INTEGER REFERENCES speaker_profiles(id) ON DELETE SET NULL
+        );
         CREATE TABLE IF NOT EXISTS person_identity_actions (
           id TEXT PRIMARY KEY,
           action TEXT NOT NULL,
@@ -1850,6 +1854,12 @@ class DatabaseManager {
         // opening. Without it, assistant edits save as plain updates.
         debugLogger.error("Assistant note Undo unavailable", { error: error.message }, "database");
       }
+
+      // Existing meeting guests and picker contacts become identities once on upgrade.
+      const peopleBackfill = require('./peopleActions').backfillPeopleIdentities(this);
+      this.peopleBackfillCount = peopleBackfill.created;
+      if (peopleBackfill.ran && peopleBackfill.created > 0)
+        debugLogger.info('People identity backfill complete', { created: peopleBackfill.created }, 'database');
 
       return true;
     } catch (error) {
@@ -5977,12 +5987,12 @@ class DatabaseManager {
   searchContacts(query) {
     try {
       if (!this.db) throw new Error("Database not initialized");
-      const pattern = `%${query || ""}%`;
+      const { matchesPerson } = require('../utils/personSearch');
       return this.db
         .prepare(
-          "SELECT email, display_name, created_at, updated_at FROM contacts WHERE email LIKE ? OR display_name LIKE ? ORDER BY display_name ASC, email ASC LIMIT 20"
+          "SELECT email, display_name, created_at, updated_at FROM contacts ORDER BY display_name ASC, email ASC"
         )
-        .all(pattern, pattern);
+        .all().filter(contact => matchesPerson(contact, query || '')).slice(0, 20);
     } catch (error) {
       debugLogger.error("Error searching contacts", { error: error.message }, "database");
       throw error;
