@@ -2603,6 +2603,9 @@
       "unknownNumber": "متحدث غير معروف {{n}}",
       "restore": "استعادة",
       "olderCorrections": "عرض {{n}} تصحيحات أقدم",
+      "splitCluster": "هذان شخصان",
+      "splitPreview": "استخدم {{moved}} من {{total}} صفوف بوصفها صوتاً مختلفاً. قد تتبعها صفوف أخرى وفقاً للصوت.",
+      "splitReport": "نُقل {{moved}} صفوف، منها {{acoustic}} بدليل الصوت، وبقي {{retained}}. تراجع من أحد الصفوف المنقولة.",
       "historyFull": "سجل تصحيحات هذه الملاحظة ممتلئ (16 ميغابايت). لا يزال بإمكانك التراجع عن التصحيحات القديمة.",
       "historyQuarantined": "لا يمكن تحديد ترتيب إجراءات هذه الملاحظة. التراجع غير متاح.",
       "notAssessed": "لم يتم التقييم",
@@ -2615,6 +2618,8 @@
       "reason": {
         "closeMatch": "{{first}} أو {{second}}",
         "too_short": "قصير جدًا لتحديد المتحدث",
+        "overlapping_speech": "كلام متداخل",
+        "possible_mixed_speakers": "ربما اختلط صوتا متحدثين",
         "changed_after_final": "تغيّر بعد التحليل النهائي",
         "not_sure": "غير متأكد"
       }

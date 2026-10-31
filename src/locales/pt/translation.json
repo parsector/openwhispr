@@ -3229,6 +3229,9 @@
       "unknownNumber": "Pessoa desconhecida {{n}}",
       "restore": "Restaurar",
       "olderCorrections": "Mostrar {{n}} correções anteriores",
+      "splitCluster": "São duas pessoas",
+      "splitPreview": "Use {{moved}} de {{total}} linhas como voz distinta. Outras linhas podem seguir pela voz.",
+      "splitReport": "{{moved}} linhas movidas, incluindo {{acoustic}} pela voz; {{retained}} ficaram. Desfaça numa linha movida.",
       "historyFull": "O histórico de correções desta nota está cheio (16 MB). As correções anteriores ainda podem ser desfeitas.",
       "historyQuarantined": "Não é possível determinar a ordem das ações desta nota. Desfazer está indisponível.",
       "notAssessed": "Não avaliado",
@@ -3241,6 +3244,8 @@
       "reason": {
         "closeMatch": "{{first}} ou {{second}}",
         "too_short": "Curto demais para identificar",
+        "overlapping_speech": "Falas sobrepostas",
+        "possible_mixed_speakers": "Possíveis vozes misturadas",
         "changed_after_final": "Alterado após a análise final",
         "not_sure": "Não há certeza"
       }

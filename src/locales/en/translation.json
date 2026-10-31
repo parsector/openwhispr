@@ -3726,6 +3726,9 @@
       "unknownNumber": "Unknown speaker {{n}}",
       "restore": "Restore",
       "olderCorrections": "Show {{n}} older corrections",
+      "splitCluster": "This is two people",
+      "splitPreview": "Use {{moved}} of {{total}} rows as the contrasting voice. Other rows may follow from voice evidence.",
+      "splitReport": "Moved {{moved}} rows, including {{acoustic}} from voice evidence; {{retained}} stayed. Restore the split from a moved row.",
       "historyFull": "This note’s correction history is full (16 MB). Older corrections remain available to undo.",
       "historyQuarantined": "This note’s action order cannot be established. Undo is unavailable.",
       "notAssessed": "Not assessed",
@@ -3738,6 +3741,8 @@
       "reason": {
         "closeMatch": "{{first}} or {{second}}",
         "too_short": "Too short to identify",
+        "overlapping_speech": "Overlapping speech",
+        "possible_mixed_speakers": "Possible mixed speakers",
         "changed_after_final": "Changed after final analysis",
         "not_sure": "Not sure"
       }

@@ -3157,6 +3157,9 @@
       "unknownNumber": "不明な話者 {{n}}",
       "restore": "元に戻す",
       "olderCorrections": "以前の修正を{{n}}件表示",
+      "splitCluster": "2人の声です",
+      "splitPreview": "{{total}}行のうち{{moved}}行を別の声として選びます。声の特徴により他の行も移動する場合があります。",
+      "splitReport": "{{moved}}行を移動しました。そのうち{{acoustic}}行は声の特徴に基づきます。{{retained}}行は残りました。移動した行から元に戻せます。",
       "historyFull": "このノートの修正履歴は上限（16 MB）に達しました。以前の修正は引き続き元に戻せます。",
       "historyQuarantined": "このノートの操作順序を確定できません。元に戻す操作は利用できません。",
       "notAssessed": "未評価",
@@ -3169,6 +3172,8 @@
       "reason": {
         "closeMatch": "{{first}} または {{second}}",
         "too_short": "短すぎて識別できません",
+        "overlapping_speech": "発話が重なっています",
+        "possible_mixed_speakers": "複数の話者が混在している可能性",
         "changed_after_final": "最終分析後に変更されました",
         "not_sure": "不明確"
       }

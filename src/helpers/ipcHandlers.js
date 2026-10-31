@@ -8022,6 +8022,11 @@ class IPCHandlers {
       });
       return {
         diarizationPcmPath: pcmPath ? Buffer.concat(pcmPath) : null,
+        otherTrackAudio: diarizedSource === "system" && micPcmPath
+          ? { source: "mic", pcm: Buffer.concat(micPcmPath), startedAt: micStartedAt }
+          : diarizedSource === "mic" && systemPcmPath
+            ? { source: "system", pcm: Buffer.concat(systemPcmPath), startedAt: systemStartedAt }
+            : null,
         diarizationSegments,
         retractedSegments,
         diarizationStartedAt: startedAt,
@@ -10197,6 +10202,7 @@ class IPCHandlers {
             retractedSegments,
             diarizationStartedAt,
             diarizedSource,
+            otherTrackAudio,
           } = await captureMeetingDiarizationState();
           const transcript =
             buildOrderedTranscriptText(diarizationSegments) || meetingLocalTranscript;
@@ -10218,7 +10224,8 @@ class IPCHandlers {
             noteIdSnapshot,
             diarizedSource,
             speakerIndexBaseSnapshot,
-            retractedSegments
+            retractedSegments,
+            ...(otherTrackAudio ? [otherTrackAudio] : [])
           );
 
           return { success: true, transcript, diarizationSessionId };
@@ -10231,6 +10238,7 @@ class IPCHandlers {
           retractedSegments,
           diarizationStartedAt,
           diarizedSource,
+          otherTrackAudio,
         } = await captureMeetingDiarizationState();
         const transcript =
           buildOrderedTranscriptText(diarizationSegments) ||
@@ -10253,7 +10261,8 @@ class IPCHandlers {
           noteIdSnapshot,
           diarizedSource,
           speakerIndexBaseSnapshot,
-          retractedSegments
+          retractedSegments,
+          ...(otherTrackAudio ? [otherTrackAudio] : [])
         );
 
         return { success: true, transcript, diarizationSessionId };
@@ -13071,6 +13080,19 @@ class IPCHandlers {
 
     ipcMain.handle("apply-speaker-correction", async (_event, request) => {
       try {
+        if (request?.type === "split") {
+          const note = this.databaseManager.getNote(request.noteId);
+          if (!note || note.deleted_at) return { success: false, error: "note_missing" };
+          const rows = require("./transcriptDocument").readTranscriptDocument(note.transcript).rows;
+          const cluster = rows.filter((row) => !row.deleted &&
+            row.diarizationRunId === request.target?.runId && row.speaker === request.target?.clusterId);
+          const { proposeClusterSplit } = require("./speakerClusterSplit");
+          const proposal = await proposeClusterSplit(cluster, request.rowIds || [], request.noteId,
+            this.meetingAudioStore, require("./speakerEmbeddings"));
+          request = { ...request, expectedTranscript: note.transcript,
+            evidenceRowIds: proposal.movedIds.filter((id) => !(request.rowIds || []).includes(id) &&
+              !cluster.find((row) => row.id === id)?.speakerLocked) };
+        }
         const { applySpeakerCorrection } = require("./speakerCorrectionTransaction");
         const result = applySpeakerCorrection(this.databaseManager, liveSpeakerIdentifier, request);
         if (result.success) {
@@ -13507,7 +13529,8 @@ class IPCHandlers {
     noteId = null,
     diarizedSource = "system",
     speakerIndexBase = 0,
-    retractedSegments = []
+    retractedSegments = [],
+    otherTrackAudio = null
   ) {
     const startMs =
       (Number.isFinite(audioStartedAt) && audioStartedAt) ||
@@ -13527,9 +13550,26 @@ class IPCHandlers {
 
     // Split before any send so diarized, skipped and failed runs drop the same
     // echo rows.
-    const { kept, removed: echoDuplicates } = this.diarizationManager?.splitMicEchoDuplicates(
+    let { kept, removed: echoDuplicates } = this.diarizationManager?.splitMicEchoDuplicates(
       normalized
     ) ?? { kept: normalized, removed: [] };
+    // Main's ingestion copy can lag a correction already committed by the
+    // renderer. Bring authoritative locks into this stop-time pass before any
+    // re-segmentation so a corrected row is never cut or relabelled.
+    try {
+      const saved = noteId != null ? this.databaseManager?.getNote?.(noteId) : null;
+      const locked = new Map(require("./transcriptDocument").readTranscriptDocument(saved?.transcript).rows
+        .filter(isSpeakerLocked).map((row) => [row.id, row]));
+      kept = kept.map((row) => {
+        const prior = locked.get(row.id);
+        return prior ? { ...row, speaker: prior.speaker, speakerName: prior.speakerName,
+          speakerIsPlaceholder: prior.speakerIsPlaceholder, speakerStatus: "locked",
+          speakerLocked: true, speakerLockSource: "user", unknownNumber: prior.unknownNumber,
+          corrections: prior.corrections } : row;
+      });
+    } catch (error) {
+      debugLogger.warn("Could not read saved speaker locks for final pass", { error: error.message });
+    }
     const echoDuplicateSet = new Set(echoDuplicates);
     const isEchoDuplicate = (index) => echoDuplicateSet.has(normalized[index]);
     // Rows main dropped that the renderer may still hold in the transcript it
@@ -13549,17 +13589,41 @@ class IPCHandlers {
       }
     };
     // Raw rows, sent when there is no diarization to merge.
-    const sendUndiarized = () =>
-      send({
-        segments: transcriptSegments
-          .map((segment) => ({ ...segment, id: segment.id || require("crypto").randomUUID() }))
-          .filter((_, index) => !isEchoDuplicate(index)),
-      });
+    const sendUndiarized = async () => {
+      let rows = transcriptSegments
+        .map((segment) => ({ ...segment, id: segment.id || require("crypto").randomUUID() }))
+        .filter((_, index) => !isEchoDuplicate(index));
+      const localWhisper = this.whisperManager?.serverManager;
+      if (noteId != null && this.meetingAudioStore && localWhisper?.ready &&
+        !localWhisper.isRemote && this.whisperManager.currentServerModel) {
+        try {
+          const { alignTranscriptRows, timedWordsFromStoredTrack,
+            withAudioSpans } = require("./meetingWordAlignment");
+          const tracks = this.meetingAudioStore.status(noteId).tracks || {};
+          for (const source of new Set(rows.map((row) => row.source))) {
+            const durationSeconds = tracks[source]?.sampleCount / 24000;
+            if (!(durationSeconds > 0)) continue;
+            const words = await timedWordsFromStoredTrack({
+              noteId, track: source, durationSeconds, store: this.meetingAudioStore,
+              transcribe: (wav) => localWhisper.transcribe(wav, { wordTimestamps: true }),
+            });
+            const aligned = alignTranscriptRows(rows.filter((row) => row.source === source), words);
+            const byId = new Map(aligned.map((row) => [row.id, row]));
+            rows = rows.map((row) => byId.get(row.id) || row);
+          }
+          rows = withAudioSpans(rows, noteId);
+        } catch (error) {
+          debugLogger.warn("Undiarized meeting word alignment unavailable",
+            { error: error.message }, "speaker");
+        }
+      }
+      send({ segments: rows });
+    };
 
     const diarizationEnabled = (sessionConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
 
     if (!diarizationEnabled || !this.diarizationManager?.isAvailable() || !rawPcmPath) {
-      sendUndiarized();
+      void sendUndiarized();
       return;
     }
 
@@ -13620,13 +13684,71 @@ class IPCHandlers {
 
         const recordingStartedAt = noteId != null
           ? this.meetingAudioStore?.status(noteId).startedAt : null;
+        const recordingOffset = (startedAt) => recordingStartedAt != null && startedAt != null
+          ? Math.max(0, (startedAt - recordingStartedAt) / 1000) : 0;
+        const audioStartOffsets = { [diarizedSource]: recordingOffset(audioStartedAt) };
+        if (otherTrackAudio) audioStartOffsets[otherTrackAudio.source] = recordingOffset(otherTrackAudio.startedAt);
+        let alignedRows = kept;
+        const localWhisper = this.whisperManager?.serverManager;
+        if (localWhisper?.ready && !localWhisper.isRemote && this.whisperManager.currentServerModel) {
+          try {
+            const alignmentStartedAt = Date.now();
+            const { alignTranscriptRows, timedWordsFromWhisper,
+              timedWordsFromStoredTrack } = require("./meetingWordAlignment");
+            const byId = new Map();
+            const alignSource = (source, words) => {
+              for (const row of alignTranscriptRows(kept.filter((candidate) => candidate.source === source), words))
+                byId.set(row.id, row);
+            };
+            const decodeWords = async (wav) => timedWordsFromWhisper(
+              await localWhisper.transcribe(wav, { wordTimestamps: true }));
+            alignSource(diarizedSource, await decodeWords(
+              Buffer.isBuffer(tmpWav) ? tmpWav : await fs.promises.readFile(tmpWav)));
+            if (otherTrackAudio?.pcm?.length) {
+              try {
+                const otherWav = await this.diarizationManager.convertRawPcmToWavBuffer(
+                  otherTrackAudio.pcm, 24000);
+                alignSource(otherTrackAudio.source, await decodeWords(otherWav));
+              } catch (error) {
+                debugLogger.warn("Other meeting track alignment unavailable", { error: error.message }, "speaker");
+              }
+            } else if (noteId != null) {
+              // Once a call becomes audible the live mic diarization buffer is
+              // intentionally dropped. Use the already retained local audio.
+              const otherSource = diarizedSource === "system" ? "mic" : "system";
+              const durationSeconds = this.meetingAudioStore?.status(noteId)
+                .tracks?.[otherSource]?.sampleCount / 24000;
+              if (durationSeconds > 0) {
+                try {
+                  const words = await timedWordsFromStoredTrack({
+                    noteId, track: otherSource, durationSeconds, store: this.meetingAudioStore,
+                    transcribe: (wav) => localWhisper.transcribe(wav, { wordTimestamps: true }),
+                  });
+                  alignSource(otherSource, words);
+                  audioStartOffsets[otherSource] = 0;
+                } catch (error) {
+                  debugLogger.warn("Retained meeting track alignment unavailable",
+                    { error: error.message }, "speaker");
+                }
+              }
+            }
+            alignedRows = kept.map((row) => byId.get(row.id) || row);
+            debugLogger.info("Local meeting word alignment", {
+              elapsedMs: Date.now() - alignmentStartedAt,
+              alignedRows: alignedRows.filter((row) => row.wordTimings?.length).length,
+              eligibleRows: kept.length,
+            }, "speaker");
+          } catch (error) {
+            debugLogger.warn("Local word alignment unavailable", { error: error.message }, "speaker");
+          }
+        }
         const enrichedSegments = this.diarizationManager.mergeWithTranscript(
-          kept,
+          alignedRows,
           diarizationSegments,
           { diarizedSource, speakerIndexBase,
             recordingId: recordingStartedAt != null ? noteId : null,
-            audioStartOffsetSeconds: recordingStartedAt != null && audioStartedAt != null
-              ? Math.max(0, (audioStartedAt - recordingStartedAt) / 1000) : 0 }
+            audioStartOffsetSeconds: audioStartOffsets[diarizedSource],
+            audioStartOffsets }
         );
 
         const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
@@ -13722,7 +13844,7 @@ class IPCHandlers {
                 if (reason) {
                   for (const seg of enrichedSegments) {
                     if (seg.speaker === mappedId && !isSpeakerLocked(seg)) {
-                      if (seg.uncertainty?.reason !== "too_short") seg.uncertainty = reason;
+                      if (!["too_short", "overlapping_speech"].includes(seg.uncertainty?.reason)) seg.uncertainty = reason;
                       seg.speakerAssessmentAvailable = true;
                       seg.speakerName = undefined;
                       seg.speakerIsPlaceholder = true;
@@ -13767,11 +13889,20 @@ class IPCHandlers {
 
         for (const seg of enrichedSegments) {
           seg.diarizationRunId = sessionId;
-          const prior = transcriptSegments.find((row) => row.id && row.id === seg.id);
+          const prior = transcriptSegments.find((row) => row.id && row.id === seg.id) ||
+            (seg.parentRowId && transcriptSegments.find((row) => row.id === seg.parentRowId));
           const { changedAfterFinalReason } = require("./speakerUncertainty");
           const changed = changedAfterFinalReason(prior?.speakerName, seg.speakerName);
-          if (changed && !isSpeakerLocked(seg) && seg.uncertainty?.reason !== "too_short") {
-            seg.uncertainty = changed;
+          if (prior && !isSpeakerLocked(seg) &&
+            (changed || prior.speaker !== seg.speaker ||
+              !!prior.speakerIsPlaceholder !== !!seg.speakerIsPlaceholder ||
+              (seg.parentRowId && seg.parentRowId !== seg.id))) {
+            seg.changedAfterFinal = true;
+            seg.finalRevision = { fromSpeaker: prior.speaker, toSpeaker: seg.speaker,
+              fromName: prior.speakerName, toName: seg.speakerName,
+              ...(seg.parentRowId && seg.parentRowId !== seg.id
+                ? { splitFromRowId: seg.parentRowId } : {}) };
+            if (!seg.uncertainty) seg.uncertainty = { reason: "changed_after_final" };
             seg.speakerAssessmentAvailable = true;
           }
         }

@@ -20,6 +20,97 @@ const DiarizationManager = require("../../src/helpers/diarization.js");
 const systemSegment = (timestamp, text) => ({ source: "system", timestamp, text });
 const micSegment = (timestamp, text) => ({ source: "mic", timestamp, text });
 
+test("an unaligned row gains the utterance's real word timings and exact audio span", () => {
+  const manager = new DiarizationManager();
+  const [row] = manager.mergeWithTranscript(
+    [{ id: "turn-1", ...systemSegment(9, "hello there"), wordTimings: [
+      { word: "hello", start: 10.1, end: 10.4 },
+      { word: "there", start: 10.55, end: 10.9 },
+    ] }],
+    [{ start: 9, end: 12, speaker: "speaker_00" }],
+    { recordingId: 7, audioStartOffsetSeconds: 2 }
+  );
+  assert.deepEqual(row.wordTimings, [
+    { word: "hello", start: 10.1, end: 10.4 },
+    { word: "there", start: 10.55, end: 10.9 },
+  ]);
+  assert.deepEqual(row.audioSpan, {
+    recordingId: 7, trackId: "system", startSample: 290400, endSample: 309600,
+  });
+});
+
+test("genuine simultaneous voices are refused and marked for review", () => {
+  const manager = new DiarizationManager();
+  const [row] = manager.mergeWithTranscript(
+    [{ id: "cross-talk", ...systemSegment(10, "both of you"), wordTimings: [
+      { word: "both", start: 10, end: 10.2 },
+      { word: "of", start: 10.2, end: 10.35 },
+      { word: "you", start: 10.35, end: 10.6 },
+    ] }],
+    [
+      { start: 9.9, end: 10.7, speaker: "speaker_00" },
+      { start: 10.1, end: 10.65, speaker: "speaker_01" },
+    ],
+    { recordingId: 7 }
+  );
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerIsPlaceholder, true);
+  assert.equal(row.uncertainty?.reason, "overlapping_speech");
+  assert.deepEqual(row.audioSpan, {
+    recordingId: 7, trackId: "system", startSample: 240000, endSample: 254400,
+  });
+});
+
+test("explicit locked Unknown survives final diarization untouched", () => {
+  const manager = new DiarizationManager();
+  const [row] = manager.mergeWithTranscript(
+    [{ id: "locked", ...systemSegment(10, "who knows"), speaker: "speaker_live",
+      speakerLocked: true, speakerLockSource: "user", speakerStatus: "locked",
+      speakerIsPlaceholder: true, unknownNumber: 4 }],
+    [{ start: 10, end: 12, speaker: "speaker_00" }]
+  );
+  assert.equal(row.speaker, "speaker_live");
+  assert.equal(row.speakerIsPlaceholder, true);
+  assert.equal(row.unknownNumber, 4);
+  assert.equal(row.speakerLocked, true);
+});
+
+test("an aligned row crossing a speaker handoff splits at a word boundary", () => {
+  const manager = new DiarizationManager();
+  const input = [{ id: "turn-1", ...systemSegment(1, "hello there thanks"), wordTimings: [
+    { word: "hello", start: 1, end: 1.4 },
+    { word: "there", start: 1.5, end: 1.8 },
+    { word: "thanks", start: 2.2, end: 2.6 },
+  ] }];
+  const diarized = [
+    { start: 0.8, end: 2, speaker: "speaker_00" },
+    { start: 2, end: 3, speaker: "speaker_01" },
+  ];
+  const first = manager.mergeWithTranscript(input, diarized, { recordingId: 7 });
+  const second = manager.mergeWithTranscript(input, diarized, { recordingId: 7 });
+  assert.equal(first.length, 2);
+  assert.deepEqual(first.map((row) => row.text), ["hello there", "thanks"]);
+  assert.equal(first[0].id, "turn-1");
+  assert.equal(first[1].id, second[1].id);
+  assert.deepEqual(first.map((row) => row.speaker), ["speaker_0", "speaker_1"]);
+  assert.deepEqual(first.map((row) => [row.audioSpan.startSample, row.audioSpan.endSample]),
+    [[24000, 43200], [52800, 62400]]);
+});
+
+test("the mic track keeps its own recording offset when system audio is diarized", () => {
+  const manager = new DiarizationManager();
+  const [mic] = manager.mergeWithTranscript([
+    { id: "mic-1", ...micSegment(10, "hello"),
+      wordTimings: [{ word: "hello", start: 1, end: 1.5 }] },
+  ], [{ start: 0, end: 2, speaker: "speaker_00" }], {
+    diarizedSource: "system", recordingId: 7,
+    audioStartOffsets: { mic: 5, system: 2 },
+  });
+  assert.deepEqual(mic.audioSpan, {
+    recordingId: 7, trackId: "mic", startSample: 144000, endSample: 156000,
+  });
+});
+
 test("a segment between clusters takes the nearest cluster, not the first", () => {
   const manager = new DiarizationManager();
 

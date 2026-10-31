@@ -3793,7 +3793,7 @@ declare global {
         }>
       >;
       applySpeakerCorrection?: (request: {
-        type: "apply" | "undo";
+        type: "apply" | "split" | "undo";
         noteId: number;
         id: string;
         scope?: "row" | "selected" | "cluster";
@@ -3808,6 +3808,8 @@ declare global {
         error?: string;
         rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
         mapping?: { runId?: string; clusterId: string; value: { display_name?: string; displayName?: string } | null } | null;
+        report?: { movedRows: number; retainedRows: number; acousticRows: number;
+          newClusterId: string; evidence: string } | null;
       }>;
       getSpeakerProfiles?: () => Promise<
         Array<{

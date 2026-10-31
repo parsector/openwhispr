@@ -3229,6 +3229,9 @@
       "unknownNumber": "未知發言者 {{n}}",
       "restore": "還原",
       "olderCorrections": "顯示較早的 {{n}} 項修正",
+      "splitCluster": "這是兩個人",
+      "splitPreview": "將 {{total}} 列中的 {{moved}} 列作為另一種聲音。其他列可能根據聲音證據一併移動。",
+      "splitReport": "已移動 {{moved}} 列，其中 {{acoustic}} 列根據聲音證據；{{retained}} 列保留。可從已移動的列復原。",
       "historyFull": "此筆記的修正記錄已滿（16 MB）。較早的修正仍可復原。",
       "historyQuarantined": "無法確定此筆記的操作順序，因此無法復原。",
       "notAssessed": "未評估",
@@ -3241,6 +3244,8 @@
       "reason": {
         "closeMatch": "{{first}} 或 {{second}}",
         "too_short": "太短，無法識別",
+        "overlapping_speech": "語音重疊",
+        "possible_mixed_speakers": "可能混有多位說話者",
         "changed_after_final": "最終分析後有所變更",
         "not_sure": "不確定"
       }

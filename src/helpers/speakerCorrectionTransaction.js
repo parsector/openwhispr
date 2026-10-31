@@ -14,6 +14,8 @@ const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = req
 const { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES } = require('./speakerActionLog');
 const globalHistory = require('./speakerGlobalHistory');
 const MAX_CORRECTION_BYTES = MAX_ACTION_LOG_BYTES;
+const SPLIT_FIELDS = ["speaker", "speakerName", "speakerIsPlaceholder", "speakerStatus",
+  "unknownNumber", "uncertainty", "speakerLocked", "speakerLockSource"];
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
 const snapshot = (row) =>
   Object.fromEntries(FIELDS.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
@@ -26,7 +28,7 @@ const restore = (row, previous) => {
 const parse = (raw, noteId) => normalizeRowIds(readTranscriptDocument(raw).rows, noteId);
 function applySpeakerCorrection(database, identifier, request) {
   const { noteId, id } = request;
-  if (!noteId || !id || !["apply", "undo"].includes(request.type))
+  if (!noteId || !id || !["apply", "split", "undo"].includes(request.type))
     return { success: false, error: "invalid_request" };
   let committedMapping = null;
   let committedProfileId = null;
@@ -47,6 +49,7 @@ function applySpeakerCorrection(database, identifier, request) {
     for (const row of normalizeRowIds(request.rows || [], note.client_note_id || noteId))
       if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
     let rows = [...byId.values()];
+    let splitReport = null;
     if (request.type === "apply") {
       const { scope, target, name, profileId, email } = request;
       if (profileId != null && typeof database.db.prepare === 'function' &&
@@ -134,16 +137,81 @@ function applySpeakerCorrection(database, identifier, request) {
         if (!result?.success) throw Error(result?.error || "mapping_failed");
         committedMapping = { runId: target.runId, clusterId: target.clusterId, value: after };
       }
+    } else if (request.type === "split") {
+      const { target, rowIds } = request;
+      if (request.expectedTranscript != null && request.expectedTranscript !== note.transcript)
+        return { success: false, error: "transcript_changed" };
+      const cluster = rows.filter((row) => !row.deleted && row.diarizationRunId === target?.runId &&
+        row.speaker === target?.clusterId);
+      const reviewed = new Set(rowIds || []);
+      const eligibleEvidence = (request.evidenceRowIds || []).filter((rowId) => {
+        const row = cluster.find((candidate) => candidate.id === rowId);
+        return row && !row.speakerLocked && row.speakerLockSource !== "user";
+      });
+      const selected = new Set([...(rowIds || []), ...eligibleEvidence]);
+      if (cluster.length < 2 || !reviewed.size || selected.size >= cluster.length ||
+        [...selected].some((rowId) => !cluster.some((row) => row.id === rowId)))
+        return { success: false, error: "invalid_split" };
+      const used = [
+        ...rows.map((row) => row.speaker),
+        ...(database.getSpeakerMappings?.(noteId) || []).map((mapping) => mapping.speaker_id),
+      ].map((speaker) => /^speaker_(\d+)$/.exec(speaker || "")?.[1])
+        .filter((number) => number != null).map(Number);
+      const nextCluster = `speaker_${Math.max(-1, ...used) + 1}`;
+      const snapshots = {};
+      const changed = [];
+      rows = rows.map((row) => {
+        if (!selected.has(row.id)) return row;
+        snapshots[row.id] = Object.fromEntries(SPLIT_FIELDS.filter((field) => row[field] !== undefined)
+          .map((field) => [field, row[field]]));
+        const next = { ...row, speaker: nextCluster, unknownNumber: undefined,
+          correctionRevision: (Number(row.correctionRevision) || 0) + 1 };
+        // A machine name inherited from the mixed cluster is no longer evidence
+        // for the new one. Human locks and explicit Unknown remain authoritative.
+        if (!row.speakerLocked && row.speakerLockSource !== "user") {
+          next.speakerName = undefined;
+          next.speakerIsPlaceholder = true;
+          next.speakerStatus = "provisional";
+          next.uncertainty = { reason: "possible_mixed_speakers" };
+        }
+        next.corrections = [...(row.corrections || []), { id, rowId: row.id,
+          sequence: log.nextSequence }];
+        changed.push(next);
+        return next;
+      });
+      const event = { id, noteId, actor: "user", timestamp: new Date().toISOString(),
+        sequence: log.nextSequence, target, rowIds: [...selected], reviewedRowIds: [...reviewed],
+        newClusterId: nextCluster,
+        snapshots };
+      changed[0].corrections[changed[0].corrections.length - 1] = event;
+      nextLog = appendAction(log, { kind: "split", id, event });
+      if (!nextLog) return { success: false, error: "history_full" };
+      splitReport = { movedRows: selected.size, retainedRows: cluster.length - selected.size,
+        acousticRows: selected.size - reviewed.size, newClusterId: nextCluster,
+        evidence: selected.size > reviewed.size ? "voice_embeddings" : "selected_rows" };
     } else {
       const action = newestAvailableAction(log);
-      if (!log.actions.some((entry) => entry.kind === 'correction' && entry.id === id))
+      if (!log.actions.some((entry) => ['correction', 'split'].includes(entry.kind) && entry.id === id))
         return { success: false, error: 'correction_missing' };
       if (!action) return { success: false, error: log.actions.at(-1)?.unavailableReason || 'later_change' };
-      if (action.kind !== 'correction' || action.id !== id)
+      if (!['correction', 'split'].includes(action.kind) || action.id !== id)
         return { success: false, error: 'later_change' };
       if (note.deleted_at) database.db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(noteId);
       const event = action.event;
       nextLog = removeNewestAction(log);
+      if (action.kind === 'split') {
+        rows = rows.map((row) => {
+          const previous = event.snapshots?.[row.id];
+          if (!previous) return row;
+          const next = { ...row };
+          for (const field of SPLIT_FIELDS) delete next[field];
+          Object.assign(next, previous);
+          next.correctionRevision = (Number(row.correctionRevision) || 0) + 1;
+          next.corrections = (row.corrections || []).filter((record) => record.id !== id);
+          if (!next.corrections.length) delete next.corrections;
+          return next;
+        });
+      } else {
       rows = rows.map((row) => {
         const record = (row.corrections || []).find((item) => item.id === id);
         if (!record) return row;
@@ -169,13 +237,14 @@ function applySpeakerCorrection(database, identifier, request) {
         committedMapping = { runId: event.diarizationRunId, clusterId: event.clusterId,
           value: before || null };
       }
+      }
     }
     const transcript = writeTranscriptDocument(rows, readTranscriptDocument(note.transcript).unknownNumberHighWater);
     const result = database.updateNote(noteId, { transcript,
       speaker_action_log: JSON.stringify(nextLog), speaker_label_undo: null });
     if (!result?.success) throw Error(result?.error || "transcript_failed");
-    if (request.type === 'apply') globalHistory.add(database.db, { id, kind: 'correction',
-      profileId: committedProfileId, noteId, label: request.name || 'Unknown' });
+    if (request.type === 'apply' || request.type === 'split') globalHistory.add(database.db, { id, kind: request.type,
+      profileId: committedProfileId, noteId, label: request.type === 'split' ? 'Split cluster' : request.name || 'Unknown' });
     else globalHistory.remove(database.db, id, noteId);
     if (request.type === "undo" && newestAvailableAction(log)?.event?.createdProfileId)
       database.removeUnusedNamedSpeakerProfile?.(newestAvailableAction(log).event.createdProfileId);
@@ -191,7 +260,8 @@ function applySpeakerCorrection(database, identifier, request) {
         );
       else identifier.unmapSpeaker?.(clusterId, noteId);
     }
-    return { success: true, rows, mapping: committedMapping };
+    return { success: true, rows: readTranscriptDocument(transcript).rows,
+      mapping: committedMapping, report: splitReport };
   });
   const caches =
     identifier &&

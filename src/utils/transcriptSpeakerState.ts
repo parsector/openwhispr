@@ -104,6 +104,10 @@ export const lockTranscriptSpeaker = (
 
 const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSegment) => {
   const merged = { ...incoming } as TranscriptSegment;
+  const sameText = normalizeText(existing.text) === normalizeText(incoming.text);
+  if (sameText && !merged.wordTimings && existing.wordTimings) merged.wordTimings = existing.wordTimings;
+  if (sameText && !merged.audioSpan && existing.audioSpan && merged.wordTimings)
+    merged.audioSpan = existing.audioSpan;
   const existingFields = existing as Record<SpeakerStateField, unknown>;
   const mergedFields = merged as Record<SpeakerStateField, unknown>;
 
@@ -121,14 +125,22 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
   }
 
   if (isTranscriptSpeakerLocked(existing)) {
-    // Keep the user's name/lock but let diarization refine the speaker cluster, so one
-    // locked label can't freeze a bucket diarization splits into multiple speakers.
+    // A user decision is authoritative, including an explicit Unknown and its cluster.
     for (const field of SPEAKER_STATE_FIELDS) {
-      if (field === "speaker" || field === "speakerIsPlaceholder") continue;
       mergedFields[field] = existingFields[field];
     }
     merged.speakerIsPlaceholder = existing.speakerIsPlaceholder;
     merged.uncertainty = undefined;
+    merged.changedAfterFinal = existing.changedAfterFinal;
+    merged.finalRevision = existing.finalRevision;
+    if (incoming.parentRowId === existing.id && incoming.splitStartWord === 0 &&
+      incoming.text !== existing.text) {
+      merged.text = existing.text;
+      merged.wordTimings = existing.wordTimings;
+      merged.audioSpan = existing.audioSpan;
+      merged.parentRowId = existing.parentRowId;
+      merged.splitStartWord = existing.splitStartWord;
+    }
   }
 
   return normalizeTranscriptSegment(merged);
@@ -165,6 +177,9 @@ export const mergeTranscriptSegments = (
   const unmatchedIncoming: TranscriptSegment[] = [];
 
   incomingSegments.forEach((segment, index) => {
+    const parent = segment.parentRowId && existingSegments.find((row) => row.id === segment.parentRowId);
+    if (segment.parentRowId && segment.parentRowId !== segment.id && parent &&
+      isTranscriptSpeakerLocked(parent)) return;
     const findUnused = (candidates?: number[]) =>
       candidates?.find((candidateIndex) => !usedIndexes.has(candidateIndex));
 
@@ -237,6 +252,11 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
     normalized.map((segment) => ({
       id: segment.id || crypto.randomUUID(),
       audioSpan: segment.audioSpan,
+      wordTimings: segment.wordTimings,
+      parentRowId: segment.parentRowId,
+      splitStartWord: segment.splitStartWord,
+      changedAfterFinal: segment.changedAfterFinal,
+      finalRevision: segment.finalRevision,
       unknownNumber: segment.unknownNumber,
       unknownNumberHighWater: segment.unknownNumberHighWater,
       uncertainty: segment.uncertainty,

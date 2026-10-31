@@ -3229,6 +3229,9 @@
       "unknownNumber": "未知发言人 {{n}}",
       "restore": "恢复",
       "olderCorrections": "显示较早的 {{n}} 项更正",
+      "splitCluster": "这是两个人",
+      "splitPreview": "将 {{total}} 行中的 {{moved}} 行作为另一种声音。其他行可能根据声音证据一起移动。",
+      "splitReport": "已移动 {{moved}} 行，其中 {{acoustic}} 行基于声音证据；{{retained}} 行保留。可从已移动的行撤销。",
       "historyFull": "此笔记的更正记录已满（16 MB）。较早的更正仍可撤销。",
       "historyQuarantined": "无法确定此笔记的操作顺序，因此无法撤销。",
       "notAssessed": "未评估",
@@ -3241,6 +3244,8 @@
       "reason": {
         "closeMatch": "{{first}} 或 {{second}}",
         "too_short": "太短，无法识别",
+        "overlapping_speech": "语音重叠",
+        "possible_mixed_speakers": "可能混有多位说话人",
         "changed_after_final": "最终分析后发生变化",
         "not_sure": "不确定"
       }

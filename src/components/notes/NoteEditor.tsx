@@ -453,6 +453,7 @@ export default function NoteEditor({
   const [reviewOnly, setReviewOnly] = useState(false);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerCorrectionError, setSpeakerCorrectionError] = useState<string | null>(null);
+  const [speakerSplitReport, setSpeakerSplitReport] = useState<string | null>(null);
   const [speakerHistoryQuarantined, setSpeakerHistoryQuarantined] = useState(false);
   useEffect(() => {
     let active = true;
@@ -772,7 +773,7 @@ export default function NoteEditor({
   );
 
   const commitSpeakerCorrection = useCallback(async (request: {
-    type: "apply" | "undo"; id: string; scope?: "row" | "selected" | "cluster";
+    type: "apply" | "split" | "undo"; id: string; scope?: "row" | "selected" | "cluster";
     rowIds?: string[]; target?: { runId?: string; clusterId?: string };
     name?: string | null; profileId?: number | null; email?: string | null;
   }) => {
@@ -782,6 +783,7 @@ export default function NoteEditor({
     await previousCorrection;
     const before = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
     setSpeakerCorrectionError(null);
+    setSpeakerSplitReport(null);
     if (isRecording) setSpeakerCorrectionPending(true);
     try {
       const result = await window.electronAPI?.applySpeakerCorrection?.({
@@ -796,6 +798,10 @@ export default function NoteEditor({
         return false;
       }
       const committed = result.rows;
+      if (result.report) setSpeakerSplitReport(t("notes.speaker.splitReport", {
+        moved: result.report.movedRows, retained: result.report.retainedRows,
+        acoustic: result.report.acousticRows,
+      }));
       if (isRecording) {
         // Merge after the await: a transcription row may have arrived during IPC.
         const liveNow = useMeetingRecordingStore.getState().segments;
@@ -924,6 +930,20 @@ export default function NoteEditor({
   const handleUndoSpeakerCorrection = useCallback(async (correctionId: string) => {
     await commitSpeakerCorrection({ type: "undo", id: correctionId });
   }, [commitSpeakerCorrection]);
+
+  const handleSplitCluster = useCallback(async (rowId: string) => {
+    const rows = isRecording ? useMeetingRecordingStore.getState().segments : displaySegments;
+    const row = rows.find((segment) => segment.id === rowId);
+    if (!row?.speaker) return;
+    const cluster = rows.filter((segment) => segment.speaker === row.speaker &&
+      segment.diarizationRunId === row.diarizationRunId);
+    const selected = cluster.filter((segment) => selectedSegmentIds.has(segment.id));
+    const seeds = selected.length > 0 && selected.length < cluster.length ? selected : [row];
+    const ok = await commitSpeakerCorrection({ type: "split", id: crypto.randomUUID(),
+      target: { runId: row.diarizationRunId, clusterId: row.speaker },
+      rowIds: seeds.map((segment) => segment.id) });
+    if (ok) handleClearSelection();
+  }, [commitSpeakerCorrection, displaySegments, handleClearSelection, isRecording, selectedSegmentIds]);
 
   const handleBulkAssignName = useCallback(async (
     displayName: string, _email?: string | null, profileId?: number
@@ -1540,6 +1560,7 @@ export default function NoteEditor({
 
         {speakerHistoryQuarantined && <p role="status" className="px-4 py-2 text-sm text-destructive">{t("notes.speaker.historyQuarantined")}</p>}
         {speakerCorrectionError && <p role="alert" className="px-4 py-2 text-sm text-destructive">{speakerCorrectionError}</p>}
+        {speakerSplitReport && <p role="status" className="px-4 py-2 text-sm text-muted-foreground">{speakerSplitReport}</p>}
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
@@ -1559,6 +1580,7 @@ export default function NoteEditor({
                   onSetSessionExpectedCount={onSetSessionExpectedCount}
                   onMapSpeaker={handleMapSpeaker}
                   onAssignSpeakerScope={handleAssignSpeakerScope}
+                  onSplitCluster={isRecording ? undefined : handleSplitCluster}
                   onUndoCorrection={handleUndoSpeakerCorrection}
                   onConfirmSuggestion={handleConfirmSuggestion}
                   onDismissSuggestion={handleDismissSuggestion}
@@ -1581,6 +1603,7 @@ export default function NoteEditor({
                   onSetSessionExpectedCount={onSetSessionExpectedCount}
                   onMapSpeaker={handleMapSpeaker}
                   onAssignSpeakerScope={handleAssignSpeakerScope}
+                  onSplitCluster={isRecording ? undefined : handleSplitCluster}
                   onUndoCorrection={handleUndoSpeakerCorrection}
                   onConfirmSuggestion={handleConfirmSuggestion}
                   onDismissSuggestion={handleDismissSuggestion}

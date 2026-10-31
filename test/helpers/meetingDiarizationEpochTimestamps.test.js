@@ -181,6 +181,9 @@ test("main final analysis finds the prior row by its ingestion id", async () => 
   const payload = await runMainDiarization(stored, { finalName: "Sam" });
   assert.equal(payload.segments[0].id, id);
   assert.deepEqual(payload.segments[0].uncertainty, { reason: "changed_after_final" });
+  assert.deepEqual(payload.segments[0].finalRevision, {
+    fromSpeaker: undefined, toSpeaker: "speaker_0", fromName: "Alex", toName: "Sam",
+  });
   const merged = runRendererCompletion([
     { id, source: "system", text: "hello", timestamp: START_MS + 1000, speakerName: "Alex" },
   ], payload);

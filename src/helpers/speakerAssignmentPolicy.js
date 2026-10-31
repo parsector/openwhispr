@@ -32,7 +32,7 @@ function isSpeakerLocked(segment) {
 }
 
 function canAutoRelabelSpeaker(segment) {
-  return !isSpeakerLocked(segment) && !["too_short", "close_match", "not_sure"].includes(segment?.uncertainty?.reason);
+  return !isSpeakerLocked(segment) && !["too_short", "close_match", "not_sure", "overlapping_speech"].includes(segment?.uncertainty?.reason);
 }
 
 function applySpeakerUpdate(segment, patch, status) {

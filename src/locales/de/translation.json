@@ -3574,6 +3574,9 @@
       "unknownNumber": "Unbekannte Person {{n}}",
       "restore": "Wiederherstellen",
       "olderCorrections": "{{n}} ältere Korrekturen anzeigen",
+      "splitCluster": "Das sind zwei Personen",
+      "splitPreview": "{{moved}} von {{total}} Zeilen als Gegenbeispiel wählen. Weitere Zeilen können anhand der Stimme folgen.",
+      "splitReport": "{{moved}} Zeilen verschoben, davon {{acoustic}} anhand der Stimme; {{retained}} blieben. Über eine verschobene Zeile rückgängig machen.",
       "historyFull": "Der Korrekturverlauf dieser Notiz ist voll (16 MB). Ältere Korrekturen können weiterhin rückgängig gemacht werden.",
       "historyQuarantined": "Die Reihenfolge der Aktionen dieser Notiz ist unklar. Rückgängig ist nicht verfügbar.",
       "notAssessed": "Nicht bewertet",
@@ -3586,6 +3589,8 @@
       "reason": {
         "closeMatch": "{{first}} oder {{second}}",
         "too_short": "Zu kurz für eine Identifizierung",
+        "overlapping_speech": "Überlappende Sprache",
+        "possible_mixed_speakers": "Möglicherweise mehrere Sprecher",
         "changed_after_final": "Nach der abschließenden Analyse geändert",
         "not_sure": "Unsicher"
       }

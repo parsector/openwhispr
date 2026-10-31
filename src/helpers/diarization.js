@@ -470,20 +470,72 @@ class DiarizationManager {
   mergeWithTranscript(
     transcriptSegments,
     diarizationSegments,
-    { diarizedSource = "system", speakerIndexBase = 0, recordingId = null, audioStartOffsetSeconds = 0 } = {}
+    { diarizedSource = "system", speakerIndexBase = 0, recordingId = null,
+      audioStartOffsetSeconds = 0, audioStartOffsets = {} } = {}
   ) {
     if (!transcriptSegments || transcriptSegments.length === 0) return [];
     if (!diarizationSegments || diarizationSegments.length === 0) {
-      return transcriptSegments.map((seg) => ({ ...seg }));
+      return recordingId != null
+        ? require("./meetingWordAlignment").withAudioSpans(
+          transcriptSegments, recordingId, audioStartOffsets)
+        : transcriptSegments.map((seg) => ({ ...seg }));
     }
 
     // Renumber clusters (speaker_00 → speaker_0), offset past a resumed note's ids.
     const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
     const speakerMap = buildSpeakerRenumber(speakerSet, speakerIndexBase);
 
+    const alignedBounds = (seg) => {
+      const tokens = String(seg.text || "").trim().split(/\s+/u).filter(Boolean);
+      const words = seg.wordTimings;
+      if (!Array.isArray(words) || words.length !== tokens.length || !words.length) return null;
+      const comparable = (value) => String(value).normalize("NFKC").replace(/[^\p{L}\p{N}]/gu, "").toLocaleLowerCase();
+      for (let i = 0; i < words.length; i += 1) {
+        if (comparable(words[i].word) !== comparable(tokens[i]) ||
+          !Number.isFinite(words[i].start) || !Number.isFinite(words[i].end) ||
+          words[i].start < 0 || words[i].end <= words[i].start ||
+          (i && words[i].start < words[i - 1].end)) return null;
+      }
+      return { start: words[0].start, end: words.at(-1).end };
+    };
+
+    const splitAtHandoffs = (seg) => {
+      if (seg.source !== diarizedSource || seg.speakerLocked || seg.speakerLockSource === "user" ||
+        seg.corrections?.length || !alignedBounds(seg) || seg.wordTimings.length < 2) return [seg];
+      const speakers = seg.wordTimings.map((word) => {
+        let best = null, bestDuration = 0;
+        for (const turn of diarizationSegments) {
+          const duration = Math.min(word.end, turn.end) - Math.max(word.start, turn.start);
+          if (duration > bestDuration) { best = turn.speaker; bestDuration = duration; }
+        }
+        return best;
+      });
+      if (speakers.some((speaker) => !speaker)) return [seg];
+      const boundaries = [0];
+      for (let i = 1; i < speakers.length; i += 1)
+        if (speakers[i] !== speakers[i - 1]) boundaries.push(i);
+      if (boundaries.length === 1) return [seg];
+      boundaries.push(speakers.length);
+      const tokens = seg.text.trim().split(/\s+/u);
+      return boundaries.slice(0, -1).map((start, i) => {
+        const end = boundaries[i + 1];
+        if (i === 0) return { ...seg, audioSpan: undefined,
+          parentRowId: seg.id, splitStartWord: 0,
+          text: tokens.slice(start, end).join(" "),
+          wordTimings: seg.wordTimings.slice(start, end) };
+        const hex = crypto.createHash("sha256").update(`${seg.id}\0${start}`).digest("hex");
+        const id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+        return { ...seg, id, audioSpan: undefined, parentRowId: seg.id, splitStartWord: start,
+          text: tokens.slice(start, end).join(" "),
+          wordTimings: seg.wordTimings.slice(start, end),
+          timestamp: seg.wordTimings[start].start,
+          unknownNumber: undefined };
+      });
+    };
+    const workingSegments = transcriptSegments.flatMap(splitAtHandoffs);
     const nextTimestampAt = (startIndex, source) => {
-      for (let i = startIndex + 1; i < transcriptSegments.length; i += 1) {
-        const candidate = transcriptSegments[i];
+      for (let i = startIndex + 1; i < workingSegments.length; i += 1) {
+        const candidate = workingSegments[i];
         if (candidate.source === source && candidate.timestamp != null) {
           return candidate.timestamp;
         }
@@ -491,8 +543,21 @@ class DiarizationManager {
       return null;
     };
 
-    return transcriptSegments.map((seg, index) => {
+    return workingSegments.map((seg, index) => {
       const enriched = { ...seg };
+      const bounds = alignedBounds(seg);
+      if (!bounds) {
+        // A diarization turn is not a transcript alignment. Keep the row honest.
+        delete enriched.wordTimings;
+        delete enriched.audioSpan;
+      } else if (recordingId != null) {
+        const offset = audioStartOffsets[seg.source] ?? audioStartOffsetSeconds;
+        enriched.audioSpan = {
+          recordingId, trackId: seg.source,
+          startSample: Math.round((offset + bounds.start) * 24000),
+          endSample: Math.round((offset + bounds.end) * 24000),
+        };
+      }
 
       // A mic track can contain several people. Preserve any user correction,
       // otherwise leave it unnamed when only system audio was diarized.
@@ -506,8 +571,8 @@ class DiarizationManager {
       }
 
       if (seg.source === diarizedSource && seg.timestamp != null) {
-        const segStart = seg.timestamp;
-        const segEnd = nextTimestampAt(index, diarizedSource) ?? segStart + 2.5;
+        const segStart = bounds?.start ?? seg.timestamp;
+        const segEnd = bounds?.end ?? (nextTimestampAt(index, diarizedSource) ?? segStart + 2.5);
         const midpoint = segStart + (segEnd - segStart) / 2;
         let overlapSpeaker = null;
         let nearestSpeaker = null;
@@ -542,24 +607,24 @@ class DiarizationManager {
         // distance instead of latching onto the first cluster it sees.
         const bestSpeaker = overlapSpeaker ?? nearestSpeaker;
         const matchedSpan = overlapSpan ?? nearestSpan;
-        if (recordingId != null && matchedSpan && matchedSpan.end > matchedSpan.start) {
-          enriched.audioSpan = {
-            recordingId, trackId: diarizedSource,
-            startSample: Math.max(0, Math.round((audioStartOffsetSeconds + matchedSpan.start) * 24000)),
-            endSample: Math.round((audioStartOffsetSeconds + matchedSpan.end) * 24000),
-          };
-        }
-
-        enriched.uncertainty = shortSpanReason(matchedSpan) || enriched.uncertainty;
+        // Only simultaneous, distinct diarization voices count as cross-talk.
+        // A handoff with adjacent turns has zero intersection and stays assignable.
+        const simultaneous = !!bounds && diarizationSegments.some((first, i) =>
+          diarizationSegments.slice(i + 1).some((second) =>
+            first.speaker !== second.speaker &&
+            Math.min(segEnd, first.end, second.end) - Math.max(segStart, first.start, second.start) >= 0.1));
+        enriched.uncertainty = simultaneous
+          ? { reason: "overlapping_speech" }
+          : shortSpanReason(matchedSpan) || enriched.uncertainty;
         if (enriched.uncertainty) enriched.speakerAssessmentAvailable = true;
-        const abstained = ["too_short", "close_match", "not_sure"].includes(enriched.uncertainty?.reason);
+        const abstained = ["too_short", "close_match", "not_sure", "overlapping_speech"].includes(enriched.uncertainty?.reason);
         if (abstained && !enriched.speakerLocked && enriched.speakerLockSource !== "user") {
           enriched.speakerName = undefined;
           enriched.speakerIsPlaceholder = true;
           enriched.speakerStatus = "provisional";
         }
 
-        if (bestSpeaker) {
+        if (bestSpeaker && !seg.speakerLocked && seg.speakerLockSource !== "user") {
           const patch = {
             speaker: speakerMap.get(bestSpeaker) || bestSpeaker,
             speakerIsPlaceholder: abstained,

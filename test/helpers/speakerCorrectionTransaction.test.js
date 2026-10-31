@@ -93,6 +93,36 @@ const correction = (
 });
 const rows = (f) => require("../../src/helpers/transcriptDocument").readTranscriptDocument(f.note.transcript).rows;
 
+test("splitting a cluster keeps row ids and locks, gives a new number, and undoes in order", () => {
+  const f = fixture();
+  const { writeTranscriptDocument } = require("../../src/helpers/transcriptDocument");
+  f.note.transcript = writeTranscriptDocument([
+    row("a"),
+    { ...row("b"), speakerLocked: true, speakerLockSource: "user", speakerStatus: "locked",
+      speakerName: "Sam", speakerIsPlaceholder: false },
+    row("c"),
+  ]);
+  const before = rows(f);
+  const split = applySpeakerCorrection(f.db, f.identifier, {
+    type: "split", noteId: 1, id: "split-1", target: { runId: "run1", clusterId: "speaker_0" },
+    rowIds: ["b"], rows: [],
+  });
+  assert.equal(split.success, true);
+  const after = rows(f);
+  assert.deepEqual(after.map((r) => r.id), before.map((r) => r.id));
+  assert.equal(after[0].speaker, "speaker_0");
+  assert.notEqual(after[1].speaker, "speaker_0");
+  assert.equal(after[1].speakerName, "Sam");
+  assert.equal(after[1].speakerLocked, true);
+  assert.notEqual(after[1].unknownNumber, after[0].unknownNumber);
+  assert.equal(split.report.movedRows, 1);
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: "undo", noteId: 1, id: "split-1" }).success, true);
+  const restored = rows(f);
+  assert.deepEqual(restored.map((r) => [r.id, r.speaker, r.speakerName, r.speakerLocked, r.unknownNumber]),
+    before.map((r) => [r.id, r.speaker, r.speakerName, r.speakerLocked, r.unknownNumber]));
+});
+
 test("atomic correction merges a live row appended while IPC waits", () => {
   const f = fixture();
   const request = correction("c1", "a", "Alex");

@@ -915,7 +915,7 @@ class WhisperServerManager extends EventEmitter {
     });
 
     // signal is optional; only cancellable uploads pass one.
-    const { language, initialPrompt, signal, skipDecoderThresholds } = options;
+    const { language, initialPrompt, signal, skipDecoderThresholds, wordTimestamps } = options;
     if (signal?.aborted) throw createAbortError("whisper-server transcription cancelled");
 
     // whisper.cpp wants 16 kHz mono PCM16; a renderer PCM tap delivers exactly that.
@@ -966,10 +966,16 @@ class WhisperServerManager extends EventEmitter {
       debugLogger.info("Using custom dictionary prompt", { prompt: initialPrompt });
     }
 
+    if (wordTimestamps) {
+      for (const [name, value] of Object.entries({ max_len: "1", split_on_word: "true" })) {
+        parts.push(`--${boundary}\r\n` +
+          `Content-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`);
+      }
+    }
     parts.push(
       `--${boundary}\r\n` +
         `Content-Disposition: form-data; name="response_format"\r\n\r\n` +
-        `json\r\n`
+        `${wordTimestamps ? "verbose_json" : "json"}\r\n`
     );
     parts.push(`--${boundary}--\r\n`);
 

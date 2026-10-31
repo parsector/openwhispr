@@ -3229,6 +3229,9 @@
       "unknownNumber": "Voce sconosciuta {{n}}",
       "restore": "Ripristina",
       "olderCorrections": "Mostra {{n}} correzioni precedenti",
+      "splitCluster": "Sono due persone",
+      "splitPreview": "Usa {{moved}} di {{total}} righe come voce distinta. Altre righe possono seguire in base alla voce.",
+      "splitReport": "Spostate {{moved}} righe, di cui {{acoustic}} in base alla voce; {{retained}} sono rimaste. Annulla da una riga spostata.",
       "historyFull": "La cronologia delle correzioni di questa nota è piena (16 MB). Puoi ancora annullare le correzioni precedenti.",
       "historyQuarantined": "Non è possibile stabilire l’ordine delle azioni di questa nota. Annulla non è disponibile.",
       "notAssessed": "Non valutato",
@@ -3241,6 +3244,8 @@
       "reason": {
         "closeMatch": "{{first}} o {{second}}",
         "too_short": "Troppo breve per identificare",
+        "overlapping_speech": "Voci sovrapposte",
+        "possible_mixed_speakers": "Possibili voci miste",
         "changed_after_final": "Modificato dopo l’analisi finale",
         "not_sure": "Non certo"
       }

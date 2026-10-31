@@ -103,3 +103,46 @@ test('final abstention clears the prior name from the saved row', async () => {
   assert.equal(saved.speakerName, undefined);
   assert.equal(saved.speakerIsPlaceholder, true);
 });
+
+test('a locked Unknown row keeps its id, cluster, number and alignment through final analysis', async () => {
+  const { mergeSessionDiarization } = await import('../../src/utils/diarizationCompletion.ts');
+  const live = { ...row('stable-id', 'run1', 'speaker_0'), text: 'hello',
+    speakerLocked: true, speakerLockSource: 'user', speakerIsPlaceholder: true,
+    speakerStatus: 'locked', unknownNumber: 3,
+    wordTimings: [{ word: 'hello', start: 1, end: 1.4 }],
+    audioSpan: { recordingId: 4, trackId: 'system', startSample: 24000, endSample: 33600 } };
+  const result = mergeSessionDiarization({ existing: [live], seedLength: 0,
+    unknownNumberHighWater: 3, segments: [{ ...row('stable-id', 'run1', 'speaker_7'), text: 'hello', speakerName: 'Sam' }] });
+  const [saved] = result.segments;
+  assert.equal(saved.id, 'stable-id');
+  assert.equal(saved.speaker, 'speaker_0');
+  assert.equal(saved.unknownNumber, 3);
+  assert.equal(saved.speakerName, undefined);
+  assert.deepEqual(saved.wordTimings, live.wordTimings);
+  assert.deepEqual(saved.audioSpan, live.audioSpan);
+});
+
+test('a final word split never cuts a row the owner locked during recording', async () => {
+  const { mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const existing = { ...row('stable-id', 'run1'), text: 'hello there', speakerLocked: true,
+    speakerLockSource: 'user', speakerIsPlaceholder: true, speakerStatus: 'locked' };
+  const final = [
+    { ...row('stable-id', 'run1'), text: 'hello', parentRowId: 'stable-id', splitStartWord: 0 },
+    { ...row('child-id', 'run1', 'speaker_1'), text: 'there', parentRowId: 'stable-id', splitStartWord: 1 },
+  ];
+  const merged = mergeTranscriptSegments([existing], final);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].id, 'stable-id');
+  assert.equal(merged[0].text, 'hello there');
+  assert.equal(merged[0].speakerIsPlaceholder, true);
+});
+
+test('changed transcript text cannot inherit timing from an earlier decode', async () => {
+  const { mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const existing = { ...row('same-id', 'run1'), text: 'hello',
+    wordTimings: [{ word: 'hello', start: 1, end: 1.4 }],
+    audioSpan: { recordingId: 4, trackId: 'system', startSample: 24000, endSample: 33600 } };
+  const [saved] = mergeTranscriptSegments([existing], [{ ...row('same-id', 'run1'), text: 'goodbye' }]);
+  assert.equal(saved.wordTimings, undefined);
+  assert.equal(saved.audioSpan, undefined);
+});

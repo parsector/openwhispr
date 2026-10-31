@@ -515,8 +515,10 @@ function SpeakerLabel({
   self,
   onMap,
   onAssignScope,
+  onSplitCluster,
   onUndoCorrection,
   selectedRowIds,
+  selectedClusterCount,
   clusterRowCount,
   onConfirm,
   onDismiss,
@@ -532,8 +534,10 @@ function SpeakerLabel({
   self?: "offer" | "exclude";
   onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
   onAssignScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number, email?: string | null) => void;
+  onSplitCluster?: (rowId: string) => void;
   onUndoCorrection?: (id: string) => void;
   selectedRowIds?: Set<string>;
+  selectedClusterCount: number;
   clusterRowCount: number;
   onConfirm?: (speakerId: string, name: string, profileId: number) => void;
   onDismiss?: (speakerId: string) => void;
@@ -597,6 +601,16 @@ function SpeakerLabel({
           ))}
         </div>
         {scope === "cluster" && <div className="px-3 pt-2 text-[11px] text-muted-foreground" data-affected-rows={clusterRowCount}>{t("notes.speaker.scope.changesRows", { n: clusterRowCount })}</div>}
+        {clusterRowCount > 1 && segment.speaker && onSplitCluster && <div className="border-b border-border/70 px-3 py-2">
+          <p className="mb-1 text-[11px] text-muted-foreground">{t("notes.speaker.splitPreview", {
+            moved: selectedClusterCount > 0 && selectedClusterCount < clusterRowCount ? selectedClusterCount : 1,
+            total: clusterRowCount,
+          })}</p>
+          <button type="button" className="rounded px-2 py-1 text-xs font-medium text-foreground hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => { onSplitCluster(segment.id); setOpen(false); }}>
+            {t("notes.speaker.splitCluster")}
+          </button>
+        </div>}
         <SpeakerPicker
           speakerProfiles={speakerProfiles}
           participants={participants}
@@ -760,8 +774,10 @@ interface SegmentRowProps {
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
   onAssignSpeakerScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number, email?: string | null) => void;
+  onSplitCluster?: (rowId: string) => void;
   onUndoCorrection?: (id: string) => void;
   selectedRowIds?: Set<string>;
+  selectedClusterCount: number;
   clusterRowCount: number;
   onMapSpeaker?: (
     speakerId: string,
@@ -800,8 +816,10 @@ const SegmentRow = memo(function SegmentRow({
   participants,
   onMapSpeaker,
   onAssignSpeakerScope,
+  onSplitCluster,
   onUndoCorrection,
   selectedRowIds,
+  selectedClusterCount,
   clusterRowCount,
   onConfirmSuggestion,
   onDismissSuggestion,
@@ -842,8 +860,10 @@ const SegmentRow = memo(function SegmentRow({
         self={self}
         onMap={onMapSpeaker}
         onAssignScope={onAssignSpeakerScope}
+        onSplitCluster={onSplitCluster}
         onUndoCorrection={onUndoCorrection}
         selectedRowIds={selectedRowIds}
+        selectedClusterCount={selectedClusterCount}
         clusterRowCount={clusterRowCount}
         onConfirm={onConfirmSuggestion}
         onDismiss={onDismissSuggestion}
@@ -870,7 +890,7 @@ const SegmentRow = memo(function SegmentRow({
       style={isNewest ? { animation: "agent-message-in 200ms ease-out both" } : undefined}
     >
       {labelElement}
-      {(segment.uncertainty || latestCorrection(segment) || segment.quarantinedCorrections?.length ||
+      {(segment.uncertainty || segment.changedAfterFinal || latestCorrection(segment) || segment.quarantinedCorrections?.length ||
         (!segment.speakerAssessmentAvailable && !segment.speakerLocked && !segment.speakerName)) && <div className="flex items-center gap-2 px-1 pb-0.5 text-[11px] text-muted-foreground">
         {segment.importedUnlabeled && !segment.speakerName &&
           <span>{t("notes.speaker.importedUnlabeled")}</span>}
@@ -880,6 +900,8 @@ const SegmentRow = memo(function SegmentRow({
         {segment.uncertainty && <span>{segment.uncertainty.reason === "close_match" && segment.uncertainty.candidates
           ? t("notes.speaker.reason.closeMatch", { first: segment.uncertainty.candidates[0], second: segment.uncertainty.candidates[1] })
           : t(`notes.speaker.reason.${segment.uncertainty.reason}`)}</span>}
+        {segment.changedAfterFinal && segment.uncertainty?.reason !== "changed_after_final" &&
+          <span>{t("notes.speaker.reason.changed_after_final")}</span>}
         {latestCorrection(segment) && <button type="button" className="underline underline-offset-2 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
           onClick={() => onUndoCorrection?.(latestCorrection(segment)!.id)}>{t("notes.speaker.restore")}</button>}
       </div>}
@@ -910,7 +932,8 @@ const SegmentRow = memo(function SegmentRow({
                 className="rounded px-1 py-0.5 underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={t(playing ? "meetingAudio.pause" : "meetingAudio.play") + ": " + segment.text}>
                 {t(playing ? "meetingAudio.pause" : "meetingAudio.play")}
-                {!segment.audioSpan && <span className="ms-1">· {t("meetingAudio.approximate")}</span>}
+                {(!segment.wordTimings?.length || !segment.audioSpan) &&
+                  <span className="ms-1">· {t("meetingAudio.approximate")}</span>}
               </button>
             : <span>{t(`meetingAudio.${["expired", "deleted", "evicted", "incomplete"].includes(audioState)
               ? audioState : audioState === "key_unavailable" ? "keyUnavailable" : "unavailable"}`)}</span>}
@@ -952,6 +975,7 @@ interface MeetingTranscriptChatProps {
   onSetSessionDiarizationEnabled?: (enabled: boolean) => void;
   onSetSessionExpectedCount?: (count: number) => void;
   onAssignSpeakerScope?: (scope: "row" | "selected" | "cluster", rowId: string, name: string | null, profileId?: number, email?: string | null) => void;
+  onSplitCluster?: (rowId: string) => void;
   onUndoCorrection?: (id: string) => void;
   onMapSpeaker?: (
     speakerId: string,
@@ -988,6 +1012,7 @@ export function MeetingTranscriptChat({
   onSetSessionExpectedCount,
   onMapSpeaker,
   onAssignSpeakerScope,
+  onSplitCluster,
   onUndoCorrection,
   onConfirmSuggestion,
   onDismissSuggestion,
@@ -1029,10 +1054,11 @@ export function MeetingTranscriptChat({
     playerRef.current?.pause();
     if (playerUrlRef.current) URL.revokeObjectURL(playerUrlRef.current);
     const position = segment.timestamp != null && segment.timestamp > 1000000000000
-      ? (segment.timestamp - audioStatus.startedAt) / 1000 : (segment.timestamp ?? 0);
-    const span = segment.audioSpan?.recordingId === noteId ? segment.audioSpan : null;
-    const from = Math.max(0, span ? span.startSample / 24000 - 0.25 : position - 6);
-    const to = Math.max(from + 0.25, span ? span.endSample / 24000 + 0.35 : position + 2);
+      ? (segment.timestamp - audioStatus.startedAt) / 1000
+      : (segment.timestamp ?? (segment.audioSpan?.startSample ?? 0) / 24000);
+    const span = segment.wordTimings?.length && segment.audioSpan?.recordingId === noteId ? segment.audioSpan : null;
+    const from = Math.max(0, span ? span.startSample / 24000 : position - 6);
+    const to = span ? span.endSample / 24000 : Math.max(from + 0.25, position + 2);
     try {
       const response = await window.electronAPI?.meetingAudioSpan?.(noteId, span?.trackId || segment.source, from, to);
       if (!response?.wav) {
@@ -1381,9 +1407,13 @@ export function MeetingTranscriptChat({
                     participants={participants}
                     onMapSpeaker={onMapSpeaker}
                     onAssignSpeakerScope={onAssignSpeakerScope}
+                    onSplitCluster={onSplitCluster}
                     onUndoCorrection={onUndoCorrection}
                     selectedRowIds={selectedSegmentIds}
-                    clusterRowCount={segments.filter((row) => row.speaker === segment.speaker).length}
+                    selectedClusterCount={segments.filter((row) => row.speaker === segment.speaker &&
+                      row.diarizationRunId === segment.diarizationRunId && selectedSegmentIds?.has(row.id)).length}
+                    clusterRowCount={segments.filter((row) => row.speaker === segment.speaker &&
+                      row.diarizationRunId === segment.diarizationRunId).length}
                     onConfirmSuggestion={onConfirmSuggestion}
                     onDismissSuggestion={onDismissSuggestion}
                     onAttachSpeakerEmail={onAttachSpeakerEmail}

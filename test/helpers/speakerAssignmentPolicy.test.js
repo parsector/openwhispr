@@ -38,6 +38,7 @@ test("isSpeakerLocked and canAutoRelabelSpeaker check lock state accurately", ()
   assert.equal(canAutoRelabelSpeaker({ speakerStatus: "locked" }), false);
   assert.equal(canAutoRelabelSpeaker({ uncertainty: { reason: "too_short" } }), false);
   assert.equal(canAutoRelabelSpeaker({ uncertainty: { reason: "close_match" } }), false);
+  assert.equal(canAutoRelabelSpeaker({ uncertainty: { reason: "overlapping_speech" } }), false);
   assert.equal(canAutoRelabelSpeaker(null), true);
 });
 

@@ -3574,6 +3574,9 @@
       "unknownNumber": "Intervenant inconnu {{n}}",
       "restore": "Rétablir",
       "olderCorrections": "Afficher {{n}} corrections précédentes",
+      "splitCluster": "Ce sont deux personnes",
+      "splitPreview": "Choisir {{moved}} lignes sur {{total}} comme autre voix. D’autres lignes peuvent suivre selon la voix.",
+      "splitReport": "{{moved}} lignes déplacées, dont {{acoustic}} selon la voix ; {{retained}} sont restées. Rétablissez depuis une ligne déplacée.",
       "historyFull": "L’historique des corrections de cette note est plein (16 Mo). Les anciennes corrections peuvent encore être annulées.",
       "historyQuarantined": "L’ordre des actions de cette note est incertain. Annuler est indisponible.",
       "notAssessed": "Non évalué",
@@ -3586,6 +3589,8 @@
       "reason": {
         "closeMatch": "{{first}} ou {{second}}",
         "too_short": "Trop court pour identifier",
+        "overlapping_speech": "Paroles qui se chevauchent",
+        "possible_mixed_speakers": "Plusieurs voix possibles",
         "changed_after_final": "Modifié après l’analyse finale",
         "not_sure": "Incertain"
       }

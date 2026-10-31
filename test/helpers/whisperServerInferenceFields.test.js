@@ -118,6 +118,17 @@ test("skipDecoderThresholds omits the raised fields so the server keeps its defa
   assert.equal(fieldValue(body, "response_format"), "json");
 });
 
+test("stop-time alignment requests word-sized timed segments from the local server", async (t) => {
+  const { server, port, getBody } = await startCapturingServer();
+  t.after(() => server.close());
+  const manager = createManager(port);
+  await manager.transcribe(Buffer.from("audio"), { wordTimestamps: true });
+  const body = getBody();
+  assert.equal(fieldValue(body, "response_format"), "verbose_json");
+  assert.equal(fieldValue(body, "max_len"), "1");
+  assert.equal(fieldValue(body, "split_on_word"), "true");
+});
+
 test("transcribeLocalWhisper plumbs skipDecoderThresholds to the server request (meeting chunks)", async () => {
   const manager = new WhisperManager();
   const captured = [];
