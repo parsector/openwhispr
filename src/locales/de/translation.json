@@ -3535,6 +3535,7 @@
       "laterChangeReplaced": "Eine spätere Änderung hat diese ersetzt. Mache zuerst die spätere Änderung rückgängig.",
       "you": "Du",
       "them": "Gegenüber",
+      "unknown": "Unbekannter Sprecher",
       "label": "Sprecher {{n}}",
       "identifyingSpeakers": "Sprecher werden identifiziert...",
       "liveAccuracyHint": "Sprecher werden noch identifiziert. Die Genauigkeit der Beschriftung verbessert sich, sobald das Gespräch endet.",

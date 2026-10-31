@@ -3190,6 +3190,7 @@
       "laterChangeReplaced": "Una modifica successiva ha sostituito questa. Annulla prima la modifica successiva.",
       "you": "Tu",
       "them": "Loro",
+      "unknown": "Partecipante sconosciuto",
       "label": "Partecipante {{n}}",
       "identifyingSpeakers": "Identificazione dei partecipanti...",
       "liveAccuracyHint": "Identificazione dei partecipanti in corso. La precisione delle etichette migliorerà al termine della chiamata.",

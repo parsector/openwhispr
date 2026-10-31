@@ -3687,6 +3687,7 @@
       "laterChangeReplaced": "A later change replaced this. Undo that change first.",
       "you": "You",
       "them": "Them",
+      "unknown": "Unknown Speaker",
       "label": "Speaker {{n}}",
       "identifyingSpeakers": "Identifying speakers...",
       "liveAccuracyHint": "Still identifying speakers. Labeling accuracy will improve once the call ends.",

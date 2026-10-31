@@ -3190,6 +3190,7 @@
       "laterChangeReplaced": "Uma alteração posterior substituiu esta. Desfaça primeiro a alteração posterior.",
       "you": "Você",
       "them": "Outro",
+      "unknown": "Participante desconhecido",
       "label": "Participante {{n}}",
       "identifyingSpeakers": "Identificando participantes...",
       "liveAccuracyHint": "Ainda identificando participantes. A precisão dos rótulos melhorará quando a chamada terminar.",

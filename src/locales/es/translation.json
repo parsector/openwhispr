@@ -3242,6 +3242,7 @@
       "laterChangeReplaced": "Un cambio posterior reemplazó este. Deshaz primero el cambio posterior.",
       "you": "Tú",
       "them": "Ellos",
+      "unknown": "Participante desconocido",
       "label": "Participante {{n}}",
       "identifyingSpeakers": "Identificando participantes...",
       "liveAccuracyHint": "Aún identificando participantes. La precisión de las etiquetas mejorará cuando termine la llamada.",

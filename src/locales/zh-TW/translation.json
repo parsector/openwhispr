@@ -3190,6 +3190,7 @@
       "laterChangeReplaced": "後續變更已覆蓋此變更。請先復原後續變更。",
       "you": "你",
       "them": "對方",
+      "unknown": "未知發言者",
       "label": "發言者 {{n}}",
       "identifyingSpeakers": "正在辨識發言者...",
       "liveAccuracyHint": "仍在辨識發言者。通話結束後，標籤準確度會提升。",
