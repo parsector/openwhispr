@@ -7,22 +7,12 @@
       "properties": {
         "status": {
           "type": "string",
-          "enum": [
-            "open",
-            "proposed",
-            "completed",
-            "rejected",
-            "all"
-          ],
+          "enum": ["open", "proposed", "completed", "rejected", "all"],
           "description": "Todo status; default open. 'all' includes every status."
         },
         "direction": {
           "type": "string",
-          "enum": [
-            "owe",
-            "waiting",
-            "both"
-          ],
+          "enum": ["owe", "waiting", "both"],
           "description": "'owe' is what the user owes; 'waiting' is what someone else owes the user; default both."
         },
         "person": {
@@ -31,13 +21,7 @@
         },
         "due": {
           "type": "string",
-          "enum": [
-            "overdue",
-            "today",
-            "week",
-            "none",
-            "all"
-          ],
+          "enum": ["overdue", "today", "week", "none", "all"],
           "description": "Local calendar date: overdue is an open, owed todo before today; today is today's date; week is today through six days ahead; none has no due date; default all."
         },
         "limit": {
@@ -66,9 +50,7 @@
           "description": "Todo ID from list_todos."
         }
       },
-      "required": [
-        "id"
-      ],
+      "required": ["id"],
       "additionalProperties": false
     }
   },
@@ -100,10 +82,7 @@
         },
         "direction": {
           "type": "string",
-          "enum": [
-            "owe",
-            "waiting"
-          ]
+          "enum": ["owe", "waiting"]
         },
         "due_date": {
           "type": "string",
@@ -116,9 +95,7 @@
           "description": "The sentence the agent is acting on."
         }
       },
-      "required": [
-        "text"
-      ],
+      "required": ["text"],
       "additionalProperties": false
     }
   },
@@ -136,11 +113,7 @@
         },
         "status": {
           "type": "string",
-          "enum": [
-            "open",
-            "completed",
-            "rejected"
-          ]
+          "enum": ["open", "completed", "rejected"]
         },
         "rejected_reason": {
           "type": "string",
@@ -172,9 +145,7 @@
           ]
         }
       },
-      "required": [
-        "id"
-      ],
+      "required": ["id"],
       "additionalProperties": false
     }
   }

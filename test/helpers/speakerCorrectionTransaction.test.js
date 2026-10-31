@@ -158,7 +158,7 @@ test("map undo and another identification cannot revive name or profile", () => 
 test("undo restores from the ordered action log when transcript rows carry no history", () => {
   const f = fixture();
   assert.equal(applySpeakerCorrection(f.db, f.identifier, correction("log-only", "a", "Alex")).success, true);
-  const saved = rows(f).map(({ corrections, ...entry }) => entry);
+  const saved = rows(f).map(({ corrections: _corrections, ...entry }) => entry);
   f.note.transcript = JSON.stringify(saved);
   assert.equal(applySpeakerCorrection(f.db, f.identifier,
     { type: "undo", noteId: 1, id: "log-only" }).success, true);

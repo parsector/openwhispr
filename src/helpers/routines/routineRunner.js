@@ -45,17 +45,20 @@ function actionItemContext(database, now) {
 function selectedNoteContext(database, config, now) {
   if (!config) return null;
   const scope = database._accountScopeCondition("notes");
-  const rows = database.db.prepare(
-    `SELECT notes.id,notes.title,notes.created_at,notes.participants,
+  const rows = database.db
+    .prepare(
+      `SELECT notes.id,notes.title,notes.created_at,notes.participants,
       notes.enhanced_content,notes.content,notes.folder_id,folders.routine_id
      FROM notes LEFT JOIN folders ON folders.id=notes.folder_id
      WHERE notes.deleted_at IS NULL AND datetime(notes.created_at)>=datetime(?)
        AND ${scope.sql}
        AND notes.id NOT IN (SELECT note_id FROM routine_runs WHERE note_id IS NOT NULL)
      ORDER BY notes.created_at DESC, notes.id DESC LIMIT 200`
-  ).all(new Date(now - config.lookback_days * DAY).toISOString(), ...scope.params);
+    )
+    .all(new Date(now - config.lookback_days * DAY).toISOString(), ...scope.params);
   const folders = config.folder_ids === null ? null : new Set(config.folder_ids);
-  const people = config.people === null ? null : new Set(config.people.map((value) => value.toLowerCase()));
+  const people =
+    config.people === null ? null : new Set(config.people.map((value) => value.toLowerCase()));
   let count = 0;
   let chars = 0;
   const sections = [];
@@ -66,9 +69,17 @@ function selectedNoteContext(database, config, now) {
     try {
       const parsed = JSON.parse(note.participants || "[]");
       if (Array.isArray(parsed)) participants = parsed;
-    } catch { /* malformed metadata */ }
-    if (people && !participants.some((person) =>
-      typeof person.email === "string" && people.has(person.email.trim().toLowerCase()))) continue;
+    } catch {
+      /* malformed metadata */
+    }
+    if (
+      people &&
+      !participants.some(
+        (person) =>
+          typeof person.email === "string" && people.has(person.email.trim().toLowerCase())
+      )
+    )
+      continue;
     const names = participants.map((person) => person.displayName || person.email).filter(Boolean);
     const section = `[Note ${note.id}](note:${note.id}) ${note.title} (${note.created_at})\nPeople: ${names.join(", ") || "none"}\n${note.enhanced_content || note.content || ""}`;
     const separator = sections.length ? 2 : 0;
@@ -125,8 +136,13 @@ function meetingContext(database, noteId) {
     throw new Error("Routine notes cannot be meeting sources");
   const note = database.getNote(noteId);
   if (!note || note.deleted_at) throw new Error("Source meeting note unavailable");
-  const event = note.calendar_event_id ? database.getCalendarEventById(note.calendar_event_id) : null;
-  return { eventSummary: event?.summary || "", text: `Meeting note: [${note.title}](note:${note.id})\nNote content:\n${note.content || "none"}\nTranscript (including speaker labels when available):\n${note.transcript || "none"}\nAttendees: ${note.participants || "none"}\nCalendar event: ${event ? `${event.summary} — ${event.start_time}` : "none"}\nsummary: ${note.enhanced_content || "not yet generated"}` };
+  const event = note.calendar_event_id
+    ? database.getCalendarEventById(note.calendar_event_id)
+    : null;
+  return {
+    eventSummary: event?.summary || "",
+    text: `Meeting note: [${note.title}](note:${note.id})\nNote content:\n${note.content || "none"}\nTranscript (including speaker labels when available):\n${note.transcript || "none"}\nAttendees: ${note.participants || "none"}\nCalendar event: ${event ? `${event.summary} — ${event.start_time}` : "none"}\nsummary: ${note.enhanced_content || "not yet generated"}`,
+  };
 }
 
 function eventContext(database, eventId) {
@@ -135,26 +151,42 @@ function eventContext(database, eventId) {
   let people = [];
   try {
     const attendees = JSON.parse(event.attendees || "[]");
-    if (Array.isArray(attendees)) people = attendees
-      .filter((person) => !person.self && typeof person.email === "string")
-      .map((person) => person.email.trim().toLowerCase());
-  } catch { /* malformed attendee metadata */ }
+    if (Array.isArray(attendees))
+      people = attendees
+        .filter((person) => !person.self && typeof person.email === "string")
+        .map((person) => person.email.trim().toLowerCase());
+  } catch {
+    /* malformed attendee metadata */
+  }
   let history = "No prior notes with these attendees";
   let status = "ok";
   if (people.length) {
     try {
-      history = selectedNoteContext(database, { folder_ids: null, people, lookback_days: 90 }, Date.now()).text;
+      history = selectedNoteContext(
+        database,
+        { folder_ids: null, people, lookback_days: 90 },
+        Date.now()
+      ).text;
     } catch {
       history = "Prior notes unavailable";
       status = "unavailable";
     }
   }
-  return { eventSummary: event.summary || "", text: `Upcoming meeting: ${event.summary} — ${event.start_time}\nAttendees: ${event.attendees || "none"}\nMeeting link: ${event.web_link || event.hangout_link || "none"}\nHistory with these attendees:\n${history}`, status };
+  return {
+    eventSummary: event.summary || "",
+    text: `Upcoming meeting: ${event.summary} — ${event.start_time}\nAttendees: ${event.attendees || "none"}\nMeeting link: ${event.web_link || event.hangout_link || "none"}\nHistory with these attendees:\n${history}`,
+    status,
+  };
 }
 
 function noteTitle(database, routine, now, eventSummary) {
-  const base = renderRoutineTitle({ name: routine.name, triggerType: routine.trigger_type,
-    titleTemplate: routine.trigger_config?.title_template, event: eventSummary, now });
+  const base = renderRoutineTitle({
+    name: routine.name,
+    triggerType: routine.trigger_type,
+    titleTemplate: routine.trigger_config?.title_template,
+    event: eventSummary,
+    now,
+  });
   const scope = database._accountScopeCondition("notes");
   const exists = database.db
     .prepare(`SELECT 1 FROM notes WHERE title=? AND ${scope.sql} LIMIT 1`)
@@ -187,7 +219,9 @@ class RoutineRunner {
       .prepare("UPDATE routines SET last_run_at=? WHERE id=?")
       .run(new Date(now).toISOString(), routine.id);
     try {
-      const readNotes = routine.allowed_tools.some((name) => name === "search_notes" || name === "get_note");
+      const readNotes = routine.allowed_tools.some(
+        (name) => name === "search_notes" || name === "get_note"
+      );
       const readCalendar = routine.allowed_tools.includes("get_calendar_events");
       let actions = null;
       if (readNotes) {
@@ -205,14 +239,25 @@ class RoutineRunner {
       const calendar = readCalendar ? calendarContext(database, now) : null;
       let selectedNotes;
       if (readNotes) {
-        try { selectedNotes = selectedNoteContext(database, routine.source_config, now); }
-        catch { selectedNotes = { text: "Selected notes unavailable", count: 0, status: "unavailable" }; }
+        try {
+          selectedNotes = selectedNoteContext(database, routine.source_config, now);
+        } catch {
+          selectedNotes = { text: "Selected notes unavailable", count: 0, status: "unavailable" };
+        }
       }
       const sourceStatus = {
-        ...(actions ? { action_items: actions.status === "unavailable"
-          ? "unavailable" : { scanned: actions.scanned, matched: actions.matched } } : {}),
+        ...(actions
+          ? {
+              action_items:
+                actions.status === "unavailable"
+                  ? "unavailable"
+                  : { scanned: actions.scanned, matched: actions.matched },
+            }
+          : {}),
         ...(calendar ? { calendar: calendar.status } : {}),
-        ...(selectedNotes ? { selected_notes: selectedNotes.status || { matched: selectedNotes.count } } : {}),
+        ...(selectedNotes
+          ? { selected_notes: selectedNotes.status || { matched: selectedNotes.count } }
+          : {}),
         ...(job.trigger === "meeting_ended" ? { diarization: job.diarization || "pending" } : {}),
       };
       let model = job.model;
@@ -221,10 +266,11 @@ class RoutineRunner {
         if (await this.modelUsable(routine.model_override)) {
           model = routine.model_override;
           sourceStatus.model_override = {
-            mode: model.mode, provider: model.provider, model: model.model,
+            mode: model.mode,
+            provider: model.provider,
+            model: model.model,
           };
-        }
-        else modelWarning = `model override unavailable, used ${model?.model || "default"}`;
+        } else modelWarning = `model override unavailable, used ${model?.model || "default"}`;
       }
       if (modelWarning) sourceStatus.model_override = modelWarning;
       const toolsAvailable = routineEndpointSupportsTools(model);
@@ -272,7 +318,8 @@ class RoutineRunner {
       };
       const prep = job.trigger === "before_event" ? eventContext(database, job.eventId) : null;
       if (prep?.status === "unavailable") sourceStatus.event_history = "unavailable";
-      const meeting = job.trigger === "meeting_ended" ? meetingContext(database, job.sourceNoteId) : null;
+      const meeting =
+        job.trigger === "meeting_ended" ? meetingContext(database, job.sourceNoteId) : null;
       const triggerContext = meeting?.text || prep?.text || "";
       const eventSummary = meeting?.eventSummary || prep?.eventSummary || "";
       const prompt = `${routine.prompt}\n\n${triggerContext ? `${triggerContext}\n\n` : ""}${calendar ? `Today's calendar:\n${calendar.text}\n\n` : ""}${actions ? `Last seven days' checkbox action items:\n${actions.text}\n\n` : ""}${selectedNotes ? `Selected notes (deterministically filtered):\n${selectedNotes.text}\n\n` : ""}Cite notes with Markdown links in the form [Note](note:<id>). Do not invent unavailable sources. ${toolsAvailable ? "Write the note text, then call finish_run with empty=false and a short headline. If there is truly nothing to report, call finish_run with empty=true." : "End with a short useful answer or exactly NOTHING_TO_REPORT."}`;
@@ -309,7 +356,9 @@ class RoutineRunner {
         .filter(([, value]) => typeof value === "string" && value.startsWith("unavailable"))
         .map(([name]) => name.replaceAll("_", " "));
       const sourceParts = [
-        ...(actions ? [`${actions.scanned} notes scanned, ${actions.matched} with checkboxes`] : []),
+        ...(actions
+          ? [`${actions.scanned} notes scanned, ${actions.matched} with checkboxes`]
+          : []),
         ...(calendar ? [`calendar ${calendar.status}`] : []),
         ...(unavailable.length ? [`unavailable: ${unavailable.join(", ")}`] : []),
         ...(modelWarning ? [modelWarning] : []),
@@ -356,4 +405,11 @@ class RoutineRunner {
   }
 }
 
-module.exports = { RoutineRunner, actionItemContext, selectedNoteContext, calendarContext, eventContext, linkNoteReferences };
+module.exports = {
+  RoutineRunner,
+  actionItemContext,
+  selectedNoteContext,
+  calendarContext,
+  eventContext,
+  linkNoteReferences,
+};

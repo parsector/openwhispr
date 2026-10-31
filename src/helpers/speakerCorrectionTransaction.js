@@ -11,19 +11,38 @@ const FIELDS = [
   "uncertainty",
   "machineReason",
 ];
-const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
-const { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES } = require('./speakerActionLog');
-const globalHistory = require('./speakerGlobalHistory');
-const debugLogger = require('./debugLogger');
+const {
+  readTranscriptDocument,
+  writeTranscriptDocument,
+  normalizeRowIds,
+} = require("./transcriptDocument");
+const {
+  readSpeakerActionLog,
+  appendAction,
+  removeNewestAction,
+  newestAvailableAction,
+  MAX_ACTION_LOG_BYTES,
+} = require("./speakerActionLog");
+const globalHistory = require("./speakerGlobalHistory");
+const debugLogger = require("./debugLogger");
 const MAX_CORRECTION_BYTES = MAX_ACTION_LOG_BYTES;
 const rejectFullHistory = (recoverableBy) => {
-  const error = new Error('history_full');
-  error.code = 'history_full';
+  const error = new Error("history_full");
+  error.code = "history_full";
   error.recoverableBy = recoverableBy;
   throw error;
 };
-const SPLIT_FIELDS = ["speaker", "speakerName", "speakerIsPlaceholder", "speakerStatus",
-  "unknownNumber", "uncertainty", "speakerLocked", "speakerLockSource", "machineReason"];
+const SPLIT_FIELDS = [
+  "speaker",
+  "speakerName",
+  "speakerIsPlaceholder",
+  "speakerStatus",
+  "unknownNumber",
+  "uncertainty",
+  "speakerLocked",
+  "speakerLockSource",
+  "machineReason",
+];
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
 const snapshot = (row) =>
   Object.fromEntries(FIELDS.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
@@ -47,11 +66,12 @@ function applySpeakerCorrection(database, identifier, request) {
     const note = database.getNote(noteId);
     if (!note) return { success: false, error: "note_missing" };
     const log = readSpeakerActionLog(note);
-    if (log.quarantined) return { success: false, error: 'history_quarantined' };
-    const unavailable = request.type === 'undo' && globalHistory.status(database.db, id, noteId)?.unavailable_reason;
+    if (log.quarantined) return { success: false, error: "history_quarantined" };
+    const unavailable =
+      request.type === "undo" && globalHistory.status(database.db, id, noteId)?.unavailable_reason;
     if (unavailable) return { success: false, error: unavailable };
-    if (request.type === 'undo' && !globalHistory.canUndo(database.db, id, noteId))
-      return { success: false, error: 'later_change' };
+    if (request.type === "undo" && !globalHistory.canUndo(database.db, id, noteId))
+      return { success: false, error: "later_change" };
     let nextLog = log;
     const saved = parse(note.transcript, note.client_note_id || noteId);
     const byId = new Map(saved.map((row) => [row.id, row]));
@@ -63,34 +83,57 @@ function applySpeakerCorrection(database, identifier, request) {
     let splitReport = null;
     if (request.type === "apply") {
       const { scope, target, name, profileId, email } = request;
-      if (profileId != null && typeof database.db.prepare === 'function' &&
-          !database.db.prepare('SELECT 1 FROM speaker_profiles WHERE id = ?').get(profileId))
-        return { success: false, error: 'person_missing' };
+      if (
+        profileId != null &&
+        typeof database.db.prepare === "function" &&
+        !database.db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(profileId)
+      )
+        return { success: false, error: "person_missing" };
       if (!["row", "selected", "cluster"].includes(scope))
         return { success: false, error: "invalid_request" };
       const ids = new Set(request.rowIds || []);
-      const affected = rows.filter((row) => !row.deleted && (
-        scope === "cluster"
-          ? row.diarizationRunId === target?.runId && row.speaker === target?.clusterId
-          : ids.has(row.id)
-      ));
+      const affected = rows.filter(
+        (row) =>
+          !row.deleted &&
+          (scope === "cluster"
+            ? row.diarizationRunId === target?.runId && row.speaker === target?.clusterId
+            : ids.has(row.id))
+      );
       if (!affected.length) return { success: false, error: "target_missing" };
-      for (const row of affected) if (row.diarizationRunId === identifier?.activeRunId && row.speaker)
-        invalidatedClusters.add(row.speaker);
-      if (scope === 'cluster') anchorInput = { speakerId: target.clusterId,
-        runId: target.runId, noteId,
-        rows: affected.map(row => ({ ...row })), name };
+      for (const row of affected)
+        if (row.diarizationRunId === identifier?.activeRunId && row.speaker)
+          invalidatedClusters.add(row.speaker);
+      if (scope === "cluster")
+        anchorInput = {
+          speakerId: target.clusterId,
+          runId: target.runId,
+          noteId,
+          rows: affected.map((row) => ({ ...row })),
+          name,
+        };
       // Naming is the only step that links an attendee identity to transcript rows.
       // Register this note first so a speaker can reuse its attendee-only person.
       const canPersistIdentity = name && profileId == null && database.createNamedSpeakerProfile;
-      if (canPersistIdentity && note.participants) require('./peopleActions').registerAttendees(database, noteId);
-      const normalized = value => String(value || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+      if (canPersistIdentity && note.participants)
+        require("./peopleActions").registerAttendees(database, noteId);
+      const normalized = (value) =>
+        String(value || "")
+          .normalize("NFKC")
+          .trim()
+          .replace(/\s+/g, " ")
+          .toLocaleLowerCase();
       const profiles = canPersistIdentity
-        ? database.db.prepare('SELECT id, display_name, email FROM speaker_profiles ORDER BY id').all() : [];
-      const existingProfile = profiles.find(p => email && normalized(p.email) === normalized(email))
-        || profiles.find(p => normalized(p.display_name) === normalized(name));
-      const createdProfile = canPersistIdentity && !existingProfile
-        ? database.createNamedSpeakerProfile(name, email) : null;
+        ? database.db
+            .prepare("SELECT id, display_name, email FROM speaker_profiles ORDER BY id")
+            .all()
+        : [];
+      const existingProfile =
+        profiles.find((p) => email && normalized(p.email) === normalized(email)) ||
+        profiles.find((p) => normalized(p.display_name) === normalized(name));
+      const createdProfile =
+        canPersistIdentity && !existingProfile
+          ? database.createNamedSpeakerProfile(name, email)
+          : null;
       const chosenProfileId = profileId ?? existingProfile?.id ?? createdProfile?.id ?? null;
       committedProfileId = chosenProfileId;
       const key = scope === "cluster" ? mappingKey(target.runId, target.clusterId) : null;
@@ -104,9 +147,15 @@ function applySpeakerCorrection(database, identifier, request) {
       const snapshots = {};
       const timestamp = new Date().toISOString();
       const sequence = log.nextSequence;
-      const initialAttribution = !!name && affected.every(row => !row.speakerName &&
-        !row.speakerLocked && !Number(row.correctionRevision) &&
-        !log.actions.some(action => action.event?.affectedRowIds?.includes(row.id)));
+      const initialAttribution =
+        !!name &&
+        affected.every(
+          (row) =>
+            !row.speakerName &&
+            !row.speakerLocked &&
+            !Number(row.correctionRevision) &&
+            !log.actions.some((action) => action.event?.affectedRowIds?.includes(row.id))
+        );
       rows = rows.map((row) => {
         if (!affectedSet.has(row.id)) return row;
         const previous = snapshot(row);
@@ -127,18 +176,27 @@ function applySpeakerCorrection(database, identifier, request) {
         return next;
       });
       const event = {
-        id, noteId, rowId: affected[0].id, scope, actor: "user", timestamp, sequence,
+        id,
+        noteId,
+        rowId: affected[0].id,
+        scope,
+        actor: "user",
+        timestamp,
+        sequence,
         diarizationRunId: affected[0].diarizationRunId,
         clusterId: scope === "cluster" ? target.clusterId : undefined,
         target: scope === "cluster" ? target : { rowIds: affectedRowIds },
-        affectedRowIds, snapshots, mappingChanged: !!key, initialAttribution,
+        affectedRowIds,
+        snapshots,
+        mappingChanged: !!key,
+        initialAttribution,
         afterFinalAnalysis: request.afterFinalAnalysis === true,
         mappingBefore: before && { displayName: before.display_name, profileId: before.profile_id },
         mappingAfter: after && { displayName: after.display_name, profileId: after.profile_id },
         createdProfileId: createdProfile?.id,
       };
-      nextLog = appendAction(log, { kind: 'correction', id, event });
-      if (!nextLog) rejectFullHistory('undo_correction');
+      nextLog = appendAction(log, { kind: "correction", id, event });
+      if (!nextLog) rejectFullHistory("undo_correction");
       if (key) {
         const result = database.setSpeakerRunMapping(
           noteId,
@@ -154,32 +212,50 @@ function applySpeakerCorrection(database, identifier, request) {
       const { target, rowIds } = request;
       if (request.expectedTranscript != null && request.expectedTranscript !== note.transcript)
         return { success: false, error: "transcript_changed" };
-      const cluster = rows.filter((row) => !row.deleted && row.diarizationRunId === target?.runId &&
-        row.speaker === target?.clusterId);
+      const cluster = rows.filter(
+        (row) =>
+          !row.deleted &&
+          row.diarizationRunId === target?.runId &&
+          row.speaker === target?.clusterId
+      );
       const reviewed = new Set(rowIds || []);
       const eligibleEvidence = (request.evidenceRowIds || []).filter((rowId) => {
         const row = cluster.find((candidate) => candidate.id === rowId);
         return row && !row.speakerLocked && row.speakerLockSource !== "user";
       });
       const selected = new Set([...(rowIds || []), ...eligibleEvidence]);
-      if (cluster.length < 2 || !reviewed.size || selected.size >= cluster.length ||
-        [...selected].some((rowId) => !cluster.some((row) => row.id === rowId)))
+      if (
+        cluster.length < 2 ||
+        !reviewed.size ||
+        selected.size >= cluster.length ||
+        [...selected].some((rowId) => !cluster.some((row) => row.id === rowId))
+      )
         return { success: false, error: "invalid_split" };
       invalidatedClusters.add(target.clusterId);
       const used = [
         ...rows.map((row) => row.speaker),
         ...(database.getSpeakerMappings?.(noteId) || []).map((mapping) => mapping.speaker_id),
-      ].map((speaker) => /^speaker_(\d+)$/.exec(speaker || "")?.[1])
-        .filter((number) => number != null).map(Number);
+      ]
+        .map((speaker) => /^speaker_(\d+)$/.exec(speaker || "")?.[1])
+        .filter((number) => number != null)
+        .map(Number);
       const nextCluster = `speaker_${Math.max(-1, ...used) + 1}`;
       const snapshots = {};
       const changed = [];
       rows = rows.map((row) => {
         if (!selected.has(row.id)) return row;
-        snapshots[row.id] = Object.fromEntries(SPLIT_FIELDS.filter((field) => row[field] !== undefined)
-          .map((field) => [field, row[field]]));
-        const next = { ...row, speaker: nextCluster, unknownNumber: undefined,
-          correctionRevision: (Number(row.correctionRevision) || 0) + 1 };
+        snapshots[row.id] = Object.fromEntries(
+          SPLIT_FIELDS.filter((field) => row[field] !== undefined).map((field) => [
+            field,
+            row[field],
+          ])
+        );
+        const next = {
+          ...row,
+          speaker: nextCluster,
+          unknownNumber: undefined,
+          correctionRevision: (Number(row.correctionRevision) || 0) + 1,
+        };
         // A machine name inherited from the mixed cluster is no longer evidence
         // for the new one. Human locks and explicit Unknown remain authoritative.
         if (!row.speakerLocked && row.speakerLockSource !== "user") {
@@ -192,31 +268,53 @@ function applySpeakerCorrection(database, identifier, request) {
         changed.push(next);
         return next;
       });
-      const event = { id, noteId, actor: "user", timestamp: new Date().toISOString(),
-        sequence: log.nextSequence, target, rowIds: [...selected], reviewedRowIds: [...reviewed],
+      const event = {
+        id,
+        noteId,
+        actor: "user",
+        timestamp: new Date().toISOString(),
+        sequence: log.nextSequence,
+        target,
+        rowIds: [...selected],
+        reviewedRowIds: [...reviewed],
         newClusterId: nextCluster,
         afterFinalAnalysis: request.afterFinalAnalysis === true,
-        snapshots };
+        snapshots,
+      };
       nextLog = appendAction(log, { kind: "split", id, event });
       if (!nextLog) rejectFullHistory();
-      splitReport = { movedRows: selected.size, retainedRows: cluster.length - selected.size,
-        acousticRows: selected.size - reviewed.size, newClusterId: nextCluster,
-        evidence: selected.size > reviewed.size ? "voice_embeddings" : "selected_rows" };
+      splitReport = {
+        movedRows: selected.size,
+        retainedRows: cluster.length - selected.size,
+        acousticRows: selected.size - reviewed.size,
+        newClusterId: nextCluster,
+        evidence: selected.size > reviewed.size ? "voice_embeddings" : "selected_rows",
+      };
     } else {
       const action = newestAvailableAction(log);
-      if (!log.actions.some((entry) => ['correction', 'split', 'reconsideration'].includes(entry.kind) && entry.id === id))
-        return { success: false, error: 'correction_missing' };
-      if (!action) return { success: false, error: log.actions.at(-1)?.unavailableReason || 'later_change' };
-      if (!['correction', 'split', 'reconsideration'].includes(action.kind) || action.id !== id)
-        return { success: false, error: 'later_change' };
-      if (note.deleted_at) database.db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(noteId);
+      if (
+        !log.actions.some(
+          (entry) =>
+            ["correction", "split", "reconsideration"].includes(entry.kind) && entry.id === id
+        )
+      )
+        return { success: false, error: "correction_missing" };
+      if (!action)
+        return { success: false, error: log.actions.at(-1)?.unavailableReason || "later_change" };
+      if (!["correction", "split", "reconsideration"].includes(action.kind) || action.id !== id)
+        return { success: false, error: "later_change" };
+      if (note.deleted_at)
+        database.db
+          .prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?")
+          .run(noteId);
       const event = action.event;
       if (event.clusterId) invalidatedClusters.add(event.clusterId);
-      for (const row of rows) if (event.affectedRowIds?.includes(row.id) || event.rowIds?.includes(row.id))
-        if (row.diarizationRunId === identifier?.activeRunId && row.speaker)
-          invalidatedClusters.add(row.speaker);
+      for (const row of rows)
+        if (event.affectedRowIds?.includes(row.id) || event.rowIds?.includes(row.id))
+          if (row.diarizationRunId === identifier?.activeRunId && row.speaker)
+            invalidatedClusters.add(row.speaker);
       nextLog = removeNewestAction(log);
-      if (action.kind === 'split') {
+      if (action.kind === "split") {
         rows = rows.map((row) => {
           const previous = event.snapshots?.[row.id];
           if (!previous) return row;
@@ -227,53 +325,75 @@ function applySpeakerCorrection(database, identifier, request) {
           return next;
         });
       } else {
-      rows = rows.map((row) => {
-        if (!event.snapshots?.[row.id]) return row;
-        const next = restore(row, event.snapshots[row.id].previous);
-        next.correctionRevision = (Number(row.correctionRevision) || 0) + 1;
-        return next;
-      });
-      if (event.mappingChanged && event.clusterId) {
-        const before = event.mappingBefore;
-        const result = before
-          ? database.setSpeakerRunMapping(
-              noteId,
-              event.diarizationRunId,
-              event.clusterId,
-              before.profileId ?? null,
-              before.displayName
-            )
-          : database.removeSpeakerRunMapping(noteId, event.diarizationRunId, event.clusterId);
-        if (!result?.success) throw Error(result?.error || "mapping_failed");
-        committedMapping = { runId: event.diarizationRunId, clusterId: event.clusterId,
-          value: before || null };
-      }
-      if (action.kind === 'reconsideration') {
-        committedMapping = { runId: event.diarizationRunId, clusterId: event.clusterId, value: null };
-        dismissedReconsideration = event.clusterId;
-      }
+        rows = rows.map((row) => {
+          if (!event.snapshots?.[row.id]) return row;
+          const next = restore(row, event.snapshots[row.id].previous);
+          next.correctionRevision = (Number(row.correctionRevision) || 0) + 1;
+          return next;
+        });
+        if (event.mappingChanged && event.clusterId) {
+          const before = event.mappingBefore;
+          const result = before
+            ? database.setSpeakerRunMapping(
+                noteId,
+                event.diarizationRunId,
+                event.clusterId,
+                before.profileId ?? null,
+                before.displayName
+              )
+            : database.removeSpeakerRunMapping(noteId, event.diarizationRunId, event.clusterId);
+          if (!result?.success) throw Error(result?.error || "mapping_failed");
+          committedMapping = {
+            runId: event.diarizationRunId,
+            clusterId: event.clusterId,
+            value: before || null,
+          };
+        }
+        if (action.kind === "reconsideration") {
+          committedMapping = {
+            runId: event.diarizationRunId,
+            clusterId: event.clusterId,
+            value: null,
+          };
+          dismissedReconsideration = event.clusterId;
+        }
       }
     }
     // Old notes may still contain the pre-log row copy. This write moves its
     // events into the log and removes every duplicate in the same transaction.
-    const transcript = writeTranscriptDocument(rows.map(({ corrections, ...row }) => row),
-      readTranscriptDocument(note.transcript).unknownNumberHighWater);
-    const result = database.updateNote(noteId, { transcript,
-      speaker_action_log: JSON.stringify(nextLog), speaker_label_undo: null });
+    const transcript = writeTranscriptDocument(
+      rows.map(({ corrections, ...row }) => row),
+      readTranscriptDocument(note.transcript).unknownNumberHighWater
+    );
+    const result = database.updateNote(noteId, {
+      transcript,
+      speaker_action_log: JSON.stringify(nextLog),
+      speaker_label_undo: null,
+    });
     if (!result?.success) throw Error(result?.error || "transcript_failed");
-    if (request.type !== 'undo') {
-      const changedRows = request.type === 'apply'
-        ? nextLog.actions.at(-1)?.event?.affectedRowIds || []
-        : nextLog.actions.at(-1)?.event?.rowIds || [];
-      require('./voiceEnrollment').rowCorrected(database.db, noteId, changedRows);
+    if (request.type !== "undo") {
+      const changedRows =
+        request.type === "apply"
+          ? nextLog.actions.at(-1)?.event?.affectedRowIds || []
+          : nextLog.actions.at(-1)?.event?.rowIds || [];
+      require("./voiceEnrollment").rowCorrected(database.db, noteId, changedRows);
     }
-    if (request.type === 'apply' || request.type === 'split') globalHistory.add(database.db, { id, kind: request.type,
-      profileId: committedProfileId, noteId, label: request.type === 'split' ? 'Split cluster' : request.name || 'Unknown' });
+    if (request.type === "apply" || request.type === "split")
+      globalHistory.add(database.db, {
+        id,
+        kind: request.type,
+        profileId: committedProfileId,
+        noteId,
+        label: request.type === "split" ? "Split cluster" : request.name || "Unknown",
+      });
     else globalHistory.remove(database.db, id, noteId);
     if (request.type === "undo" && newestAvailableAction(log)?.event?.createdProfileId)
       database.removeUnusedNamedSpeakerProfile?.(newestAvailableAction(log).event.createdProfileId);
-    if (committedMapping && identifier &&
-      (identifier.activeRunId === undefined || identifier.activeRunId === committedMapping.runId)) {
+    if (
+      committedMapping &&
+      identifier &&
+      (identifier.activeRunId === undefined || identifier.activeRunId === committedMapping.runId)
+    ) {
       const { clusterId, value } = committedMapping;
       if (value?.display_name || value?.displayName)
         identifier.mapSpeaker(
@@ -284,8 +404,12 @@ function applySpeakerCorrection(database, identifier, request) {
         );
       else identifier.unmapSpeaker?.(clusterId, noteId);
     }
-    return { success: true, rows: readTranscriptDocument(transcript).rows,
-      mapping: committedMapping, report: splitReport };
+    return {
+      success: true,
+      rows: readTranscriptDocument(transcript).rows,
+      mapping: committedMapping,
+      report: splitReport,
+    };
   });
   const caches =
     identifier &&
@@ -296,31 +420,41 @@ function applySpeakerCorrection(database, identifier, request) {
   try {
     const result = run();
     if (result.success) {
-      result.anchorInvalidated = [...invalidatedClusters].some(cluster => !!identifier?.getAnchorState?.(cluster));
+      result.anchorInvalidated = [...invalidatedClusters].some(
+        (cluster) => !!identifier?.getAnchorState?.(cluster)
+      );
       for (const cluster of invalidatedClusters) identifier?.invalidateAnchor?.(cluster);
     }
     if (result.success) {
-      try { identifier?.revalidateAnchors?.(); }
-      catch { identifier?.invalidateAnchor?.(); }
+      try {
+        identifier?.revalidateAnchors?.();
+      } catch {
+        identifier?.invalidateAnchor?.();
+      }
     }
     if (result.success && anchorInput && identifier?.activateAnchor) {
       try {
         result.anchor = anchorInput.name
           ? identifier.activateAnchor({ ...anchorInput, profileId: committedProfileId })
-          : { state: 'refused', reason: 'explicit_unknown' };
+          : { state: "refused", reason: "explicit_unknown" };
       } catch (error) {
-        debugLogger.warn('Live speaker anchor measurement failed', { error: error.message });
-        result.anchor = { state: 'refused', reason: 'unavailable' };
+        debugLogger.warn("Live speaker anchor measurement failed", { error: error.message });
+        result.anchor = { state: "refused", reason: "unavailable" };
       }
     }
-    if (result.success && dismissedReconsideration) identifier?.dismissReconsideration?.(dismissedReconsideration);
+    if (result.success && dismissedReconsideration)
+      identifier?.dismissReconsideration?.(dismissedReconsideration);
     return result;
   } catch (error) {
     for (const [key, snapshot] of caches || []) {
       if (snapshot) identifier[key] = snapshot;
     }
-    if (error.code === 'history_full') return { success: false, error: 'history_full',
-      ...(error.recoverableBy ? { recoverableBy: error.recoverableBy } : {}) };
+    if (error.code === "history_full")
+      return {
+        success: false,
+        error: "history_full",
+        ...(error.recoverableBy ? { recoverableBy: error.recoverableBy } : {}),
+      };
     throw error;
   }
 }

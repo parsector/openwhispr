@@ -1,6 +1,10 @@
 import { parseTranscriptSegments } from "./parseTranscriptSegments";
 import { withoutAttendeesFence } from "./noteAttendees";
-import { isYouSpeakerName, normalizeTranscriptSegments, resolveSegmentSpeakerName } from "./transcriptSpeakerState";
+import {
+  isYouSpeakerName,
+  normalizeTranscriptSegments,
+  resolveSegmentSpeakerName,
+} from "./transcriptSpeakerState";
 import { buildMeetingContext, type MeetingIdentity } from "./llmTranscript";
 import i18n from "../i18n";
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
@@ -45,15 +49,21 @@ function speakerLabel(segment: TranscriptSegment, speakerMappings: Record<string
   if (typeof resolved === "string" && resolved) {
     return isYouSpeakerName(resolved, i18n.t("notes.speaker.you")) ? NOTE_TAKER_LABEL : resolved;
   }
-  if (segment.speaker === "you" && !segment.speakerLocked && segment.speakerLockSource !== "user") return NOTE_TAKER_LABEL;
+  if (segment.speaker === "you" && !segment.speakerLocked && segment.speakerLockSource !== "user")
+    return NOTE_TAKER_LABEL;
   // Numbered from 1, as the note shows speakers. An in-person meeting is
   // diarized on the mic, so a numbered mic speaker isn't the note taker.
   const numbered = typeof segment.speaker === "string" && /^speaker_(\d+)$/.exec(segment.speaker);
-  if (numbered) return i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? Number(numbered[1]) + 1 });
-  if (segment.source === "mic") return i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
+  if (numbered)
+    return i18n.t("notes.speaker.unknownNumber", {
+      n: segment.unknownNumber ?? Number(numbered[1]) + 1,
+    });
+  if (segment.source === "mic")
+    return i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
   if (typeof segment.speaker === "string" && segment.speaker)
     return i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
-  return segment.source === "system" || segment.speakerLocked ||
+  return segment.source === "system" ||
+    segment.speakerLocked ||
     (typeof segment.speakerName === "string" && !!segment.speakerName)
     ? i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 })
     : "";

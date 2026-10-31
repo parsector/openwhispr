@@ -968,8 +968,9 @@ class WhisperServerManager extends EventEmitter {
 
     if (wordTimestamps) {
       for (const [name, value] of Object.entries({ max_len: "1", split_on_word: "true" })) {
-        parts.push(`--${boundary}\r\n` +
-          `Content-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`);
+        parts.push(
+          `--${boundary}\r\n` + `Content-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`
+        );
       }
     }
     parts.push(

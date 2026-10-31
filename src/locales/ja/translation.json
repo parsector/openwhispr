@@ -5325,7 +5325,12 @@
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
     "calibrationUnavailable": "Calibration settings unavailable",
     "calibrationInvalidReport": "Invalid calibration report",
-    "calibrationFields": {"similarityFloor": "Similarity floor", "runnerUpMargin": "Runner-up margin", "minimumVoicedSeconds": "Minimum voiced seconds", "overlapToleranceSeconds": "Overlap tolerance seconds"},
+    "calibrationFields": {
+      "similarityFloor": "Similarity floor",
+      "runnerUpMargin": "Runner-up margin",
+      "minimumVoicedSeconds": "Minimum voiced seconds",
+      "overlapToleranceSeconds": "Overlap tolerance seconds"
+    },
     "actionHistory": "操作履歴",
     "undoOrder": "元に戻す操作は新しい順です。新しい操作を取り消すと古い操作が有効になります。",
     "deletedPerson": "削除された人物",

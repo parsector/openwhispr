@@ -54,8 +54,9 @@ function createToolRegistry({
       }
     },
     list_todos: async (args) => {
-      try { return listTodos(database, args); }
-      catch {
+      try {
+        return listTodos(database, args);
+      } catch {
         onUnavailable("list_todos");
         return { success: false, data: null, displayText: "Todos unavailable" };
       }

@@ -10,7 +10,11 @@ export const listTodosTool: ToolDefinition = {
     try {
       return await window.electronAPI.todosToolList(args);
     } catch (error) {
-      return { success: false, data: null, displayText: `Failed to list todos: ${(error as Error).message}` };
+      return {
+        success: false,
+        data: null,
+        displayText: `Failed to list todos: ${(error as Error).message}`,
+      };
     }
   },
 };

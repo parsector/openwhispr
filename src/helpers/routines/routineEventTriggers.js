@@ -4,7 +4,12 @@ const DAY = 86400000;
 const PROVIDERS = ["google", "microsoft", "apple"];
 
 function titleMatches(pattern, title) {
-  return !pattern || String(title || "").toLocaleLowerCase().includes(pattern.toLocaleLowerCase());
+  return (
+    !pattern ||
+    String(title || "")
+      .toLocaleLowerCase()
+      .includes(pattern.toLocaleLowerCase())
+  );
 }
 
 function matchesBeforeEvent(config, event) {
@@ -26,31 +31,58 @@ function matchesMeetingEnded(config, note, event) {
 function validateEventTrigger(type, config) {
   if (!config || config.schema_version !== 1) throw new Error("Invalid trigger configuration");
   if (type === "before_event") {
-    if (!Number.isInteger(config.minutes_before) || config.minutes_before < 0 || config.minutes_before > 1440 ||
-      typeof config.title_pattern !== "string" || config.title_pattern.length > 200 ||
-      typeof config.has_attendees !== "boolean" || typeof config.has_meeting_link !== "boolean" ||
-      typeof config.skip_declined !== "boolean") throw new Error("Invalid calendar trigger");
+    if (
+      !Number.isInteger(config.minutes_before) ||
+      config.minutes_before < 0 ||
+      config.minutes_before > 1440 ||
+      typeof config.title_pattern !== "string" ||
+      config.title_pattern.length > 200 ||
+      typeof config.has_attendees !== "boolean" ||
+      typeof config.has_meeting_link !== "boolean" ||
+      typeof config.skip_declined !== "boolean"
+    )
+      throw new Error("Invalid calendar trigger");
   } else if (type === "meeting_ended") {
-    if (!Array.isArray(config.folder_ids) || config.folder_ids.some((id) => !Number.isSafeInteger(id) || id < 1) ||
-      typeof config.title_pattern !== "string" || config.title_pattern.length > 200 ||
-      (!config.folder_ids.length && !config.title_pattern.trim())) throw new Error("Choose a folder or title filter");
+    if (
+      !Array.isArray(config.folder_ids) ||
+      config.folder_ids.some((id) => !Number.isSafeInteger(id) || id < 1) ||
+      typeof config.title_pattern !== "string" ||
+      config.title_pattern.length > 200 ||
+      (!config.folder_ids.length && !config.title_pattern.trim())
+    )
+      throw new Error("Choose a folder or title filter");
   } else if (type !== "time") throw new Error("Invalid trigger type");
 }
 
 function meetingEndedPreview(database, config, now = Date.now()) {
-  const events = database.getCalendarEventsInRange(new Date(now - 7 * DAY).toISOString(), new Date(now).toISOString(), PROVIDERS);
+  const events = database.getCalendarEventsInRange(
+    new Date(now - 7 * DAY).toISOString(),
+    new Date(now).toISOString(),
+    PROVIDERS
+  );
   const scope = database._accountScopeCondition("notes");
-  const notes = database.db.prepare(`SELECT id,folder_id,calendar_event_id,deleted_at FROM notes WHERE deleted_at IS NULL AND ${scope.sql}
-    AND id NOT IN (SELECT note_id FROM routine_runs WHERE note_id IS NOT NULL)`).all(...scope.params);
+  const notes = database.db
+    .prepare(
+      `SELECT id,folder_id,calendar_event_id,deleted_at FROM notes WHERE deleted_at IS NULL AND ${scope.sql}
+    AND id NOT IN (SELECT note_id FROM routine_runs WHERE note_id IS NOT NULL)`
+    )
+    .all(...scope.params);
   const byEvent = new Map();
   for (const note of notes) {
     if (!byEvent.has(note.calendar_event_id)) byEvent.set(note.calendar_event_id, []);
     byEvent.get(note.calendar_event_id).push(note);
   }
   return events.filter((event) => {
-    const candidates = byEvent.get(event.id) || (config.folder_ids.length ? [] : [{ folder_id: null }]);
+    const candidates =
+      byEvent.get(event.id) || (config.folder_ids.length ? [] : [{ folder_id: null }]);
     return candidates.some((note) => matchesMeetingEnded(config, note, event));
   }).length;
 }
 
-module.exports = { matchesBeforeEvent, matchesMeetingEnded, validateEventTrigger, meetingEndedPreview, PROVIDERS };
+module.exports = {
+  matchesBeforeEvent,
+  matchesMeetingEnded,
+  validateEventTrigger,
+  meetingEndedPreview,
+  PROVIDERS,
+};

@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { MeetingAudioStore, RATE } = require('../../src/helpers/meetingAudioStore');
+const fakeCodec = require('../lib/fakeAudioCodec');
 const { rebaseDiarizedRows, attachUndiarizedAudioSpans, extendBatchCapture } = require('../../src/helpers/meetingAudioTimebase');
 const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
 
@@ -40,7 +41,7 @@ test('capture → serialized rows → finalization → playback → decoded tone
       return Buffer.concat([decipher.update(blob.subarray(12, -16)), decipher.final()]);
     },
   };
-  const store = new MeetingAudioStore(root, { now: () => ORIGIN, encryption });
+  const store = new MeetingAudioStore(root, { now: () => ORIGIN, encryption, codec: fakeCodec });
   const firstMic = tone(440), firstSystem = tone(660);
   const nextMic = tone(550), nextSystem = tone(880);
   store.begin(1, ORIGIN);

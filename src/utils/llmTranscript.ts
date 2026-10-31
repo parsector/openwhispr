@@ -1,6 +1,10 @@
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import type { CalendarAttendee } from "../types/calendar";
-import { isYouSpeakerName, normalizeTranscriptSegments, resolveSegmentSpeakerName } from "./transcriptSpeakerState";
+import {
+  isYouSpeakerName,
+  normalizeTranscriptSegments,
+  resolveSegmentSpeakerName,
+} from "./transcriptSpeakerState";
 import type { MentionPerson } from "./mentionMarkdown";
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -26,13 +30,17 @@ export function resolveLlmSpeakerLabel(
 ): string {
   const resolved = resolveSegmentSpeakerName(segment, speakerMappings);
   if (resolved) return isYouSpeakerName(resolved, t("notes.speaker.you")) ? selfLabel : resolved;
-  if (segment.speaker === "you" && !segment.speakerLocked && segment.speakerLockSource !== "user") return selfLabel;
+  if (segment.speaker === "you" && !segment.speakerLocked && segment.speakerLockSource !== "user")
+    return selfLabel;
   if (segment.speaker) {
     const num = Number.parseInt(segment.speaker.replace("speaker_", ""), 10);
-    if (!Number.isNaN(num)) return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? num + 1 });
+    if (!Number.isNaN(num))
+      return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? num + 1 });
   }
-  if (segment.source === "mic") return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
-  return segment.source === "system" || segment.speakerLocked ||
+  if (segment.source === "mic")
+    return t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
+  return segment.source === "system" ||
+    segment.speakerLocked ||
     (typeof segment.speakerName === "string" && !!segment.speakerName)
     ? t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 })
     : "";

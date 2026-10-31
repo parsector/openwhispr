@@ -9,7 +9,10 @@ export const updateTodoTool: ToolDefinition = {
   parameters: definition.parameters,
   readOnly: false,
   async execute(args: Record<string, unknown>): Promise<ToolResult> {
-    try { return await window.electronAPI.todosToolUpdate(args); }
-    catch (error) { return { success: false, data: null, displayText: (error as Error).message }; }
+    try {
+      return await window.electronAPI.todosToolUpdate(args);
+    } catch (error) {
+      return { success: false, data: null, displayText: (error as Error).message };
+    }
   },
 };

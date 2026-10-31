@@ -2,10 +2,19 @@
 // arrays; version 2 stores note metadata beside the rows.
 function readTranscriptDocument(raw) {
   let parsed;
-  try { parsed = JSON.parse(raw || "[]"); } catch { parsed = []; }
+  try {
+    parsed = JSON.parse(raw || "[]");
+  } catch {
+    parsed = [];
+  }
   const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.rows) ? parsed.rows : [];
-  const highWater = Math.max(0, Number(Array.isArray(parsed) ? 0 : parsed.unknownNumberHighWater) || 0,
-    ...rows.map((row) => Math.max(Number(row.unknownNumber) || 0, Number(row.unknownNumberHighWater) || 0)));
+  const highWater = Math.max(
+    0,
+    Number(Array.isArray(parsed) ? 0 : parsed.unknownNumberHighWater) || 0,
+    ...rows.map((row) =>
+      Math.max(Number(row.unknownNumber) || 0, Number(row.unknownNumberHighWater) || 0)
+    )
+  );
   return { rows, unknownNumberHighWater: highWater };
 }
 
@@ -13,11 +22,19 @@ function isTranscriptDocument(raw) {
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) || Array.isArray(parsed?.rows);
-  } catch { return false; }
+  } catch {
+    return false;
+  }
 }
 
 function rowIdentityKey(row) {
-  return [row.source || "", row.timestamp ?? "", String(row.text || "").trim().replace(/\s+/g, " ")].join("|");
+  return [
+    row.source || "",
+    row.timestamp ?? "",
+    String(row.text || "")
+      .trim()
+      .replace(/\s+/g, " "),
+  ].join("|");
 }
 
 function normalizeRowIds(rows, noteId = "unknown") {
@@ -27,10 +44,14 @@ function normalizeRowIds(rows, noteId = "unknown") {
   const used = new Set(rows.map((row) => row.id).filter(Boolean));
   const kept = new Set();
   return rows.map((row) => {
-    const safeRow = row.id && counts.get(row.id) > 1 && row.corrections?.length
-      ? { ...row, quarantinedCorrections: [...(row.quarantinedCorrections || []), ...row.corrections],
-        corrections: undefined }
-      : row;
+    const safeRow =
+      row.id && counts.get(row.id) > 1 && row.corrections?.length
+        ? {
+            ...row,
+            quarantinedCorrections: [...(row.quarantinedCorrections || []), ...row.corrections],
+            corrections: undefined,
+          }
+        : row;
     if (row.id && !kept.has(row.id)) {
       kept.add(row.id);
       return safeRow;
@@ -38,11 +59,16 @@ function normalizeRowIds(rows, noteId = "unknown") {
     const key = rowIdentityKey(row);
     let occurrence = seen.get(key) || 0;
     let id;
-    do { id = legacyUuid(noteId, `${key}\0${occurrence++}`); } while (used.has(id));
+    do {
+      id = legacyUuid(noteId, `${key}\0${occurrence++}`);
+    } while (used.has(id));
     seen.set(key, occurrence);
     used.add(id);
-    return { ...safeRow, id,
-      ...(row.id ? { idRepair: { previousId: row.id, reason: "duplicate_id" } } : {}) };
+    return {
+      ...safeRow,
+      id,
+      ...(row.id ? { idRepair: { previousId: row.id, reason: "duplicate_id" } } : {}),
+    };
   });
 }
 
@@ -64,21 +90,31 @@ function migrateTranscriptDocument(raw, noteId) {
   for (const row of doc.rows) if (row.id) counts.set(row.id, (counts.get(row.id) || 0) + 1);
   const ids = new Map();
   let migrated = false;
-  const rows = normalizeRowIds(doc.rows.map((row) => {
-    const unique = row.id && counts.get(row.id) === 1 ? row.id : null;
-    const id = row.id && !UUID_RE.test(row.id) ? legacyUuid(noteId, row.id) : row.id;
-    if (unique) ids.set(unique, id);
-    if (id !== row.id) migrated = true;
-    return { ...row, id };
-  }), noteId);
+  const rows = normalizeRowIds(
+    doc.rows.map((row) => {
+      const unique = row.id && counts.get(row.id) === 1 ? row.id : null;
+      const id = row.id && !UUID_RE.test(row.id) ? legacyUuid(noteId, row.id) : row.id;
+      if (unique) ids.set(unique, id);
+      if (id !== row.id) migrated = true;
+      return { ...row, id };
+    }),
+    noteId
+  );
   for (let index = 0; index < rows.length; index++) {
     if (rows[index].idRepair && !doc.rows[index].idRepair)
       rows[index].idRepair.previousId = doc.rows[index].id;
   }
   if (rows.some((row, index) => row.id !== doc.rows[index].id)) migrated = true;
-  let quarantinedCorrections = rows.reduce((count, row, index) => count +
-    Math.max(0, (row.quarantinedCorrections?.length || 0) -
-      (doc.rows[index].quarantinedCorrections?.length || 0)), 0);
+  let quarantinedCorrections = rows.reduce(
+    (count, row, index) =>
+      count +
+      Math.max(
+        0,
+        (row.quarantinedCorrections?.length || 0) -
+          (doc.rows[index].quarantinedCorrections?.length || 0)
+      ),
+    0
+  );
   for (const row of rows) {
     if (!row.corrections?.length) continue;
     const retained = [];
@@ -87,54 +123,81 @@ function migrateTranscriptDocument(raw, noteId) {
       const rowId = ids.get(record.rowId);
       const affected = record.affectedRowIds?.map((id) => ids.get(id));
       const targetIds = record.target?.rowIds?.map((id) => ids.get(id));
-      const snapshotIds = record.snapshots && Object.keys(record.snapshots).map((id) => ids.get(id));
-      if (rowId !== row.id || affected?.some((id) => !id) ||
-          targetIds?.some((id) => !id) || snapshotIds?.some((id) => !id)) {
+      const snapshotIds =
+        record.snapshots && Object.keys(record.snapshots).map((id) => ids.get(id));
+      if (
+        rowId !== row.id ||
+        affected?.some((id) => !id) ||
+        targetIds?.some((id) => !id) ||
+        snapshotIds?.some((id) => !id)
+      ) {
         quarantined.push(record);
         quarantinedCorrections++;
         migrated = true;
         continue;
       }
-      retained.push({ ...record, rowId,
+      retained.push({
+        ...record,
+        rowId,
         noteId: record.noteId ?? noteId,
         ...(affected ? { affectedRowIds: affected } : {}),
         ...(targetIds ? { target: { ...record.target, rowIds: targetIds } } : {}),
-        ...(record.snapshots ? { snapshots: Object.fromEntries(Object.entries(record.snapshots)
-          .map(([id, value]) => [ids.get(id), value])) } : {}),
+        ...(record.snapshots
+          ? {
+              snapshots: Object.fromEntries(
+                Object.entries(record.snapshots).map(([id, value]) => [ids.get(id), value])
+              ),
+            }
+          : {}),
       });
     }
     row.corrections = retained;
     if (quarantined.length) row.quarantinedCorrections = quarantined;
   }
-  return { rows, unknownNumberHighWater: doc.unknownNumberHighWater,
-    idMap: ids, migrated, quarantinedCorrections };
+  return {
+    rows,
+    unknownNumberHighWater: doc.unknownNumberHighWater,
+    idMap: ids,
+    migrated,
+    quarantinedCorrections,
+  };
 }
 
 // The only number allocator. Call it with the complete note and the note's
 // persisted high-water mark before displaying or saving rows.
 function allocateUnknownNumbers(rows, noteHighWater = 0) {
   const groups = new Map();
-  const keyFor = (row, index) => row.speaker
-    ? `cluster:${row.diarizationRunId || "legacy"}:${row.speaker}`
-    : `row:${row.id ?? `${row.source || "unknown"}:${row.timestamp ?? index}`}`;
+  const keyFor = (row, index) =>
+    row.speaker
+      ? `cluster:${row.diarizationRunId || "legacy"}:${row.speaker}`
+      : `row:${row.id ?? `${row.source || "unknown"}:${row.timestamp ?? index}`}`;
   for (const [index, row] of rows.entries()) {
     if (row.deleted) continue;
     const key = keyFor(row, index);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(row);
   }
-  let next = Math.max(noteHighWater, 0, ...rows.map((row) =>
-    Math.max(Number(row.unknownNumber) || 0, Number(row.unknownNumberHighWater) || 0))) + 1;
+  let next =
+    Math.max(
+      noteHighWater,
+      0,
+      ...rows.map((row) =>
+        Math.max(Number(row.unknownNumber) || 0, Number(row.unknownNumberHighWater) || 0)
+      )
+    ) + 1;
   const numbers = new Map();
   const owned = new Set();
-  const priorityGroups = [...groups].sort((left, right) =>
-    Number(right[1].some(row => row.speakerLocked && row.speakerIsPlaceholder)) -
-    Number(left[1].some(row => row.speakerLocked && row.speakerIsPlaceholder)));
+  const priorityGroups = [...groups].sort(
+    (left, right) =>
+      Number(right[1].some((row) => row.speakerLocked && row.speakerIsPlaceholder)) -
+      Number(left[1].some((row) => row.speakerLocked && row.speakerIsPlaceholder))
+  );
   for (const [key, members] of priorityGroups) {
     const counts = new Map();
-    const locked = members.filter(row => row.speakerLocked && row.speakerIsPlaceholder);
-    for (const row of locked.length ? locked : members) if (Number(row.unknownNumber) > 0)
-      counts.set(row.unknownNumber, (counts.get(row.unknownNumber) || 0) + 1);
+    const locked = members.filter((row) => row.speakerLocked && row.speakerIsPlaceholder);
+    for (const row of locked.length ? locked : members)
+      if (Number(row.unknownNumber) > 0)
+        counts.set(row.unknownNumber, (counts.get(row.unknownNumber) || 0) + 1);
     const preferred = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
     if (preferred && !owned.has(preferred)) {
       numbers.set(key, preferred);
@@ -143,9 +206,14 @@ function allocateUnknownNumbers(rows, noteHighWater = 0) {
   }
   const assigned = rows.map((row, index) => {
     if (row.deleted) return { ...row };
-    if (!(typeof row.speaker === "string" && row.speaker) &&
-        !(typeof row.speakerName === "string" && row.speakerName) &&
-        row.source !== "mic" && row.source !== "system" && !row.speakerLocked) return { ...row };
+    if (
+      !(typeof row.speaker === "string" && row.speaker) &&
+      !(typeof row.speakerName === "string" && row.speakerName) &&
+      row.source !== "mic" &&
+      row.source !== "system" &&
+      !row.speakerLocked
+    )
+      return { ...row };
     const key = keyFor(row, index);
     if (!numbers.has(key)) {
       while (owned.has(next)) next++;
@@ -154,46 +222,84 @@ function allocateUnknownNumbers(rows, noteHighWater = 0) {
     }
     return { ...row, unknownNumber: numbers.get(key) };
   });
-  const highWater = Math.max(noteHighWater, next - 1,
-    ...assigned.map((row) => row.unknownNumber || 0));
+  const highWater = Math.max(
+    noteHighWater,
+    next - 1,
+    ...assigned.map((row) => row.unknownNumber || 0)
+  );
   return assigned.map((row) => ({ ...row, unknownNumberHighWater: highWater }));
 }
 
 function writeTranscriptDocument(rows, highWater = 0) {
   const numbered = allocateUnknownNumbers(rows, highWater);
-  return JSON.stringify({ version: 2, unknownNumberHighWater: Math.max(highWater,
-    ...numbered.map((row) => Math.max(Number(row.unknownNumber) || 0, Number(row.unknownNumberHighWater) || 0)), 0), rows: numbered });
+  return JSON.stringify({
+    version: 2,
+    unknownNumberHighWater: Math.max(
+      highWater,
+      ...numbered.map((row) =>
+        Math.max(Number(row.unknownNumber) || 0, Number(row.unknownNumberHighWater) || 0)
+      ),
+      0
+    ),
+    rows: numbered,
+  });
 }
 
 // Explicit allowlist: new local evidence fields cannot cross this boundary.
 function publicTranscript(raw, speakerMappings = {}) {
   if (!raw || !isTranscriptDocument(raw)) return raw;
   const { rows, unknownNumberHighWater } = readTranscriptDocument(raw);
-  const fields = ["id", "text", "source", "timestamp", "speakerName",
-    "speakerIsPlaceholder", "unknownNumber", "deleted"];
+  const fields = [
+    "id",
+    "text",
+    "source",
+    "timestamp",
+    "speakerName",
+    "speakerIsPlaceholder",
+    "unknownNumber",
+    "deleted",
+  ];
   const numbered = allocateUnknownNumbers(normalizeRowIds(rows), unknownNumberHighWater);
   const originalIdCounts = new Map();
-  for (const row of rows) if (typeof row.id === "string" && row.id.trim())
-    originalIdCounts.set(row.id, (originalIdCounts.get(row.id) || 0) + 1);
-  const visible = numbered.filter((row, index) => !row.deleted ||
-    (typeof rows[index].id === "string" && !!rows[index].id.trim() &&
-      originalIdCounts.get(rows[index].id) === 1))
+  for (const row of rows)
+    if (typeof row.id === "string" && row.id.trim())
+      originalIdCounts.set(row.id, (originalIdCounts.get(row.id) || 0) + 1);
+  const visible = numbered
+    .filter(
+      (row, index) =>
+        !row.deleted ||
+        (typeof rows[index].id === "string" &&
+          !!rows[index].id.trim() &&
+          originalIdCounts.get(rows[index].id) === 1)
+    )
     .map((row) => {
       if (row.deleted) return { id: row.id, deleted: true };
-      const fixedAssignment = row.speakerLocked || row.speakerLockSource === "user" ||
-        row.diarizationRunId;
-      const mappedName = !fixedAssignment && row.speaker
-        ? speakerMappings[row.speaker] : undefined;
+      const fixedAssignment =
+        row.speakerLocked || row.speakerLockSource === "user" || row.diarizationRunId;
+      const mappedName = !fixedAssignment && row.speaker ? speakerMappings[row.speaker] : undefined;
       const displayedName = fixedAssignment
-        ? (row.speakerIsPlaceholder ? undefined : row.speakerName)
-        : mappedName || (row.speakerIsPlaceholder ? undefined : row.speakerName ||
-          (typeof row.speaker === "string" && row.speaker !== "you" &&
-          !row.speaker.startsWith("speaker_") ? row.speaker : undefined));
-      return Object.fromEntries(fields.filter((field) => {
-        if (field === "speakerName") return displayedName !== undefined;
-        if (field === "speakerIsPlaceholder") return !!row.speakerIsPlaceholder && !displayedName;
-        return row[field] !== undefined;
-      }).map((field) => [field, field === "speakerName" ? displayedName : row[field]]));
+        ? row.speakerIsPlaceholder
+          ? undefined
+          : row.speakerName
+        : mappedName ||
+          (row.speakerIsPlaceholder
+            ? undefined
+            : row.speakerName ||
+              (typeof row.speaker === "string" &&
+              row.speaker !== "you" &&
+              !row.speaker.startsWith("speaker_")
+                ? row.speaker
+                : undefined));
+      return Object.fromEntries(
+        fields
+          .filter((field) => {
+            if (field === "speakerName") return displayedName !== undefined;
+            if (field === "speakerIsPlaceholder")
+              return !!row.speakerIsPlaceholder && !displayedName;
+            return row[field] !== undefined;
+          })
+          .map((field) => [field, field === "speakerName" ? displayedName : row[field]])
+      );
     });
   return JSON.stringify({ version: 2, rows: visible });
 }
@@ -204,7 +310,8 @@ function reconcileCloudTranscript(cloudRaw, localRaw, { noteId = "unknown" } = {
   if (!isTranscriptDocument(cloudRaw))
     return { transcript: localRaw || cloudRaw, pendingUpload: false, quarantinedMarkers: [] };
   const cloud = readTranscriptDocument(cloudRaw);
-  const local = isTranscriptDocument(localRaw) ? readTranscriptDocument(localRaw)
+  const local = isTranscriptDocument(localRaw)
+    ? readTranscriptDocument(localRaw)
     : { rows: [], unknownNumberHighWater: 0 };
   const localRows = normalizeRowIds(local.rows, noteId);
   const rows = [...localRows];
@@ -221,8 +328,10 @@ function reconcileCloudTranscript(cloudRaw, localRaw, { noteId = "unknown" } = {
   for (const [index, raw] of cloud.rows.entries()) {
     if (raw.deleted) {
       if (typeof raw.id !== "string" || !raw.id.trim() || cloudCounts.get(raw.id) !== 1) {
-        quarantinedMarkers.push({ marker: { id: typeof raw.id === "string" ? raw.id : null,
-          deleted: true }, reason: "ambiguous_or_missing_id" });
+        quarantinedMarkers.push({
+          marker: { id: typeof raw.id === "string" ? raw.id : null, deleted: true },
+          reason: "ambiguous_or_missing_id",
+        });
         continue;
       }
       const ownIndex = byId.get(raw.id);
@@ -233,35 +342,58 @@ function reconcileCloudTranscript(cloudRaw, localRaw, { noteId = "unknown" } = {
       }
       continue;
     }
-    const incoming = publicRow(raw, raw.id && liveCounts.get(raw.id) === 1
-      ? raw.id : repaired[index].id);
+    const incoming = publicRow(
+      raw,
+      raw.id && liveCounts.get(raw.id) === 1 ? raw.id : repaired[index].id
+    );
     const ownIndex = byId.get(incoming.id);
     if (ownIndex === undefined) {
       if (typeof incoming.text !== "string") continue;
       byId.set(incoming.id, rows.length);
-      rows.push(localRows.length ? { id: incoming.id, text: incoming.text,
-        source: incoming.source, timestamp: incoming.timestamp, importedUnlabeled: true } : incoming);
+      rows.push(
+        localRows.length
+          ? {
+              id: incoming.id,
+              text: incoming.text,
+              source: incoming.source,
+              timestamp: incoming.timestamp,
+              importedUnlabeled: true,
+            }
+          : incoming
+      );
     } else {
       const own = rows[ownIndex];
       // A live row cannot resurrect a locally deleted row. Text changes on
       // an existing id still arrive; attribution and history remain local.
-      rows[ownIndex] = { ...own,
+      rows[ownIndex] = {
+        ...own,
         ...(incoming.text !== undefined && { text: incoming.text }),
         ...(incoming.timestamp !== undefined && { timestamp: incoming.timestamp }),
-        ...(incoming.source !== undefined && { source: incoming.source }) };
+        ...(incoming.source !== undefined && { source: incoming.source }),
+      };
     }
   }
-  return { transcript: JSON.stringify({ version: 2,
-    unknownNumberHighWater: local.unknownNumberHighWater, rows }),
-    pendingUpload: localRows.some((row) => !cloudCounts.has(row.id)), quarantinedMarkers };
+  return {
+    transcript: JSON.stringify({
+      version: 2,
+      unknownNumberHighWater: local.unknownNumberHighWater,
+      rows,
+    }),
+    pendingUpload: localRows.some((row) => !cloudCounts.has(row.id)),
+    quarantinedMarkers,
+  };
 }
 
 function publicRow(row, id) {
-  return Object.fromEntries(["id", "text", "source", "timestamp", "speakerName",
-    "speakerIsPlaceholder", "unknownNumber"].filter((key) =>
-    key === "id" || (row[key] !== undefined &&
-      !(key === "speakerName" && row.speakerIsPlaceholder))).map((key) =>
-    [key, key === "id" ? id : row[key]]));
+  return Object.fromEntries(
+    ["id", "text", "source", "timestamp", "speakerName", "speakerIsPlaceholder", "unknownNumber"]
+      .filter(
+        (key) =>
+          key === "id" ||
+          (row[key] !== undefined && !(key === "speakerName" && row.speakerIsPlaceholder))
+      )
+      .map((key) => [key, key === "id" ? id : row[key]])
+  );
 }
 
 function mergeLocalTranscriptState(cloudRaw, localRaw) {
@@ -275,35 +407,54 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
   for (const row of proposed.rows) {
     const own = byId.get(row.id);
     if (own?.deleted && !row.deleted) return null;
-    if (own && (Number(row.correctionRevision) || 0) !==
-        (Number(own.correctionRevision) || 0)) return null;
+    if (own && (Number(row.correctionRevision) || 0) !== (Number(own.correctionRevision) || 0))
+      return null;
   }
   const seen = new Set();
   const rows = proposed.rows.map((row) => {
     const own = byId.get(row.id);
     if (!own) return row;
     seen.add(row.id);
-    const protectedAssignment = own.speakerLockSource === "user" ||
+    const protectedAssignment =
+      own.speakerLockSource === "user" ||
       (own.machineReason === "approved_voice" && own.speaker === row.speaker);
-    return protectedAssignment ? {
-      ...row,
-      speakerName: own.speakerName,
-      speakerIsPlaceholder: own.speakerIsPlaceholder,
-      speakerStatus: own.speakerStatus,
-      speakerLocked: own.speakerLocked,
-      speakerLockSource: own.speakerLockSource,
-      quarantinedCorrections: own.quarantinedCorrections,
-      suggestedName: own.suggestedName,
-      suggestedProfileId: own.suggestedProfileId,
-      machineReason: own.machineReason,
-    } : row;
+    return protectedAssignment
+      ? {
+          ...row,
+          speakerName: own.speakerName,
+          speakerIsPlaceholder: own.speakerIsPlaceholder,
+          speakerStatus: own.speakerStatus,
+          speakerLocked: own.speakerLocked,
+          speakerLockSource: own.speakerLockSource,
+          quarantinedCorrections: own.quarantinedCorrections,
+          suggestedName: own.suggestedName,
+          suggestedProfileId: own.suggestedProfileId,
+          machineReason: own.machineReason,
+        }
+      : row;
   });
-  rows.push(...current.rows.filter((row) => !seen.has(row.id) &&
-    (row.speakerLockSource === "user" || row.machineReason === "approved_voice" || row.deleted)));
-  return writeTranscriptDocument(rows, Math.max(proposed.unknownNumberHighWater,
-    current.unknownNumberHighWater));
+  rows.push(
+    ...current.rows.filter(
+      (row) =>
+        !seen.has(row.id) &&
+        (row.speakerLockSource === "user" || row.machineReason === "approved_voice" || row.deleted)
+    )
+  );
+  return writeTranscriptDocument(
+    rows,
+    Math.max(proposed.unknownNumberHighWater, current.unknownNumberHighWater)
+  );
 }
 
-export { readTranscriptDocument, writeTranscriptDocument, publicTranscript, isTranscriptDocument,
-  allocateUnknownNumbers, mergeLocalTranscriptState, reconcileAutomaticTranscript,
-  reconcileCloudTranscript, normalizeRowIds, migrateTranscriptDocument };
+export {
+  readTranscriptDocument,
+  writeTranscriptDocument,
+  publicTranscript,
+  isTranscriptDocument,
+  allocateUnknownNumbers,
+  mergeLocalTranscriptState,
+  reconcileAutomaticTranscript,
+  reconcileCloudTranscript,
+  normalizeRowIds,
+  migrateTranscriptDocument,
+};

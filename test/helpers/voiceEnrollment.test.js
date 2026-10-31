@@ -276,7 +276,8 @@ test('deleting real retained audio removes approved vectors and blocks their und
   const { noteId } = f.note('one');
   const { MeetingAudioStore, RATE } = require('../../src/helpers/meetingAudioStore');
   const store = new MeetingAudioStore(path.join(dir, 'retained-audio'), { database: f.db,
-    encryption: { encryptBytes: bytes => bytes, decryptBytes: bytes => bytes } });
+    encryption: { encryptBytes: bytes => bytes, decryptBytes: bytes => bytes },
+    codec: require('../lib/fakeAudioCodec') });
   const pcm = Buffer.alloc(RATE * 2 * 4);
   for (let i = 0; i < RATE * 4; i++) pcm.writeInt16LE(Math.round(10000 * Math.sin(i / 24)), i * 2);
   const startedAt = Date.now();
@@ -313,7 +314,8 @@ test('deleting source audio scrubs older clear-voice embedding snapshots', t => 
   assert.equal(action.success, true);
   const { MeetingAudioStore } = require('../../src/helpers/meetingAudioStore');
   const store = new MeetingAudioStore(path.join(dir, 'snapshot-audio'), { database: f.db,
-    encryption: { encryptBytes: bytes => bytes, decryptBytes: bytes => bytes } });
+    encryption: { encryptBytes: bytes => bytes, decryptBytes: bytes => bytes },
+    codec: require('../lib/fakeAudioCodec') });
   store.begin(noteId); store.finish(noteId);
   store.delete(noteId);
   assert.equal(people.undoClearVoiceData(f.db, action.id).success, true);
@@ -325,7 +327,8 @@ test('fresh install can delete its first recording before any enrolment action',
   const { noteId } = f.note('first');
   const { MeetingAudioStore } = require('../../src/helpers/meetingAudioStore');
   const store = new MeetingAudioStore(path.join(dir, 'fresh-audio'), { database: f.db,
-    encryption: { encryptBytes: bytes => bytes, decryptBytes: bytes => bytes } });
+    encryption: { encryptBytes: bytes => bytes, decryptBytes: bytes => bytes },
+    codec: require('../lib/fakeAudioCodec') });
   store.begin(noteId);
   store.finish(noteId);
   assert.equal(store.delete(noteId).state, 'deleted');

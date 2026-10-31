@@ -82,8 +82,9 @@ export const normalizeTranscriptSegment = (segment: TranscriptSegment): Transcri
 };
 
 export const normalizeTranscriptSegments = (segments: TranscriptSegment[], noteHighWater = 0) => {
-  return (allocateUnknownNumbers(segments, noteHighWater) as TranscriptSegment[])
-    .map(normalizeTranscriptSegment);
+  return (allocateUnknownNumbers(segments, noteHighWater) as TranscriptSegment[]).map(
+    normalizeTranscriptSegment
+  );
 };
 
 export const applyTranscriptSpeakerPatch = (
@@ -106,23 +107,35 @@ export const lockTranscriptSpeaker = (
 const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSegment) => {
   const merged = { ...incoming } as TranscriptSegment;
   const sameText = normalizeText(existing.text) === normalizeText(incoming.text);
-  if (sameText && !merged.wordTimings && existing.wordTimings) merged.wordTimings = existing.wordTimings;
+  if (sameText && !merged.wordTimings && existing.wordTimings)
+    merged.wordTimings = existing.wordTimings;
   if (sameText && !merged.audioSpan && existing.audioSpan && merged.wordTimings)
     merged.audioSpan = existing.audioSpan;
   const existingFields = existing as Record<SpeakerStateField, unknown>;
   const mergedFields = merged as Record<SpeakerStateField, unknown>;
-  const preserveMachineName = existing.machineReason === "approved_voice" &&
-    existing.speaker === incoming.speaker && !isTranscriptSpeakerLocked(existing);
+  const preserveMachineName =
+    existing.machineReason === "approved_voice" &&
+    existing.speaker === incoming.speaker &&
+    !isTranscriptSpeakerLocked(existing);
 
   for (const field of SPEAKER_STATE_FIELDS) {
     if (mergedFields[field] === undefined && existingFields[field] !== undefined) {
-      if ((field === "speakerName" || field === "speakerStatus") &&
-        incoming.speakerIsPlaceholder && !isTranscriptSpeakerLocked(existing) && !preserveMachineName) continue;
+      if (
+        (field === "speakerName" || field === "speakerStatus") &&
+        incoming.speakerIsPlaceholder &&
+        !isTranscriptSpeakerLocked(existing) &&
+        !preserveMachineName
+      )
+        continue;
       mergedFields[field] = existingFields[field];
     }
   }
 
-  if (incoming.speakerIsPlaceholder && !isTranscriptSpeakerLocked(existing) && !preserveMachineName) {
+  if (
+    incoming.speakerIsPlaceholder &&
+    !isTranscriptSpeakerLocked(existing) &&
+    !preserveMachineName
+  ) {
     merged.speakerName = undefined;
     if (incoming.speakerStatus !== "confirmed") merged.speakerStatus = "provisional";
   }
@@ -141,8 +154,11 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
     merged.uncertainty = undefined;
     merged.changedAfterFinal = existing.changedAfterFinal;
     merged.finalRevision = existing.finalRevision;
-    if (incoming.parentRowId === existing.id && incoming.splitStartWord === 0 &&
-      incoming.text !== existing.text) {
+    if (
+      incoming.parentRowId === existing.id &&
+      incoming.splitStartWord === 0 &&
+      incoming.text !== existing.text
+    ) {
       merged.text = existing.text;
       merged.wordTimings = existing.wordTimings;
       merged.audioSpan = existing.audioSpan;
@@ -164,9 +180,10 @@ export const mergeTranscriptSegments = (
     return normalizeTranscriptSegments(existingSegments, noteHighWater);
   }
   if (existingSegments.length === 0) {
-    return normalizeTranscriptSegments(incomingSegments.map((segment) =>
-      ({ ...segment, id: segment.id || crypto.randomUUID() })
-    ), noteHighWater);
+    return normalizeTranscriptSegments(
+      incomingSegments.map((segment) => ({ ...segment, id: segment.id || crypto.randomUUID() })),
+      noteHighWater
+    );
   }
 
   const existingById = new Map<string, number>();
@@ -181,28 +198,39 @@ export const mergeTranscriptSegments = (
   });
 
   const usedIndexes = new Set<number>();
-  const reservedExactIndexes = new Set(incomingSegments.flatMap((segment) => {
-    const index = segment.id ? existingById.get(segment.id) : undefined;
-    return index === undefined ? [] : [index];
-  }));
+  const reservedExactIndexes = new Set(
+    incomingSegments.flatMap((segment) => {
+      const index = segment.id ? existingById.get(segment.id) : undefined;
+      return index === undefined ? [] : [index];
+    })
+  );
   const enrichedByIndex = new Map<number, TranscriptSegment>();
   const unmatchedIncoming: TranscriptSegment[] = [];
 
   incomingSegments.forEach((segment, index) => {
-    const parent = segment.parentRowId && existingSegments.find((row) => row.id === segment.parentRowId);
-    if (segment.parentRowId && segment.parentRowId !== segment.id && parent &&
-      isTranscriptSpeakerLocked(parent)) return;
+    const parent =
+      segment.parentRowId && existingSegments.find((row) => row.id === segment.parentRowId);
+    if (
+      segment.parentRowId &&
+      segment.parentRowId !== segment.id &&
+      parent &&
+      isTranscriptSpeakerLocked(parent)
+    )
+      return;
     const findUnused = (candidates?: number[]) =>
       candidates?.find((candidateIndex) => !usedIndexes.has(candidateIndex));
 
     let matchIndex = segment.id ? existingById.get(segment.id) : undefined;
     if (matchIndex !== undefined && usedIndexes.has(matchIndex)) matchIndex = undefined;
 
-    const newSplitChild = !!segment.parentRowId && segment.parentRowId !== segment.id &&
-      !existingById.has(segment.id);
+    const newSplitChild =
+      !!segment.parentRowId && segment.parentRowId !== segment.id && !existingById.has(segment.id);
     if (matchIndex === undefined && !newSplitChild) {
-      matchIndex = findUnused(existingByKey.get(getSegmentMatchKey(segment))?.filter(
-        candidateIndex => !reservedExactIndexes.has(candidateIndex)));
+      matchIndex = findUnused(
+        existingByKey
+          .get(getSegmentMatchKey(segment))
+          ?.filter((candidateIndex) => !reservedExactIndexes.has(candidateIndex))
+      );
     }
 
     if (matchIndex === undefined && !newSplitChild) {
@@ -219,10 +247,13 @@ export const mergeTranscriptSegments = (
     if (matchIndex === undefined && !newSplitChild && Number.isFinite(segment.timestamp)) {
       const candidates = existingSegments
         .map((row, existingIndex) => ({ row, existingIndex }))
-        .filter(({ row, existingIndex }) =>
-          !usedIndexes.has(existingIndex) && !reservedExactIndexes.has(existingIndex) && row.source === segment.source &&
-          Number.isFinite(row.timestamp) &&
-          Math.abs((row.timestamp as number) - (segment.timestamp as number)) <= 0.5
+        .filter(
+          ({ row, existingIndex }) =>
+            !usedIndexes.has(existingIndex) &&
+            !reservedExactIndexes.has(existingIndex) &&
+            row.source === segment.source &&
+            Number.isFinite(row.timestamp) &&
+            Math.abs((row.timestamp as number) - (segment.timestamp as number)) <= 0.5
         );
       // A time-only match is safe only when there is one possible predecessor.
       if (candidates.length === 1) matchIndex = candidates[0].existingIndex;
@@ -232,21 +263,28 @@ export const mergeTranscriptSegments = (
       const existing = existingSegments[matchIndex];
       // A text/time match is useful for display reconciliation, but it is not
       // lineage. Keep the corrected row and show a new transcription separately.
-      if (existing.id !== segment.id && (
-        isTranscriptSpeakerLocked(existing) ||
-        isTranscriptSpeakerLocked(segment)
-      )) {
-        unmatchedIncoming.push(normalizeTranscriptSegment({ ...segment, id: segment.id || crypto.randomUUID() }));
+      if (
+        existing.id !== segment.id &&
+        (isTranscriptSpeakerLocked(existing) || isTranscriptSpeakerLocked(segment))
+      ) {
+        unmatchedIncoming.push(
+          normalizeTranscriptSegment({ ...segment, id: segment.id || crypto.randomUUID() })
+        );
         return;
       }
       usedIndexes.add(matchIndex);
-      enrichedByIndex.set(matchIndex, mergeSpeakerFields(existing, {
-        ...segment,
-        id: existingSegments[matchIndex].id,
-        unknownNumber: (preserveMatchedNumbers || segment.speaker === existingSegments[matchIndex].speaker)
-          ? existingSegments[matchIndex].unknownNumber : undefined,
-        unknownNumberHighWater: existingSegments[matchIndex].unknownNumberHighWater,
-      }));
+      enrichedByIndex.set(
+        matchIndex,
+        mergeSpeakerFields(existing, {
+          ...segment,
+          id: existingSegments[matchIndex].id,
+          unknownNumber:
+            preserveMatchedNumbers || segment.speaker === existingSegments[matchIndex].speaker
+              ? existingSegments[matchIndex].unknownNumber
+              : undefined,
+          unknownNumberHighWater: existingSegments[matchIndex].unknownNumberHighWater,
+        })
+      );
     } else {
       unmatchedIncoming.push(
         normalizeTranscriptSegment({ ...segment, id: segment.id || crypto.randomUUID() })
@@ -298,7 +336,8 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       speakerLocked: segment.speakerLocked,
       speakerLockSource: segment.speakerLockSource,
       machineReason: segment.machineReason,
-    })), Math.max(noteHighWater, ...normalized.map((segment) => segment.unknownNumberHighWater || 0), 0)
+    })),
+    Math.max(noteHighWater, ...normalized.map((segment) => segment.unknownNumberHighWater || 0), 0)
   );
 };
 
@@ -312,12 +351,19 @@ export const resolveSegmentSpeakerName = (
 ): string | undefined => {
   if (isTranscriptSpeakerLocked(segment))
     return segment.speakerIsPlaceholder ? undefined : segment.speakerName;
-  if (segment.diarizationRunId) return segment.speakerIsPlaceholder ? undefined : segment.speakerName;
+  if (segment.diarizationRunId)
+    return segment.speakerIsPlaceholder ? undefined : segment.speakerName;
   const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
   if (mapped) return mapped;
   if (segment.speakerIsPlaceholder) return undefined;
-  return segment.speakerName || (typeof segment.speaker === "string" && segment.speaker !== "you" &&
-    !segment.speaker.startsWith("speaker_") ? segment.speaker : undefined);
+  return (
+    segment.speakerName ||
+    (typeof segment.speaker === "string" &&
+    segment.speaker !== "you" &&
+    !segment.speaker.startsWith("speaker_")
+      ? segment.speaker
+      : undefined)
+  );
 };
 
 // Naming a speaker "You" is how the user marks their own voice. The name is

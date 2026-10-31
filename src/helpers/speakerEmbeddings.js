@@ -161,9 +161,10 @@ class SpeakerEmbeddings {
     const memory = Buffer.isBuffer(wavPath) ? wavPath : null;
     const fd = memory ? null : fs.openSync(wavPath, "r");
     try {
-      const read = (position, length) => memory
-        ? memory.subarray(position, position + length)
-        : this._readBytes(fd, position, length);
+      const read = (position, length) =>
+        memory
+          ? memory.subarray(position, position + length)
+          : this._readBytes(fd, position, length);
       const header = this._parseWavHeader(read(0, WAV_HEADER_READ_BYTES));
       for (const [speaker, speakerSegments] of bySpeaker) {
         if (signal?.aborted) break;

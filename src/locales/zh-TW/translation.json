@@ -5325,7 +5325,12 @@
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
     "calibrationUnavailable": "Calibration settings unavailable",
     "calibrationInvalidReport": "Invalid calibration report",
-    "calibrationFields": {"similarityFloor": "Similarity floor", "runnerUpMargin": "Runner-up margin", "minimumVoicedSeconds": "Minimum voiced seconds", "overlapToleranceSeconds": "Overlap tolerance seconds"},
+    "calibrationFields": {
+      "similarityFloor": "Similarity floor",
+      "runnerUpMargin": "Runner-up margin",
+      "minimumVoicedSeconds": "Minimum voiced seconds",
+      "overlapToleranceSeconds": "Overlap tolerance seconds"
+    },
     "actionHistory": "操作紀錄",
     "undoOrder": "復原從最新操作開始；復原較新的操作後，較早的操作才會解鎖。",
     "deletedPerson": "已刪除的人物",

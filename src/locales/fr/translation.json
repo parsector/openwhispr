@@ -5325,7 +5325,12 @@
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
     "calibrationUnavailable": "Calibration settings unavailable",
     "calibrationInvalidReport": "Invalid calibration report",
-    "calibrationFields": {"similarityFloor": "Similarity floor", "runnerUpMargin": "Runner-up margin", "minimumVoicedSeconds": "Minimum voiced seconds", "overlapToleranceSeconds": "Overlap tolerance seconds"},
+    "calibrationFields": {
+      "similarityFloor": "Similarity floor",
+      "runnerUpMargin": "Runner-up margin",
+      "minimumVoicedSeconds": "Minimum voiced seconds",
+      "overlapToleranceSeconds": "Overlap tolerance seconds"
+    },
     "actionHistory": "Historique des actions",
     "undoOrder": "Annulez d’abord les actions récentes ; les anciennes se débloquent ensuite.",
     "deletedPerson": "une personne supprimée",

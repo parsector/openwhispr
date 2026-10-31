@@ -229,7 +229,12 @@ export function parseTranscriptToSegments(text, anchorMs) {
   const useSpeakerMode =
     speakerLines.length / lines.length >= SPEAKER_LINE_RATIO && distinctSpeakers.size >= 2;
   if (!useSpeakerMode) {
-    return lines.map((line, i) => ({ id: randomUUID(), text: line, source: "system", timestamp: anchorMs + i }));
+    return lines.map((line, i) => ({
+      id: randomUUID(),
+      text: line,
+      source: "system",
+      timestamp: anchorMs + i,
+    }));
   }
 
   const segments = [];

@@ -82,7 +82,10 @@ export function LocalMcpBlock() {
               disabled={busy || !label.trim()}
               onClick={() =>
                 void run(async () => {
-                  const token = await window.electronAPI.localMcpCreateToken(label, allowTodoWrites ? ["todos:write"] : []);
+                  const token = await window.electronAPI.localMcpCreateToken(
+                    label,
+                    allowTodoWrites ? ["todos:write"] : []
+                  );
                   setPlaintext(token.plaintext);
                   setLabel("");
                   setAllowTodoWrites(false);
@@ -93,7 +96,12 @@ export function LocalMcpBlock() {
             </Button>
           </div>
           <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={allowTodoWrites} onChange={(event) => setAllowTodoWrites(event.target.checked)} className="accent-primary" />
+            <input
+              type="checkbox"
+              checked={allowTodoWrites}
+              onChange={(event) => setAllowTodoWrites(event.target.checked)}
+              className="accent-primary"
+            />
             {t("integrations.mcp.local.allowTodoWrites")}
           </label>
           {plaintext && (
@@ -117,7 +125,11 @@ export function LocalMcpBlock() {
             <div key={token.id} className="flex items-center justify-between gap-2 text-xs">
               <div className="min-w-0">
                 <span className="font-medium break-all">{token.label}</span>
-                {token.scopes.includes("todos:write") && <span className="ms-2 text-muted-foreground">{t("integrations.mcp.local.todoWrites")}</span>}
+                {token.scopes.includes("todos:write") && (
+                  <span className="ms-2 text-muted-foreground">
+                    {t("integrations.mcp.local.todoWrites")}
+                  </span>
+                )}
                 <span className="ms-2 text-muted-foreground">
                   {t("integrations.mcp.local.created")}:{" "}
                   {new Date(token.createdAt).toLocaleString()}

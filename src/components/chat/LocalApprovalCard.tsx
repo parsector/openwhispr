@@ -9,7 +9,13 @@ import {
   type LocalApprovalEntry,
 } from "../../stores/localApprovalStore";
 
-export function LocalApprovalCard({ entry, compact = false }: { entry: LocalApprovalEntry; compact?: boolean }) {
+export function LocalApprovalCard({
+  entry,
+  compact = false,
+}: {
+  entry: LocalApprovalEntry;
+  compact?: boolean;
+}) {
   const { t } = useTranslation();
   const [notes, setNotes] = useState<
     Array<{ id: number; title: string; content?: string | null; enhanced_content?: string | null }>
@@ -50,21 +56,57 @@ export function LocalApprovalCard({ entry, compact = false }: { entry: LocalAppr
   );
   const busy = entry.state === "approving" || entry.state === "cancelling";
   const pending = entry.state === "pending" || busy;
-  if (compact) return (
-    <section className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-1 px-3 py-2 text-xs" aria-label={t("agentJobs.card.title")}>
-      <span className="min-w-0 flex-1 text-foreground">{entry.summary}</span>
-      <span className="text-muted-foreground">{t(guaranteeKey(entry.harness, entry.mode))}</span>
-      {entry.harness === "cursor-agent" && <span className="text-muted-foreground">{t(cursorTrustKey(Boolean(entry.trustWorkspace)))}</span>}
-      {entry.mode === "write" && entry.branch && <span className="break-all text-muted-foreground">{t("agentJobs.card.branch")}: {entry.branch}</span>}
-      <span className="text-muted-foreground" role="status">{t(`agentJobs.card.${entry.state}`)}</span>
-      {entry.authWarning && <span className="text-warning">{t("agentJobs.pane.authSoftWarning")}</span>}
-      {pending && <div className="flex items-center gap-2">
-        <button type="button" disabled={busy} className="rounded px-2 py-1 text-primary hover:bg-muted disabled:opacity-50" onClick={() => void approveLocal(entry.key)}>{t("agentJobs.card.approve")}</button>
-        <button type="button" disabled={busy} className="rounded px-2 py-1 text-muted-foreground hover:bg-muted disabled:opacity-50" onClick={() => void cancelLocal(entry.key)}>{t("agentJobs.card.cancel")}</button>
-      </div>}
-      {entry.error && <span role="alert" className="text-destructive">{entry.error}</span>}
-    </section>
-  );
+  if (compact)
+    return (
+      <section
+        className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-surface-1 px-3 py-2 text-xs"
+        aria-label={t("agentJobs.card.title")}
+      >
+        <span className="min-w-0 flex-1 text-foreground">{entry.summary}</span>
+        <span className="text-muted-foreground">{t(guaranteeKey(entry.harness, entry.mode))}</span>
+        {entry.harness === "cursor-agent" && (
+          <span className="text-muted-foreground">
+            {t(cursorTrustKey(Boolean(entry.trustWorkspace)))}
+          </span>
+        )}
+        {entry.mode === "write" && entry.branch && (
+          <span className="break-all text-muted-foreground">
+            {t("agentJobs.card.branch")}: {entry.branch}
+          </span>
+        )}
+        <span className="text-muted-foreground" role="status">
+          {t(`agentJobs.card.${entry.state}`)}
+        </span>
+        {entry.authWarning && (
+          <span className="text-warning">{t("agentJobs.pane.authSoftWarning")}</span>
+        )}
+        {pending && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded px-2 py-1 text-primary hover:bg-muted disabled:opacity-50"
+              onClick={() => void approveLocal(entry.key)}
+            >
+              {t("agentJobs.card.approve")}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded px-2 py-1 text-muted-foreground hover:bg-muted disabled:opacity-50"
+              onClick={() => void cancelLocal(entry.key)}
+            >
+              {t("agentJobs.card.cancel")}
+            </button>
+          </div>
+        )}
+        {entry.error && (
+          <span role="alert" className="text-destructive">
+            {entry.error}
+          </span>
+        )}
+      </section>
+    );
   return (
     <section
       className="rounded-md border border-border bg-surface-1 p-3 space-y-2"

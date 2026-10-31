@@ -46,12 +46,13 @@ const EMBEDDING_ONNX = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 const SILERO_VAD_ONNX = "silero_vad.onnx";
 
 class DiarizationManager {
-  constructor() {
+  constructor({ pcmConverter = null } = {}) {
     // Meeting post-processing and upload/batch diarization can overlap, so
     // track every live process, not a single slot.
     this._processes = new Set();
     this.currentDownloadProcess = null;
     this.cachedBinaryPath = null;
+    this.pcmConverter = pcmConverter;
   }
 
   getBinaryPath() {
@@ -290,7 +291,8 @@ class DiarizationManager {
     const embPath = this._resolveModelPath(EMBEDDING_ONNX);
     let pipePath = null;
     if (Buffer.isBuffer(wavPath)) {
-      if (!pipeRoot || process.platform === "win32") throw new Error("Secure meeting diarization pipe is unavailable");
+      if (!pipeRoot || process.platform === "win32")
+        throw new Error("Secure meeting diarization pipe is unavailable");
       fs.mkdirSync(pipeRoot, { recursive: true, mode: 0o700 });
       pipePath = path.join(pipeRoot, `diarization-${crypto.randomUUID()}.fifo`);
       const result = spawnSync("mkfifo", ["-m", "600", pipePath], { windowsHide: true });
@@ -319,7 +321,10 @@ class DiarizationManager {
     try {
       timeoutMs = Math.max(
         DIARIZATION_TIMEOUT_MS,
-        computeTranscriptionTimeoutMs((Buffer.isBuffer(wavPath) ? wavPath.length : fs.statSync(wavPath).size) / PCM16_MONO_16K_BYTES_PER_SECOND)
+        computeTranscriptionTimeoutMs(
+          (Buffer.isBuffer(wavPath) ? wavPath.length : fs.statSync(wavPath).size) /
+            PCM16_MONO_16K_BYTES_PER_SECOND
+        )
       );
     } catch {
       // Unreadable WAV: keep the flat cap.
@@ -331,9 +336,7 @@ class DiarizationManager {
 
       // Opening the FIFO read/write avoids a race where both the child's read
       // and the parent's write block waiting for the other endpoint to open.
-      const pipeKeeperFd = pipePath
-        ? fs.openSync(pipePath, fs.constants.O_RDWR)
-        : null;
+      const pipeKeeperFd = pipePath ? fs.openSync(pipePath, fs.constants.O_RDWR) : null;
 
       const proc = spawn(binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
@@ -343,7 +346,9 @@ class DiarizationManager {
       if (pipePath) {
         const writerFd = fs.openSync(pipePath, fs.constants.O_WRONLY);
         const writer = fs.createWriteStream(pipePath, { fd: writerFd, autoClose: true });
-        writer.on("error", (error) => debugLogger.warn("Diarization pipe write failed", { error: error.message }));
+        writer.on("error", (error) =>
+          debugLogger.warn("Diarization pipe write failed", { error: error.message })
+        );
         writer.end(wavPath);
       }
 
@@ -353,8 +358,16 @@ class DiarizationManager {
       // The single pid-file slot tracks whichever process is still alive; only
       // the reaper consumes it, and the Set is the real shutdown source.
       const untrack = () => {
-        if (pipeKeeperFd != null) { try { fs.closeSync(pipeKeeperFd); } catch {} }
-        if (pipePath) { try { fs.unlinkSync(pipePath); } catch {} }
+        if (pipeKeeperFd != null) {
+          try {
+            fs.closeSync(pipeKeeperFd);
+          } catch {}
+        }
+        if (pipePath) {
+          try {
+            fs.unlinkSync(pipePath);
+          } catch {}
+        }
         this._processes.delete(proc);
         const survivor = this._processes.values().next().value;
         if (survivor) sidecarPidFile.write("diarization", survivor.pid);
@@ -471,14 +484,22 @@ class DiarizationManager {
   mergeWithTranscript(
     transcriptSegments,
     diarizationSegments,
-    { diarizedSource = "system", speakerIndexBase = 0, recordingId = null,
-      audioStartOffsetSeconds = 0, audioStartOffsets = {} } = {}
+    {
+      diarizedSource = "system",
+      speakerIndexBase = 0,
+      recordingId = null,
+      audioStartOffsetSeconds = 0,
+      audioStartOffsets = {},
+    } = {}
   ) {
     if (!transcriptSegments || transcriptSegments.length === 0) return [];
     if (!diarizationSegments || diarizationSegments.length === 0) {
       return recordingId != null
         ? require("./meetingWordAlignment").withAudioSpans(
-          transcriptSegments, recordingId, audioStartOffsets)
+            transcriptSegments,
+            recordingId,
+            audioStartOffsets
+          )
         : transcriptSegments.map((seg) => ({ ...seg }));
     }
 
@@ -487,27 +508,50 @@ class DiarizationManager {
     const speakerMap = buildSpeakerRenumber(speakerSet, speakerIndexBase);
 
     const alignedBounds = (seg) => {
-      const tokens = String(seg.text || "").trim().split(/\s+/u).filter(Boolean);
+      const tokens = String(seg.text || "")
+        .trim()
+        .split(/\s+/u)
+        .filter(Boolean);
       const words = seg.wordTimings;
       if (!Array.isArray(words) || words.length !== tokens.length || !words.length) return null;
-      const comparable = (value) => String(value).normalize("NFKC").replace(/[^\p{L}\p{N}]/gu, "").toLocaleLowerCase();
+      const comparable = (value) =>
+        String(value)
+          .normalize("NFKC")
+          .replace(/[^\p{L}\p{N}]/gu, "")
+          .toLocaleLowerCase();
       for (let i = 0; i < words.length; i += 1) {
-        if (comparable(words[i].word) !== comparable(tokens[i]) ||
-          !Number.isFinite(words[i].start) || !Number.isFinite(words[i].end) ||
-          words[i].start < 0 || words[i].end <= words[i].start ||
-          (i && words[i].start < words[i - 1].end)) return null;
+        if (
+          comparable(words[i].word) !== comparable(tokens[i]) ||
+          !Number.isFinite(words[i].start) ||
+          !Number.isFinite(words[i].end) ||
+          words[i].start < 0 ||
+          words[i].end <= words[i].start ||
+          (i && words[i].start < words[i - 1].end)
+        )
+          return null;
       }
       return { start: words[0].start, end: words.at(-1).end };
     };
 
     const splitAtHandoffs = (seg) => {
-      if (seg.source !== diarizedSource || seg.speakerLocked || seg.speakerLockSource === "user" ||
-        seg.corrections?.length || !alignedBounds(seg) || seg.wordTimings.length < 2) return [seg];
+      if (
+        seg.source !== diarizedSource ||
+        seg.speakerLocked ||
+        seg.speakerLockSource === "user" ||
+        seg.corrections?.length ||
+        !alignedBounds(seg) ||
+        seg.wordTimings.length < 2
+      )
+        return [seg];
       const speakers = seg.wordTimings.map((word) => {
-        let best = null, bestDuration = 0;
+        let best = null,
+          bestDuration = 0;
         for (const turn of diarizationSegments) {
           const duration = Math.min(word.end, turn.end) - Math.max(word.start, turn.start);
-          if (duration > bestDuration) { best = turn.speaker; bestDuration = duration; }
+          if (duration > bestDuration) {
+            best = turn.speaker;
+            bestDuration = duration;
+          }
         }
         return best;
       });
@@ -520,17 +564,28 @@ class DiarizationManager {
       const tokens = seg.text.trim().split(/\s+/u);
       return boundaries.slice(0, -1).map((start, i) => {
         const end = boundaries[i + 1];
-        if (i === 0) return { ...seg, audioSpan: undefined,
-          parentRowId: seg.id, splitStartWord: 0,
-          text: tokens.slice(start, end).join(" "),
-          wordTimings: seg.wordTimings.slice(start, end) };
+        if (i === 0)
+          return {
+            ...seg,
+            audioSpan: undefined,
+            parentRowId: seg.id,
+            splitStartWord: 0,
+            text: tokens.slice(start, end).join(" "),
+            wordTimings: seg.wordTimings.slice(start, end),
+          };
         const hex = crypto.createHash("sha256").update(`${seg.id}\0${start}`).digest("hex");
         const id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-        return { ...seg, id, audioSpan: undefined, parentRowId: seg.id, splitStartWord: start,
+        return {
+          ...seg,
+          id,
+          audioSpan: undefined,
+          parentRowId: seg.id,
+          splitStartWord: start,
           text: tokens.slice(start, end).join(" "),
           wordTimings: seg.wordTimings.slice(start, end),
           timestamp: seg.wordTimings[start].start,
-          unknownNumber: undefined };
+          unknownNumber: undefined,
+        };
       });
     };
     const workingSegments = transcriptSegments.flatMap(splitAtHandoffs);
@@ -554,7 +609,8 @@ class DiarizationManager {
       } else if (recordingId != null) {
         const offset = audioStartOffsets[seg.source] ?? audioStartOffsetSeconds;
         enriched.audioSpan = {
-          recordingId, trackId: seg.source,
+          recordingId,
+          trackId: seg.source,
           startSample: Math.round((offset + bounds.start) * 24000),
           endSample: Math.round((offset + bounds.end) * 24000),
         };
@@ -573,7 +629,7 @@ class DiarizationManager {
 
       if (seg.source === diarizedSource && seg.timestamp != null) {
         const segStart = bounds?.start ?? seg.timestamp;
-        const segEnd = bounds?.end ?? (nextTimestampAt(index, diarizedSource) ?? segStart + 2.5);
+        const segEnd = bounds?.end ?? nextTimestampAt(index, diarizedSource) ?? segStart + 2.5;
         const midpoint = segStart + (segEnd - segStart) / 2;
         let overlapSpeaker = null;
         let nearestSpeaker = null;
@@ -613,14 +669,23 @@ class DiarizationManager {
         const overlapStart = bounds ? segStart : segStart - 0.5;
         const overlapEnd = bounds ? segEnd : segEnd + 0.5;
         const simultaneous = diarizationSegments.some((first, i) =>
-          diarizationSegments.slice(i + 1).some((second) =>
-            first.speaker !== second.speaker &&
-            Math.min(overlapEnd, first.end, second.end) - Math.max(overlapStart, first.start, second.start) >= speakerThresholds.current().values.overlapToleranceSeconds));
+          diarizationSegments
+            .slice(i + 1)
+            .some(
+              (second) =>
+                first.speaker !== second.speaker &&
+                Math.min(overlapEnd, first.end, second.end) -
+                  Math.max(overlapStart, first.start, second.start) >=
+                  speakerThresholds.current().values.overlapToleranceSeconds
+            )
+        );
         enriched.uncertainty = simultaneous
           ? { reason: "overlapping_speech" }
           : shortSpanReason(matchedSpan) || enriched.uncertainty;
         if (enriched.uncertainty) enriched.speakerAssessmentAvailable = true;
-        const abstained = ["too_short", "close_match", "not_sure", "overlapping_speech"].includes(enriched.uncertainty?.reason);
+        const abstained = ["too_short", "close_match", "not_sure", "overlapping_speech"].includes(
+          enriched.uncertainty?.reason
+        );
         if (abstained && !enriched.speakerLocked && enriched.speakerLockSource !== "user") {
           enriched.speakerName = undefined;
           enriched.speakerIsPlaceholder = true;
@@ -633,7 +698,8 @@ class DiarizationManager {
             speakerIsPlaceholder: abstained,
           };
           if (abstained) {
-            if (!enriched.speakerLocked && enriched.speakerLockSource !== "user") Object.assign(enriched, patch);
+            if (!enriched.speakerLocked && enriched.speakerLockSource !== "user")
+              Object.assign(enriched, patch);
           } else {
             applyConfirmedSpeaker(enriched, patch);
           }
@@ -684,18 +750,47 @@ class DiarizationManager {
 
   async convertRawPcmToWavBuffer(rawPcm, inputSampleRate) {
     if (!Buffer.isBuffer(rawPcm) || !rawPcm.length) throw new Error("Raw PCM buffer is empty");
-    const samples = await new Promise((resolve, reject) => {
-      const proc = spawn(getFFmpegPath(), ["-hide_banner", "-loglevel", "error", "-f", "s16le",
-        "-ar", String(inputSampleRate), "-ac", "1", "-i", "pipe:0", "-f", "s16le",
-        "-ar", "16000", "-ac", "1", "pipe:1"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
-      const parts = [];
-      let error = "";
-      proc.stdout.on("data", (part) => parts.push(part));
-      proc.stderr.on("data", (part) => { error += part.toString(); });
-      proc.on("error", reject);
-      proc.on("close", (code) => code === 0 ? resolve(Buffer.concat(parts)) : reject(new Error(`PCM conversion failed: ${error}`)));
-      proc.stdin.end(rawPcm);
-    });
+    const samples = this.pcmConverter
+      ? await this.pcmConverter(rawPcm, inputSampleRate, 16000)
+      : await new Promise((resolve, reject) => {
+          const proc = spawn(
+            getFFmpegPath(),
+            [
+              "-hide_banner",
+              "-loglevel",
+              "error",
+              "-f",
+              "s16le",
+              "-ar",
+              String(inputSampleRate),
+              "-ac",
+              "1",
+              "-i",
+              "pipe:0",
+              "-f",
+              "s16le",
+              "-ar",
+              "16000",
+              "-ac",
+              "1",
+              "pipe:1",
+            ],
+            { stdio: ["pipe", "pipe", "pipe"], windowsHide: true }
+          );
+          const parts = [];
+          let error = "";
+          proc.stdout.on("data", (part) => parts.push(part));
+          proc.stderr.on("data", (part) => {
+            error += part.toString();
+          });
+          proc.on("error", reject);
+          proc.on("close", (code) =>
+            code === 0
+              ? resolve(Buffer.concat(parts))
+              : reject(new Error(`PCM conversion failed: ${error}`))
+          );
+          proc.stdin.end(rawPcm);
+        });
     const header = this._createWavHeader(samples.length, 16000, 1);
     return Buffer.concat([header, samples]);
   }

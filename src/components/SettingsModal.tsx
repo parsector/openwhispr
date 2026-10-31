@@ -61,7 +61,12 @@ interface SettingsModalProps {
   onOpenNote?: (noteId: number, rowId: string) => void;
 }
 
-export default function SettingsModal({ open, onOpenChange, initialSection, onOpenNote }: SettingsModalProps) {
+export default function SettingsModal({
+  open,
+  onOpenChange,
+  initialSection,
+  onOpenNote,
+}: SettingsModalProps) {
   const { t } = useTranslation();
   const { isSignedIn, user } = useAuth();
   const policyManaged = usePolicyStore((s) => s.managed);
@@ -203,7 +208,10 @@ export default function SettingsModal({ open, onOpenChange, initialSection, onOp
     >
       <SettingsPage
         activeSection={activeSection}
-        onOpenNote={(noteId, rowId) => { onOpenChange(false); onOpenNote?.(noteId, rowId); }}
+        onOpenNote={(noteId, rowId) => {
+          onOpenChange(false);
+          onOpenNote?.(noteId, rowId);
+        }}
         onNavigateToSection={handleSectionChange}
         initialSubTab={initialSubTab}
       />

@@ -6,6 +6,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const Database = require("better-sqlite3");
 const { MeetingAudioStore, RATE } = require("../../src/helpers/meetingAudioStore");
+const fakeCodec = require("../lib/fakeAudioCodec");
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "ow-audio-test-"));
@@ -34,7 +35,7 @@ function fixture(t) {
     INSERT INTO speaker_profiles VALUES(7, x'01020304', 1, 0);
     INSERT INTO voice_exemplars VALUES('sample-1', 7, 1, 'mic');`);
   t.after(() => db.close());
-  const makeStore = () => new MeetingAudioStore(root, { database: { db }, now: () => clock, encryption });
+  const makeStore = () => new MeetingAudioStore(root, { database: { db }, now: () => clock, encryption, codec: fakeCodec });
   return { root, db, encryption, makeStore, setClock: (value) => { clock = value; }, clock };
 }
 
@@ -54,6 +55,30 @@ function correlation(actual, expected) {
   }
   return dot / Math.sqrt(aa * bb);
 }
+
+test("audio store uses injected cipher, codec, and directory", (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ow-audio-seams-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const calls = { encrypt: 0, decrypt: 0, encode: 0, decode: 0 };
+  const encryption = {
+    encryptBytes(bytes) { calls.encrypt++; return Buffer.concat([Buffer.from([0xa5]), bytes]); },
+    decryptBytes(bytes) { calls.decrypt++; assert.equal(bytes[0], 0xa5); return bytes.subarray(1); },
+  };
+  const codec = {
+    encode(pcm) { calls.encode++; return fakeCodec.encode(pcm); },
+    decode(bytes) { calls.decode++; return fakeCodec.decode(bytes); },
+  };
+  const store = new MeetingAudioStore(root, { encryption, codec });
+  const pcm = signal(1, 440);
+  const startedAt = Date.now();
+  store.begin(1, startedAt);
+  store.append(1, "mic", pcm, startedAt);
+  store.finish(1);
+  const chunk = store.status(1).tracks.mic.chunks[0].file;
+  assert.equal(fs.readFileSync(path.join(root, "1", chunk))[0], 0xa5);
+  assert.deepEqual(store.span(1, "mic", 0, 1).wav.subarray(44), pcm);
+  assert.ok(Object.values(calls).every(count => count > 0), JSON.stringify(calls));
+});
 
 test("interrupt, repair encrypted tracks, retrieve two arbitrary exact-duration spans", (t) => {
   const f = fixture(t);
@@ -308,7 +333,7 @@ test('physical database reset leaves no recording for reused note one', t => {
   let db = new Database(dbPath);
   db.exec("CREATE TABLE notes(id INTEGER PRIMARY KEY, client_note_id TEXT); INSERT INTO notes VALUES (1, 'before-wipe')");
   const encryption = { encryptBytes: bytes => bytes, decryptBytes: bytes => bytes };
-  const store = new MeetingAudioStore(root, { database: { db }, encryption });
+  const store = new MeetingAudioStore(root, { database: { db }, encryption, codec: fakeCodec });
   store.begin(1); store.append(1, 'mic', signal(6, 440)); store.finish(1);
   const oldRecordingId = store.status(1).recordingId;
   assert.match(oldRecordingId, /^[0-9a-f-]{36}$/i);
@@ -320,7 +345,7 @@ test('physical database reset leaves no recording for reused note one', t => {
   db = new Database(dbPath);
   t.after(() => db.close());
   db.exec("CREATE TABLE notes(id INTEGER PRIMARY KEY, client_note_id TEXT); INSERT INTO notes VALUES (1, 'after-wipe')");
-  const reopened = new MeetingAudioStore(root, { database: { db }, encryption });
+  const reopened = new MeetingAudioStore(root, { database: { db }, encryption, codec: fakeCodec });
   assert.equal(reopened.status(1).state, 'unavailable');
   assert.deepEqual(fs.readdirSync(root), []);
   reopened.begin(1);
@@ -331,7 +356,7 @@ test('deletion and device purge notify every window to discard playback', t => {
   const f = fixture(t);
   const changes = [];
   const store = new MeetingAudioStore(f.root, { database: { db: f.db },
-    encryption: f.encryption, onChanged: change => changes.push(change) });
+    encryption: f.encryption, codec: fakeCodec, onChanged: change => changes.push(change) });
   store.begin(1); store.append(1, 'mic', signal(6, 440)); store.finish(1);
   store.delete(1);
   assert.deepEqual(changes, [{ noteId: 1, state: 'deleted' }]);
@@ -353,7 +378,7 @@ test("a replaced key leaves existing ciphertext and its manifest intact", (t) =>
     encryptBytes(bytes) { return Buffer.from(bytes); },
     decryptBytes() { throw new Error("Authentication failed"); },
   };
-  const reopened = new MeetingAudioStore(f.root, { encryption: wrongKey, now: () => f.clock });
+  const reopened = new MeetingAudioStore(f.root, { encryption: wrongKey, codec: fakeCodec, now: () => f.clock });
   assert.equal(reopened.status(1).state, "key_unavailable");
   assert.throws(() => reopened.begin(1), /key is unavailable/);
   assert.deepEqual(fs.readFileSync(file), before);

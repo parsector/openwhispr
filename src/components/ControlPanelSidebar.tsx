@@ -105,7 +105,9 @@ export default function ControlPanelSidebar({
                 </span>
               )}
               {item.id === "todos" && overdueCount > 0 && (
-                <span className="ms-auto rounded-full bg-[color:color-mix(in_srgb,var(--color-destructive)_9%,var(--color-background))] px-1.5 text-[10px] font-semibold text-destructive">{overdueCount}</span>
+                <span className="ms-auto rounded-full bg-[color:color-mix(in_srgb,var(--color-destructive)_9%,var(--color-background))] px-1.5 text-[10px] font-semibold text-destructive">
+                  {overdueCount}
+                </span>
               )}
             </button>
           );
