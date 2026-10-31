@@ -14,6 +14,11 @@ export interface MeetingSegmentEvent {
   source: "mic" | "system";
   type: "partial" | "final" | "retract";
   timestamp?: number;
+  speechStart?: number;
+  speechEnd?: number;
+  recordingId?: string | number;
+  recordingOrigin?: number;
+  timebase?: "epoch" | "recording";
   id?: string;
 }
 
@@ -79,6 +84,11 @@ export function reduceMeetingSegmentEvent(
     text: event.text,
     source: event.source,
     timestamp: event.timestamp,
+    speechStart: event.speechStart,
+    speechEnd: event.speechEnd,
+    recordingId: event.recordingId,
+    recordingOrigin: event.recordingOrigin,
+    timebase: event.timebase,
   });
   const inserted = deps.decorateFinal(raw);
   const { segments, index } = insertSegmentByTimestamp(state.segments, inserted);

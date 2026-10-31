@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import type { Commitment } from "../../types/electron";
 import { groupFor } from "../todos/TodoGroups";
 import { sourceChipsByIndex } from "../todos/sourceChips";
-import { MeetingAudioPlayback, playbackRange } from "../../utils/meetingAudioPlayback";
+import { MeetingAudioPlayback, PlaybackUnavailableError, playbackRange } from "../../utils/meetingAudioPlayback";
 import {
   isSelfSideSegment,
   isTranscriptSpeakerLocked,
@@ -777,6 +777,7 @@ interface SegmentRowProps {
   onToggleSelect?: (segmentId: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
   audioState?: string;
+  audioUnavailableReason?: "timebase" | "gap" | "track";
   playing?: boolean;
   onPlayAudio?: (segment: TranscriptSegment) => void;
 }
@@ -813,6 +814,7 @@ const SegmentRow = memo(function SegmentRow({
   onToggleSelect,
   t,
   audioState,
+  audioUnavailableReason,
   playing,
   onPlayAudio,
 }: SegmentRowProps) {
@@ -924,14 +926,15 @@ const SegmentRow = memo(function SegmentRow({
           <span dir="auto">{segment.text}</span>
         </div>
         {audioState && <div className="mt-1 px-1 text-[11px] text-muted-foreground">
-          {(audioState === "complete" || audioState === "recording" || audioState === "incomplete") &&
+          {audioUnavailableReason ? <span>{t(`meetingAudio.${audioUnavailableReason}`)}</span> :
+          (audioState === "complete" || audioState === "recording" || audioState === "incomplete") &&
             (segment.audioSpan || segment.timestamp != null) && onPlayAudio
             ? <button type="button" onClick={() => onPlayAudio(segment)}
                 className="rounded px-1 py-0.5 underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 aria-label={t(playing ? "meetingAudio.pause" : "meetingAudio.play") + ": " + segment.text}>
                 {t(playing ? "meetingAudio.pause" : "meetingAudio.play")}
                 {(!segment.wordTimings?.length || !segment.audioSpan) &&
-                  <span className="ms-1">· {t("meetingAudio.approximate")}</span>}
+                  <span className="ms-1">· {t(segment.speechStart == null ? "meetingAudio.noOnset" : "meetingAudio.approximate")}</span>}
               </button>
             : <span>{t(`meetingAudio.${["expired", "deleted", "evicted", "incomplete"].includes(audioState)
               ? audioState : audioState === "key_unavailable" ? "keyUnavailable" : "unavailable"}`)}</span>}
@@ -1027,7 +1030,8 @@ export function MeetingTranscriptChat({
   const segments = useMemo(() => normalizeTranscriptSegments(
     projectSpeakerActions(providedSegments, speakerActionLog)), [providedSegments, speakerActionLog]);
   const { t } = useTranslation();
-  const [audioStatus, setAudioStatus] = useState<{ state: string; reason?: string | null; bytes: number; startedAt?: number; recordingId?: string | number; keep?: boolean } | null>(null);
+  const [audioStatus, setAudioStatus] = useState<{ state: string; reason?: string | null; bytes: number; startedAt?: number; recordingId?: string | number;
+    tracks?: Partial<Record<"mic" | "system", { chunks: Array<{ startSample: number; sampleCount: number }> }>>; keep?: boolean } | null>(null);
   const [audioUsage, setAudioUsage] = useState<{ usedBytes: number; budgetBytes: number; days: 3 | 7 | 30; evictions: Array<{ noteId: number; title: string; at: number }> } | null>(null);
   const [audioMessage, setAudioMessage] = useState("");
   const [playingRowId, setPlayingRowId] = useState<string | null>(null);
@@ -1069,14 +1073,14 @@ export function MeetingTranscriptChat({
       setPlayingRowId(null);
       return;
     }
-    const request = playbackRef.current!.request();
-    const { from, to, track } = playbackRange(segment, segments,
-      audioStatus?.recordingId ?? noteId, audioStatus?.startedAt);
     try {
+      const request = playbackRef.current!.request();
+      const { from, to, track } = playbackRange(segment, segments,
+        audioStatus?.recordingId ?? noteId, audioStatus?.startedAt, audioStatus?.tracks);
       const response = await window.electronAPI?.meetingAudioSpan?.(noteId, track, from, to);
       if (!playbackRef.current?.isCurrent(request)) return;
       if (!response?.wav) {
-        setAudioMessage(t(`meetingAudio.${response?.state === "not_flushed" ? "notFlushed" : "unavailable"}`));
+        setAudioMessage(t(`meetingAudio.${response?.state === "not_flushed" ? "notFlushed" : response?.state === "gap" ? "gap" : "unavailable"}`));
         refreshAudio();
         return;
       }
@@ -1090,8 +1094,8 @@ export function MeetingTranscriptChat({
       if (!playbackRef.current?.isCurrent(request)) return;
       setPlayingRowId(segment.id);
       setAudioMessage(response.partial ? t("meetingAudio.partial") : "");
-    } catch {
-      setAudioMessage(t("meetingAudio.unavailable"));
+    } catch (error) {
+      setAudioMessage(t(error instanceof PlaybackUnavailableError ? `meetingAudio.${error.reason}` : "meetingAudio.unavailable"));
     }
   }, [noteId, audioStatus, playingRowId, refreshAudio, t, segments]);
   const deleteAudio = useCallback(async () => {
@@ -1256,7 +1260,7 @@ export function MeetingTranscriptChat({
 
   return (
     <div className="h-full flex flex-col">
-      {audioStatus && audioStatus.state !== "unavailable" && <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-1 text-[11px] text-muted-foreground" role="status">
+      {audioStatus && <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-1 text-[11px] text-muted-foreground" role="status">
         {audioUsage && <span>{t("meetingAudio.storage", {
           used: (audioUsage.usedBytes / 1_000_000).toFixed(3),
           budget: (audioUsage.budgetBytes / 1_000_000).toFixed(3),
@@ -1299,7 +1303,7 @@ export function MeetingTranscriptChat({
             {t("meetingAudio.delete")}
           </button>}
         </>}
-        {(audioStatus.state === "complete" || audioStatus.state === "incomplete") && noteId != null &&
+        {noteId != null &&
           <button type="button" className="underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => void window.electronAPI?.exportMeetingCalibration?.(noteId).then(result => {
               if (result?.success) setAudioMessage(t("meetingAudio.calibrationExported", { folder: result.folder }));
@@ -1404,6 +1408,13 @@ export function MeetingTranscriptChat({
               const segment = segments[i];
               const { key, activeName, selfSide } = rowMeta[i];
               const isSystemSpeaker = !!segment.speaker && !selfSide;
+              let audioUnavailableReason: "timebase" | "gap" | "track" | undefined;
+              if (audioStatus?.tracks && ["complete", "incomplete", "recording"].includes(audioStatus.state) &&
+                noteId != null && (segment.audioSpan || segment.timestamp != null)) {
+                try { playbackRange(segment, segments, audioStatus.recordingId ?? noteId,
+                  audioStatus.startedAt, audioStatus.tracks); }
+                catch (error) { if (error instanceof PlaybackUnavailableError) audioUnavailableReason = error.reason; }
+              }
               return (
                 <div
                   key={segment.id}
@@ -1451,6 +1462,7 @@ export function MeetingTranscriptChat({
                     onToggleSelect={onToggleSelect}
                     t={t}
                     audioState={audioStatus?.state === "unavailable" ? undefined : audioStatus?.state}
+                    audioUnavailableReason={audioUnavailableReason}
                     playing={playingRowId === segment.id}
                     onPlayAudio={segment.audioSpan || audioStatus?.startedAt != null ? playAudio : undefined}
                   />

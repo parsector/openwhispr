@@ -3660,6 +3660,7 @@ declare global {
         bytes: number;
         startedAt?: number;
         recordingId?: string | number;
+        tracks?: Partial<Record<"mic" | "system", { chunks: Array<{ startSample: number; sampleCount: number }> }>>;
         keep?: boolean;
       }>;
       meetingAudioUsage?: () => Promise<{ usedBytes: number; budgetBytes: number; days: 3 | 7 | 30; evictions: Array<{ noteId: number; title: string; at: number }> }>;

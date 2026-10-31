@@ -2949,14 +2949,23 @@ class IPCHandlers {
       const note = this.databaseManager.getNote(noteId);
       if (!note || note.deleted_at) return { success: false, error: "Meeting not found" };
       const status = this.meetingAudioStore.status(noteId);
-      if (!["complete", "incomplete"].includes(status.state))
-        return { success: false, error: "Stored meeting audio is unavailable" };
+      const unavailable = {
+        deleted: "Audio was deleted. Start a new recording to export calibration data.",
+        expired: "Audio retention expired. Start a new recording, or keep its audio before it expires.",
+        evicted: "Audio was removed to free space. Start a new recording and increase the audio budget.",
+        key_unavailable: "The audio encryption key cannot be read. Restore keychain access and try again.",
+        recording: "Stop the recording before exporting calibration data.",
+        unavailable: "No retained audio is available. Record a new meeting and enable audio retention.",
+      };
+      if (!["complete", "incomplete"].includes(status.state) || !status.bytes)
+        return { success: false, error: unavailable[status.state] || unavailable.unavailable };
       const { dialog } = require("electron");
       const choice = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"],
         title: "Choose where to export calibration data" });
       if (choice.canceled || !choice.filePaths?.[0]) return { success: false, canceled: true };
-      const folder = fs.mkdtempSync(path.join(choice.filePaths[0], `openwhispr-meeting-${noteId}-`));
+      let folder;
       try {
+        folder = fs.mkdtempSync(path.join(choice.filePaths[0], `openwhispr-meeting-${noteId}-`));
         const audio = {};
         for (const track of ["mic", "system"]) {
           const file = `${track}.wav`;
@@ -2964,13 +2973,15 @@ class IPCHandlers {
           if (duration) audio[track] = { file, durationSeconds: duration };
         }
         if (!Object.keys(audio).length) throw Error("No stored audio track could be exported");
-        const labels = require("./speakerCalibrationExport").buildCalibrationLabels(note, audio);
+        const labels = require("./speakerCalibrationExport").buildCalibrationLabels(note, audio, status);
         if (!labels.rows.length) throw Error("No transcript rows to label");
+        if (labels.rows.every(row => row.unavailableReason))
+          throw Error("Transcript rows fall only in audio gaps or mismatched tracks. Select rows from a recorded section or record a new meeting.");
         fs.writeFileSync(path.join(folder, "labels.json"), JSON.stringify(labels, null, 2), { mode: 0o600 });
         return { success: true, folder };
       } catch (error) {
-        fs.rmSync(folder, { recursive: true, force: true });
-        return { success: false, error: error.message };
+        if (folder) fs.rmSync(folder, { recursive: true, force: true });
+        return { success: false, error: `${error.message}. Check the destination folder and try again.` };
       }
     });
     ipcMain.handle("meeting-audio-delete", (_event, noteId) => {
@@ -7913,7 +7924,7 @@ class IPCHandlers {
         .join(" ")
         .trim();
 
-    const storeMeetingDiarizationSegment = (text, source, timestamp, micSuppression = null) => {
+    const storeMeetingDiarizationSegment = (text, source, timestamp, micSuppression = null, timing = {}) => {
       const id = crypto.randomUUID();
       meetingDiarizationSegments.push({
         id,
@@ -7921,6 +7932,7 @@ class IPCHandlers {
         text,
         source,
         timestamp,
+        ...timing,
         committedAt: Date.now(),
         suppressionReason: source === "mic" ? micSuppression?.reason || null : null,
         hasBleedEvidence: source === "mic" ? !!micSuppression?.hasBleedEvidence : false,
@@ -7933,6 +7945,8 @@ class IPCHandlers {
       text,
       source,
       timestamp,
+      speechStart = timestamp,
+      speechEnd = null,
       micSuppression = null,
       send = null,
       includeInLocalTranscript = false,
@@ -7941,7 +7955,14 @@ class IPCHandlers {
         appendMeetingLocalTranscript(text);
       }
 
-      const id = storeMeetingDiarizationSegment(text, source, timestamp, micSuppression);
+      const audioStatus = meetingNoteId != null ? this.meetingAudioStore.status(meetingNoteId) : null;
+      const timing = {
+        speechStart, speechEnd,
+        recordingId: audioStatus?.recordingId,
+        recordingOrigin: audioStatus?.startedAt,
+        timebase: "epoch",
+      };
+      const id = storeMeetingDiarizationSegment(text, source, timestamp, micSuppression, timing);
 
       if (send) {
         send("meeting-transcription-segment", {
@@ -7949,6 +7970,7 @@ class IPCHandlers {
           source,
           type: "final",
           timestamp,
+          ...timing,
           id,
         });
       }
@@ -8662,6 +8684,7 @@ class IPCHandlers {
 
     let meetingLocalMode = false;
     let meetingLocalBuffers = { mic: [], system: [] };
+    let meetingLocalCapture = { mic: { start: null, end: null }, system: { start: null, end: null } };
     let meetingLocalTimer = null;
     let meetingLocalWin = null;
     let meetingLocalTranscript = "";
@@ -8710,6 +8733,10 @@ class IPCHandlers {
         // Large synthetic gaps would dilute speech and inflate the next batch.
         if (synthetic) return;
         meetingLocalBuffers[source].push(buffer);
+        if (capturedAt != null && Number.isFinite(capturedAt)) {
+          meetingLocalCapture[source] = require("./meetingAudioTimebase").extendBatchCapture(
+            meetingLocalCapture[source], capturedAt, buffer.length);
+        }
         return;
       }
 
@@ -8851,7 +8878,7 @@ class IPCHandlers {
           continue;
         }
 
-        dispatchMeetingAudioBuffer(next.buffer, "mic");
+        dispatchMeetingAudioBuffer(next.buffer, "mic", false, next.captureTime);
       }
     };
 
@@ -9029,6 +9056,8 @@ class IPCHandlers {
 
       const pcm24k = Buffer.concat(chunks);
       meetingLocalBuffers[source] = [];
+      const capture = meetingLocalCapture[source];
+      meetingLocalCapture[source] = { start: null, end: null };
 
       const pcm16k = downsample24kTo16k(pcm24k);
 
@@ -9176,6 +9205,8 @@ class IPCHandlers {
                   text,
                   source,
                   timestamp: segTimestamp,
+                  speechStart: capture.start,
+                  speechEnd: capture.end,
                   micSuppression,
                   send: sendLocalSegment,
                   includeInLocalTranscript: true,
@@ -9188,6 +9219,8 @@ class IPCHandlers {
             text,
             source,
             timestamp: segTimestamp,
+            speechStart: capture.start,
+            speechEnd: capture.end,
             micSuppression,
             send: sendLocalSegment,
             includeInLocalTranscript: true,
@@ -9252,6 +9285,7 @@ class IPCHandlers {
       this._activeMeetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
+      meetingLocalCapture = { mic: { start: null, end: null }, system: { start: null, end: null } };
       meetingDiarizationBuffers = [];
       meetingDiarizationStartedAt = null;
       dropMeetingMicDiarizationCapture();
@@ -9897,6 +9931,7 @@ class IPCHandlers {
           meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
+          meetingLocalCapture = { mic: { start: null, end: null }, system: { start: null, end: null } };
           meetingLocalTranscript = "";
 
           await startLiveSpeakerIdentification(meetingLocalWin, systemAudioMode);
@@ -9956,8 +9991,9 @@ class IPCHandlers {
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      const captureTime = capturedAt ?? Date.now();
       if (meetingNoteId != null && (source === "mic" || source === "system")) {
-        try { this.meetingAudioStore.append(meetingNoteId, source, outboundBuffer, capturedAt || Date.now()); }
+        try { this.meetingAudioStore.append(meetingNoteId, source, outboundBuffer, captureTime); }
         catch (error) {
           this.meetingAudioStore.fail(meetingNoteId, error.message);
           debugLogger.warn("Meeting audio retention failed", { error: error.message }, "meeting");
@@ -10012,7 +10048,7 @@ class IPCHandlers {
           }
         }
 
-        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, capturedAt);
+        dispatchMeetingAudioBuffer(outboundBuffer, "system", synthetic, captureTime);
         return;
       }
 
@@ -10036,6 +10072,7 @@ class IPCHandlers {
         meetingPendingMicChunks.push({
           buffer: outboundBuffer,
           queuedAt: Date.now(),
+          captureTime,
         });
         flushPendingMeetingMicChunks();
         return;
@@ -13716,8 +13753,7 @@ class IPCHandlers {
       if (noteId != null && this.meetingAudioStore && localWhisper?.ready &&
         !localWhisper.isRemote && this.whisperManager.currentServerModel) {
         try {
-          const { alignTranscriptRows, timedWordsFromStoredTrack,
-            withAudioSpans } = require("./meetingWordAlignment");
+          const { alignTranscriptRows, timedWordsFromStoredTrack } = require("./meetingWordAlignment");
           const tracks = this.meetingAudioStore.status(noteId).tracks || {};
           for (const source of new Set(rows.map((row) => row.source))) {
             const durationSeconds = tracks[source]?.sampleCount / 24000;
@@ -13730,7 +13766,8 @@ class IPCHandlers {
             const byId = new Map(aligned.map((row) => [row.id, row]));
             rows = rows.map((row) => byId.get(row.id) || row);
           }
-          rows = withAudioSpans(rows, noteId);
+          rows = require("./meetingAudioTimebase").attachUndiarizedAudioSpans(
+            rows, this.meetingAudioStore.status(noteId));
         } catch (error) {
           debugLogger.warn("Undiarized meeting word alignment unavailable",
             { error: error.message }, "speaker");
@@ -13861,7 +13898,7 @@ class IPCHandlers {
             debugLogger.warn("Local word alignment unavailable", { error: error.message }, "speaker");
           }
         }
-        const enrichedSegments = this.diarizationManager.mergeWithTranscript(
+        let enrichedSegments = this.diarizationManager.mergeWithTranscript(
           alignedRows,
           diarizationSegments,
           { diarizedSource, speakerIndexBase,
@@ -13870,6 +13907,16 @@ class IPCHandlers {
             audioStartOffsetSeconds: audioStartOffsets[diarizedSource],
             audioStartOffsets }
         );
+        // The diarizer operates in session seconds. Persist all rows in the
+        // manifest's recording seconds, including rows it could not align.
+        const recordingId = recordingStartedAt != null
+          ? this.meetingAudioStore.status(noteId).recordingId : null;
+        enrichedSegments = require("./meetingAudioTimebase").rebaseDiarizedRows(enrichedSegments, {
+          sessionOrigin: isEpochMs ? startMs : null,
+          recordingOrigin: recordingStartedAt,
+          recordingId,
+          audioStartOffsets,
+        });
 
         const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
         const speakerRenumber = buildSpeakerRenumber(speakerSet, speakerIndexBase);

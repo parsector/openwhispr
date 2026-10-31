@@ -77,6 +77,7 @@ function harness({ native = true, local = false } = {}) {
     ...micGate,
     meetingLocalMode: local,
     meetingLocalBuffers: { mic: [], system: [] },
+    meetingLocalCapture: { mic: { start: null, end: null }, system: { start: null, end: null } },
     meetingSendCounts: { mic: 0, system: 0 },
     _meetingSystemStreaming: { sendAudio: (buffer) => streamed.push(buffer) },
     meetingReconnectAudioBuffers: { mic: [], system: [] },

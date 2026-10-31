@@ -78,6 +78,11 @@ export interface TranscriptSegment {
   text: string;
   source: "mic" | "system";
   timestamp?: number;
+  speechStart?: number;
+  speechEnd?: number;
+  recordingId?: string | number;
+  recordingOrigin?: number;
+  timebase?: "epoch" | "recording";
   speaker?: string;
   speakerName?: string;
   speakerIsPlaceholder?: boolean;

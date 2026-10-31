@@ -46,10 +46,21 @@ function timedWordsFromWhisper(response) {
 async function timedWordsFromStoredTrack({ noteId, track, durationSeconds, store, transcribe }) {
   const words = [];
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return words;
-  for (let coreStart = 0; coreStart < durationSeconds; coreStart += 90) {
-    const coreEnd = Math.min(durationSeconds, coreStart + 90);
-    const windowStart = Math.max(0, coreStart - 5);
-    const windowEnd = Math.min(durationSeconds, coreEnd + 5);
+  const chunks = store.status?.(noteId)?.tracks?.[track]?.chunks;
+  const regions = [];
+  if (Array.isArray(chunks)) {
+    for (const chunk of chunks) {
+      const start = chunk.startSample / 24000;
+      const end = (chunk.startSample + chunk.sampleCount) / 24000;
+      const last = regions.at(-1);
+      if (last && start <= last.end) last.end = Math.max(last.end, end);
+      else regions.push({ start, end });
+    }
+  } else regions.push({ start: 0, end: durationSeconds });
+  for (const region of regions) for (let coreStart = region.start; coreStart < region.end; coreStart += 90) {
+    const coreEnd = Math.min(region.end, coreStart + 90);
+    const windowStart = Math.max(region.start, coreStart - 5);
+    const windowEnd = Math.min(region.end, coreEnd + 5);
     const audio = store.span(noteId, track, windowStart, windowEnd);
     if (audio.state !== "available" || audio.partial) continue;
     const decoded = timedWordsFromWhisper(await transcribe(audio.wav));

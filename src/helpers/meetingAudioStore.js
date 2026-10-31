@@ -370,6 +370,15 @@ class MeetingAudioStore {
     const requestedEnd = Math.round(endSeconds * RATE);
     const end = Math.min(requestedEnd, state.sampleCount);
     if (end <= start) return { state: manifest.status === "recording" ? "not_flushed" : "unavailable" };
+    let cursor = start;
+    for (const chunk of state.chunks) {
+      const chunkEnd = chunk.startSample + chunk.sampleCount;
+      if (chunkEnd <= cursor || chunk.startSample >= end) continue;
+      if (chunk.startSample > cursor) return { state: "gap" };
+      cursor = Math.min(end, chunkEnd);
+      if (cursor === end) break;
+    }
+    if (cursor < end) return { state: "gap" };
     const parts = [];
     let covered = 0;
     let lastEnd = null;
@@ -407,8 +416,14 @@ class MeetingAudioStore {
     try {
       fs.writeSync(fd, wav(Buffer.alloc(0)).subarray(0, 44));
       let samples = 0;
+      const silence = Buffer.alloc(RATE * 2);
       for (const chunk of chunks) {
-        if (chunk.startSample !== samples) throw Error("Stored audio has a gap");
+        if (chunk.startSample < samples) throw Error("Stored audio chunks overlap");
+        while (samples < chunk.startSample) {
+          const count = Math.min(RATE, chunk.startSample - samples);
+          fs.writeSync(fd, silence.subarray(0, count * 2));
+          samples += count;
+        }
         const pcm = decode(unpack(this.encryption.decryptBytes(
           fs.readFileSync(this._chunkFile(noteId, chunk.file)))).ogg);
         if (pcm.length !== chunk.sampleCount * 2) throw Error("Stored audio chunk length changed");
