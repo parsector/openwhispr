@@ -3772,7 +3772,13 @@ declare global {
       ) => () => void;
 
       // Speaker name mapping
-      listPeople?: () => Promise<Array<{ id: number; displayName: string; email: string | null; noteCount: number; meetingCount: number; segmentCount: number; lastHeard: string | null; lastSeen: string | null; sampleCount: number; hasVoice: boolean; legacyVoice: boolean; needsReapproval: boolean; usedOnce: boolean; duplicates: Array<{ id: number; name: string }> }>>;
+      listPeople?: () => Promise<Array<{ id: number; displayName: string; email: string | null; noteCount: number; meetingCount: number; segmentCount: number; lastHeard: string | null; lastSeen: string | null; sampleCount: number; hasVoice: boolean; legacyVoice: boolean; needsReapproval: boolean; voiceProgress: { cleanSpans: number; meetings: number; approvedSpans: number; conflict: boolean; usable: boolean; requiredSpans: number; requiredMeetings: number }; usedOnce: boolean; duplicates: Array<{ id: number; name: string }> }>>;
+      listVoiceEnrollmentCandidates?: (profileId: number) => Promise<Array<{ id: string; profileId: number; noteId: number; noteTitle: string; meetingDate: string; rowIds: string[]; track: 'mic' | 'system'; startSample: number; endSample: number; durationSeconds: number; everCorrected: boolean }>>;
+      listVoiceEnrollmentSamples?: (profileId: number) => Promise<Array<{ id: string; profileId: number; noteId: number; noteTitle: string; meetingDate: string; rowIds: string[]; durationSeconds: number; odd: boolean }>>;
+      removeVoiceEnrollmentSample?: (id: string) => Promise<{ success: boolean; error?: string }>;
+      playVoiceEnrollmentCandidate?: (id: string) => Promise<{ state: string; wav?: string; token?: string }>;
+      decideVoiceEnrollmentCandidate?: (id: string, choice: 'approve' | 'reject', token: string) => Promise<{ success: boolean; error?: string }>;
+      undoVoiceEnrollmentAction?: (id: string) => Promise<{ success: boolean; error?: string }>;
       listPeopleActions?: () => Promise<Array<{ id: string; kind: string; profileId: number | null; noteId: number | null; label: string; unavailableReason: string | null; noteInTrash: 0 | 1; createdAt: string }>>;
       undoPeopleMapping?: (noteId: number) => Promise<{ success: boolean; error?: string }>;
       onPeopleChanged?: (callback: () => void) => () => void;

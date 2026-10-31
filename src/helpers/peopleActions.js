@@ -94,7 +94,7 @@ function registerAttendees(database, onlyNoteId = null) {
 function listPeople(database) {
   const db = database.db;
   db.transaction(() => registerAttendees(database))();
-  const profiles = db.prepare('SELECT id, display_name, email, sample_count, embedding, voice_needs_reapproval, created_at, updated_at FROM speaker_profiles').all();
+  const profiles = db.prepare('SELECT id, display_name, email, sample_count, embedding, voice_usable, voice_needs_reapproval, created_at, updated_at FROM speaker_profiles').all();
   const byName = new Map();
   for (const p of profiles) {
     const key = normalized(p.display_name);
@@ -148,7 +148,9 @@ function listPeople(database) {
       sampleCount: p.sample_count || 0,
       hasVoice: !!p.embedding?.length && p.sample_count > 0,
       needsReapproval: p.voice_needs_reapproval === 1,
-      legacyVoice: !!p.embedding?.length && p.sample_count > 0,
+      legacyVoice: !!p.embedding?.length && p.sample_count > 0 &&
+        !db.prepare('SELECT 1 FROM voice_exemplars WHERE profile_id = ? LIMIT 1').get(p.id),
+      voiceProgress: require('./voiceEnrollment').progress(database, p.id),
       usedOnce: hit.notes.size === 1,
       duplicates: duplicates.get(p.id) };
   });
@@ -257,6 +259,8 @@ function applyPersonAction(database, request) {
       return { success: false, error: 'preview_changed' };
     if (request.type === 'delete') return deletePerson(database, built);
     const id = randomUUID();
+    if (request.type === 'reset' || request.type === 'merge')
+      require('./voiceEnrollment').snapshotEvidence(db, id, current.id, survivor?.id);
     const nextName = request.type === 'merge' ? survivor.display_name : request.type === 'rename' ? String(request.name).trim() : null;
     const attendanceBefore = db.prepare('SELECT note_id, identity_key FROM person_attendance WHERE profile_id = ?').all(current.id);
     if (!affected.length && ['rename', 'merge'].includes(request.type)) {
@@ -267,6 +271,9 @@ function applyPersonAction(database, request) {
       if (request.type === 'rename') db.prepare('UPDATE speaker_profiles SET display_name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(nextName, current.id);
       else {
         db.prepare('UPDATE person_attendance SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
+        db.prepare('UPDATE voice_exemplars SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
+        if (db.prepare('SELECT 1 FROM voice_exemplars WHERE profile_id = ? LIMIT 1').get(survivor.id))
+          require('./voiceEnrollment').rebuild(db, survivor.id);
         db.prepare('DELETE FROM speaker_profiles WHERE id = ?').run(current.id);
       }
       history.add(db, { id, kind: request.type, profileId: current.id, label: current.display_name });
@@ -283,7 +290,7 @@ function applyPersonAction(database, request) {
         ...row, speakerName: nextName || undefined, speakerIsPlaceholder: !nextName,
         suggestedProfileId: request.type === 'merge' ? survivor.id : request.type === 'delete' ? undefined : row.suggestedProfileId,
         unknownNumber: request.type === 'delete' ? undefined : row.unknownNumber,
-        correctionRevision: (Number(row.correctionRevision) || 0) + 1,
+        correctionRevision: row.correctionRevision,
       } : row);
       const after = request.type === 'reset' ? item.note.transcript : writeTranscriptDocument(changed, doc.unknownNumberHighWater);
       const log = readSpeakerActionLog(item.note);
@@ -322,6 +329,14 @@ function applyPersonAction(database, request) {
       for (const table of ['speaker_mappings', 'speaker_run_mappings']) db.prepare(
         `UPDATE ${table} SET profile_id = ?, display_name = ? WHERE profile_id = ?`)
         .run(survivor?.id || null, nextName || '', current.id);
+      if (request.type === 'merge') {
+        db.prepare('UPDATE voice_exemplars SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
+        if (db.prepare('SELECT 1 FROM voice_exemplars WHERE profile_id = ? LIMIT 1').get(survivor.id))
+          require('./voiceEnrollment').rebuild(db, survivor.id);
+      } else {
+        require('./voiceEnrollment').pruneSnapshots(db, 'profile_id', current.id);
+        db.prepare('DELETE FROM voice_enrollment_actions WHERE profile_id = ?').run(current.id);
+      }
       db.prepare('DELETE FROM speaker_profiles WHERE id = ?').run(current.id);
     } else if (request.type === 'rename') {
       for (const table of ['speaker_mappings', 'speaker_run_mappings']) db.prepare(
@@ -332,6 +347,7 @@ function applyPersonAction(database, request) {
       for (const table of ['speaker_mappings', 'speaker_run_mappings']) db.prepare(`DELETE FROM ${table} WHERE profile_id = ?`).run(current.id);
       db.prepare('UPDATE speaker_profiles SET embedding = ?, sample_count = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
         .run(Buffer.alloc(0), current.id);
+      require('./voiceEnrollment').removeEvidence(db, current.id);
     }
     history.add(db, { id, kind: request.type, profileId: current.id, label: current.display_name });
     return { success: true, id, ...preview, noteIds: affected.map(a => a.note.id) };
@@ -366,6 +382,7 @@ function undoPersonAction(database, id) {
             db.prepare('UPDATE person_attendance SET profile_id = ? WHERE note_id = ? AND identity_key = ?')
               .run(identity.profile_id, row.note_id, row.identity_key);
           }
+          require('./voiceEnrollment').restoreEvidence(db, id);
         }
         db.prepare('DELETE FROM person_identity_actions WHERE id = ?').run(id);
         history.remove(db, id);
@@ -380,6 +397,7 @@ function undoPersonAction(database, id) {
       const old = JSON.parse(saved.snapshot);
       db.prepare('UPDATE speaker_profiles SET embedding = ?, sample_count = ? WHERE id = ?')
         .run(Buffer.from(old.embedding, 'base64'), old.sample_count, old.id);
+      require('./voiceEnrollment').restoreEvidence(db, id);
       db.prepare('DELETE FROM speaker_person_voice_actions WHERE id = ?').run(id);
       history.remove(db, id);
       return { success: true, noteIds: [], personAction: { type: 'undo_reset', profileId: old.id } };
@@ -426,6 +444,8 @@ function undoPersonAction(database, id) {
       else db.prepare("UPDATE notes SET transcript = ?, speaker_action_log = ?, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?")
         .run(writeTranscriptDocument(rows, doc.unknownNumberHighWater), JSON.stringify(removeNewestAction(log)), note.id);
     }
+    if (action.action === 'reset' || action.action === 'merge')
+      require('./voiceEnrollment').restoreEvidence(db, id);
     history.remove(db, id);
     return { success: true, noteIds: action.affectedNoteIds,
       personAction: { type: action.action === 'merge' ? 'undo_merge' : action.action === 'reset' ? 'undo_reset' : action.action,
@@ -558,6 +578,8 @@ function deletePerson(database, built) {
   for (const item of affected) for (const row of item.embeddingRows)
     db.prepare('DELETE FROM note_speaker_embeddings WHERE note_id = ? AND speaker_id = ?').run(row.note_id, row.speaker_id);
   db.prepare('UPDATE person_attendance SET profile_id = NULL WHERE profile_id = ?').run(current.id);
+  require('./voiceEnrollment').pruneSnapshots(db, 'profile_id', current.id);
+  db.prepare('DELETE FROM voice_enrollment_actions WHERE profile_id = ?').run(current.id);
   db.prepare('DELETE FROM speaker_profiles WHERE id = ?').run(current.id);
   history.add(db, { id: randomUUID(), kind: 'delete', profileId: current.id, label: 'deleted_person' });
   history.invalidateProfile(db, current.id);
@@ -580,6 +602,7 @@ function clearVoiceData(database, expected) {
       expected[key] !== undefined && expected[key] !== preview[key]))
       return { success: false, error: 'preview_changed' };
     const id = randomUUID();
+    require('./voiceEnrollment').snapshotEvidence(db, id);
     const profiles = db.prepare('SELECT id, embedding, sample_count FROM speaker_profiles').all()
       .map(p => ({ ...p, embedding: Buffer.from(p.embedding).toString('base64') }));
     const mappings = ['speaker_mappings', 'speaker_run_mappings'].flatMap(table =>
@@ -601,6 +624,7 @@ function clearVoiceData(database, expected) {
     db.prepare('INSERT INTO speaker_voice_clear_actions (id, snapshot) VALUES (?, ?)')
       .run(id, JSON.stringify({ profiles, mappings, noteEmbeddings, noteIds }));
     db.prepare('UPDATE speaker_profiles SET embedding = ?, sample_count = 0').run(Buffer.alloc(0));
+    require('./voiceEnrollment').removeEvidence(db);
     db.prepare('DELETE FROM speaker_mappings').run();
     db.prepare('DELETE FROM speaker_run_mappings').run();
     db.prepare('DELETE FROM note_speaker_embeddings').run();
@@ -634,6 +658,7 @@ function undoClearVoiceData(database, id) {
         .run(...keys.map(key => m[key]), m.profile_id, m.display_name);
     }
     restoreEmbeddings(db, noteEmbeddings);
+    require('./voiceEnrollment').restoreEvidence(db, id);
     for (const note of notesToUpdate) db.prepare('UPDATE notes SET speaker_action_log = ? WHERE id = ?')
       .run(JSON.stringify(removeNewestAction(readSpeakerActionLog(note))), note.id);
     db.prepare('DELETE FROM speaker_voice_clear_actions WHERE id = ?').run(id);

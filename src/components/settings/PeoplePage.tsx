@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
@@ -9,6 +9,8 @@ type Kind = "rename" | "merge" | "delete" | "reset";
 type Request = { type: Kind; profileId: number; survivorId?: number; name?: string };
 type Preview = { success: boolean; error?: string; noteCount?: number; segmentCount?: number; pinnedCount?: number; voiceSamples?: number; historyCount?: number; noteEmbeddingCount?: number };
 type HistoryAction = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listPeopleActions>>>[number];
+type EnrollmentCandidate = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listVoiceEnrollmentCandidates>>>[number];
+type EnrollmentSample = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listVoiceEnrollmentSamples>>>[number];
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const button = "rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
 
@@ -40,6 +42,90 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
   const [report, setReport] = useState<{ id: string; name: string; type: Kind; count: number; segments: number } | null>(null);
   const [clearPreview, setClearPreview] = useState<{ success: boolean; personCount: number; embeddingCount: number; mappingCount: number; noteEmbeddingCount: number } | null>(null);
   const [clearReport, setClearReport] = useState<{ id: string; personCount: number; embeddingCount: number; mappingCount: number } | null>(null);
+  const [enrollingId, setEnrollingId] = useState<number | null>(null);
+  const [candidates, setCandidates] = useState<EnrollmentCandidate[]>([]);
+  const [enrollmentSamples, setEnrollmentSamples] = useState<EnrollmentSample[]>([]);
+  const [listeningId, setListeningId] = useState<string | null>(null);
+  const [listened, setListened] = useState<{ id: string; token: string } | null>(null);
+  const [enrollmentError, setEnrollmentError] = useState("");
+  const enrollmentPlayer = useRef<HTMLAudioElement | null>(null);
+  const enrollmentUrl = useRef<string | null>(null);
+  const enrollmentRequest = useRef(0);
+  useEffect(() => () => { enrollmentPlayer.current?.pause(); if (enrollmentUrl.current) URL.revokeObjectURL(enrollmentUrl.current); }, []);
+  const openEnrollment = async (profileId: number) => {
+    const request = ++enrollmentRequest.current;
+    enrollmentPlayer.current?.pause();
+    setEnrollingId(profileId); setListened(null); setListeningId(null);
+    setEnrollmentError(""); setCandidates([]); setEnrollmentSamples([]);
+    try {
+      const [offers, samples] = await Promise.all([
+        window.electronAPI.listVoiceEnrollmentCandidates?.(profileId),
+        window.electronAPI.listVoiceEnrollmentSamples?.(profileId),
+      ]);
+      if (request !== enrollmentRequest.current) return;
+      setCandidates(offers || []); setEnrollmentSamples(samples || []);
+    }
+    catch { if (request === enrollmentRequest.current) setEnrollmentError("unavailable"); }
+  };
+  const playCandidate = async (candidate: EnrollmentCandidate) => {
+    if (candidate.profileId !== enrollingId) return;
+    const request = enrollmentRequest.current;
+    enrollmentPlayer.current?.pause();
+    if (enrollmentUrl.current) URL.revokeObjectURL(enrollmentUrl.current);
+    setListened(null); setListeningId(candidate.id); setEnrollmentError("");
+    try {
+      const result = await window.electronAPI.playVoiceEnrollmentCandidate?.(candidate.id);
+      if (request !== enrollmentRequest.current) return;
+      if (!result?.wav || !result.token) throw Error("unavailable");
+      const bytes = Uint8Array.from(atob(result.wav), character => character.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+      enrollmentUrl.current = url;
+      const player = new Audio(url);
+      enrollmentPlayer.current = player;
+      player.onended = () => { if (request === enrollmentRequest.current) {
+        setListeningId(null); setListened({ id: candidate.id, token: result.token! });
+      } };
+      await player.play();
+    } catch { if (request === enrollmentRequest.current) {
+      setListeningId(null); setEnrollmentError("unavailable");
+    } }
+  };
+  const decideCandidate = async (candidate: EnrollmentCandidate, choice: "approve" | "reject") => {
+    if (listened?.id !== candidate.id || candidate.profileId !== enrollingId) return;
+    const request = enrollmentRequest.current;
+    setWorking(true); setEnrollmentError("");
+    try {
+      const result = await window.electronAPI.decideVoiceEnrollmentCandidate?.(candidate.id, choice, listened.token);
+      if (!result?.success) throw Error(result?.error || "unavailable");
+      if (request !== enrollmentRequest.current) return;
+      setListened(null);
+      const [offers, samples] = await Promise.all([
+        window.electronAPI.listVoiceEnrollmentCandidates?.(candidate.profileId),
+        window.electronAPI.listVoiceEnrollmentSamples?.(candidate.profileId),
+      ]);
+      if (request !== enrollmentRequest.current) return;
+      setCandidates(offers || []); setEnrollmentSamples(samples || []);
+      await refresh();
+    } catch (cause) { if (request === enrollmentRequest.current)
+      setEnrollmentError(String(cause instanceof Error ? cause.message : cause)); }
+    finally { setWorking(false); }
+  };
+  const removeEnrollmentSample = async (sample: EnrollmentSample) => {
+    if (sample.profileId !== enrollingId) return;
+    const request = enrollmentRequest.current;
+    setWorking(true); setEnrollmentError("");
+    try {
+      const result = await window.electronAPI.removeVoiceEnrollmentSample?.(sample.id);
+      if (!result?.success) throw Error(result?.error || "unavailable");
+      if (request !== enrollmentRequest.current) return;
+      const samples = await window.electronAPI.listVoiceEnrollmentSamples?.(sample.profileId);
+      if (request !== enrollmentRequest.current) return;
+      setEnrollmentSamples(samples || []);
+      await refresh();
+    } catch (cause) { if (request === enrollmentRequest.current)
+      setEnrollmentError(String(cause instanceof Error ? cause.message : cause)); }
+    finally { setWorking(false); }
+  };
   const refresh = useCallback(async () => {
     setLoading(true); setError(false);
     try {
@@ -144,6 +230,7 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
     setWorking(true); setActionError("");
     try {
       const result = action.kind === "clear_voice" ? await window.electronAPI.undoClearVoiceData?.(action.id)
+        : action.kind === "enrollment" ? await window.electronAPI.undoVoiceEnrollmentAction?.(action.id)
         : action.kind === "correction" && action.noteId ? await window.electronAPI.applySpeakerCorrection?.({ type: "undo", noteId: action.noteId, id: action.id })
         : action.kind === "mapping" && action.noteId ? await window.electronAPI.undoPeopleMapping?.(action.noteId)
         : action.kind === "adoption" && action.noteId ? await window.electronAPI.takeCloudSpeakerLabels?.(action.noteId, true)
@@ -183,8 +270,21 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
         <div className="min-w-0"><div className="flex flex-wrap items-baseline gap-x-2"><strong className="truncate text-sm">{p.displayName}</strong>{p.email && <span className="truncate text-xs text-muted-foreground" dir="auto">{p.email}</span>}</div>
           <p className="mt-1 text-xs tabular-nums text-muted-foreground">{t("people.meetingCount", { count: p.meetingCount })} · {t("people.usage", { notes: p.noteCount, segments: p.segmentCount })} · {t("people.lastSeen", { date: date(p.lastSeen) })}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">{p.duplicates.map(d => <span key={d.id} className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">{t("people.duplicate", { name: d.name })}</span>)}{p.needsReapproval && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">{t("meetingAudio.reapproval")}</span>}{p.usedOnce && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">{t("people.usedOnce")}</span>}{!p.hasVoice && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">{t("people.noVoice")}</span>}{p.legacyVoice && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">{t("people.legacyVoice")}</span>}</div>
-        </div><div className="flex flex-wrap gap-1.5">{(["rename", "merge", "delete"] as Kind[]).map(action => <button key={action} type="button" className={button} onClick={() => start(p, action)}>{t(`people.actions.${action}`)}</button>)}{p.hasVoice && <button type="button" className={button} onClick={() => start(p, "reset")}>{t("people.actions.reset")}</button>}</div>
+          <p className="mt-2 text-xs tabular-nums text-muted-foreground">{t("people.enrollmentProgress", { spans: p.voiceProgress.cleanSpans, meetings: p.voiceProgress.meetings })} · {t(p.voiceProgress.usable ? "people.voiceUsable" : "people.voiceProvisional")}</p>
+          {p.voiceProgress.conflict && <p role="alert" className="mt-2 text-xs text-amber-700 dark:text-amber-300">{t("people.voiceConflict")}</p>}
+        </div><div className="flex flex-wrap gap-1.5">{(["rename", "merge", "delete"] as Kind[]).map(action => <button key={action} type="button" className={button} onClick={() => start(p, action)}>{t(`people.actions.${action}`)}</button>)}<button type="button" className={button} onClick={() => void openEnrollment(p.id)}>{t("people.enrollVoice")}</button>{p.hasVoice && <button type="button" className={button} onClick={() => start(p, "reset")}>{t("people.actions.reset")}</button>}</div>
       </div>)}</div>
+      {enrollingId !== null && <section className="rounded-xl border border-border bg-surface-2/40 p-5" aria-label={t("people.enrollVoice")}>
+        <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{t("people.enrollVoice")} · {people.find(p => p.id === enrollingId)?.displayName}</h3><button type="button" className={button} onClick={() => { enrollmentRequest.current++; enrollmentPlayer.current?.pause(); setEnrollingId(null); setListened(null); setCandidates([]); setEnrollmentSamples([]); }}>{t("people.cancel")}</button></div>
+        <p className="mt-2 text-sm text-muted-foreground">{t("people.enrollmentIntro")}</p>
+        {enrollmentError && <p role="alert" className="mt-3 text-sm text-destructive">{t(`people.enrollmentErrors.${enrollmentError}`, { defaultValue: t("people.actionError") })}</p>}
+        {candidates.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("people.noEnrollmentCandidates")}</p>}
+        <div className="mt-3 divide-y divide-border rounded-lg border border-border">{candidates.map(candidate => <div key={candidate.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
+          <div><p className="text-sm font-medium">{candidate.noteTitle}</p><p className="text-xs text-muted-foreground">{date(candidate.meetingDate)} · {candidate.durationSeconds.toFixed(1)}s · {candidate.track} · {t("people.enrollmentRows", { rows: candidate.rowIds.join(", ") })} · {t("people.neverCorrected")}</p></div>
+          <div className="flex gap-2"><button type="button" className={button} onClick={() => void playCandidate(candidate)}>{listeningId === candidate.id ? t("people.playing") : t("people.listen")}</button><button type="button" className={button} disabled={working || listened?.id !== candidate.id} onClick={() => void decideCandidate(candidate, "approve")}>{t("people.approveSample")}</button><button type="button" className={button} disabled={working || listened?.id !== candidate.id} onClick={() => void decideCandidate(candidate, "reject")}>{t("people.rejectSample")}</button></div>
+        </div>)}</div>
+        {enrollmentSamples.length > 0 && <div className="mt-4"><h4 className="text-sm font-semibold">{t("people.approvedSamples")}</h4><div className="mt-2 divide-y divide-border rounded-lg border border-border">{enrollmentSamples.map(sample => <div key={sample.id} className={`flex flex-wrap items-center justify-between gap-3 p-3 ${sample.odd ? "bg-amber-500/10" : ""}`}><span className="text-sm">{sample.noteTitle} · {date(sample.meetingDate)} · {t("people.enrollmentRows", { rows: sample.rowIds.join(", ") })}{sample.odd && <> · {t("people.oddSample")}</>}</span><div className="flex gap-2">{sample.odd && <button type="button" className={button} onClick={() => onOpenNote?.(sample.noteId, sample.rowIds[0])}>{t("people.splitSample")}</button>}<button type="button" className={button} disabled={working} onClick={() => void removeEnrollmentSample(sample)}>{t("people.removeSample")}</button></div></div>)}</div></div>}
+      </section>}
     </div>}
     {!loading && !error && tab === "review" && <div role="tabpanel" className="space-y-4">
       {reviewLoading && <p role="status" className="text-sm text-muted-foreground">{t("people.loading")}</p>}

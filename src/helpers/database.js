@@ -1274,6 +1274,11 @@ class DatabaseManager {
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_voice_exemplars_note ON voice_exemplars(note_id);
+        CREATE TRIGGER IF NOT EXISTS invalidate_deleted_voice_exemplar
+        AFTER DELETE ON voice_exemplars BEGIN
+          UPDATE speaker_profiles SET embedding = x'', sample_count = 0,
+            voice_usable = 0, voice_needs_reapproval = 1 WHERE id = OLD.profile_id;
+        END;
         CREATE TABLE IF NOT EXISTS voice_enrollment_candidates (
           id TEXT PRIMARY KEY,
           profile_id INTEGER REFERENCES speaker_profiles(id) ON DELETE CASCADE,
@@ -1285,11 +1290,30 @@ class DatabaseManager {
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_voice_candidates_note ON voice_enrollment_candidates(note_id);
+        CREATE TABLE IF NOT EXISTS voice_enrollment_actions (
+          id TEXT PRIMARY KEY,
+          candidate_id TEXT NOT NULL,
+          profile_id INTEGER NOT NULL,
+          note_id INTEGER NOT NULL,
+          choice TEXT NOT NULL
+        );
       `);
       try {
         this.db.exec("ALTER TABLE speaker_profiles ADD COLUMN voice_needs_reapproval INTEGER NOT NULL DEFAULT 0");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
+      }
+      for (const [table, column, type] of [
+        ['speaker_profiles', 'voice_usable', 'INTEGER NOT NULL DEFAULT 0'],
+        ['voice_exemplars', 'row_ids', "TEXT NOT NULL DEFAULT '[]'"],
+        ['voice_exemplars', 'meeting_date', 'TEXT'],
+        ['voice_enrollment_candidates', 'row_ids', "TEXT NOT NULL DEFAULT '[]'"],
+        ['voice_enrollment_candidates', 'meeting_date', 'TEXT'],
+        ['voice_enrollment_candidates', 'rejected_at', 'TEXT'],
+        ['voice_enrollment_actions', 'before_sample', 'TEXT'],
+      ]) {
+        if (!this.db.prepare(`PRAGMA table_info(${table})`).all().some(item => item.name === column))
+          this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
       }
 
       // A cloud folder delete is optimistic until the API answers. Keep the
@@ -4476,6 +4500,10 @@ class DatabaseManager {
   // only tombstone notes still need the explicit cleanup.
   _deleteSpeakerRowsForNotes(noteIdSubquery, param) {
     require('./speakerGlobalHistory').retireNotes(this.db, noteIdSubquery, [param]);
+    if (this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'voice_exemplars'").get()) {
+      const noteIds = this.db.prepare(`SELECT id FROM notes WHERE id IN (${noteIdSubquery})`).all(param);
+      for (const { id } of noteIds) require('./voiceEnrollment').removeNoteEvidence(this.db, id);
+    }
     this.db.prepare(`DELETE FROM speaker_mappings WHERE note_id IN (${noteIdSubquery})`).run(param);
     this.db
       .prepare(`DELETE FROM note_speaker_embeddings WHERE note_id IN (${noteIdSubquery})`)
@@ -6641,11 +6669,13 @@ class DatabaseManager {
     return this.db.prepare("SELECT * FROM speaker_profiles WHERE id = ?").get(winner.id);
   }
 
-  getSpeakerProfiles(includeEmbedding = false) {
+  getSpeakerProfiles(includeEmbedding = false, { includeProvisional = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const query = includeEmbedding
-        ? "SELECT * FROM speaker_profiles WHERE sample_count > 0 AND length(embedding) > 0"
+        ? `SELECT * FROM speaker_profiles WHERE ${includeProvisional ? '' : 'voice_usable = 1 AND'}
+          sample_count > 0 AND length(embedding) = 2048 AND
+          EXISTS (SELECT 1 FROM voice_exemplars WHERE profile_id = speaker_profiles.id)`
         : `SELECT id, display_name, email, sample_count, created_at, updated_at
            FROM speaker_profiles`;
       return this.db.prepare(query).all();

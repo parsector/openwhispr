@@ -361,14 +361,19 @@ class MeetingAudioStore {
     const table = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='voice_exemplars'").get();
     if (!table) return;
     db.transaction(() => {
-      const affected = db.prepare("SELECT DISTINCT profile_id FROM voice_exemplars WHERE note_id = ?").all(noteId);
-      db.prepare("DELETE FROM voice_exemplars WHERE note_id = ?").run(noteId);
-      db.prepare("DELETE FROM voice_enrollment_candidates WHERE note_id = ?").run(noteId);
-      db.prepare("DELETE FROM note_speaker_embeddings WHERE note_id = ?").run(noteId);
-      for (const { profile_id } of affected) {
-        db.prepare("UPDATE speaker_profiles SET embedding = ?, sample_count = 0, voice_needs_reapproval = 1 WHERE id = ?")
-          .run(Buffer.alloc(0), profile_id);
+      const hasEnrollmentSchema = db.prepare('PRAGMA table_info(voice_exemplars)').all()
+        .some(column => column.name === 'row_ids');
+      if (hasEnrollmentSchema) require('./voiceEnrollment').removeNoteEvidence(db, noteId);
+      else {
+        // Older installations and small retention fixtures have the original
+        // exemplar table but no consent/action columns yet.
+        const affected = db.prepare('SELECT DISTINCT profile_id FROM voice_exemplars WHERE note_id = ?').all(noteId);
+        db.prepare('DELETE FROM voice_exemplars WHERE note_id = ?').run(noteId);
+        db.prepare('DELETE FROM voice_enrollment_candidates WHERE note_id = ?').run(noteId);
+        for (const { profile_id } of affected) db.prepare(`UPDATE speaker_profiles
+          SET embedding = x'', sample_count = 0, voice_needs_reapproval = 1 WHERE id = ?`).run(profile_id);
       }
+      db.prepare("DELETE FROM note_speaker_embeddings WHERE note_id = ?").run(noteId);
     })();
   }
 

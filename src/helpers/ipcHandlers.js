@@ -13114,6 +13114,30 @@ class IPCHandlers {
     });
 
     ipcMain.handle("people-list", () => require("./peopleActions").listPeople(this.databaseManager));
+    ipcMain.handle("voice-enrollment-candidates", (_event, profileId) =>
+      require('./voiceEnrollment').listCandidates(this.databaseManager, this.meetingAudioStore, profileId));
+    ipcMain.handle("voice-enrollment-samples", (_event, profileId) =>
+      require('./voiceEnrollment').listSamples(this.databaseManager, profileId));
+    ipcMain.handle("voice-enrollment-remove", (_event, sampleId) => {
+      const result = require('./voiceEnrollment').removeSample(this.databaseManager, sampleId);
+      if (result.success) { this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
+      return result;
+    });
+    ipcMain.handle("voice-enrollment-play", (_event, id) => {
+      const result = require('./voiceEnrollment').play(this.databaseManager, this.meetingAudioStore, id);
+      return result.wav ? { ...result, wav: result.wav.toString('base64') } : result;
+    });
+    ipcMain.handle("voice-enrollment-decide", async (_event, id, choice, token) => {
+      const result = await require('./voiceEnrollment').decide(this.databaseManager, this.meetingAudioStore,
+        require('./speakerEmbeddings'), id, choice, token);
+      if (result.success) { this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
+      return result;
+    });
+    ipcMain.handle("voice-enrollment-undo", (_event, id) => {
+      const result = require('./voiceEnrollment').undo(this.databaseManager, id);
+      if (result.success) { this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
+      return result;
+    });
     ipcMain.handle("people-action-history", () => require("./peopleActions").listPeopleActions(this.databaseManager));
     ipcMain.handle("people-undo-mapping", (_event, noteId) => {
       const result = this.databaseManager.undoSpeakerMapping(noteId);
@@ -13797,7 +13821,7 @@ class IPCHandlers {
 
         if (speakerEmbeddingsMap) {
           try {
-            const profiles = this.databaseManager.getSpeakerProfiles(true);
+            const profiles = this.databaseManager.getSpeakerProfiles(true, { includeProvisional: true });
 
             if (profiles.length > 0) {
               for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
@@ -13829,6 +13853,32 @@ class IPCHandlers {
                   }
                 }
 
+                const cohort = require('./speakerCohortNormalization').rankProfiles(
+                  emb,
+                  Object.entries(speakerEmbeddingsMap).filter(([id]) => id !== mappedId)
+                    .map(([, values]) => new Float32Array(values)),
+                  profiles.map(profile => ({ id: profile.id, display_name: profile.display_name,
+                    embedding: new Float32Array(profile.embedding.buffer, profile.embedding.byteOffset,
+                      profile.embedding.byteLength / 4) })),
+                  (left, right) => speakerEmb.cosineSimilarity(left, right)
+                );
+                // A changed cohort ranking is a review suggestion. It never
+                // upgrades a weak raw cosine into a silent name.
+                if (cohort.changed) {
+                  for (const seg of enrichedSegments) if (seg.speaker === mappedId &&
+                    !isSpeakerLocked(seg) && seg.uncertainty?.reason !== 'too_short') {
+                    seg.speakerAssessmentAvailable = true;
+                    seg.speakerName = undefined;
+                    seg.speakerIsPlaceholder = true;
+                    seg.speakerStatus = 'provisional';
+                    if (cohort.cohortBest.raw > 0.5) applySuggestedSpeaker(seg, {
+                      suggestedName: cohort.cohortBest.display_name,
+                      suggestedProfileId: cohort.cohortBest.id,
+                    });
+                  }
+                  continue;
+                }
+
                 // A usable embedding was compared with local profiles even
                 // when none scored high enough to suggest a name.
                 for (const seg of enrichedSegments) {
@@ -13854,7 +13904,7 @@ class IPCHandlers {
                   continue;
                 }
 
-                if (bestProfile && bestSim > 0.6) {
+                if (bestProfile && bestSim > 0.6 && bestProfile.voice_usable === 1) {
                   for (const seg of enrichedSegments) {
                     if (seg.speaker === mappedId && seg.uncertainty?.reason !== "too_short") {
                       applyConfirmedSpeaker(seg, {

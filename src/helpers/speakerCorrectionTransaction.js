@@ -243,6 +243,12 @@ function applySpeakerCorrection(database, identifier, request) {
     const result = database.updateNote(noteId, { transcript,
       speaker_action_log: JSON.stringify(nextLog), speaker_label_undo: null });
     if (!result?.success) throw Error(result?.error || "transcript_failed");
+    if (request.type !== 'undo') {
+      const changedRows = request.type === 'apply'
+        ? nextLog.actions.at(-1)?.event?.affectedRowIds || []
+        : nextLog.actions.at(-1)?.event?.rowIds || [];
+      require('./voiceEnrollment').rowCorrected(database.db, noteId, changedRows);
+    }
     if (request.type === 'apply' || request.type === 'split') globalHistory.add(database.db, { id, kind: request.type,
       profileId: committedProfileId, noteId, label: request.type === 'split' ? 'Split cluster' : request.name || 'Unknown' });
     else globalHistory.remove(database.db, id, noteId);
