@@ -18,6 +18,16 @@ const calibration = Object.freeze({
 });
 const MIN_OWN_SIMILARITY = calibration.ownSimilarity.value;
 const played = new Map();
+function stopObserving(session) {
+  if (session?.sender && session.audioListener) {
+    session.sender.off('audio-state-changed', session.audioListener);
+    session.audioListener = null;
+  }
+}
+function forgetPlayback(id) {
+  stopObserving(played.get(id));
+  played.delete(id);
+}
 
 const vector = bytes => new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
 const packed = values => Buffer.from(values.buffer, values.byteOffset, values.byteLength);
@@ -177,7 +187,8 @@ function locate(database, store, id) {
   }
   return null;
 }
-function play(database, store, id) {
+function play(database, store, id, sender = null) {
+  forgetPlayback(id);
   const candidate = locate(database, store, id);
   if (!candidate) return { state: 'unavailable' };
   const audio = store.span(candidate.noteId, candidate.track,
@@ -185,22 +196,43 @@ function play(database, store, id) {
   if (audio.state !== 'available' || audio.partial) return { state: 'unavailable' };
   const token = randomUUID();
   const now = (store.now || Date.now)();
-  played.set(id, { token, revision: candidate.revision,
-    completeAfter: now + Math.ceil(candidate.durationSeconds * 1000),
-    expires: now + 10 * 60 * 1000, completed: false });
+  const durationMs = Math.ceil(candidate.durationSeconds * 1000);
+  const session = { token, revision: candidate.revision, durationMs,
+    completeAfter: now + durationMs,
+    expires: now + 10 * 60 * 1000, completed: false, sender,
+    audibleMs: 0, audibleSince: null, audioListener: null };
+  if (sender) {
+    // Chromium reports actual audio output from this WebContents. The renderer
+    // can request completion, but cannot make a silent WebContents audible via IPC.
+    session.audioListener = (event) => {
+      const at = (store.now || Date.now)();
+      if (session.audibleSince != null) session.audibleMs += Math.max(0, at - session.audibleSince);
+      session.audibleSince = event.audible ? at : null;
+    };
+    sender.on('audio-state-changed', session.audioListener);
+  }
+  played.set(id, session);
   return { state: 'available', wav: audio.wav, token, candidate };
 }
-function complete(database, store, id, token) {
+function complete(database, store, id, token, sender = null) {
   const session = played.get(id);
   const now = (store.now || Date.now)();
-  if (!session || session.token !== token || session.expires < now || now < session.completeAfter)
+  if (!session || session.token !== token || session.expires < now || now < session.completeAfter ||
+      session.sender !== sender)
     return { success: false, error: 'playback_required' };
+  if (sender) {
+    const audibleMs = session.audibleMs + (session.audibleSince == null ? 0 :
+      Math.max(0, now - session.audibleSince));
+    if (audibleMs < session.durationMs * 0.75)
+      return { success: false, error: 'playback_required' };
+  }
   const candidate = locate(database, store, id);
   if (!candidate || candidate.revision !== session.revision) {
-    played.delete(id);
+    forgetPlayback(id);
     return { success: false, error: 'candidate_unavailable' };
   }
   session.completed = true;
+  stopObserving(session);
   return { success: true };
 }
 async function embed(wav, extractor) {
@@ -247,13 +279,13 @@ function echoLike(wav, other) {
   }
   return left > 0 && right > 0 && dot / Math.sqrt(left * right) > calibration.echoCorrelation.value;
 }
-async function decide(database, store, extractor, id, choice, token) {
+async function decide(database, store, extractor, id, choice, token, sender = null) {
   const playback = played.get(id);
   if (!['approve', 'reject'].includes(choice) || !playback || playback.token !== token ||
-      !playback.completed || playback.expires < (store.now || Date.now)())
+      !playback.completed || playback.expires < (store.now || Date.now)() || playback.sender !== sender)
     return { success: false, error: 'playback_required' };
   const candidate = locate(database, store, id);
-  played.delete(id);
+  forgetPlayback(id);
   if (!candidate || candidate.revision !== playback.revision) return { success: false, error: 'candidate_unavailable' };
   const audio = store.span(candidate.noteId, candidate.track,
     candidate.startSample / RATE, candidate.endSample / RATE);

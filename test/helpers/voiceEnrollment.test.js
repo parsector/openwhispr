@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const Module = require('node:module');
+const { EventEmitter } = require('node:events');
 let dir;
 const originalLoad = Module._load;
 Module._load = function(request, parent, isMain) {
@@ -97,6 +98,35 @@ test('approval requires server-observed playback completion for the same candida
   doc.rows[0].speakerName = 'Changed after playback';
   f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
   assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token)).success, false);
+});
+
+test('elapsed time and a forged completion cannot replace audible playback in the requesting window', async t => {
+  const f = fixture(t);
+  f.note('audible');
+  let clock = 1000;
+  const store = { ...f.audio, now: () => clock };
+  const [candidate] = enrollment.listCandidates(f.db, store, f.person.id);
+  const sender = new EventEmitter();
+  let audible = false;
+  sender.isCurrentlyAudible = () => audible;
+  const otherWindow = new EventEmitter();
+  otherWindow.isCurrentlyAudible = () => false;
+  const first = enrollment.play(f.db, store, candidate.id, sender);
+  clock += 5000;
+  assert.deepEqual(enrollment.complete(f.db, store, candidate.id, first.token, sender),
+    { success: false, error: 'playback_required' });
+  const second = enrollment.play(f.db, store, candidate.id, sender);
+  audible = true;
+  sender.emit('audio-state-changed', { audible: true });
+  clock += 4000;
+  audible = false;
+  sender.emit('audio-state-changed', { audible: false });
+  assert.deepEqual(enrollment.complete(f.db, store, candidate.id, second.token, otherWindow),
+    { success: false, error: 'playback_required' });
+  assert.deepEqual(enrollment.complete(f.db, store, candidate.id, second.token, sender),
+    { success: true });
+  assert.equal((await enrollment.decide(f.db, store, f.extractor, candidate.id, 'reject', second.token, otherWindow)).success, false);
+  assert.equal((await enrollment.decide(f.db, store, f.extractor, candidate.id, 'reject', second.token, sender)).success, true);
 });
 
 test('two meetings and three clean spans graduate; a correction demotes', async t => {
