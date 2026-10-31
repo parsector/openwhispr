@@ -5366,5 +5366,28 @@
     "meetingCount": "参加した会議: {{count}}",
     "lastSeen": "最終参加日: {{date}}",
     "attendeeDeleteReappears": "この人は「人」から消えますが、新しい会議に参加すると再び表示されます。"
+  },
+  "meetingAudio": {
+    "play": "音声を再生",
+    "pause": "音声を一時停止",
+    "approximate": "おおよその位置",
+    "expired": "音声の保存期限が切れました",
+    "deleted": "音声は削除されました",
+    "evicted": "容量確保のため音声を削除しました",
+    "unavailable": "このデバイスに音声がありません",
+    "incomplete": "音声が不完全です",
+    "notFlushed": "直近の数秒はまだ保存されていません",
+    "partial": "この区間は一部のみ保存されています",
+    "delete": "音声を削除して文字起こしを残す",
+    "confirmDelete": "この会議の音声を削除して{{size}}を解放しますか？文字起こしは残ります。",
+    "keep": "音声を保持",
+    "unkeep": "通常の保存期間を使用",
+    "storage": "音声使用量: {{used}} MB / {{budget}} MB",
+    "retention": "保存期間",
+    "days": "日",
+    "budget": "ディスク上限",
+    "evictedNotes": "次のノートの音声を削除しました: {{titles}}",
+    "keyUnavailable": "暗号化キーを利用できないため、音声を保存できませんでした。",
+    "reapproval": "音声の再承認が必要です"
   }
 }

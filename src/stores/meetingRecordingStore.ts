@@ -58,6 +58,7 @@ import { persistFinalTranscriptAroundStop } from "../helpers/meetingTranscriptPe
 
 export interface TranscriptSegment {
   id: string;
+  audioSpan?: { recordingId: number; trackId: "mic" | "system"; startSample: number; endSample: number };
   unknownNumber?: number;
   unknownNumberHighWater?: number;
   uncertainty?: { reason: string; candidates?: [string, string] };

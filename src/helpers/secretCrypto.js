@@ -139,4 +139,27 @@ function decrypt(blob) {
   throw new Error("decryption failed: no backend available");
 }
 
-module.exports = { encrypt, decrypt, isAvailable };
+// Audio is binary and must never be turned into a UTF-8 string. Keep the
+// authenticated envelope separate from the legacy string secret format.
+function encryptBytes(bytes) {
+  _ensureInit();
+  if (mode !== "keychain" || !masterKey) {
+    throw new Error("Audio encryption key is unavailable in the OS credential store");
+  }
+  const iv = crypto.randomBytes(IV_LEN);
+  const cipher = crypto.createCipheriv(ALGO, masterKey, iv);
+  return Buffer.concat([iv, cipher.update(bytes), cipher.final(), cipher.getAuthTag()]);
+}
+
+function decryptBytes(blob) {
+  _ensureInit();
+  if (mode !== "keychain" || !masterKey) {
+    throw new Error("Audio encryption key is unavailable in the OS credential store");
+  }
+  if (blob.length < IV_LEN + TAG_LEN) throw new Error("Encrypted audio chunk is truncated");
+  const decipher = crypto.createDecipheriv(ALGO, masterKey, blob.subarray(0, IV_LEN));
+  decipher.setAuthTag(blob.subarray(blob.length - TAG_LEN));
+  return Buffer.concat([decipher.update(blob.subarray(IV_LEN, -TAG_LEN)), decipher.final()]);
+}
+
+module.exports = { encrypt, decrypt, isAvailable, encryptBytes, decryptBytes };

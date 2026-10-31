@@ -5366,5 +5366,28 @@
     "meetingCount": "Meetings: {{count}}",
     "lastSeen": "Last seen {{date}}",
     "attendeeDeleteReappears": "They will disappear from People and can reappear if they attend a new meeting."
+  },
+  "meetingAudio": {
+    "play": "Play audio",
+    "pause": "Pause audio",
+    "approximate": "Approximate position",
+    "expired": "Audio expired",
+    "deleted": "Audio deleted",
+    "evicted": "Audio removed to free space",
+    "unavailable": "Audio unavailable on this device",
+    "incomplete": "Audio incomplete",
+    "notFlushed": "The last seconds have not been saved yet",
+    "partial": "Only part of this span is saved",
+    "delete": "Delete audio, keep transcript",
+    "confirmDelete": "Delete this meeting’s audio and free {{size}}? The transcript will stay.",
+    "keep": "Keep audio",
+    "unkeep": "Use normal retention",
+    "storage": "Audio uses {{used}} MB of {{budget}} MB",
+    "retention": "Retention",
+    "days": "days",
+    "budget": "Disk budget",
+    "evictedNotes": "Audio removed from notes: {{titles}}",
+    "keyUnavailable": "Audio could not be saved because the encryption key is unavailable.",
+    "reapproval": "Voice needs reapproval"
   }
 }

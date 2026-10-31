@@ -137,7 +137,7 @@ class SpeakerEmbeddings {
   async extractEmbedding(wavPath, startSec, endSec) {
     if (endSec - startSec < MIN_SEGMENT_SECONDS) return null;
 
-    const buf = fs.readFileSync(wavPath);
+    const buf = Buffer.isBuffer(wavPath) ? wavPath : fs.readFileSync(wavPath);
     const { byteOffset, numSamples } = this._embeddingWindow(
       this._parseWavHeader(buf),
       startSec,
@@ -158,9 +158,13 @@ class SpeakerEmbeddings {
     }
 
     const centroids = new Map();
-    const fd = fs.openSync(wavPath, "r");
+    const memory = Buffer.isBuffer(wavPath) ? wavPath : null;
+    const fd = memory ? null : fs.openSync(wavPath, "r");
     try {
-      const header = this._parseWavHeader(this._readBytes(fd, 0, WAV_HEADER_READ_BYTES));
+      const read = (position, length) => memory
+        ? memory.subarray(position, position + length)
+        : this._readBytes(fd, position, length);
+      const header = this._parseWavHeader(read(0, WAV_HEADER_READ_BYTES));
       for (const [speaker, speakerSegments] of bySpeaker) {
         if (signal?.aborted) break;
         const longest = speakerSegments
@@ -174,7 +178,7 @@ class SpeakerEmbeddings {
               segment.start,
               segment.end
             );
-            const pcm = this._readBytes(fd, byteOffset, numSamples * BYTES_PER_SAMPLE);
+            const pcm = read(byteOffset, numSamples * BYTES_PER_SAMPLE);
             const embedding = await this._extractEmbeddingFromSamples(
               this._decodePcm16(pcm, 0, numSamples)
             );
@@ -189,7 +193,7 @@ class SpeakerEmbeddings {
         }
       }
     } finally {
-      fs.closeSync(fd);
+      if (fd != null) fs.closeSync(fd);
     }
     return centroids;
   }

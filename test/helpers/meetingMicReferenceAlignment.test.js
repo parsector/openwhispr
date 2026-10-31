@@ -29,7 +29,10 @@ function harness() {
     meetingAecEnabled: false,
     meetingLocalMode: false,
     meetingLiveSpeakerActive: false,
-    meetingDiarizationStream: { write() {} },
+    meetingNoteId: null,
+    meetingDiarizationBuffers: [],
+    meetingMicDiarizationBuffers: [],
+    meetingMicDiarizationStartedAt: null,
     meetingSystemAudioHeard: true,
     meetingSystemAudioWatchdog: { recordChunk() {} },
     meetingEchoLeakDetector: {

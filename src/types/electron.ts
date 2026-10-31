@@ -3654,6 +3654,25 @@ declare global {
         success: boolean;
         reason?: "recording-active";
       }>;
+      meetingAudioStatus?: (noteId: number) => Promise<{
+        state: "recording" | "complete" | "incomplete" | "deleted" | "expired" | "evicted" | "unavailable" | "key_unavailable";
+        reason?: string | null;
+        bytes: number;
+        startedAt?: number;
+        keep?: boolean;
+      }>;
+      meetingAudioUsage?: () => Promise<{ usedBytes: number; budgetBytes: number; days: 3 | 7 | 30; evictions: Array<{ noteId: number; title: string; at: number }> }>;
+      meetingAudioSpan?: (noteId: number, track: "mic" | "system", startSeconds: number, endSeconds: number) => Promise<{
+        state: string;
+        wav?: string;
+        durationSeconds?: number;
+        partial?: boolean;
+      }>;
+      meetingAudioDelete?: (noteId: number) => Promise<{ state: string; freedBytes?: number }>;
+      meetingAudioSetPolicy?: (policy: { days: 3 | 7 | 30; budgetBytes: number }) => Promise<{
+        usedBytes: number; budgetBytes: number; removed: Array<{ noteId: number; reason: string }>;
+      }>;
+      meetingAudioSetKeep?: (noteId: number, keep: boolean) => Promise<{ state: string; keep?: boolean }>;
       meetingNoteStopped?: (noteId: number) => void;
       meetingNoteFinalized?: (data: { noteId: number; diarized: boolean | "skipped" }) => void;
       onMeetingTranscriptionSegment?: (
@@ -3753,7 +3772,7 @@ declare global {
       ) => () => void;
 
       // Speaker name mapping
-      listPeople?: () => Promise<Array<{ id: number; displayName: string; email: string | null; noteCount: number; meetingCount: number; segmentCount: number; lastHeard: string | null; lastSeen: string | null; sampleCount: number; hasVoice: boolean; legacyVoice: boolean; usedOnce: boolean; duplicates: Array<{ id: number; name: string }> }>>;
+      listPeople?: () => Promise<Array<{ id: number; displayName: string; email: string | null; noteCount: number; meetingCount: number; segmentCount: number; lastHeard: string | null; lastSeen: string | null; sampleCount: number; hasVoice: boolean; legacyVoice: boolean; needsReapproval: boolean; usedOnce: boolean; duplicates: Array<{ id: number; name: string }> }>>;
       listPeopleActions?: () => Promise<Array<{ id: string; kind: string; profileId: number | null; noteId: number | null; label: string; unavailableReason: string | null; createdAt: string }>>;
       undoPeopleMapping?: (noteId: number) => Promise<{ success: boolean; error?: string }>;
       onPeopleChanged?: (callback: () => void) => () => void;

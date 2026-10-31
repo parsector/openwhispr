@@ -5366,5 +5366,28 @@
     "meetingCount": "參加會議：{{count}}",
     "lastSeen": "上次出現：{{date}}",
     "attendeeDeleteReappears": "此人將從「人物」中消失；如果參加新的會議，可能會再次出現。"
+  },
+  "meetingAudio": {
+    "play": "播放音訊",
+    "pause": "暫停音訊",
+    "approximate": "大致位置",
+    "expired": "音訊已過期",
+    "deleted": "音訊已刪除",
+    "evicted": "音訊已為釋放空間而移除",
+    "unavailable": "此裝置上沒有音訊",
+    "incomplete": "音訊不完整",
+    "notFlushed": "最後幾秒尚未儲存",
+    "partial": "此片段僅儲存了一部分",
+    "delete": "刪除音訊，保留逐字稿",
+    "confirmDelete": "刪除此會議的音訊並釋放 {{size}}？逐字稿會保留。",
+    "keep": "保留音訊",
+    "unkeep": "使用一般保留期限",
+    "storage": "音訊佔用 {{used}} MB，共 {{budget}} MB",
+    "retention": "保留期限",
+    "days": "天",
+    "budget": "磁碟上限",
+    "evictedNotes": "以下筆記的音訊已移除：{{titles}}",
+    "keyUnavailable": "加密金鑰無法使用，因此無法儲存音訊。",
+    "reapproval": "聲音需要重新核准"
   }
 }

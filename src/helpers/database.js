@@ -1259,6 +1259,39 @@ class DatabaseManager {
         )
       `);
 
+      // Local voice evidence has explicit recording provenance. The cache in
+      // speaker_profiles is invalidated whenever its source audio is removed.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS voice_exemplars (
+          id TEXT PRIMARY KEY,
+          profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+          note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+          track TEXT NOT NULL CHECK (track IN ('mic', 'system')),
+          start_sample INTEGER NOT NULL,
+          end_sample INTEGER NOT NULL,
+          embedding BLOB,
+          approved_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_voice_exemplars_note ON voice_exemplars(note_id);
+        CREATE TABLE IF NOT EXISTS voice_enrollment_candidates (
+          id TEXT PRIMARY KEY,
+          profile_id INTEGER REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+          note_id INTEGER NOT NULL REFERENCES notes(id) ON DELETE CASCADE,
+          track TEXT NOT NULL CHECK (track IN ('mic', 'system')),
+          start_sample INTEGER NOT NULL,
+          end_sample INTEGER NOT NULL,
+          embedding BLOB,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_voice_candidates_note ON voice_enrollment_candidates(note_id);
+      `);
+      try {
+        this.db.exec("ALTER TABLE speaker_profiles ADD COLUMN voice_needs_reapproval INTEGER NOT NULL DEFAULT 0");
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+
       // A cloud folder delete is optimistic until the API answers. Keep the
       // exact pre-delete row state in a durable journal so a permission denial
       // can revive the same folder, notes, speakers, and conversations even

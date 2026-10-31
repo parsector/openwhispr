@@ -5366,5 +5366,28 @@
     "meetingCount": "Besuchte Meetings: {{count}}",
     "lastSeen": "Zuletzt gesehen: {{date}}",
     "attendeeDeleteReappears": "Diese Person verschwindet aus „Personen“ und kann nach Teilnahme an einem neuen Meeting wieder erscheinen."
+  },
+  "meetingAudio": {
+    "play": "Audio abspielen",
+    "pause": "Audio pausieren",
+    "approximate": "Ungefähre Position",
+    "expired": "Audio abgelaufen",
+    "deleted": "Audio gelöscht",
+    "evicted": "Audio wegen Speichermangel entfernt",
+    "unavailable": "Audio auf diesem Gerät nicht verfügbar",
+    "incomplete": "Audio unvollständig",
+    "notFlushed": "Die letzten Sekunden wurden noch nicht gespeichert",
+    "partial": "Nur ein Teil dieses Abschnitts ist gespeichert",
+    "delete": "Audio löschen, Transkript behalten",
+    "confirmDelete": "Audio dieser Besprechung löschen und {{size}} freigeben? Das Transkript bleibt erhalten.",
+    "keep": "Audio behalten",
+    "unkeep": "Normale Aufbewahrung",
+    "storage": "Audio belegt {{used}} MB von {{budget}} MB",
+    "retention": "Aufbewahrung",
+    "days": "Tage",
+    "budget": "Speicherlimit",
+    "evictedNotes": "Audio aus Notizen entfernt: {{titles}}",
+    "keyUnavailable": "Audio konnte nicht gespeichert werden, da der Verschlüsselungsschlüssel nicht verfügbar ist.",
+    "reapproval": "Stimme muss erneut bestätigt werden"
   }
 }

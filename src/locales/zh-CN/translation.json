@@ -5366,5 +5366,28 @@
     "meetingCount": "参加会议：{{count}}",
     "lastSeen": "上次出现：{{date}}",
     "attendeeDeleteReappears": "此人将从“人物”中消失；如果参加新的会议，可能会再次出现。"
+  },
+  "meetingAudio": {
+    "play": "播放音频",
+    "pause": "暂停音频",
+    "approximate": "大致位置",
+    "expired": "音频已过期",
+    "deleted": "音频已删除",
+    "evicted": "音频已为释放空间而移除",
+    "unavailable": "此设备上没有音频",
+    "incomplete": "音频不完整",
+    "notFlushed": "最后几秒尚未保存",
+    "partial": "此片段仅保存了一部分",
+    "delete": "删除音频，保留文字记录",
+    "confirmDelete": "删除此会议的音频并释放 {{size}}？文字记录将保留。",
+    "keep": "保留音频",
+    "unkeep": "使用正常保留期限",
+    "storage": "音频占用 {{used}} MB，共 {{budget}} MB",
+    "retention": "保留期限",
+    "days": "天",
+    "budget": "磁盘上限",
+    "evictedNotes": "以下笔记的音频已移除：{{titles}}",
+    "keyUnavailable": "加密密钥不可用，因此无法保存音频。",
+    "reapproval": "声音需要重新批准"
   }
 }

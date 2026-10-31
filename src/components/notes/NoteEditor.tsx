@@ -1545,6 +1545,7 @@ export default function NoteEditor({
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
               isRecording ? (
                 <LiveMeetingTranscriptChat
+                  noteId={note.id}
                   focusRowId={peopleFocusRowId}
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   speakerMappings={speakerMappings}

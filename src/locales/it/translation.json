@@ -5366,5 +5366,28 @@
     "meetingCount": "Riunioni: {{count}}",
     "lastSeen": "Ultima presenza: {{date}}",
     "attendeeDeleteReappears": "Questa persona scomparirà da Persone e potrà riapparire se partecipa a una nuova riunione."
+  },
+  "meetingAudio": {
+    "play": "Riproduci audio",
+    "pause": "Metti in pausa",
+    "approximate": "Posizione approssimativa",
+    "expired": "Audio scaduto",
+    "deleted": "Audio eliminato",
+    "evicted": "Audio rimosso per liberare spazio",
+    "unavailable": "Audio non disponibile su questo dispositivo",
+    "incomplete": "Audio incompleto",
+    "notFlushed": "Gli ultimi secondi non sono ancora stati salvati",
+    "partial": "È stata salvata solo una parte di questo intervallo",
+    "delete": "Elimina audio, conserva trascrizione",
+    "confirmDelete": "Eliminare l’audio di questa riunione e liberare {{size}}? La trascrizione resterà.",
+    "keep": "Conserva audio",
+    "unkeep": "Usa conservazione normale",
+    "storage": "L’audio usa {{used}} MB su {{budget}} MB",
+    "retention": "Conservazione",
+    "days": "giorni",
+    "budget": "Limite disco",
+    "evictedNotes": "Audio rimosso dalle note: {{titles}}",
+    "keyUnavailable": "Impossibile salvare l’audio perché la chiave di crittografia non è disponibile.",
+    "reapproval": "La voce richiede una nuova approvazione"
   }
 }

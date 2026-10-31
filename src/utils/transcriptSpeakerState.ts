@@ -236,6 +236,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
   return writeTranscriptDocument(
     normalized.map((segment) => ({
       id: segment.id || crypto.randomUUID(),
+      audioSpan: segment.audioSpan,
       unknownNumber: segment.unknownNumber,
       unknownNumberHighWater: segment.unknownNumberHighWater,
       uncertainty: segment.uncertainty,

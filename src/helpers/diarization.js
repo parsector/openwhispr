@@ -1,13 +1,15 @@
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
+const crypto = require("crypto");
 const debugLogger = require("./debugLogger");
 const { runSystemTar } = require("./systemTar");
 const { downloadFile, createDownloadSignal, checkDiskSpace } = require("./downloadUtils");
 const { resolveBinaryPath, gracefulStopProcess } = require("../utils/serverUtils");
 const { getModelsDirForService } = require("./modelDirUtils");
 const { convertToWav } = require("./ffmpegUtils");
+const { getFFmpegPath } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
 const { shortSpanReason } = require("./speakerUncertainty");
@@ -263,7 +265,7 @@ class DiarizationManager {
   }
 
   async diarize(wavPath, options = {}) {
-    const { threshold = 0.55, signal = null } = options;
+    const { threshold = 0.55, signal = null, pipeRoot = null } = options;
 
     if (signal?.aborted) return [];
 
@@ -278,13 +280,21 @@ class DiarizationManager {
       return [];
     }
 
-    if (!fs.existsSync(wavPath)) {
+    if (!Buffer.isBuffer(wavPath) && !fs.existsSync(wavPath)) {
       debugLogger.warn("Diarization input file not found", { wavPath });
       return [];
     }
 
     const segPath = this._resolveModelPath(SEGMENTATION_ONNX);
     const embPath = this._resolveModelPath(EMBEDDING_ONNX);
+    let pipePath = null;
+    if (Buffer.isBuffer(wavPath)) {
+      if (!pipeRoot || process.platform === "win32") throw new Error("Secure meeting diarization pipe is unavailable");
+      fs.mkdirSync(pipeRoot, { recursive: true, mode: 0o700 });
+      pipePath = path.join(pipeRoot, `diarization-${crypto.randomUUID()}.fifo`);
+      const result = spawnSync("mkfifo", ["-m", "600", pipePath], { windowsHide: true });
+      if (result.status !== 0) throw new Error("Could not create secure diarization pipe");
+    }
 
     const args = [
       `--segmentation.pyannote-model=${segPath}`,
@@ -293,14 +303,14 @@ class DiarizationManager {
       `--clustering.cluster-threshold=${threshold}`,
       "--min-duration-on=0.2",
       "--min-duration-off=0.5",
-      wavPath,
+      pipePath || wavPath,
     ];
 
     debugLogger.info("Starting diarization", {
       binaryPath,
       numSpeakers: "automatic",
       threshold,
-      wavPath,
+      wavPath: Buffer.isBuffer(wavPath) ? "memory" : wavPath,
     });
 
     // Scale with the recording length, but never below the 60-minute floor.
@@ -308,7 +318,7 @@ class DiarizationManager {
     try {
       timeoutMs = Math.max(
         DIARIZATION_TIMEOUT_MS,
-        computeTranscriptionTimeoutMs(fs.statSync(wavPath).size / PCM16_MONO_16K_BYTES_PER_SECOND)
+        computeTranscriptionTimeoutMs((Buffer.isBuffer(wavPath) ? wavPath.length : fs.statSync(wavPath).size) / PCM16_MONO_16K_BYTES_PER_SECOND)
       );
     } catch {
       // Unreadable WAV: keep the flat cap.
@@ -318,11 +328,23 @@ class DiarizationManager {
       let stdout = "";
       let stderr = "";
 
+      // Opening the FIFO read/write avoids a race where both the child's read
+      // and the parent's write block waiting for the other endpoint to open.
+      const pipeKeeperFd = pipePath
+        ? fs.openSync(pipePath, fs.constants.O_RDWR)
+        : null;
+
       const proc = spawn(binaryPath, args, {
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,
         detached: process.platform !== "win32",
       });
+      if (pipePath) {
+        const writerFd = fs.openSync(pipePath, fs.constants.O_WRONLY);
+        const writer = fs.createWriteStream(pipePath, { fd: writerFd, autoClose: true });
+        writer.on("error", (error) => debugLogger.warn("Diarization pipe write failed", { error: error.message }));
+        writer.end(wavPath);
+      }
 
       this._processes.add(proc);
       sidecarPidFile.write("diarization", proc.pid);
@@ -330,6 +352,8 @@ class DiarizationManager {
       // The single pid-file slot tracks whichever process is still alive; only
       // the reaper consumes it, and the Set is the real shutdown source.
       const untrack = () => {
+        if (pipeKeeperFd != null) { try { fs.closeSync(pipeKeeperFd); } catch {} }
+        if (pipePath) { try { fs.unlinkSync(pipePath); } catch {} }
         this._processes.delete(proc);
         const survivor = this._processes.values().next().value;
         if (survivor) sidecarPidFile.write("diarization", survivor.pid);
@@ -446,7 +470,7 @@ class DiarizationManager {
   mergeWithTranscript(
     transcriptSegments,
     diarizationSegments,
-    { diarizedSource = "system", speakerIndexBase = 0 } = {}
+    { diarizedSource = "system", speakerIndexBase = 0, recordingId = null, audioStartOffsetSeconds = 0 } = {}
   ) {
     if (!transcriptSegments || transcriptSegments.length === 0) return [];
     if (!diarizationSegments || diarizationSegments.length === 0) {
@@ -518,6 +542,13 @@ class DiarizationManager {
         // distance instead of latching onto the first cluster it sees.
         const bestSpeaker = overlapSpeaker ?? nearestSpeaker;
         const matchedSpan = overlapSpan ?? nearestSpan;
+        if (recordingId != null && matchedSpan && matchedSpan.end > matchedSpan.start) {
+          enriched.audioSpan = {
+            recordingId, trackId: diarizedSource,
+            startSample: Math.max(0, Math.round((audioStartOffsetSeconds + matchedSpan.start) * 24000)),
+            endSample: Math.round((audioStartOffsetSeconds + matchedSpan.end) * 24000),
+          };
+        }
 
         enriched.uncertainty = shortSpanReason(matchedSpan) || enriched.uncertainty;
         if (enriched.uncertainty) enriched.speakerAssessmentAvailable = true;
@@ -581,6 +612,24 @@ class DiarizationManager {
     });
 
     return wavPath;
+  }
+
+  async convertRawPcmToWavBuffer(rawPcm, inputSampleRate) {
+    if (!Buffer.isBuffer(rawPcm) || !rawPcm.length) throw new Error("Raw PCM buffer is empty");
+    const samples = await new Promise((resolve, reject) => {
+      const proc = spawn(getFFmpegPath(), ["-hide_banner", "-loglevel", "error", "-f", "s16le",
+        "-ar", String(inputSampleRate), "-ac", "1", "-i", "pipe:0", "-f", "s16le",
+        "-ar", "16000", "-ac", "1", "pipe:1"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+      const parts = [];
+      let error = "";
+      proc.stdout.on("data", (part) => parts.push(part));
+      proc.stderr.on("data", (part) => { error += part.toString(); });
+      proc.on("error", reject);
+      proc.on("close", (code) => code === 0 ? resolve(Buffer.concat(parts)) : reject(new Error(`PCM conversion failed: ${error}`)));
+      proc.stdin.end(rawPcm);
+    });
+    const header = this._createWavHeader(samples.length, 16000, 1);
+    return Buffer.concat([header, samples]);
   }
 
   _createWavHeader(dataSize, sampleRate, channels) {

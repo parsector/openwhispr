@@ -90,7 +90,7 @@ function registerAttendees(database, onlyNoteId = null) {
 function listPeople(database) {
   const db = database.db;
   db.transaction(() => registerAttendees(database))();
-  const profiles = db.prepare('SELECT id, display_name, email, sample_count, embedding, created_at, updated_at FROM speaker_profiles').all();
+  const profiles = db.prepare('SELECT id, display_name, email, sample_count, embedding, voice_needs_reapproval, created_at, updated_at FROM speaker_profiles').all();
   const byName = new Map();
   for (const p of profiles) {
     const key = normalized(p.display_name);
@@ -143,6 +143,7 @@ function listPeople(database) {
       lastHeard: hit.lastHeard, lastSeen: later(hit.lastSeen, hit.lastHeard),
       sampleCount: p.sample_count || 0,
       hasVoice: !!p.embedding?.length && p.sample_count > 0,
+      needsReapproval: p.voice_needs_reapproval === 1,
       legacyVoice: !!p.embedding?.length && p.sample_count > 0,
       usedOnce: hit.notes.size === 1,
       duplicates: duplicates.get(p.id) };

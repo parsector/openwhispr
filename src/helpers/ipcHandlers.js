@@ -13,6 +13,7 @@ const { searchNotes } = require("./noteSearch");
 const { ANALYTICS_HISTORY_BACKFILL_VERSION } = require("./analytics");
 const { PARAKEET_UNSUPPORTED_OS_CODE } = require("./parakeetCapability");
 const { getModelType, isSherpaLocalProvider } = require("./parakeetModelInfo");
+const { MeetingAudioStore } = require("./meetingAudioStore");
 const { broadcastToWindows } = require("./windowBroadcast");
 const { openExternalUrl } = require("./externalUrlOpener");
 const { resolveFailedGpuBackends } = require("./whisper");
@@ -707,6 +708,17 @@ class IPCHandlers {
     this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
+    this.meetingAudioStore = new MeetingAudioStore(
+      path.join(app.getPath("userData"), "meeting-audio"),
+      { database: this.databaseManager, onEvicted: ({ title }) => {
+        try {
+          new Notification({ title: i18nMain.t("meetingAudio.evicted"),
+            body: i18nMain.t("meetingAudio.evictedNotes", { titles: title }) }).show();
+        } catch (error) {
+          debugLogger.warn("Could not notify audio eviction", { error: error.message }, "meeting");
+        }
+      } }
+    );
     this.localModelDownloadStatus = new LocalModelDownloadStatus();
     this._retentionCleanupInterval = null;
     this._retentionSettings = { ...DEFAULT_RETENTION_SETTINGS }; // Synced from renderer
@@ -1852,6 +1864,7 @@ class IPCHandlers {
     // keep for 60/90 days or forever (#1370). The first sync runs the first
     // sweep instead.
     this._retentionCleanupInterval = setInterval(() => {
+      this.meetingAudioStore.enforce();
       if (this._retentionSettingsSynced) this._runRetentionCleanup();
     }, SIX_HOURS_MS);
   }
@@ -2910,6 +2923,31 @@ class IPCHandlers {
       return this.deleteNoteInternal(id);
     });
 
+    ipcMain.handle("meeting-audio-status", (_event, noteId) => {
+      const note = this.databaseManager.getNote(noteId);
+      return note && !note.deleted_at
+        ? this.meetingAudioStore.status(noteId) : { state: "unavailable", bytes: 0 };
+    });
+    ipcMain.handle("meeting-audio-usage", () => this.meetingAudioStore.usage());
+    ipcMain.handle("meeting-audio-span", (_event, noteId, track, start, end) => {
+      const note = this.databaseManager.getNote(noteId);
+      if (!note || note.deleted_at) return { state: "unavailable" };
+      const result = this.meetingAudioStore.span(noteId, track, start, end);
+      return result.wav ? { ...result, wav: result.wav.toString("base64") } : result;
+    });
+    ipcMain.handle("meeting-audio-delete", (_event, noteId) => {
+      const note = this.databaseManager.getNote(noteId);
+      if (!note || note.deleted_at) return { state: "unavailable" };
+      return this.meetingAudioStore.delete(noteId);
+    });
+    ipcMain.handle("meeting-audio-policy", (_event, policy) =>
+      this.meetingAudioStore.setPolicy(policy));
+    ipcMain.handle("meeting-audio-keep", (_event, noteId, keep) => {
+      const note = this.databaseManager.getNote(noteId);
+      return note && !note.deleted_at
+        ? this.meetingAudioStore.setKeep(noteId, keep) : { state: "unavailable" };
+    });
+
     ipcMain.handle("db-search-notes", async (event, query, limit, spaceId, folderId) => {
       return this.databaseManager.searchNotes(query, limit, spaceId, folderId);
     });
@@ -3073,6 +3111,7 @@ class IPCHandlers {
           const result = this.databaseManager.deleteAccountData(accountId);
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
+            this.meetingAudioStore.purge(noteId);
             this._asyncMirrorDelete(noteId);
           }
           return { success: true, ...result };
@@ -3366,6 +3405,7 @@ class IPCHandlers {
       this.databaseManager.restoreNoteAfterDeniedDelete(id)
     );
     ipcMain.handle("db-hard-delete-note", (_, id) => {
+      this.meetingAudioStore.purge(id);
       const result = this.databaseManager.hardDeleteNote(id);
       if (result?.success) {
         try {
@@ -3453,6 +3493,7 @@ class IPCHandlers {
           this._asyncMirrorWrite(note);
         }
         for (const noteId of result.deletedNoteIds ?? []) {
+          this.meetingAudioStore.purge(noteId);
           this._asyncMirrorDelete(noteId);
         }
         setImmediate(() => {
@@ -7957,41 +7998,30 @@ class IPCHandlers {
     };
 
     const captureMeetingDiarizationState = async () => {
-      const systemPcmPath = meetingDiarizationPath;
+      const systemPcmPath = meetingDiarizationBuffers.length ? meetingDiarizationBuffers : null;
       const systemStartedAt = meetingDiarizationStartedAt;
-      const micPcmPath = meetingMicDiarizationPath;
+      const micPcmPath = meetingMicDiarizationBuffers.length ? meetingMicDiarizationBuffers : null;
       const micStartedAt = meetingMicDiarizationStartedAt;
       const systemAudioHeard = meetingSystemAudioHeard;
       const diarizationSegments = meetingDiarizationSegments;
       const retractedSegments = meetingRetractedMicSegments;
-      if (meetingDiarizationStream) {
-        await new Promise((resolve) => meetingDiarizationStream.end(resolve));
-        meetingDiarizationStream = null;
-      }
-      if (meetingMicDiarizationStream) {
-        await new Promise((resolve) => meetingMicDiarizationStream.end(resolve));
-        meetingMicDiarizationStream = null;
-      }
-      meetingDiarizationPath = null;
+      meetingDiarizationBuffers = [];
       meetingDiarizationStartedAt = null;
-      meetingMicDiarizationPath = null;
+      meetingMicDiarizationBuffers = [];
       meetingMicDiarizationStartedAt = null;
       meetingSystemAudioHeard = false;
       meetingSystemAudioHandover.reset();
       meetingDiarizationSegments = [];
       meetingRetractedMicSegments = [];
-      const { pcmPath, startedAt, diarizedSource, cleanupPcmPaths } = resolveDiarizationInput({
+      const { pcmPath, startedAt, diarizedSource } = resolveDiarizationInput({
         systemPcmPath,
         micPcmPath,
         systemAudioHeard,
         systemStartedAt,
         micStartedAt,
       });
-      for (const stalePath of cleanupPcmPaths) {
-        fs.unlink(stalePath, () => {});
-      }
       return {
-        diarizationPcmPath: pcmPath,
+        diarizationPcmPath: pcmPath ? Buffer.concat(pcmPath) : null,
         diarizationSegments,
         retractedSegments,
         diarizationStartedAt: startedAt,
@@ -8555,14 +8585,11 @@ class IPCHandlers {
     let meetingReconnectAudioBytes = { mic: 0, system: 0 };
     let meetingReconnectReplaySources = new Set();
 
-    const fs = require("fs");
-    let meetingDiarizationStream = null;
-    let meetingDiarizationPath = null;
+    let meetingDiarizationBuffers = [];
     let meetingDiarizationStartedAt = null;
     // Parallel raw mic capture so an in-person session (no audible system
     // audio) can be diarized; dropped as soon as the session proves to be a call.
-    let meetingMicDiarizationStream = null;
-    let meetingMicDiarizationPath = null;
+    let meetingMicDiarizationBuffers = [];
     let meetingMicDiarizationStartedAt = null;
     let meetingSystemAudioHeard = false;
     const meetingSystemAudioHandover = createMeetingSystemAudioHandover();
@@ -9132,18 +9159,15 @@ class IPCHandlers {
     };
 
     const dropMeetingMicDiarizationCapture = () => {
-      if (meetingMicDiarizationStream) {
-        meetingMicDiarizationStream.end();
-        meetingMicDiarizationStream = null;
-      }
-      if (meetingMicDiarizationPath) {
-        fs.unlink(meetingMicDiarizationPath, () => {});
-        meetingMicDiarizationPath = null;
-      }
+      meetingMicDiarizationBuffers = [];
       meetingMicDiarizationStartedAt = null;
     };
 
     const resetMeetingLocalState = () => {
+      if (meetingNoteId != null) {
+        try { this.meetingAudioStore.finish(meetingNoteId); }
+        catch (error) { this.meetingAudioStore.fail(meetingNoteId, error.message); }
+      }
       if (meetingLocalTimer) {
         clearInterval(meetingLocalTimer);
         meetingLocalTimer = null;
@@ -9161,14 +9185,7 @@ class IPCHandlers {
       this._activeMeetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
-      if (meetingDiarizationStream) {
-        meetingDiarizationStream.end();
-        meetingDiarizationStream = null;
-      }
-      if (meetingDiarizationPath) {
-        fs.unlink(meetingDiarizationPath, () => {});
-        meetingDiarizationPath = null;
-      }
+      meetingDiarizationBuffers = [];
       meetingDiarizationStartedAt = null;
       dropMeetingMicDiarizationCapture();
       meetingSystemAudioHeard = false;
@@ -9754,6 +9771,13 @@ class IPCHandlers {
         meetingEchoLeakDetector.reset();
         meetingOneOnOneAttendee = resolveOneOnOneAttendeeForNote(options.noteId);
         meetingNoteId = options.noteId ?? null;
+        if (meetingNoteId != null) {
+          try { this.meetingAudioStore.begin(meetingNoteId, meetingStartedAt); }
+          catch (error) {
+            this.meetingAudioStore.fail(meetingNoteId, error.message);
+            debugLogger.warn("Meeting audio retention unavailable", { error: error.message }, "meeting");
+          }
+        }
         meetingSpeakerIndexBase = this._resolveMeetingSpeakerIndexBase(
           meetingNoteId,
           options.speakerIndexBase
@@ -9865,6 +9889,13 @@ class IPCHandlers {
 
     const sendMeetingAudio = (audioBuffer, source, synthetic = false, capturedAt = null) => {
       const outboundBuffer = Buffer.isBuffer(audioBuffer) ? audioBuffer : Buffer.from(audioBuffer);
+      if (meetingNoteId != null && (source === "mic" || source === "system")) {
+        try { this.meetingAudioStore.append(meetingNoteId, source, outboundBuffer, capturedAt || Date.now()); }
+        catch (error) {
+          this.meetingAudioStore.fail(meetingNoteId, error.message);
+          debugLogger.warn("Meeting audio retention failed", { error: error.message }, "meeting");
+        }
+      }
       // Auto-end judges "is anyone audible" from the raw chunk of either
       // channel, before AEC/holdback/muting can swallow it.
       if (!synthetic) {
@@ -9895,13 +9926,12 @@ class IPCHandlers {
           void liveSpeakerIdentifier.feedAudio(outboundBuffer);
         }
 
-        if (!meetingDiarizationStream) {
-          const os = require("os");
-          meetingDiarizationPath = path.join(os.tmpdir(), `ow-diarize-raw-${Date.now()}.pcm`);
-          meetingDiarizationStream = fs.createWriteStream(meetingDiarizationPath);
-          meetingDiarizationStartedAt = receivedAt;
+        if (!meetingDiarizationBuffers.length) {
+          meetingDiarizationStartedAt = capturedAt || receivedAt;
         }
-        meetingDiarizationStream.write(outboundBuffer);
+        // Recovery silence is intentionally a reusable bounded buffer. Keep
+        // its reference here instead of allocating one copy per missing tick.
+        meetingDiarizationBuffers.push(outboundBuffer);
 
         if (!synthetic) {
           // Every real chunk feeds the watchdog, including actual silence.
@@ -9925,16 +9955,11 @@ class IPCHandlers {
         // pre-AEC/pre-gate so the timeline stays continuous, like the system
         // capture above.
         if (!meetingSystemAudioHeard) {
-          if (!meetingMicDiarizationStream) {
+          if (!meetingMicDiarizationBuffers.length) {
             const receivedAt = Date.now();
-            meetingMicDiarizationPath = path.join(
-              os.tmpdir(),
-              `ow-diarize-raw-mic-${receivedAt}.pcm`
-            );
-            meetingMicDiarizationStream = fs.createWriteStream(meetingMicDiarizationPath);
             meetingMicDiarizationStartedAt = receivedAt;
           }
-          meetingMicDiarizationStream.write(outboundBuffer);
+          meetingMicDiarizationBuffers.push(Buffer.from(outboundBuffer));
         }
 
         if (processMeetingMicWithAec(outboundBuffer)) {
@@ -10150,6 +10175,10 @@ class IPCHandlers {
         await stopMeetingAec();
 
         const liveSpeakerState = await stopLiveSpeakerIdentification().catch(() => null);
+        if (meetingNoteId != null) {
+          try { this.meetingAudioStore.finish(meetingNoteId); }
+          catch (error) { this.meetingAudioStore.fail(meetingNoteId, error.message); }
+        }
 
         const diarizationSessionId = `diar-${Date.now()}`;
         const diarizationWin = meetingLocalWin || this.windowManager.controlPanelWindow;
@@ -13176,6 +13205,9 @@ class IPCHandlers {
     });
 
     ipcMain.handle("save-note-speaker-embeddings", async (_event, noteId, embeddingsObj) => {
+      if (["deleted", "expired", "evicted"].includes(this.meetingAudioStore.status(noteId).state)) {
+        return { success: false, error: "Recording audio was removed" };
+      }
       const buffers = {};
       for (const [speakerId, arr] of Object.entries(embeddingsObj)) {
         buffers[speakerId] = Buffer.from(new Float32Array(arr).buffer);
@@ -13566,10 +13598,12 @@ class IPCHandlers {
     (async () => {
       let tmpWav = null;
       try {
-        tmpWav = await this.diarizationManager.convertRawPcmToWav(rawPcmPath, 24000);
+        tmpWav = Buffer.isBuffer(rawPcmPath)
+          ? await this.diarizationManager.convertRawPcmToWavBuffer(rawPcmPath, 24000)
+          : await this.diarizationManager.convertRawPcmToWav(rawPcmPath, 24000);
         let diarizationSegments = await this.diarizationManager.diarize(
           tmpWav,
-          {}
+          { pipeRoot: this.meetingAudioStore?.root }
         );
         const producedCount = new Set(diarizationSegments.map((segment) => segment.speaker)).size;
         if (numSpeakers > 0 && !kept.some(isSpeakerLocked)) {
@@ -13584,10 +13618,15 @@ class IPCHandlers {
           final: new Set(diarizationSegments.map((segment) => segment.speaker)).size,
         }, "speaker");
 
+        const recordingStartedAt = noteId != null
+          ? this.meetingAudioStore?.status(noteId).startedAt : null;
         const enrichedSegments = this.diarizationManager.mergeWithTranscript(
           kept,
           diarizationSegments,
-          { diarizedSource, speakerIndexBase }
+          { diarizedSource, speakerIndexBase,
+            recordingId: recordingStartedAt != null ? noteId : null,
+            audioStartOffsetSeconds: recordingStartedAt != null && audioStartedAt != null
+              ? Math.max(0, (audioStartedAt - recordingStartedAt) / 1000) : 0 }
         );
 
         const speakerSet = new Set(diarizationSegments.map((d) => d.speaker));
@@ -13736,7 +13775,9 @@ class IPCHandlers {
             seg.speakerAssessmentAvailable = true;
           }
         }
-        send({ segments: enrichedSegments, speakerEmbeddings: speakerEmbeddingsMap });
+        const audioRemoved = noteId != null && ["deleted", "expired", "evicted"]
+          .includes(this.meetingAudioStore?.status(noteId).state);
+        send({ segments: enrichedSegments, speakerEmbeddings: audioRemoved ? null : speakerEmbeddingsMap });
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
         this._diarizationSpeakerReservations.delete(sessionId);
@@ -13744,10 +13785,10 @@ class IPCHandlers {
         // failed run falls back to the skip result rather than an empty one.
         sendUndiarized();
       } finally {
-        try {
-          fs.unlinkSync(rawPcmPath);
-        } catch (_) {}
-        if (tmpWav) {
+        if (typeof rawPcmPath === "string") {
+          try { fs.unlinkSync(rawPcmPath); } catch (_) {}
+        }
+        if (typeof tmpWav === "string") {
           try {
             fs.unlinkSync(tmpWav);
           } catch (_) {}
@@ -13770,6 +13811,7 @@ class IPCHandlers {
   deleteNoteInternal(id) {
     const result = this.databaseManager.deleteNote(id);
     if (result?.success) {
+      this.meetingAudioStore.purge(id);
       try {
         const { CommitmentStore } = require("./commitments/store");
         new CommitmentStore(this.databaseManager).sourceRemoved(id);

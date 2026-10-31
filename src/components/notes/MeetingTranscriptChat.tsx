@@ -774,6 +774,9 @@ interface SegmentRowProps {
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
+  audioState?: string;
+  playing?: boolean;
+  onPlayAudio?: (segment: TranscriptSegment) => void;
 }
 
 // Memoized so live partials (several per second) only re-render the two partial
@@ -805,6 +808,9 @@ const SegmentRow = memo(function SegmentRow({
   onAttachSpeakerEmail,
   onToggleSelect,
   t,
+  audioState,
+  playing,
+  onPlayAudio,
 }: SegmentRowProps) {
   const hasSpeaker = !!segment.speaker || !!segment.speakerName || !!segment.source || !!segment.speakerLocked;
   const isOriginallyYou = segment.speaker === "you";
@@ -897,6 +903,18 @@ const SegmentRow = memo(function SegmentRow({
         >
           <span dir="auto">{segment.text}</span>
         </div>
+        {audioState && <div className="mt-1 px-1 text-[11px] text-muted-foreground">
+          {(audioState === "complete" || audioState === "recording" || audioState === "incomplete") &&
+            (segment.audioSpan || segment.timestamp != null) && onPlayAudio
+            ? <button type="button" onClick={() => onPlayAudio(segment)}
+                className="rounded px-1 py-0.5 underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={t(playing ? "meetingAudio.pause" : "meetingAudio.play") + ": " + segment.text}>
+                {t(playing ? "meetingAudio.pause" : "meetingAudio.play")}
+                {!segment.audioSpan && <span className="ms-1">· {t("meetingAudio.approximate")}</span>}
+              </button>
+            : <span>{t(`meetingAudio.${["expired", "deleted", "evicted", "incomplete"].includes(audioState)
+              ? audioState : audioState === "key_unavailable" ? "keyUnavailable" : "unavailable"}`)}</span>}
+        </div>}
         {sourceChips?.map((row) => <button key={row.id} type="button"
           title={row.text} onClick={onOpenSourceTodos}
           className={`mt-1 flex max-w-full items-center gap-1.5 rounded-full border border-border/70 bg-muted/50 px-2 py-0.5 text-start text-[11px] hover:bg-muted ${groupFor(row) === "overdue" ? "text-destructive" : "text-muted-foreground"}`}>
@@ -981,6 +999,70 @@ export function MeetingTranscriptChat({
 }: MeetingTranscriptChatProps) {
   const segments = useMemo(() => normalizeTranscriptSegments(providedSegments), [providedSegments]);
   const { t } = useTranslation();
+  const [audioStatus, setAudioStatus] = useState<{ state: string; reason?: string | null; bytes: number; startedAt?: number; keep?: boolean } | null>(null);
+  const [audioUsage, setAudioUsage] = useState<{ usedBytes: number; budgetBytes: number; days: 3 | 7 | 30; evictions: Array<{ noteId: number; title: string; at: number }> } | null>(null);
+  const [audioMessage, setAudioMessage] = useState("");
+  const [playingRowId, setPlayingRowId] = useState<string | null>(null);
+  const playerRef = useRef<HTMLAudioElement | null>(null);
+  const playerUrlRef = useRef<string | null>(null);
+  const refreshAudio = useCallback(() => {
+    if (noteId == null) return;
+    void window.electronAPI?.meetingAudioStatus?.(noteId).then((status) => setAudioStatus(status));
+    void window.electronAPI?.meetingAudioUsage?.().then((usage) => setAudioUsage(usage));
+  }, [noteId]);
+  useEffect(() => {
+    refreshAudio();
+    const timer = window.setInterval(refreshAudio, isRecording ? 5000 : 30000);
+    return () => window.clearInterval(timer);
+  }, [refreshAudio, isRecording]);
+  useEffect(() => () => {
+    playerRef.current?.pause();
+    if (playerUrlRef.current) URL.revokeObjectURL(playerUrlRef.current);
+  }, []);
+  const playAudio = useCallback(async (segment: TranscriptSegment) => {
+    if (noteId == null || (!segment.audioSpan && segment.timestamp == null) || audioStatus?.startedAt == null) return;
+    if (playingRowId === segment.id) {
+      playerRef.current?.pause();
+      setPlayingRowId(null);
+      return;
+    }
+    playerRef.current?.pause();
+    if (playerUrlRef.current) URL.revokeObjectURL(playerUrlRef.current);
+    const position = segment.timestamp != null && segment.timestamp > 1000000000000
+      ? (segment.timestamp - audioStatus.startedAt) / 1000 : (segment.timestamp ?? 0);
+    const span = segment.audioSpan?.recordingId === noteId ? segment.audioSpan : null;
+    const from = Math.max(0, span ? span.startSample / 24000 - 0.25 : position - 6);
+    const to = Math.max(from + 0.25, span ? span.endSample / 24000 + 0.35 : position + 2);
+    try {
+      const response = await window.electronAPI?.meetingAudioSpan?.(noteId, span?.trackId || segment.source, from, to);
+      if (!response?.wav) {
+        setAudioMessage(t(`meetingAudio.${response?.state === "not_flushed" ? "notFlushed" : "unavailable"}`));
+        refreshAudio();
+        return;
+      }
+      const binary = atob(response.wav);
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+      playerUrlRef.current = url;
+      const player = new Audio(url);
+      playerRef.current = player;
+      player.onended = () => setPlayingRowId(null);
+      await player.play();
+      setPlayingRowId(segment.id);
+      setAudioMessage(response.partial ? t("meetingAudio.partial") : "");
+    } catch {
+      setAudioMessage(t("meetingAudio.unavailable"));
+    }
+  }, [noteId, audioStatus, playingRowId, refreshAudio, t]);
+  const deleteAudio = useCallback(async () => {
+    if (noteId == null || !audioStatus) return;
+    const size = `${new Intl.NumberFormat().format(audioStatus.bytes)} B`;
+    if (!window.confirm(t("meetingAudio.confirmDelete", { size }))) return;
+    await window.electronAPI?.meetingAudioDelete?.(noteId);
+    playerRef.current?.pause();
+    setPlayingRowId(null);
+    refreshAudio();
+  }, [noteId, audioStatus, refreshAudio, t]);
   const [sourceChips, setSourceChips] = useState<{ noteId: number; rows: Commitment[] } | null>(null);
   useEffect(() => {
     if (noteId == null) { setSourceChips(null); return; }
@@ -1102,6 +1184,15 @@ export function MeetingTranscriptChat({
   if (!hasContent) {
     return (
       <div className="h-full flex flex-col">
+        {audioStatus && audioStatus.state !== "unavailable" && <div className="px-4 py-2 text-xs text-muted-foreground" role="status">
+          {t(`meetingAudio.${["expired", "deleted", "evicted", "incomplete"].includes(audioStatus.state)
+            ? audioStatus.state : audioStatus.state === "key_unavailable" ? "keyUnavailable" : "storage"}`, {
+              used: ((audioUsage?.usedBytes || 0) / 1_000_000).toFixed(3),
+              budget: ((audioUsage?.budgetBytes || 0) / 1_000_000).toFixed(3),
+            })}
+          {(audioStatus.state === "complete" || audioStatus.state === "incomplete") &&
+            <button type="button" onClick={() => void deleteAudio()} className="ms-2 underline focus-visible:ring-2 focus-visible:ring-ring">{t("meetingAudio.delete")}</button>}
+        </div>}
         <div className="flex-1 flex items-center justify-center px-5">
           <p className="text-xs text-muted-foreground/70 select-none">
             {t("notes.editor.conversationWillAppear")}
@@ -1120,6 +1211,47 @@ export function MeetingTranscriptChat({
 
   return (
     <div className="h-full flex flex-col">
+      {audioStatus && audioStatus.state !== "unavailable" && <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-1 text-[11px] text-muted-foreground" role="status">
+        {audioUsage && <span>{t("meetingAudio.storage", {
+          used: (audioUsage.usedBytes / 1_000_000).toFixed(3),
+          budget: (audioUsage.budgetBytes / 1_000_000).toFixed(3),
+        })}</span>}
+        {(audioStatus.state === "incomplete" || audioStatus.state === "key_unavailable") && <span>{audioStatus.reason?.includes("key")
+          ? t("meetingAudio.keyUnavailable") : t("meetingAudio.incomplete")}</span>}
+        {audioUsage && <>
+          <label className="flex items-center gap-1">{t("meetingAudio.retention")}
+            <select value={audioUsage.days} onChange={(event) => {
+              void window.electronAPI?.meetingAudioSetPolicy?.({ days: Number(event.target.value) as 3 | 7 | 30,
+                budgetBytes: audioUsage.budgetBytes }).then(refreshAudio);
+            }} className="rounded border border-border bg-background px-1 py-0.5 text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+              {[3, 7, 30].map((days) => <option key={days} value={days}>{days} {t("meetingAudio.days")}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-1">{t("meetingAudio.budget")}
+            <select value={audioUsage.budgetBytes} onChange={(event) => {
+              void window.electronAPI?.meetingAudioSetPolicy?.({ days: audioUsage.days,
+                budgetBytes: Number(event.target.value) }).then(refreshAudio);
+            }} className="rounded border border-border bg-background px-1 py-0.5 text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+              {[500_000_000, 2 * 1024 * 1024 * 1024, 10_000_000_000].map((bytes) =>
+                <option key={bytes} value={bytes}>{(bytes / 1_000_000_000).toFixed(1)} GB</option>)}
+            </select>
+          </label>
+          {audioUsage.evictions.length > 0 && <span>{t("meetingAudio.evictedNotes", {
+            titles: audioUsage.evictions.slice(0, 3).map((item) => item.title).join(", ")
+          })}</span>}
+        </>}
+        {(audioStatus.state === "complete" || audioStatus.state === "incomplete" || audioStatus.state === "recording") && <>
+          <button type="button" onClick={() => { if (noteId != null) void window.electronAPI?.meetingAudioSetKeep?.(noteId, !audioStatus.keep).then(refreshAudio); }}
+            className="underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring">
+            {t(audioStatus.keep ? "meetingAudio.unkeep" : "meetingAudio.keep")}
+          </button>
+          {audioStatus.state !== "recording" && <button type="button" onClick={() => void deleteAudio()}
+            className="underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring">
+            {t("meetingAudio.delete")}
+          </button>}
+        </>}
+        {audioMessage && <span>{audioMessage}</span>}
+      </div>}
       {(isRecording || isDiarizing) && (
         <div className={cn("shrink-0 px-4 pt-2 mb-1.5", contentClassName)}>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5 rounded-lg border border-border/70 bg-surface-2/40 text-xs text-foreground">
@@ -1257,6 +1389,9 @@ export function MeetingTranscriptChat({
                     onAttachSpeakerEmail={onAttachSpeakerEmail}
                     onToggleSelect={onToggleSelect}
                     t={t}
+                    audioState={audioStatus?.state === "unavailable" ? undefined : audioStatus?.state}
+                    playing={playingRowId === segment.id}
+                    onPlayAudio={playAudio}
                   />
                 </div>
               );
