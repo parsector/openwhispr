@@ -3818,6 +3818,7 @@ declare global {
         name?: string | null;
         profileId?: number | null;
         email?: string | null;
+        afterFinalAnalysis?: boolean;
         rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
       }) => Promise<{
         success: boolean;

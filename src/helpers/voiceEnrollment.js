@@ -2,6 +2,7 @@
 // to a usable profile; naming a row never calls it.
 const { randomUUID, createHash } = require('node:crypto');
 const { readTranscriptDocument } = require('./transcriptDocument');
+const { readSpeakerActionLog } = require('./speakerActionLog');
 const history = require('./speakerGlobalHistory');
 
 const RATE = 24000;
@@ -41,8 +42,18 @@ function cosine(a, b) {
   return dot;
 }
 function rowsFor(db, noteId) {
-  const note = db.prepare('SELECT transcript FROM notes WHERE id = ?').get(noteId);
-  return note ? readTranscriptDocument(note.transcript).rows : [];
+  const note = db.prepare('SELECT transcript, speaker_action_log, speaker_label_undo FROM notes WHERE id = ?').get(noteId);
+  return note ? { rows: readTranscriptDocument(note.transcript).rows, changed: changedRows(note) }
+    : { rows: [], changed: new Set() };
+}
+function changedRows(note) {
+  const ids = new Set();
+  for (const action of readSpeakerActionLog(note).actions) {
+    if (!['correction', 'split', 'reconsideration'].includes(action.kind) ||
+        action.event?.initialAttribution) continue;
+    for (const id of action.event?.affectedRowIds || action.event?.rowIds || []) ids.add(id);
+  }
+  return ids;
 }
 function attributed(db, noteId, row, profileId) {
   if (row.suggestedProfileId === profileId) return true;
@@ -54,11 +65,11 @@ function attributed(db, noteId, row, profileId) {
     WHERE note_id = ? AND speaker_id = ? AND profile_id = ?`).get(noteId, row.speaker, profileId);
 }
 function clean(db, sample) {
-  const rows = rowsFor(db, sample.note_id);
+  const { rows, changed } = rowsFor(db, sample.note_id);
   const ids = JSON.parse(sample.row_ids || '[]');
   return ids.length > 0 && ids.every(id => {
     const row = rows.find(item => item.id === id);
-    return row && !row.deleted && !(row.corrections || []).some(item => !item.initialAttribution) &&
+    return row && !row.deleted && !changed.has(id) &&
       !Number(row.correctionRevision) && attributed(db, sample.note_id, row, sample.profile_id);
   });
 }
@@ -132,13 +143,14 @@ function listCandidates(database, store, profileId) {
   if (!db.prepare('SELECT 1 FROM speaker_profiles WHERE id = ?').get(profileId)) return [];
   if (samples(db, profileId).length >= MAX_SAMPLES) return [];
   const offered = [];
-  for (const note of db.prepare("SELECT id, title, created_at, transcript FROM notes WHERE note_type = 'meeting' AND deleted_at IS NULL").all()) {
+  for (const note of db.prepare("SELECT id, title, created_at, transcript, speaker_action_log, speaker_label_undo FROM notes WHERE note_type = 'meeting' AND deleted_at IS NULL").all()) {
     const audioState = store.status(note.id);
     if (!['complete', 'incomplete'].includes(audioState.state) || audioState.bytes === 0) continue;
     const rows = readTranscriptDocument(note.transcript).rows;
+    const changed = changedRows(note);
     for (const row of rows) {
       const span = row.audioSpan;
-      if (row.deleted || (row.corrections || []).some(item => !item.initialAttribution) || Number(row.correctionRevision) ||
+      if (row.deleted || changed.has(row.id) || Number(row.correctionRevision) ||
         row.uncertainty || row.overlap || row.speakerStatus === 'provisional' ||
         row.speakerStatus === 'suggested' ||
         !attributed(db, note.id, row, profileId) ||
@@ -170,7 +182,7 @@ function listCandidates(database, store, profileId) {
         startSample, endSample, durationSeconds: duration,
         revision: createHash('sha256').update(JSON.stringify([row.text, row.speaker,
           row.speakerName, row.speakerLockSource, row.speakerStatus, row.suggestedProfileId,
-          row.correctionRevision, row.corrections, row.audioSpan])).digest('hex'),
+          row.correctionRevision, changed.has(row.id), row.audioSpan])).digest('hex'),
         everCorrected: false });
     }
   }

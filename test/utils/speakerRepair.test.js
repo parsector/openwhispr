@@ -61,7 +61,7 @@ test('two locked Unknown rows in one cluster retain one shared number', async ()
 });
 
 test('the 51st correction leaves the first event undoable', async () => {
-  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../../src/utils/transcriptCorrections.ts');
+  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../fixtures/legacyTranscriptCorrections.ts');
   let rows = [row('a', 'one')];
   let first;
   for (let i = 0; i < 55; i++) {

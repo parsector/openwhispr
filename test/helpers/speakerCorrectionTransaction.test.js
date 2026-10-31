@@ -155,6 +155,67 @@ test("map undo and another identification cannot revive name or profile", () => 
   assert.equal(f.identifier.transientProfileIds.size, 0);
   assert.equal(rows(f)[0].speakerName, undefined);
 });
+test("undo restores from the ordered action log when transcript rows carry no history", () => {
+  const f = fixture();
+  assert.equal(applySpeakerCorrection(f.db, f.identifier, correction("log-only", "a", "Alex")).success, true);
+  const saved = rows(f).map(({ corrections, ...entry }) => entry);
+  f.note.transcript = JSON.stringify(saved);
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: "undo", noteId: 1, id: "log-only" }).success, true);
+  assert.equal(rows(f)[0].speakerName, undefined);
+  assert.equal(f.note.speaker_action_log && JSON.parse(f.note.speaker_action_log).actions.length, 0);
+});
+test("only post-final corrections record the changed-after-final marker", () => {
+  const f = fixture();
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { ...correction("live", "a", "Alex"), afterFinalAnalysis: false }).success, true);
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { ...correction("final", "a", "Sam"), afterFinalAnalysis: true }).success, true);
+  assert.deepEqual(JSON.parse(f.note.speaker_action_log).actions.map(action => action.event.afterFinalAnalysis),
+    [false, true]);
+});
+test("migrating a current-tip note keeps every undo action without duplicating row events", () => {
+  const f = fixture();
+  assert.equal(applySpeakerCorrection(f.db, f.identifier, correction("first", "a", "Alex")).success, true);
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    correction("second", "b", "Sam", "speaker_1")).success, true);
+  const actions = JSON.parse(f.note.speaker_action_log).actions;
+  const tipRows = rows(f).map(row => ({ ...row, corrections: actions
+    .filter(action => action.event.affectedRowIds.includes(row.id))
+    .map(action => action.event) }));
+  f.note.transcript = JSON.stringify(tipRows);
+  const { migrateSpeakerHistory } = require("../../src/helpers/speakerActionLog");
+  const migrated = migrateSpeakerHistory(f.note);
+  assert.ok(migrated);
+  Object.assign(f.note, migrated);
+  assert.equal(rows(f).every(row => row.corrections === undefined), true);
+  assert.deepEqual(JSON.parse(f.note.speaker_action_log).actions.map(action => action.id),
+    ["first", "second"]);
+  assert.equal(migrateSpeakerHistory(f.note), null);
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: "undo", noteId: 1, id: "second" }).success, true);
+  assert.equal(applySpeakerCorrection(f.db, f.identifier,
+    { type: "undo", noteId: 1, id: "first" }).success, true);
+  assert.equal(rows(f).some(row => row.speakerName), false);
+});
+test("legacy split and recognition events order with cloud adoption without losing either action", () => {
+  const { readSpeakerActionLog } = require("../../src/helpers/speakerActionLog");
+  for (const event of [
+    { id: "split", newClusterId: "speaker_2", rowIds: ["a"], snapshots: { a: { speaker: "speaker_0" } } },
+    { id: "recognition", actor: "machine", affectedRowIds: ["a"],
+      snapshots: { a: { previous: {}, next: { speakerName: "Alex" } } } },
+  ]) {
+    const note = { transcript: JSON.stringify([{ id: "a", text: "hello", source: "system",
+      corrections: [{ id: event.id, event: { ...event, sequence: 1,
+        timestamp: "2026-01-01T00:00:00.000Z" } }] }]),
+    speaker_label_undo: JSON.stringify([{ timestamp: "2026-01-02T00:00:00.000Z",
+      rows: [{ id: "a", before: { speakerName: "Alex" }, after: { speakerName: "Sam" }, revision: 2 }] }]) };
+    const log = readSpeakerActionLog(note);
+    assert.equal(log.actions.length, 2);
+    assert.deepEqual(log.actions.map(action => action.kind),
+      [event.newClusterId ? "split" : "reconsideration", "adoption"]);
+  }
+});
 test("older correction on different target waits for newest action", () => {
   const f = fixture();
   applySpeakerCorrection(f.db, f.identifier, correction("c1", "a", "Alex"));
@@ -191,9 +252,9 @@ test("same-target undo uses event order when the clock moves backward", () => {
   const f = fixture();
   applySpeakerCorrection(f.db, f.identifier, correction("c1", "a", "Alex"));
   applySpeakerCorrection(f.db, f.identifier, correction("c2", "a", "Sam"));
-  const current = rows(f);
-  current[0].corrections[1].timestamp = "2000-01-01T00:00:00.000Z";
-  f.note.transcript = JSON.stringify(current);
+  const log = JSON.parse(f.note.speaker_action_log);
+  log.actions[1].event.timestamp = "2000-01-01T00:00:00.000Z";
+  f.note.speaker_action_log = JSON.stringify(log);
   const result = applySpeakerCorrection(f.db, f.identifier, { type: "undo", noteId: 1, id: "c1" });
   assert.equal(result.error, "later_change");
 });
@@ -208,7 +269,7 @@ test('an early correction survives 55 later corrections to other rows', () => {
     });
     assert.equal(result.success, true);
   }
-  assert.equal(rows(f)[0].corrections[0].id, 'correction-0');
+  assert.equal(JSON.parse(f.note.speaker_action_log).actions[0].id, 'correction-0');
   assert.equal(applySpeakerCorrection(f.db, f.identifier,
     { type: 'undo', noteId: 1, id: 'correction-0' }).error, 'later_change');
   for (let i = 55; i > 0; i--) assert.equal(applySpeakerCorrection(f.db, f.identifier,
@@ -231,7 +292,7 @@ test('a cloud label change preserves the local event and label without conflict'
   const result = reconcileCloudTranscript(writeTranscriptDocument(cloudRows), f.note.transcript);
   assert.equal(result.conflicted, undefined);
   f.note.transcript = result.transcript;
-  assert.equal(rows(f)[0].corrections[0].id, 'c1');
+  assert.equal(JSON.parse(f.note.speaker_action_log).actions[0].id, 'c1');
   assert.equal(rows(f)[0].speakerName, 'Alex');
   assert.equal(applySpeakerCorrection(f.db, f.identifier,
     { type: 'undo', noteId: 1, id: 'c1' }).success, true);
@@ -245,9 +306,10 @@ test('owner can correct a 650-row cluster and undo it from one indexed event', (
   assert.equal(result.success, true, result.error);
   assert.equal(rows(f).length, 650);
   assert.equal(rows(f).filter((r) => r.speakerName === 'Alex').length, 650);
-  const history = rows(f).flatMap((r) => r.corrections || []);
-  assert.equal(history.filter((record) => record.snapshots).length, 1);
-  assert.equal(Object.keys(history.find((record) => record.snapshots).snapshots).length, 650);
+  const history = JSON.parse(f.note.speaker_action_log).actions;
+  assert.equal(rows(f).every(row => row.corrections === undefined), true);
+  assert.equal(history.length, 1);
+  assert.equal(Object.keys(history[0].event.snapshots).length, 650);
   assert.equal(applySpeakerCorrection(f.db, f.identifier,
     { type: 'undo', noteId: 1, id: 'large-cluster' }).success, true);
   assert.equal(rows(f).filter((r) => r.speakerName).length, 0);

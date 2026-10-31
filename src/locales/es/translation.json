@@ -5305,6 +5305,7 @@
     "voiceConflict": "Las muestras aprobadas suenan diferentes. Elimina o separa la muestra discordante.",
     "noEnrollmentCandidates": "No quedan fragmentos de audio válidos.",
     "enrollmentRows": "Fila {{rows}}",
+    "enrollmentDuration": "{{seconds}} segundos",
     "neverCorrected": "Nunca corregida",
     "listen": "Escuchar",
     "playing": "Reproduciendo…",

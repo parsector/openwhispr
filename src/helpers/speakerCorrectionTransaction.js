@@ -16,6 +16,12 @@ const { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableA
 const globalHistory = require('./speakerGlobalHistory');
 const debugLogger = require('./debugLogger');
 const MAX_CORRECTION_BYTES = MAX_ACTION_LOG_BYTES;
+const rejectFullHistory = (recoverableBy) => {
+  const error = new Error('history_full');
+  error.code = 'history_full';
+  error.recoverableBy = recoverableBy;
+  throw error;
+};
 const SPLIT_FIELDS = ["speaker", "speakerName", "speakerIsPlaceholder", "speakerStatus",
   "unknownNumber", "uncertainty", "speakerLocked", "speakerLockSource", "machineReason"];
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
@@ -99,7 +105,8 @@ function applySpeakerCorrection(database, identifier, request) {
       const timestamp = new Date().toISOString();
       const sequence = log.nextSequence;
       const initialAttribution = !!name && affected.every(row => !row.speakerName &&
-        !row.speakerLocked && !Number(row.correctionRevision) && !(row.corrections?.length));
+        !row.speakerLocked && !Number(row.correctionRevision) &&
+        !log.actions.some(action => action.event?.affectedRowIds?.includes(row.id)));
       rows = rows.map((row) => {
         if (!affectedSet.has(row.id)) return row;
         const previous = snapshot(row);
@@ -117,13 +124,7 @@ function applySpeakerCorrection(database, identifier, request) {
           machineReason: undefined,
         };
         snapshots[row.id] = { previous, next: snapshot(next) };
-        const record = {
-          id,
-          rowId: row.id,
-          sequence,
-          initialAttribution,
-        };
-        return { ...next, corrections: [...(row.corrections || []), record] };
+        return next;
       });
       const event = {
         id, noteId, rowId: affected[0].id, scope, actor: "user", timestamp, sequence,
@@ -131,15 +132,13 @@ function applySpeakerCorrection(database, identifier, request) {
         clusterId: scope === "cluster" ? target.clusterId : undefined,
         target: scope === "cluster" ? target : { rowIds: affectedRowIds },
         affectedRowIds, snapshots, mappingChanged: !!key, initialAttribution,
+        afterFinalAnalysis: request.afterFinalAnalysis === true,
         mappingBefore: before && { displayName: before.display_name, profileId: before.profile_id },
         mappingAfter: after && { displayName: after.display_name, profileId: after.profile_id },
         createdProfileId: createdProfile?.id,
       };
-      const anchor = rows.find((row) => row.id === affected[0].id);
-      anchor.corrections[anchor.corrections.length - 1] = event;
       nextLog = appendAction(log, { kind: 'correction', id, event });
-      if (!nextLog)
-        return { success: false, error: "history_full", recoverableBy: "undo_correction" };
+      if (!nextLog) rejectFullHistory('undo_correction');
       if (key) {
         const result = database.setSpeakerRunMapping(
           noteId,
@@ -190,18 +189,16 @@ function applySpeakerCorrection(database, identifier, request) {
           next.uncertainty = { reason: "possible_mixed_speakers" };
           next.machineReason = undefined;
         }
-        next.corrections = [...(row.corrections || []), { id, rowId: row.id,
-          sequence: log.nextSequence }];
         changed.push(next);
         return next;
       });
       const event = { id, noteId, actor: "user", timestamp: new Date().toISOString(),
         sequence: log.nextSequence, target, rowIds: [...selected], reviewedRowIds: [...reviewed],
         newClusterId: nextCluster,
+        afterFinalAnalysis: request.afterFinalAnalysis === true,
         snapshots };
-      changed[0].corrections[changed[0].corrections.length - 1] = event;
       nextLog = appendAction(log, { kind: "split", id, event });
-      if (!nextLog) return { success: false, error: "history_full" };
+      if (!nextLog) rejectFullHistory();
       splitReport = { movedRows: selected.size, retainedRows: cluster.length - selected.size,
         acousticRows: selected.size - reviewed.size, newClusterId: nextCluster,
         evidence: selected.size > reviewed.size ? "voice_embeddings" : "selected_rows" };
@@ -227,19 +224,13 @@ function applySpeakerCorrection(database, identifier, request) {
           for (const field of SPLIT_FIELDS) delete next[field];
           Object.assign(next, previous);
           next.correctionRevision = (Number(row.correctionRevision) || 0) + 1;
-          next.corrections = (row.corrections || []).filter((record) => record.id !== id);
-          if (!next.corrections.length) delete next.corrections;
           return next;
         });
       } else {
       rows = rows.map((row) => {
-        const record = (row.corrections || []).find((item) => item.id === id);
-        if (!record) return row;
-        const next = restore(row, event.snapshots?.[row.id]?.previous || record.previous || {});
+        if (!event.snapshots?.[row.id]) return row;
+        const next = restore(row, event.snapshots[row.id].previous);
         next.correctionRevision = (Number(row.correctionRevision) || 0) + 1;
-        const remaining = (row.corrections || []).filter((item) => item.id !== id);
-        if (remaining.length) next.corrections = remaining;
-        else delete next.corrections;
         return next;
       });
       if (event.mappingChanged && event.clusterId) {
@@ -263,7 +254,10 @@ function applySpeakerCorrection(database, identifier, request) {
       }
       }
     }
-    const transcript = writeTranscriptDocument(rows, readTranscriptDocument(note.transcript).unknownNumberHighWater);
+    // Old notes may still contain the pre-log row copy. This write moves its
+    // events into the log and removes every duplicate in the same transaction.
+    const transcript = writeTranscriptDocument(rows.map(({ corrections, ...row }) => row),
+      readTranscriptDocument(note.transcript).unknownNumberHighWater);
     const result = database.updateNote(noteId, { transcript,
       speaker_action_log: JSON.stringify(nextLog), speaker_label_undo: null });
     if (!result?.success) throw Error(result?.error || "transcript_failed");
@@ -325,6 +319,8 @@ function applySpeakerCorrection(database, identifier, request) {
     for (const [key, snapshot] of caches || []) {
       if (snapshot) identifier[key] = snapshot;
     }
+    if (error.code === 'history_full') return { success: false, error: 'history_full',
+      ...(error.recoverableBy ? { recoverableBy: error.recoverableBy } : {}) };
     throw error;
   }
 }

@@ -45,18 +45,28 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
   const [enrollingId, setEnrollingId] = useState<number | null>(null);
   const [candidates, setCandidates] = useState<EnrollmentCandidate[]>([]);
   const [enrollmentSamples, setEnrollmentSamples] = useState<EnrollmentSample[]>([]);
+  const [enrollmentLoading, setEnrollmentLoading] = useState(false);
   const [listeningId, setListeningId] = useState<string | null>(null);
   const [listened, setListened] = useState<{ id: string; token: string } | null>(null);
   const [enrollmentError, setEnrollmentError] = useState("");
   const enrollmentPlayer = useRef<HTMLAudioElement | null>(null);
   const enrollmentUrl = useRef<string | null>(null);
   const enrollmentRequest = useRef(0);
+  const previewRef = useRef<HTMLDivElement>(null);
+  const enrollmentPanelRef = useRef<HTMLElement>(null);
+  const reportRef = useRef<HTMLDivElement>(null);
+  const previewTrigger = useRef<HTMLElement | null>(null);
+  const enrollmentTrigger = useRef<HTMLElement | null>(null);
+  useEffect(() => { if (selected) previewRef.current?.focus(); }, [selected?.id, kind]);
+  useEffect(() => { if (enrollingId !== null) enrollmentPanelRef.current?.focus(); }, [enrollingId]);
+  useEffect(() => { if (report) reportRef.current?.focus(); }, [report?.id]);
   useEffect(() => () => { enrollmentPlayer.current?.pause(); if (enrollmentUrl.current) URL.revokeObjectURL(enrollmentUrl.current); }, []);
   const openEnrollment = async (profileId: number) => {
+    enrollmentTrigger.current = document.activeElement as HTMLElement;
     const request = ++enrollmentRequest.current;
     enrollmentPlayer.current?.pause();
     setEnrollingId(profileId); setListened(null); setListeningId(null);
-    setEnrollmentError(""); setCandidates([]); setEnrollmentSamples([]);
+    setEnrollmentError(""); setCandidates([]); setEnrollmentSamples([]); setEnrollmentLoading(true);
     try {
       const [offers, samples] = await Promise.all([
         window.electronAPI.listVoiceEnrollmentCandidates?.(profileId),
@@ -66,6 +76,7 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
       setCandidates(offers || []); setEnrollmentSamples(samples || []);
     }
     catch { if (request === enrollmentRequest.current) setEnrollmentError("unavailable"); }
+    finally { if (request === enrollmentRequest.current) setEnrollmentLoading(false); }
   };
   const playCandidate = async (candidate: EnrollmentCandidate) => {
     if (candidate.profileId !== enrollingId) return;
@@ -88,7 +99,12 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
             setListeningId(null); setListened({ id: candidate.id, token: result.token! });
           } else if (request === enrollmentRequest.current) {
             setListeningId(null); setEnrollmentError("playback_required");
+          } }).catch(() => { if (request === enrollmentRequest.current) {
+            setListeningId(null); setEnrollmentError("unavailable");
           } });
+      } };
+      player.onerror = () => { if (request === enrollmentRequest.current) {
+        setListeningId(null); setEnrollmentError("unavailable");
       } };
       await player.play();
     } catch { if (request === enrollmentRequest.current) {
@@ -178,7 +194,10 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
   const filterReasonLabel = (value: string) => value === "close_match" ? t("people.reasons.close_match") : reasonLabel({ reason: value, candidates: null } as Review);
   const actionErrorText = (value: string) => value === "history_quarantined" ? t("notes.speaker.historyQuarantined")
     : t(`people.errors.${value}`, { defaultValue: t("people.actionError") });
-  const start = (person: Person, action: Kind) => { setSelected(person); setKind(action); setName(person.displayName); setSurvivorId(0); setActionError(""); setReport(null); };
+  const start = (person: Person, action: Kind) => { previewTrigger.current = document.activeElement as HTMLElement; setSelected(person); setKind(action); setName(person.displayName); setSurvivorId(0); setActionError(""); setReport(null); };
+  const closePreview = () => { setSelected(null); requestAnimationFrame(() => previewTrigger.current?.focus()); };
+  const closeEnrollment = () => { enrollmentRequest.current++; enrollmentPlayer.current?.pause(); setEnrollingId(null); setListened(null); setCandidates([]); setEnrollmentSamples([]); requestAnimationFrame(() => enrollmentTrigger.current?.focus()); };
+  const newestActionIndex = actionHistory.findIndex(item => !item.unavailableReason);
   const execute = async () => {
     if (!request || !preview?.success || working) return;
     setWorking(true); setActionError("");
@@ -205,8 +224,12 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
     finally { setWorking(false); }
   };
   const previewClear = async () => {
-    setActionError("");
-    try { setClearPreview(await window.electronAPI.previewClearVoiceData?.() || null); }
+    setActionError(""); setClearPreview(null);
+    try {
+      const result = await window.electronAPI.previewClearVoiceData?.();
+      if (!result?.success) throw Error("persistence_failed");
+      setClearPreview(result);
+    }
     catch { setActionError("persistence_failed"); }
   };
   const applyClear = async () => {
@@ -236,7 +259,7 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
     try {
       const result = action.kind === "clear_voice" ? await window.electronAPI.undoClearVoiceData?.(action.id)
         : action.kind === "enrollment" ? await window.electronAPI.undoVoiceEnrollmentAction?.(action.id)
-        : (action.kind === "correction" || action.kind === "reconsideration") && action.noteId
+        : (["apply", "correction", "split", "reconsideration"].includes(action.kind)) && action.noteId
           ? await window.electronAPI.applySpeakerCorrection?.({ type: "undo", noteId: action.noteId, id: action.id })
         : action.kind === "mapping" && action.noteId ? await window.electronAPI.undoPeopleMapping?.(action.noteId)
         : action.kind === "adoption" && action.noteId ? await window.electronAPI.takeCloudSpeakerLabels?.(action.noteId, true)
@@ -259,37 +282,39 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
         <h3 className="text-sm font-semibold">{t("people.actionHistory")}</h3>
         {actionHistory.length === 0 && <p className="mt-2 text-xs text-muted-foreground">{t("people.noActions")}</p>}
         <ol className="mt-2 space-y-2">{actionHistory.map((action, index) => <li key={`${action.id}:${action.noteId}`} className="flex items-center justify-between gap-3 text-xs">
-          <span>{action.kind === "clear_voice" ? t("people.clearVoice") : action.kind === "correction" ? t("people.correctionAction") : action.kind === "reconsideration" ? t("notes.speaker.reason.approved_voice") : action.kind === "mapping" ? t("people.mappingAction") : action.kind === "adoption" ? t("people.adoptionAction") : t(`people.actions.${action.kind}`, { defaultValue: action.kind })} · {action.label === "deleted_person" ? t("people.deletedPerson") : action.label}{action.noteInTrash ? ` · ${t("people.noteInTrash")}` : ""}</span>
+          <span className="min-w-0 break-words">{action.kind === "clear_voice" ? t("people.clearVoice") : ["apply", "correction"].includes(action.kind) ? t("people.correctionAction") : action.kind === "split" ? t("notes.speaker.splitCluster") : action.kind === "enrollment" ? t(action.label.startsWith("approve:") ? "people.approveSample" : action.label.startsWith("reject:") ? "people.rejectSample" : "people.removeSample") : action.kind === "reconsideration" ? t("notes.speaker.reason.approved_voice") : action.kind === "mapping" ? t("people.mappingAction") : action.kind === "adoption" ? t("people.adoptionAction") : t(`people.actions.${action.kind}`)}{["rename", "merge", "delete", "reset", "apply", "correction", "mapping", "adoption"].includes(action.kind) && <> · {action.label === "deleted_person" ? t("people.deletedPerson") : action.label === "Unknown" ? t("people.unknown") : action.label}</>}{action.noteInTrash ? ` · ${t("people.noteInTrash")}` : ""}</span>
           {action.unavailableReason ? <span className="text-muted-foreground">{actionErrorText(action.unavailableReason)}</span>
-            : <button type="button" className={button} disabled={working || index !== actionHistory.findIndex(item => !item.unavailableReason)} onClick={() => void undoHistory(action)}>{t("people.undo")}</button>}
+            : index !== newestActionIndex ? <span className="text-muted-foreground">{t("people.errors.later_change")}</span>
+            : <button type="button" className={button} disabled={working} onClick={() => void undoHistory(action)}>{t("people.undo")}</button>}
         </li>)}</ol>
       </section>
       <div className="rounded-xl border border-border p-4"><button type="button" className={button} onClick={() => void previewClear()}>{t("people.clearVoice")}</button>
         {clearPreview && <div role="region" aria-label={t("people.clearVoice")} className="mt-3 text-sm"><p>{t("people.clearPreview", { people: clearPreview.personCount, embeddings: clearPreview.embeddingCount + clearPreview.noteEmbeddingCount, mappings: clearPreview.mappingCount })}</p><div className="mt-3 flex gap-2"><button type="button" className={button} onClick={() => setClearPreview(null)}>{t("people.cancel")}</button><button type="button" className={button} disabled={working} onClick={() => void applyClear()}>{working ? t("people.working") : t("people.clearVoice")}</button></div></div>}
-        {clearReport && <div role="status" className="mt-3 text-sm"><p>{t("people.clearDone", { people: clearReport.personCount, embeddings: clearReport.embeddingCount, mappings: clearReport.mappingCount })}</p><button type="button" className={`${button} mt-2`} disabled={working || actionHistory.find(item => !item.unavailableReason)?.id !== clearReport.id} onClick={() => void undoClear()}>{t("people.undo")}</button></div>}
+        {clearReport && <div role="status" className="mt-3 text-sm"><p>{t("people.clearDone", { people: clearReport.personCount, embeddings: clearReport.embeddingCount, mappings: clearReport.mappingCount })}</p>{actionHistory.find(item => !item.unavailableReason)?.id === clearReport.id ? <button type="button" className={`${button} mt-2`} disabled={working} onClick={() => void undoClear()}>{t("people.undo")}</button> : <p className="mt-2 text-muted-foreground">{t("people.errors.later_change")}</p>}</div>}
         {actionError && !selected && !report && <p role="alert" className="mt-2 text-sm text-destructive">{actionErrorText(actionError)}</p>}
       </div>
       <div className="grid gap-2 sm:grid-cols-[1fr_auto]"><input dir="auto" className={field} aria-label={t("people.search")} placeholder={t("people.search")} value={query} onChange={e => setQuery(e.target.value)} /><Select value={sort} onValueChange={value => setSort(value as typeof sort)}><SelectTrigger aria-label={t("people.sort")} className="w-auto"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="usage">{t("people.sortUsage")}</SelectItem><SelectItem value="heard">{t("people.sortHeard")}</SelectItem></SelectContent></Select></div>
       {people.length === 0 && <div className="rounded-xl border border-border bg-surface-2/30 p-7"><h3 className="font-semibold">{t("people.emptyTitle")}</h3><p className="mt-2 max-w-prose text-sm text-muted-foreground">{t("people.emptyBody")}</p></div>}
       {people.length > 0 && shown.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">{t("people.noMatches")}</p>}
       <div className="divide-y divide-border rounded-xl border border-border">{shown.map(p => <div key={p.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-        <div className="min-w-0"><div className="flex flex-wrap items-baseline gap-x-2"><strong className="truncate text-sm">{p.displayName}</strong>{p.email && <span className="truncate text-xs text-muted-foreground" dir="auto">{p.email}</span>}</div>
+        <div className="min-w-0"><div className="flex flex-wrap items-baseline gap-x-2"><strong className="min-w-0 break-words text-sm [overflow-wrap:anywhere]">{p.displayName}</strong>{p.email && <span className="min-w-0 break-all text-xs text-muted-foreground" dir="auto">{p.email}</span>}</div>
           <p className="mt-1 text-xs tabular-nums text-muted-foreground">{t("people.meetingCount", { count: p.meetingCount })} · {t("people.usage", { notes: p.noteCount, segments: p.segmentCount })} · {t("people.lastSeen", { date: date(p.lastSeen) })}</p>
-          <div className="mt-2 flex flex-wrap gap-1.5">{p.duplicates.map(d => <span key={d.id} className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">{t("people.duplicate", { name: d.name })}</span>)}{p.needsReapproval && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] text-amber-700 dark:text-amber-300">{t("meetingAudio.reapproval")}</span>}{p.usedOnce && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">{t("people.usedOnce")}</span>}{!p.hasVoice && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">{t("people.noVoice")}</span>}{p.legacyVoice && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">{t("people.legacyVoice")}</span>}</div>
-          <p className="mt-2 text-xs tabular-nums text-muted-foreground">{t("people.enrollmentProgress", { spans: p.voiceProgress.cleanSpans, meetings: p.voiceProgress.meetings })} · {t(p.voiceProgress.usable ? "people.voiceUsable" : "people.voiceProvisional")}</p>
-          {p.voiceProgress.conflict && <p role="alert" className="mt-2 text-xs text-amber-700 dark:text-amber-300">{t("people.voiceConflict")}</p>}
+          <div className="mt-2 flex flex-wrap gap-1.5">{p.duplicates.map(d => <span key={d.id} className="rounded-full bg-warning/10 px-2 py-0.5 text-[11px] text-foreground">{t("people.duplicate", { name: d.name })}</span>)}{p.needsReapproval && <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[11px] text-foreground">{t("meetingAudio.reapproval")}</span>}{p.usedOnce && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">{t("people.usedOnce")}</span>}{!p.hasVoice && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">{t("people.noVoice")}</span>}{p.legacyVoice && <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">{t("people.legacyVoice")}</span>}</div>
+          {(p.hasVoice || p.voiceProgress.cleanSpans > 0) && <p className="mt-2 text-xs tabular-nums text-muted-foreground">{t("people.enrollmentProgress", { spans: p.voiceProgress.cleanSpans, meetings: p.voiceProgress.meetings })} · {t(p.voiceProgress.usable ? "people.voiceUsable" : "people.voiceProvisional")}</p>}
+          {p.voiceProgress.conflict && <p role="alert" className="mt-2 text-xs text-foreground">{t("people.voiceConflict")}</p>}
         </div><div className="flex flex-wrap gap-1.5">{(["rename", "merge", "delete"] as Kind[]).map(action => <button key={action} type="button" className={button} onClick={() => start(p, action)}>{t(`people.actions.${action}`)}</button>)}<button type="button" className={button} onClick={() => void openEnrollment(p.id)}>{t("people.enrollVoice")}</button>{p.hasVoice && <button type="button" className={button} onClick={() => start(p, "reset")}>{t("people.actions.reset")}</button>}</div>
       </div>)}</div>
-      {enrollingId !== null && <section className="rounded-xl border border-border bg-surface-2/40 p-5" aria-label={t("people.enrollVoice")}>
-        <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{t("people.enrollVoice")} · {people.find(p => p.id === enrollingId)?.displayName}</h3><button type="button" className={button} onClick={() => { enrollmentRequest.current++; enrollmentPlayer.current?.pause(); setEnrollingId(null); setListened(null); setCandidates([]); setEnrollmentSamples([]); }}>{t("people.cancel")}</button></div>
+      {enrollingId !== null && <section ref={enrollmentPanelRef} tabIndex={-1} className="rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={t("people.enrollVoice")}>
+        <div className="flex items-center justify-between gap-3"><h3 className="font-semibold">{t("people.enrollVoice")} · {people.find(p => p.id === enrollingId)?.displayName}</h3><button type="button" className={button} onClick={closeEnrollment}>{t("people.cancel")}</button></div>
         <p className="mt-2 text-sm text-muted-foreground">{t("people.enrollmentIntro")}</p>
         {enrollmentError && <p role="alert" className="mt-3 text-sm text-destructive">{t(`people.enrollmentErrors.${enrollmentError}`, { defaultValue: t("people.actionError") })}</p>}
-        {candidates.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("people.noEnrollmentCandidates")}</p>}
+        {enrollmentLoading && <p role="status" className="mt-3 text-sm text-muted-foreground">{t("people.loading")}</p>}
+        {!enrollmentLoading && candidates.length === 0 && <p className="mt-3 text-sm text-muted-foreground">{t("people.noEnrollmentCandidates")}</p>}
         <div className="mt-3 divide-y divide-border rounded-lg border border-border">{candidates.map(candidate => <div key={candidate.id} className="flex flex-wrap items-center justify-between gap-3 p-3">
-          <div><p className="text-sm font-medium">{candidate.noteTitle}</p><p className="text-xs text-muted-foreground">{date(candidate.meetingDate)} · {candidate.durationSeconds.toFixed(1)}s · {candidate.track} · {t("people.enrollmentRows", { rows: candidate.rowIds.join(", ") })} · {t("people.neverCorrected")}</p></div>
-          <div className="flex gap-2"><button type="button" className={button} onClick={() => void playCandidate(candidate)}>{listeningId === candidate.id ? t("people.playing") : t("people.listen")}</button><button type="button" className={button} disabled={working || listened?.id !== candidate.id} onClick={() => void decideCandidate(candidate, "approve")}>{t("people.approveSample")}</button><button type="button" className={button} disabled={working || listened?.id !== candidate.id} onClick={() => void decideCandidate(candidate, "reject")}>{t("people.rejectSample")}</button></div>
+          <div><p className="text-sm font-medium">{candidate.noteTitle}</p><p className="text-xs text-muted-foreground">{date(candidate.meetingDate)} · {t("people.enrollmentDuration", { seconds: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(candidate.durationSeconds) })} · {t("people.neverCorrected")}</p></div>
+          <div className="flex gap-2"><button type="button" className={button} disabled={listeningId !== null || working} onClick={() => void playCandidate(candidate)}>{listeningId === candidate.id ? t("people.playing") : t("people.listen")}</button><button type="button" className={button} disabled={working || listened?.id !== candidate.id} onClick={() => void decideCandidate(candidate, "approve")}>{t("people.approveSample")}</button><button type="button" className={button} disabled={working || listened?.id !== candidate.id} onClick={() => void decideCandidate(candidate, "reject")}>{t("people.rejectSample")}</button></div>
         </div>)}</div>
-        {enrollmentSamples.length > 0 && <div className="mt-4"><h4 className="text-sm font-semibold">{t("people.approvedSamples")}</h4><div className="mt-2 divide-y divide-border rounded-lg border border-border">{enrollmentSamples.map(sample => <div key={sample.id} className={`flex flex-wrap items-center justify-between gap-3 p-3 ${sample.odd ? "bg-amber-500/10" : ""}`}><span className="text-sm">{sample.noteTitle} · {date(sample.meetingDate)} · {t("people.enrollmentRows", { rows: sample.rowIds.join(", ") })}{sample.odd && <> · {t("people.oddSample")}</>}</span><div className="flex gap-2">{sample.odd && <button type="button" className={button} onClick={() => onOpenNote?.(sample.noteId, sample.rowIds[0])}>{t("people.splitSample")}</button>}<button type="button" className={button} disabled={working} onClick={() => void removeEnrollmentSample(sample)}>{t("people.removeSample")}</button></div></div>)}</div></div>}
+        {enrollmentSamples.length > 0 && <div className="mt-4"><h4 className="text-sm font-semibold">{t("people.approvedSamples")}</h4><div className="mt-2 divide-y divide-border rounded-lg border border-border">{enrollmentSamples.map(sample => <div key={sample.id} className={`flex flex-wrap items-center justify-between gap-3 p-3 ${sample.odd ? "bg-warning/10" : ""}`}><span className="text-sm">{sample.noteTitle} · {date(sample.meetingDate)}{sample.odd && <> · {t("people.oddSample")}</>}</span><div className="flex gap-2">{sample.odd && <button type="button" className={button} disabled={!onOpenNote} onClick={() => onOpenNote?.(sample.noteId, sample.rowIds[0])}>{t("people.splitSample")}</button>}<button type="button" className={button} disabled={working} onClick={() => void removeEnrollmentSample(sample)}>{t("people.removeSample")}</button></div></div>)}</div></div>}
       </section>}
     </div>}
     {!loading && !error && tab === "review" && <div role="tabpanel" className="space-y-4">
@@ -297,10 +322,10 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
       {reviewError && <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm">{t("people.loadError")} <button type="button" className={button} onClick={() => setReviewReload(value => value + 1)}>{t("people.retry")}</button></div>}
       <div className="grid gap-2 sm:grid-cols-2"><Select value={reason || "__all__"} onValueChange={value => { setReason(value === "__all__" ? "" : value); setLimit(100); }}><SelectTrigger aria-label={t("people.filterReason")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="__all__">{t("people.allReasons")}</SelectItem>{reasons.map(r => <SelectItem key={r} value={r}>{filterReasonLabel(r)}</SelectItem>)}</SelectContent></Select><Select value={personFilter || "__all__"} onValueChange={value => { setPersonFilter(value === "__all__" ? "" : value); setLimit(100); }}><SelectTrigger aria-label={t("people.filterPerson")}><SelectValue /></SelectTrigger><SelectContent><SelectItem value="__all__">{t("people.allPeople")}</SelectItem>{people.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.displayName}</SelectItem>)}</SelectContent></Select></div>
       {!reviewLoading && !reviewError && shownReview.length === 0 && <p className="rounded-xl border border-border p-6 text-sm text-muted-foreground">{t("people.reviewEmpty")}</p>}
-      <div className="divide-y divide-border rounded-xl border border-border">{shownReview.slice(0, limit).map(r => <div key={`${r.noteId}:${r.rowId}`} className="grid gap-2 p-4 sm:grid-cols-[1fr_auto] sm:items-center"><div className="min-w-0"><p className="text-xs text-muted-foreground">{r.noteTitle} · {reasonLabel(r)}</p><p className="mt-1 line-clamp-2 text-sm">{r.text}</p><p className="mt-1 text-xs text-muted-foreground">{r.speakerName || t("people.unknown")}</p></div><button type="button" className={button} onClick={() => onOpenNote?.(r.noteId, r.rowId)}>{t("people.openRow")}</button></div>)}</div>
+      <div className="divide-y divide-border rounded-xl border border-border">{shownReview.slice(0, limit).map(r => <div key={`${r.noteId}:${r.rowId}`} className="grid gap-2 p-4 sm:grid-cols-[1fr_auto] sm:items-center"><div className="min-w-0"><p className="text-xs text-muted-foreground">{r.noteTitle} · {reasonLabel(r)}</p><p className="mt-1 line-clamp-2 text-sm">{r.text}</p><p className="mt-1 text-xs text-muted-foreground">{r.speakerName || t("people.unknown")}</p></div><button type="button" className={button} disabled={!onOpenNote} onClick={() => onOpenNote?.(r.noteId, r.rowId)}>{t("people.openRow")}</button></div>)}</div>
       {shownReview.length > limit && <button type="button" className={button} onClick={() => setLimit(limit + 100)}>{t("people.showMore")}</button>}
     </div>}
-    {selected && <div className="rounded-xl border border-border bg-surface-2/40 p-5" role="region" aria-label={t("people.previewTitle")}><h3 className="font-semibold">{t("people.previewTitle")} · {t(`people.actions.${kind}`)}</h3><p className="mt-1 text-sm text-muted-foreground">{selected.displayName}</p>
+    {selected && <div ref={previewRef} tabIndex={-1} className="rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring" role="region" aria-label={t("people.previewTitle")}><h3 className="font-semibold">{t("people.previewTitle")} · {t(`people.actions.${kind}`)}</h3><p className="mt-1 text-sm text-muted-foreground">{selected.displayName}</p>
       {kind === "rename" && <label className="mt-4 block text-sm">{t("people.newName")}<input dir="auto" className={`${field} mt-1`} value={name} onChange={e => setName(e.target.value)} maxLength={120} /></label>}
       {kind === "merge" && <div className="mt-4 text-sm"><label id="people-survivor-label">{t("people.survivor")}</label><Select value={survivorId ? String(survivorId) : "__choose__"} onValueChange={value => setSurvivorId(value === "__choose__" ? 0 : Number(value))}><SelectTrigger aria-labelledby="people-survivor-label" className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="__choose__">{t("people.choosePerson")}</SelectItem>{people.filter(p => p.id !== selected.id).map(p => <SelectItem key={p.id} value={String(p.id)}>{p.displayName}</SelectItem>)}</SelectContent></Select></div>}
       {previewLoading && <p role="status" className="mt-4 text-sm">{t("people.loadingPreview")}</p>}
@@ -311,8 +336,8 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
         : t("people.previewCounts", { notes: preview.noteCount, segments: preview.segmentCount, pinned: preview.pinnedCount })} {['delete', 'reset'].includes(kind) && t("people.noteVoiceEvidence", { count: preview.noteEmbeddingCount || 0 })} {t(`people.scope.${kind}`)}</p>}
       {preview && !preview.success && <p role="alert" className="mt-4 text-sm text-destructive">{t(`people.errors.${preview.error}`, { defaultValue: t("people.actionError") })}</p>}
       {actionError && <p role="alert" className="mt-4 text-sm text-destructive">{actionErrorText(actionError)}</p>}
-      <div className="mt-4 flex gap-2"><button type="button" className={button} onClick={() => setSelected(null)}>{t("people.cancel")}</button><button type="button" className={`${button} bg-primary text-primary-foreground hover:bg-primary/90`} disabled={!preview?.success || working} onClick={() => void execute()}>{working ? t("people.working") : t(`people.actions.${kind}`)}</button></div>
+      <div className="mt-4 flex gap-2"><button type="button" className={button} onClick={closePreview}>{t("people.cancel")}</button><button type="button" className={`${button} bg-primary text-primary-foreground hover:bg-primary/90`} disabled={!preview?.success || working} onClick={() => void execute()}>{working ? t("people.working") : t(`people.actions.${kind}`)}</button></div>
     </div>}
-    {report && <div role="status" className="rounded-xl border border-border bg-surface-2/40 p-5"><p className="text-sm font-medium">{report.type === "reset" ? t("people.doneReset", { name: report.name }) : t("people.done", { action: t(`people.actions.${report.type}`), name: report.name, notes: report.count, segments: report.segments })}</p>{report.type !== "delete" && <button type="button" className={`${button} mt-3`} disabled={working || actionHistory.find(item => !item.unavailableReason)?.id !== report.id} onClick={() => void undo()}>{t("people.undo")}</button>}{actionError && <p role="alert" className="mt-2 text-sm text-destructive">{actionErrorText(actionError)}</p>}</div>}
+    {report && <div ref={reportRef} tabIndex={-1} role="status" className="rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"><p className="text-sm font-medium">{report.type === "reset" ? t("people.doneReset", { name: report.name }) : t("people.done", { action: t(`people.actions.${report.type}`), name: report.name, notes: report.count, segments: report.segments })}</p>{report.type !== "delete" && (actionHistory.find(item => !item.unavailableReason)?.id === report.id ? <button type="button" className={`${button} mt-3`} disabled={working} onClick={() => void undo()}>{t("people.undo")}</button> : <p className="mt-2 text-sm text-muted-foreground">{t("people.errors.later_change")}</p>)}{actionError && <p role="alert" className="mt-2 text-sm text-destructive">{actionErrorText(actionError)}</p>}</div>}
   </div>;
 }

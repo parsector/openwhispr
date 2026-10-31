@@ -5423,6 +5423,7 @@
     "voiceConflict": "تبدو العينات المعتمدة كأصوات مختلفة. أزل العينة الشاذة أو افصلها.",
     "noEnrollmentCandidates": "لا توجد مقاطع صوتية مؤهلة.",
     "enrollmentRows": "الصف {{rows}}",
+    "enrollmentDuration": "{{seconds}} ثانية",
     "neverCorrected": "لم يُصحح",
     "listen": "استمع",
     "playing": "جارٍ التشغيل…",

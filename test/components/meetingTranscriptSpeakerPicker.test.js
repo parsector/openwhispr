@@ -167,7 +167,7 @@ test("a reassigned line of a call's mic doesn't offer This is me", async (t) => 
         speakerLockSource: "user",
         speakerStatus: "locked",
       },
-    ])
+    ], { onMapSpeaker: () => {} })
   );
   await act(() => buttonWithText("Bob").click());
   assert.ok(pickerOpen());
@@ -292,7 +292,8 @@ test("Escape closes the picker without changing the speaker", async (t) => {
 test("a row already on the user's side doesn't offer This is me", async (t) => {
   const { act } = await mount(
     t,
-    chat([{ id: "a", text: "me", source: "mic", timestamp: 1, speaker: "you" }])
+    chat([{ id: "a", text: "me", source: "mic", timestamp: 1, speaker: "you" }],
+      { onMapSpeaker: () => {} })
   );
   await act(() => buttonWithText(YOU).click());
   assert.ok(pickerOpen());

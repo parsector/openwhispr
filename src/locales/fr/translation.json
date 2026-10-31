@@ -5305,6 +5305,7 @@
     "voiceConflict": "Les extraits approuvés semblent provenir de voix différentes. Retirez ou séparez l’extrait divergent.",
     "noEnrollmentCandidates": "Aucun extrait audio admissible disponible.",
     "enrollmentRows": "Ligne {{rows}}",
+    "enrollmentDuration": "{{seconds}} secondes",
     "neverCorrected": "Jamais corrigée",
     "listen": "Écouter",
     "playing": "Lecture…",

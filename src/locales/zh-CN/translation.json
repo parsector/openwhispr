@@ -5305,6 +5305,7 @@
     "voiceConflict": "已批准的样本听起来像不同人的声音。请移除或拆分异常样本。",
     "noEnrollmentCandidates": "没有可用的音频片段。",
     "enrollmentRows": "行 {{rows}}",
+    "enrollmentDuration": "{{seconds}} 秒",
     "neverCorrected": "从未更正",
     "listen": "收听",
     "playing": "播放中…",

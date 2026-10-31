@@ -42,6 +42,24 @@ test("an unassessed provisional row still shows Not assessed", async () => {
   assert.ok(html.includes('Not assessed'));
 });
 
+test("a row explains its speaker change from the action log", async () => {
+  const segment = { id: 's2', text: 'hello', source: 'system', speaker: 'speaker_0',
+    speakerName: 'Sam', speakerLocked: true };
+  const event = { kind: 'correction', id: 'change', sequence: 1, event: {
+    actor: 'user', afterFinalAnalysis: true, affectedRowIds: ['s2'],
+    snapshots: { s2: { previous: { speakerName: 'Alex' }, next: { speakerName: 'Sam' } } },
+  } };
+  const html = await renderChat({ segments: [segment], speakerActionLog: JSON.stringify({ actions: [event] }),
+    onUndoCorrection: () => {} });
+  assert.ok(html.includes('Alex → Sam'));
+  assert.ok(html.includes('Changed after final analysis'));
+  assert.ok(html.includes('Restore'));
+  const live = await renderChat({ segments: [segment], speakerActionLog: JSON.stringify({ actions: [
+    { ...event, event: { ...event.event, afterFinalAnalysis: false } },
+  ] }) });
+  assert.ok(!live.includes('Changed after final analysis'));
+});
+
 test("consecutive rows of one speaker each keep a visible speaker control", async () => {
   const html = await renderChat({});
   // s3 follows s2 with the same effective speaker key.
@@ -130,11 +148,11 @@ test("a stretch of the user's lines reassigned to someone gets its own colour", 
     ],
   });
   assert.equal(
-    html.split("border-s-blue-400/50").length - 1,
+    html.split("border-s-info/50").length - 1,
     1,
     "Speaker 1 keeps the first colour"
   );
-  assert.equal(html.split("border-s-green-400/50").length - 1, 1, "Bob gets the next one");
+  assert.equal(html.split("border-s-success/50").length - 1, 1, "Bob gets the next one");
 });
 
 test('filtered review rows expose virtual positions for variable-height measurement', async () => {

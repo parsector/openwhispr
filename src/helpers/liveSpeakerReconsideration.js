@@ -80,12 +80,9 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
         row.uncertainty = undefined;
         row.machineReason = 'approved_voice';
         snapshots[row.id] = { previous, next: snapshot(row) };
-        row.corrections = [...(row.corrections || []), { id, rowId: row.id, sequence,
-          actor: 'machine', initialAttribution: false }];
       }
       const event = { id, noteId, actor: 'machine', timestamp: new Date().toISOString(), sequence,
         diarizationRunId: runId, clusterId: speakerId, affectedRowIds: cluster.map(row => row.id), snapshots };
-      cluster[0].corrections.at(-1).event = event;
       const nextLog = appendAction(log, { kind: 'reconsideration', id, event });
       if (!nextLog) return { assignments: [], skipped: [{ reason: 'history_full' }] };
       log = nextLog;

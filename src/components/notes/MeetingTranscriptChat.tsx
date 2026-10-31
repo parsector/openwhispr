@@ -9,6 +9,8 @@ import { cn } from "../lib/utils";
 import { MAX_SPEAKER_COUNT } from "../../constants/speakerDetection.json";
 import type { TranscriptSegment } from "../../stores/meetingRecordingStore";
 import { latestCorrection } from "../../utils/transcriptCorrections";
+import { projectSpeakerActions } from "../../utils/speakerActionProjection";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import type { Commitment } from "../../types/electron";
 import { groupFor } from "../todos/TodoGroups";
 import { sourceChipsByIndex } from "../todos/sourceChips";
@@ -37,26 +39,15 @@ const BUBBLE_STYLES = {
   },
 } as const;
 
-const SPEAKER_COLORS = [
-  "text-blue-400",
-  "text-green-400",
-  "text-purple-400",
-  "text-orange-400",
-  "text-pink-400",
-  "text-cyan-400",
-  "text-yellow-400",
-  "text-red-400",
-];
-
 const SPEAKER_BORDER_COLORS = [
-  "border-s-blue-400/50",
-  "border-s-green-400/50",
-  "border-s-purple-400/50",
-  "border-s-orange-400/50",
-  "border-s-pink-400/50",
-  "border-s-cyan-400/50",
-  "border-s-yellow-400/50",
-  "border-s-red-400/50",
+  "border-s-info/50",
+  "border-s-success/50",
+  "border-s-accent/50",
+  "border-s-warning/50",
+  "border-s-primary/50",
+  "border-s-foreground/50",
+  "border-s-muted-foreground/50",
+  "border-s-destructive/50",
 ];
 
 // One unlabelled line of transcript; measureElement corrects each row on mount.
@@ -511,7 +502,6 @@ function SpeakerLabel({
   resolvedName,
   speakerProfiles,
   participants,
-  colorIdx,
   isOriginallyYou,
   self,
   onMap,
@@ -530,7 +520,6 @@ function SpeakerLabel({
   resolvedName?: string;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
-  colorIdx: number;
   isOriginallyYou: boolean;
   self?: "offer" | "exclude";
   onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
@@ -546,7 +535,6 @@ function SpeakerLabel({
 }) {
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<"row" | "selected" | "cluster">("row");
-  const [visibleCorrections, setVisibleCorrections] = useState(20);
   const storedName = segment.speakerIsPlaceholder ? undefined : segment.speakerName;
   const speakerState =
     segment.speakerLocked || isTranscriptSpeakerLocked(segment)
@@ -578,12 +566,14 @@ function SpeakerLabel({
       <PopoverTrigger asChild>
         <button
           data-speaker-chip
+          type="button"
+          disabled={!onMap && !onAssignScope}
           className={cn(
             "inline-flex items-center text-[11px] font-medium mb-0.5 px-1.5 py-0.5 rounded-md outline-none cursor-pointer",
-            "border border-border/70 dark:border-white/20",
-            "hover:bg-foreground/5 hover:border-border/90 dark:hover:border-white/30",
-            "transition-colors duration-150 focus-visible:ring-1 focus-visible:ring-ring",
-            SPEAKER_COLORS[colorIdx],
+            "border border-border/70",
+            "hover:bg-foreground/5 hover:border-border/90",
+            "transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default",
+            "text-foreground",
             isUnmapped && "border-dashed",
             speakerState === "provisional" && "italic"
           )}
@@ -627,20 +617,15 @@ function SpeakerLabel({
           t={t}
         />
         <div className="border-t border-border/70 px-2 py-1.5 flex items-center gap-2">
-          <button type="button" className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10 focus-visible:ring-1 focus-visible:ring-ring"
+          {onAssignScope && <button type="button" className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => { onAssignScope?.(scope, segment.id, null); setOpen(false); }}>
             {t("notes.speaker.scope.unknown")}
-          </button>
-          {segment.corrections?.slice(-visibleCorrections).map((correction) => <button key={correction.id} type="button"
-            className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10 focus-visible:ring-1 focus-visible:ring-ring"
+          </button>}
+          {onUndoCorrection && segment.corrections?.filter(correction => correction.undoAvailable).map((correction) => <button key={correction.id} type="button"
+            className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10 focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => { onUndoCorrection?.(correction.id); setOpen(false); }}>
             {t("notes.speaker.restore")}
           </button>)}
-          {(segment.corrections?.length || 0) > visibleCorrections &&
-            <button type="button" className="rounded px-2 py-1 text-[11px] hover:bg-foreground/10"
-              onClick={() => setVisibleCorrections((count) => count + 20)}>
-              {t("notes.speaker.olderCorrections", { n: segment.corrections!.length - visibleCorrections })}
-            </button>}
         </div>
       </PopoverContent>
     </Popover>
@@ -649,22 +634,22 @@ function SpeakerLabel({
         <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/70">
           {segment.suggestedName}
         </span>
-        <button
+        {onConfirm && <button
           type="button"
-          onClick={() => onConfirm?.(speakerId, segment.suggestedName!, segment.suggestedProfileId!)}
-          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-emerald-500"
+          onClick={() => onConfirm(speakerId, segment.suggestedName!, segment.suggestedProfileId!)}
+          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-success"
           aria-label={t("notes.speaker.confirmed")}
         >
           <Check size={12} />
-        </button>
-        <button
+        </button>}
+        {onDismiss && <button
           type="button"
-          onClick={() => onDismiss?.(speakerId)}
+          onClick={() => onDismiss(speakerId)}
           className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-destructive"
           aria-label={t("notes.speaker.cancel")}
         >
           <X size={12} />
-        </button>
+        </button>}
       </span>
     )}
     </>
@@ -847,6 +832,12 @@ const SegmentRow = memo(function SegmentRow({
     !matchedProfile.email &&
     !isYouSpeakerName(matchedProfile.display_name, t("notes.speaker.you")) &&
     !!onAttachSpeakerEmail;
+  const rowAction = latestCorrection(segment);
+  const rowChangeNote = rowAction?.kind === "split" ? t("notes.speaker.splitCluster")
+    : rowAction?.kind === "correction" && rowAction.actor === "user" &&
+      rowAction.previous.speakerName !== rowAction.next.speakerName
+      ? `${t("people.correctionAction")}: ${rowAction.previous.speakerName || t("people.unknown")} → ${rowAction.next.speakerName || t("people.unknown")}`
+      : null;
 
   const labelElement = hasSpeaker && (
     <div className="flex items-center gap-1">
@@ -856,7 +847,6 @@ const SegmentRow = memo(function SegmentRow({
         resolvedName={activeName}
         speakerProfiles={speakerProfiles}
         participants={participants}
-        colorIdx={colorIdx}
         isOriginallyYou={isOriginallyYou}
         self={self}
         onMap={onMapSpeaker}
@@ -891,8 +881,8 @@ const SegmentRow = memo(function SegmentRow({
       style={isNewest ? { animation: "agent-message-in 200ms ease-out both" } : undefined}
     >
       {labelElement}
-      {(segment.uncertainty || segment.changedAfterFinal || segment.machineReason || latestCorrection(segment) || segment.quarantinedCorrections?.length ||
-        (!segment.speakerAssessmentAvailable && !segment.speakerLocked && !segment.speakerName)) && <div className="flex items-center gap-2 px-1 pb-0.5 text-[11px] text-muted-foreground">
+      {(segment.uncertainty || segment.changedAfterFinal || segment.machineReason || rowChangeNote || (onUndoCorrection && rowAction?.undoAvailable) || segment.quarantinedCorrections?.length ||
+        (!segment.speakerAssessmentAvailable && !segment.speakerLocked && !segment.speakerName)) && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 pb-0.5 text-[11px] text-muted-foreground">
         {segment.importedUnlabeled && !segment.speakerName &&
           <span>{t("notes.speaker.importedUnlabeled")}</span>}
         {!segment.importedUnlabeled && !segment.speakerAssessmentAvailable && !segment.speakerLocked && !segment.speakerName &&
@@ -905,8 +895,9 @@ const SegmentRow = memo(function SegmentRow({
           <span>{t("notes.speaker.reason.changed_after_final")}</span>}
         {segment.machineReason === "approved_voice" &&
           <span>{t("notes.speaker.reason.approved_voice")}</span>}
-        {latestCorrection(segment) && <button type="button" className="underline underline-offset-2 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring"
-          onClick={() => onUndoCorrection?.(latestCorrection(segment)!.id)}>{t("notes.speaker.restore")}</button>}
+        {rowChangeNote && <span dir="auto" className="min-w-0 break-words">{rowChangeNote}</span>}
+        {onUndoCorrection && rowAction?.undoAvailable && <button type="button" className="underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => onUndoCorrection(rowAction.id)}>{t("notes.speaker.restore")}</button>}
       </div>}
       <div className="relative max-w-[80%]">
         <div
@@ -961,6 +952,8 @@ const SegmentRow = memo(function SegmentRow({
 
 interface MeetingTranscriptChatProps {
   segments: TranscriptSegment[];
+  speakerActionLog?: string | null;
+  readOnly?: boolean;
   noteId?: number;
   micPartial?: string;
   systemPartial?: string;
@@ -997,6 +990,8 @@ interface MeetingTranscriptChatProps {
 
 export function MeetingTranscriptChat({
   segments: providedSegments,
+  speakerActionLog,
+  readOnly = false,
   noteId,
   micPartial,
   systemPartial,
@@ -1025,7 +1020,8 @@ export function MeetingTranscriptChat({
   focusRowId,
   contentClassName,
 }: MeetingTranscriptChatProps) {
-  const segments = useMemo(() => normalizeTranscriptSegments(providedSegments), [providedSegments]);
+  const segments = useMemo(() => normalizeTranscriptSegments(
+    projectSpeakerActions(providedSegments, speakerActionLog)), [providedSegments, speakerActionLog]);
   const { t } = useTranslation();
   const [audioStatus, setAudioStatus] = useState<{ state: string; reason?: string | null; bytes: number; startedAt?: number; recordingId?: string | number; keep?: boolean } | null>(null);
   const [audioUsage, setAudioUsage] = useState<{ usedBytes: number; budgetBytes: number; days: 3 | 7 | 30; evictions: Array<{ noteId: number; title: string; at: number }> } | null>(null);
@@ -1063,7 +1059,7 @@ export function MeetingTranscriptChat({
     refreshAudio();
   }), [noteId, refreshAudio]);
   const playAudio = useCallback(async (segment: TranscriptSegment) => {
-    if (noteId == null || (!segment.audioSpan && segment.timestamp == null) || audioStatus?.startedAt == null) return;
+    if (noteId == null || (!segment.audioSpan && (segment.timestamp == null || audioStatus?.startedAt == null))) return;
     if (playingRowId === segment.id) {
       playbackRef.current?.invalidate();
       setPlayingRowId(null);
@@ -1071,7 +1067,7 @@ export function MeetingTranscriptChat({
     }
     const request = playbackRef.current!.request();
     const position = segment.timestamp != null && segment.timestamp > 1000000000000
-      ? (segment.timestamp - audioStatus.startedAt) / 1000
+      ? (segment.timestamp - (audioStatus?.startedAt || 0)) / 1000
       : (segment.timestamp ?? (segment.audioSpan?.startSample ?? 0) / 24000);
     const span = segment.wordTimings?.length && segment.audioSpan?.recordingId ===
       (audioStatus.recordingId ?? noteId) ? segment.audioSpan : null;
@@ -1106,7 +1102,10 @@ export function MeetingTranscriptChat({
     playbackRef.current?.invalidate();
     statusRequestRef.current++;
     setPlayingRowId(null);
-    await window.electronAPI?.meetingAudioDelete?.(noteId);
+    try {
+      const result = await window.electronAPI?.meetingAudioDelete?.(noteId);
+      if (result?.state !== "deleted") setAudioMessage(t("meetingAudio.unavailable"));
+    } catch { setAudioMessage(t("meetingAudio.unavailable")); }
     refreshAudio();
   }, [noteId, audioStatus, refreshAudio, t]);
   const [sourceChips, setSourceChips] = useState<{ noteId: number; rows: Commitment[] } | null>(null);
@@ -1209,7 +1208,7 @@ export function MeetingTranscriptChat({
       if (rowMeta[i].selfSide) return;
       const key = rowMeta[i].key;
       if (!map.has(key)) {
-        map.set(key, nextIdx % SPEAKER_COLORS.length);
+        map.set(key, nextIdx % SPEAKER_BORDER_COLORS.length);
         nextIdx += 1;
       }
     });
@@ -1236,7 +1235,7 @@ export function MeetingTranscriptChat({
               used: ((audioUsage?.usedBytes || 0) / 1_000_000).toFixed(3),
               budget: ((audioUsage?.budgetBytes || 0) / 1_000_000).toFixed(3),
             })}
-          {(audioStatus.state === "complete" || audioStatus.state === "incomplete") &&
+          {!readOnly && (audioStatus.state === "complete" || audioStatus.state === "incomplete") &&
             <button type="button" onClick={() => void deleteAudio()} className="ms-2 underline focus-visible:ring-2 focus-visible:ring-ring">{t("meetingAudio.delete")}</button>}
         </div>}
         <div className="flex-1 flex items-center justify-center px-5">
@@ -1265,29 +1264,32 @@ export function MeetingTranscriptChat({
         {(audioStatus.state === "incomplete" || audioStatus.state === "key_unavailable") && <span>{audioStatus.reason?.includes("key")
           ? t("meetingAudio.keyUnavailable") : t("meetingAudio.incomplete")}</span>}
         {audioUsage && <>
-          <label className="flex items-center gap-1">{t("meetingAudio.retention")}
-            <select value={audioUsage.days} onChange={(event) => {
-              void window.electronAPI?.meetingAudioSetPolicy?.({ days: Number(event.target.value) as 3 | 7 | 30,
-                budgetBytes: audioUsage.budgetBytes }).then(refreshAudio);
-            }} className="rounded border border-border bg-background px-1 py-0.5 text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-              {[3, 7, 30].map((days) => <option key={days} value={days}>{days} {t("meetingAudio.days")}</option>)}
-            </select>
-          </label>
-          <label className="flex items-center gap-1">{t("meetingAudio.budget")}
-            <select value={audioUsage.budgetBytes} onChange={(event) => {
+          <span className="flex items-center gap-1">{t("meetingAudio.retention")}
+            <Select value={String(audioUsage.days)} onValueChange={(value) => {
+              void window.electronAPI?.meetingAudioSetPolicy?.({ days: Number(value) as 3 | 7 | 30,
+                budgetBytes: audioUsage.budgetBytes })?.then(refreshAudio)
+                .catch(() => setAudioMessage(t("meetingAudio.unavailable")));
+            }}><SelectTrigger aria-label={t("meetingAudio.retention")} className="h-8 w-auto gap-2"><SelectValue /></SelectTrigger>
+              <SelectContent>{[3, 7, 30].map((days) => <SelectItem key={days} value={String(days)}>{days} {t("meetingAudio.days")}</SelectItem>)}</SelectContent>
+            </Select>
+          </span>
+          <span className="flex items-center gap-1">{t("meetingAudio.budget")}
+            <Select value={String(audioUsage.budgetBytes)} onValueChange={(value) => {
               void window.electronAPI?.meetingAudioSetPolicy?.({ days: audioUsage.days,
-                budgetBytes: Number(event.target.value) }).then(refreshAudio);
-            }} className="rounded border border-border bg-background px-1 py-0.5 text-foreground focus-visible:ring-2 focus-visible:ring-ring">
-              {[500_000_000, 2 * 1024 * 1024 * 1024, 10_000_000_000].map((bytes) =>
-                <option key={bytes} value={bytes}>{(bytes / 1_000_000_000).toFixed(1)} GB</option>)}
-            </select>
-          </label>
+                budgetBytes: Number(value) })?.then(refreshAudio)
+                .catch(() => setAudioMessage(t("meetingAudio.unavailable")));
+            }}><SelectTrigger aria-label={t("meetingAudio.budget")} className="h-8 w-auto gap-2"><SelectValue /></SelectTrigger>
+              <SelectContent>{[500_000_000, 2 * 1024 * 1024 * 1024, 10_000_000_000].map((bytes) =>
+                <SelectItem key={bytes} value={String(bytes)}>{(bytes / 1_000_000_000).toFixed(1)} GB</SelectItem>)}</SelectContent>
+            </Select>
+          </span>
           {audioUsage.evictions.length > 0 && <span>{t("meetingAudio.evictedNotes", {
             titles: audioUsage.evictions.slice(0, 3).map((item) => item.title).join(", ")
           })}</span>}
         </>}
-        {(audioStatus.state === "complete" || audioStatus.state === "incomplete" || audioStatus.state === "recording") && <>
-          <button type="button" onClick={() => { if (noteId != null) void window.electronAPI?.meetingAudioSetKeep?.(noteId, !audioStatus.keep).then(refreshAudio); }}
+        {!readOnly && (audioStatus.state === "complete" || audioStatus.state === "incomplete" || audioStatus.state === "recording") && <>
+          <button type="button" onClick={() => { if (noteId != null) void window.electronAPI?.meetingAudioSetKeep?.(noteId, !audioStatus.keep)?.then(refreshAudio)
+            .catch(() => setAudioMessage(t("meetingAudio.unavailable"))); }}
             className="underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring">
             {t(audioStatus.keep ? "meetingAudio.unkeep" : "meetingAudio.keep")}
           </button>
@@ -1441,7 +1443,7 @@ export function MeetingTranscriptChat({
                     t={t}
                     audioState={audioStatus?.state === "unavailable" ? undefined : audioStatus?.state}
                     playing={playingRowId === segment.id}
-                    onPlayAudio={playAudio}
+                    onPlayAudio={segment.audioSpan || audioStatus?.startedAt != null ? playAudio : undefined}
                   />
                 </div>
               );

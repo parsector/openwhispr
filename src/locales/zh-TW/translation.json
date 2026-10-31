@@ -5305,6 +5305,7 @@
     "voiceConflict": "已核准的樣本聽起來像不同人的聲音。請移除或拆分異常樣本。",
     "noEnrollmentCandidates": "沒有可用的音訊片段。",
     "enrollmentRows": "列 {{rows}}",
+    "enrollmentDuration": "{{seconds}} 秒",
     "neverCorrected": "從未更正",
     "listen": "聆聽",
     "playing": "播放中…",

@@ -13647,8 +13647,7 @@ class IPCHandlers {
         const prior = locked.get(row.id);
         return prior ? { ...row, speaker: prior.speaker, speakerName: prior.speakerName,
           speakerIsPlaceholder: prior.speakerIsPlaceholder, speakerStatus: "locked",
-          speakerLocked: true, speakerLockSource: "user", unknownNumber: prior.unknownNumber,
-          corrections: prior.corrections } : row;
+          speakerLocked: true, speakerLockSource: "user", unknownNumber: prior.unknownNumber } : row;
       });
     } catch (error) {
       debugLogger.warn("Could not read saved speaker locks for final pass", { error: error.message });

@@ -5305,6 +5305,7 @@
     "voiceConflict": "Die bestätigten Aufnahmen klingen unterschiedlich. Entfernen oder trennen Sie die abweichende Aufnahme.",
     "noEnrollmentCandidates": "Keine geeigneten Audioabschnitte verfügbar.",
     "enrollmentRows": "Zeile {{rows}}",
+    "enrollmentDuration": "{{seconds}} Sekunden",
     "neverCorrected": "Nie korrigiert",
     "listen": "Anhören",
     "playing": "Wiedergabe…",

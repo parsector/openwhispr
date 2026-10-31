@@ -292,7 +292,6 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
       speakerStatus: own.speakerStatus,
       speakerLocked: own.speakerLocked,
       speakerLockSource: own.speakerLockSource,
-      corrections: own.corrections,
       quarantinedCorrections: own.quarantinedCorrections,
       suggestedName: own.suggestedName,
       suggestedProfileId: own.suggestedProfileId,

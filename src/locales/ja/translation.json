@@ -5305,6 +5305,7 @@
     "voiceConflict": "承認済みサンプルに異なる声が含まれています。異なるサンプルを削除または分離してください。",
     "noEnrollmentCandidates": "利用可能な音声区間はありません。",
     "enrollmentRows": "行 {{rows}}",
+    "enrollmentDuration": "{{seconds}} 秒",
     "neverCorrected": "修正履歴なし",
     "listen": "聞く",
     "playing": "再生中…",

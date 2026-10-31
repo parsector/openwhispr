@@ -233,8 +233,8 @@ export const mergeTranscriptSegments = (
       // A text/time match is useful for display reconciliation, but it is not
       // lineage. Keep the corrected row and show a new transcription separately.
       if (existing.id !== segment.id && (
-        isTranscriptSpeakerLocked(existing) || existing.corrections?.length ||
-        isTranscriptSpeakerLocked(segment) || segment.corrections?.length
+        isTranscriptSpeakerLocked(existing) ||
+        isTranscriptSpeakerLocked(segment)
       )) {
         unmatchedIncoming.push(normalizeTranscriptSegment({ ...segment, id: segment.id || crypto.randomUUID() }));
         return;
@@ -246,7 +246,6 @@ export const mergeTranscriptSegments = (
         unknownNumber: (preserveMatchedNumbers || segment.speaker === existingSegments[matchIndex].speaker)
           ? existingSegments[matchIndex].unknownNumber : undefined,
         unknownNumberHighWater: existingSegments[matchIndex].unknownNumberHighWater,
-        corrections: existingSegments[matchIndex].corrections,
       }));
     } else {
       unmatchedIncoming.push(
@@ -280,7 +279,6 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       correctionRevision: segment.correctionRevision,
       speakerAssessmentAvailable: segment.speakerAssessmentAvailable,
       importedUnlabeled: segment.importedUnlabeled,
-      corrections: segment.corrections,
       quarantinedCorrections: segment.quarantinedCorrections,
       text: segment.text,
       source: segment.source,

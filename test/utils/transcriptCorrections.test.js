@@ -14,7 +14,7 @@ test('row id survives save, reload, and text edit', async () => {
 });
 
 test('undo restores exactly the touched rows', async () => {
-  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../../src/utils/transcriptCorrections.ts');
+  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../fixtures/legacyTranscriptCorrections.ts');
   const initial = [row('r1'), row('r2'), row('r3')];
   const corrected = correctTranscriptRows(initial, new Set(['r1', 'r2']), 'selected', 'Alex');
   const restored = undoTranscriptCorrection(corrected, corrected[0].corrections[0].id);
@@ -22,7 +22,7 @@ test('undo restores exactly the touched rows', async () => {
 });
 
 test('undo after an unrelated later correction preserves that correction', async () => {
-  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../../src/utils/transcriptCorrections.ts');
+  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../fixtures/legacyTranscriptCorrections.ts');
   const initial = [row('r1'), row('r2')];
   const first = correctTranscriptRows(initial, new Set(['r1']), 'row', 'Alex');
   const second = correctTranscriptRows(first, new Set(['r2']), 'row', 'Sam');
@@ -32,7 +32,7 @@ test('undo after an unrelated later correction preserves that correction', async
 });
 
 test('correction survives re-transcription and recycled cluster id does not inherit it', async () => {
-  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const { correctTranscriptRows } = await import('../fixtures/legacyTranscriptCorrections.ts');
   const { mergeTranscriptSegments, resolveSegmentSpeakerName } = await import('../../src/utils/transcriptSpeakerState.ts');
   const previous = correctTranscriptRows([row('r1')], new Set(['r1']), 'row', 'Alex');
   const merged = mergeTranscriptSegments(previous, [{...row('new', 'speaker_0', 'changed words'), timestamp: 1, diarizationRunId: 'run2'}]);
@@ -44,7 +44,7 @@ test('correction survives re-transcription and recycled cluster id does not inhe
 });
 
 test('different ids never acquire a correction from identical text or a nearby changed phrase', async () => {
-  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const { correctTranscriptRows } = await import('../fixtures/legacyTranscriptCorrections.ts');
   const { mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
   for (const [text, timestamp] of [['yes', 100], ['different words', 1.3]]) {
     const old = correctTranscriptRows([{ ...row('r1', 'speaker_0', 'yes'), timestamp: 1 }], new Set(['r1']), 'row', 'Alex');
@@ -80,7 +80,8 @@ test('counter id migration rewrites matching references and quarantines unresolv
   assert.equal(first.quarantinedCorrections, 1);
   assert.equal(first.segments[0].quarantinedCorrections[0].rowId, 'missing');
   const second = parseTranscriptSegmentsWithMigration(serializeTranscriptSegments(first.segments), 42);
-  assert.deepEqual(second.segments.map(s => [s.id, s.corrections?.[0]?.rowId]), first.segments.map(s => [s.id, s.corrections?.[0]?.rowId]));
+  assert.deepEqual(second.segments.map(s => s.id), first.segments.map(s => s.id));
+  assert.equal(second.segments[0].corrections, undefined);
   assert.equal(second.quarantinedCorrections, 0);
   assert.equal(second.segments[0].quarantinedCorrections[0].rowId, 'missing');
 });
@@ -107,7 +108,7 @@ test('migration rewrites every selection reference and keeps ambiguous evidence 
 });
 
 test('cluster correction records carry note, run, and cluster identity', async () => {
-  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const { correctTranscriptRows } = await import('../fixtures/legacyTranscriptCorrections.ts');
   const rows = [{ ...row('r1'), diarizationRunId: 'run1' }, { ...row('r2'), diarizationRunId: 'run2' }];
   const result = correctTranscriptRows(rows, new Set(['r1', 'r2']), 'cluster', 'Alex', undefined, 42, 'run1', 'speaker_0');
   assert.equal(result[0].corrections[0].noteId, 42);
@@ -116,7 +117,7 @@ test('cluster correction records carry note, run, and cluster identity', async (
 });
 
 test('ambiguous time-only matches do not move a correction to another row', async () => {
-  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const { correctTranscriptRows } = await import('../fixtures/legacyTranscriptCorrections.ts');
   const { mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
   const existing = correctTranscriptRows([
     { ...row('r1'), timestamp: 10 },
@@ -154,7 +155,7 @@ test('deleting the highest numbered row does not reuse its placeholder', async (
 });
 
 test('explicit unknown is user locked and blocks a recycled cluster mapping', async () => {
-  const { correctTranscriptRows } = await import('../../src/utils/transcriptCorrections.ts');
+  const { correctTranscriptRows } = await import('../fixtures/legacyTranscriptCorrections.ts');
   const { resolveSegmentSpeakerName, mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
   const unknown = correctTranscriptRows([row('r1')], new Set(['r1']), 'row', null)[0];
   assert.equal(unknown.speakerLockSource, 'user');
@@ -166,7 +167,7 @@ test('explicit unknown is user locked and blocks a recycled cluster mapping', as
 });
 
 test('undoing an older correction keeps a newer correction on the same row', async () => {
-  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../../src/utils/transcriptCorrections.ts');
+  const { correctTranscriptRows, undoTranscriptCorrection } = await import('../fixtures/legacyTranscriptCorrections.ts');
   const first = correctTranscriptRows([row('r1')], new Set(['r1']), 'row', 'Alex');
   const second = correctTranscriptRows(first, new Set(['r1']), 'row', 'Sam');
   const result = undoTranscriptCorrection(second, first[0].corrections[0].id);

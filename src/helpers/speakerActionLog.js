@@ -10,13 +10,26 @@ function readSpeakerActionLog(note) {
   const rows = readTranscriptDocument(note.transcript).rows;
   const corrections = new Map();
   for (const row of rows) for (const record of row.corrections || []) {
+    const candidate = record.event || record;
     const previous = corrections.get(record.id);
-    if (!previous || (record.snapshots && !previous.snapshots)) corrections.set(record.id, record);
+    if (!previous || (candidate.snapshots && !previous.snapshots)) corrections.set(record.id, candidate);
+  }
+  // Older row-only notes stored one compact record on each affected row and
+  // the full event on its anchor. Recover every row snapshot before stripping.
+  for (const row of rows) for (const record of row.corrections || []) {
+    const event = corrections.get(record.id);
+    if (!event) continue;
+    if (record.previous || record.next) {
+      event.snapshots = { ...(event.snapshots || {}), [row.id]: {
+        previous: record.previous || {}, next: record.next || {},
+      } };
+    }
   }
   const legacy = note.speaker_label_undo ? JSON.parse(note.speaker_label_undo) : [];
   const adoptions = Array.isArray(legacy) ? legacy : [legacy];
   const entries = [
-    ...[...corrections.values()].map((event) => ({ kind: 'correction', id: event.id,
+    ...[...corrections.values()].map((event) => ({ kind: event.newClusterId ? 'split' :
+      event.actor === 'machine' ? 'reconsideration' : 'correction', id: event.id,
       event, order: Number(event.sequence) || 0 })),
     ...adoptions.map((record, index) => {
       const rows = record.rows || (record.before && record.after ? (() => {
@@ -32,7 +45,7 @@ function readSpeakerActionLog(note) {
     placeholder: !!value?.speakerIsPlaceholder, locked: !!value?.speakerLocked });
   let ambiguous = false;
   const compare = (a, b) => {
-    if (a.kind === b.kind) {
+    if (a.kind === b.kind || (a.kind !== 'adoption' && b.kind !== 'adoption')) {
       if (a.kind === 'adoption') return a.index - b.index;
       if (a.order !== b.order) return a.order - b.order;
       const aTime = Date.parse(a.event.timestamp), bTime = Date.parse(b.event.timestamp);
@@ -40,7 +53,7 @@ function readSpeakerActionLog(note) {
       ambiguous = true;
       return 0;
     }
-    const correction = a.kind === 'correction' ? a : b;
+    const correction = a.kind === 'adoption' ? b : a;
     const adoption = a.kind === 'adoption' ? a : b;
     const match = (side, other) => adoption.rows.some(row => {
       const saved = correction.event.snapshots?.[row.id];
@@ -64,7 +77,7 @@ function readSpeakerActionLog(note) {
   let sequence = 0;
   const actions = entries.map(({ kind, id, event, record, order }) => ({
     sequence: sequence = Math.max(sequence + 1, order), kind, id,
-    ...(kind === 'correction' ? { event } : { record }),
+    ...(kind === 'adoption' ? { record } : { event }),
   }));
   return { version: 1, nextSequence: sequence + 1, actions,
     ...(ambiguous ? { quarantined: true } : {}) };
@@ -86,4 +99,32 @@ function newestAvailableAction(log) {
   return log.actions.findLast(action => !action.unavailableReason);
 }
 
-module.exports = { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES };
+function migrateSpeakerHistory(note) {
+  let log = readSpeakerActionLog(note);
+  const raw = readTranscriptDocument(note.transcript);
+  const hasRowHistory = raw.rows.some(row => row.corrections?.length);
+  const needsMigration = hasRowHistory || !!note.speaker_label_undo || !note.speaker_action_log;
+  if (!needsMigration) return null;
+  if (note.speaker_action_log && (hasRowHistory || note.speaker_label_undo)) {
+    const legacy = readSpeakerActionLog({ ...note, speaker_action_log: null });
+    const owned = new Set(log.actions.map(action => action.kind === 'adoption'
+      ? `adoption:${JSON.stringify(action.record)}` : `id:${action.id}`));
+    const extra = legacy.actions.filter(action => !owned.has(action.kind === 'adoption'
+      ? `adoption:${JSON.stringify(action.record)}` : `id:${action.id}`));
+    if (extra.length) {
+      const next = Math.max(0, ...log.actions.map(action => action.sequence || 0)) + 1;
+      log = { ...log, quarantined: true,
+        nextSequence: next + extra.length,
+        actions: [...log.actions, ...extra.map((action, index) => ({ ...action,
+          sequence: next + index }))] };
+    }
+  }
+  const { writeTranscriptDocument } = require('./transcriptDocument');
+  const transcript = hasRowHistory ? writeTranscriptDocument(raw.rows.map(({ corrections, ...row }) => row),
+    raw.unknownNumberHighWater) : note.transcript;
+  const serialized = JSON.stringify(log);
+  if (Buffer.byteLength(serialized, 'utf8') > MAX_ACTION_LOG_BYTES) return { error: 'history_full' };
+  return { transcript, speaker_action_log: serialized, speaker_label_undo: null };
+}
+
+module.exports = { readSpeakerActionLog, migrateSpeakerHistory, appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES };

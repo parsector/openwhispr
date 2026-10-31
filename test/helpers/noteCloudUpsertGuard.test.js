@@ -716,8 +716,11 @@ test('separate stored histories migrate into one ordered undo log', (t) => {
   assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
   const stored = JSON.parse(db.getNote(note.id).speaker_action_log);
   const legacyAdoption = stored.actions.find((action) => action.kind === 'adoption').record;
-  db.db.prepare('UPDATE notes SET speaker_action_log = NULL, speaker_label_undo = ? WHERE id = ?')
-    .run(JSON.stringify([legacyAdoption]), note.id);
+  const tipRows = readTranscriptDocument(db.getNote(note.id).transcript).rows.map(row => ({ ...row,
+    corrections: stored.actions.filter(action => action.kind === 'correction' &&
+      action.event.affectedRowIds.includes(row.id)).map(action => action.event) }));
+  db.db.prepare('UPDATE notes SET transcript = ?, speaker_action_log = NULL, speaker_label_undo = ? WHERE id = ?')
+    .run(JSON.stringify(tipRows), JSON.stringify([legacyAdoption]), note.id);
   assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
   const migrated = JSON.parse(db.getNote(note.id).speaker_action_log);
   assert.equal(migrated.version, 1);
@@ -726,6 +729,54 @@ test('separate stored histories migrate into one ordered undo log', (t) => {
   assert.equal(db.getNote(note.id).speaker_label_undo, null);
   assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id, id: 'sam' }).success, true);
   assert.equal(readTranscriptDocument(db.getNote(note.id).transcript).rows[0].speakerName, 'Alex');
+});
+
+test('opening a current-tip note migrates row copies once and preserves every undo entry', (t) => {
+  const db = createDb(t); if (!db) return;
+  const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'a', text: 'A', source: 'system' },
+    { id: 'b', text: 'B', source: 'system' }]) });
+  for (const [id, rowId, name] of [['first', 'a', 'Alex'], ['second', 'b', 'Sam']])
+    assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id,
+      scope: 'row', rowIds: [rowId], name }).success, true);
+  const stored = db.getNote(note.id);
+  const actions = JSON.parse(stored.speaker_action_log).actions;
+  const tipRows = readTranscriptDocument(stored.transcript).rows.map(row => ({ ...row,
+    corrections: actions.filter(action => action.event.affectedRowIds.includes(row.id))
+      .map(action => action.event) }));
+  db.db.prepare('UPDATE notes SET transcript = ? WHERE id = ?').run(JSON.stringify(tipRows), note.id);
+  db.db.close();
+  const reopened = new DatabaseManager();
+  t.after(() => { reopened.db.close(); fs.rmSync(userDataDir, { recursive: true, force: true }); });
+  const migrated = reopened.getNote(note.id);
+  assert.deepEqual(JSON.parse(migrated.speaker_action_log).actions.map(action => action.id),
+    ['first', 'second']);
+  assert.equal(readTranscriptDocument(migrated.transcript).rows.every(row => row.corrections === undefined), true);
+  assert.equal(applySpeakerCorrection(reopened, null, { type: 'undo', noteId: note.id, id: 'second' }).success, true);
+  assert.equal(applySpeakerCorrection(reopened, null, { type: 'undo', noteId: note.id, id: 'first' }).success, true);
+});
+
+test('full action history rejects a correction atomically, including its new person', (t) => {
+  const db = createDb(t); if (!db) return;
+  const { MAX_ACTION_LOG_BYTES } = require('../../src/helpers/speakerActionLog');
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'a', text: 'Hello', source: 'system' }]) });
+  const log = { version: 1, nextSequence: 2, actions: [{ kind: 'correction', id: 'old',
+    sequence: 1, unavailableReason: 'deleted', padding: '' }] };
+  log.actions[0].padding = 'x'.repeat(MAX_ACTION_LOG_BYTES - Buffer.byteLength(JSON.stringify(log)) - 128);
+  const serialized = JSON.stringify(log);
+  const before = db.getNote(note.id).transcript;
+  db.updateNote(note.id, { speaker_action_log: serialized });
+  const result = applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id,
+    id: 'boundary', scope: 'row', rowIds: ['a'], name: 'Boundary profile' });
+  assert.equal(result.error, 'history_full');
+  assert.equal(db.getNote(note.id).transcript, before);
+  assert.equal(db.getNote(note.id).speaker_action_log, serialized);
+  assert.equal(db.db.prepare('SELECT COUNT(*) AS count FROM speaker_profiles WHERE display_name = ?')
+    .get('Boundary profile').count, 0);
 });
 
 test('legacy adoption before correction keeps its original order during migration', (t) => {
@@ -743,8 +794,11 @@ test('legacy adoption before correction keeps its original order during migratio
   assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id: 'jordan',
     scope: 'row', rowIds: ['row-1'], name: 'Jordan', rows: [] }).success, true);
   const log = JSON.parse(db.getNote(note.id).speaker_action_log);
-  db.db.prepare('UPDATE notes SET speaker_action_log = NULL, speaker_label_undo = ? WHERE id = ?')
-    .run(JSON.stringify([log.actions[0].record]), note.id);
+  const tipRows = readTranscriptDocument(db.getNote(note.id).transcript).rows.map(row => ({ ...row,
+    corrections: log.actions.filter(action => action.kind === 'correction' &&
+      action.event.affectedRowIds.includes(row.id)).map(action => action.event) }));
+  db.db.prepare('UPDATE notes SET transcript = ?, speaker_action_log = NULL, speaker_label_undo = ? WHERE id = ?')
+    .run(JSON.stringify(tipRows), JSON.stringify([log.actions[0].record]), note.id);
   assert.equal(db.takeCloudSpeakerLabels(note.id, true).error, 'later_change');
   assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id, id: 'jordan' }).success, true);
   assert.equal(db.takeCloudSpeakerLabels(note.id, true).success, true);
@@ -763,8 +817,12 @@ test('whole-transcript legacy adoption after a correction restores Alex or quara
   db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Jordan' }]) }, null);
   assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
   const after = db.getNote(note.id).transcript;
-  db.db.prepare('UPDATE notes SET speaker_action_log = NULL, speaker_label_undo = ? WHERE id = ?')
-    .run(JSON.stringify([{ before, after, timestamp: '2026-01-02T00:00:00.000Z' }]), note.id);
+  const log = readSpeakerActionLog(db.getNote(note.id));
+  const tipRows = readTranscriptDocument(after).rows.map(row => ({ ...row,
+    corrections: log.actions.filter(action => action.kind === 'correction' &&
+      action.event.affectedRowIds.includes(row.id)).map(action => action.event) }));
+  db.db.prepare('UPDATE notes SET transcript = ?, speaker_action_log = NULL, speaker_label_undo = ? WHERE id = ?')
+    .run(JSON.stringify(tipRows), JSON.stringify([{ before, after, timestamp: '2026-01-02T00:00:00.000Z' }]), note.id);
   const migrated = readSpeakerActionLog(db.getNote(note.id));
   if (migrated.quarantined) {
     assert.equal(db.takeCloudSpeakerLabels(note.id, true).error, 'history_quarantined');
@@ -854,7 +912,7 @@ test('Refresh preserves local correction history through a changed cloud assignm
   ]) }, null);
   const rows = require('../../src/helpers/transcriptDocument').readTranscriptDocument(db.getNote(note.id).transcript).rows;
   assert.equal(rows[0].speakerName, 'Alex');
-  assert.equal(rows[0].corrections[0].id, 'correction-1');
+  assert.equal(JSON.parse(db.getNote(note.id).speaker_action_log).actions[0].id, 'correction-1');
   assert.equal(rows[1].speakerName, undefined);
   assert.equal(rows[1].importedUnlabeled, true);
   assert.equal(applySpeakerCorrection(db, null, { type: 'undo', noteId: note.id,

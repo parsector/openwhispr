@@ -233,10 +233,8 @@ function plan(database, request) {
     const mappingRows = map.filter(m => m.profile_id === current.id);
     const embeddingRows = ['delete', 'reset'].includes(request.type)
       ? ownedEmbeddings(db, note.id, map, current.id, rows, current.display_name, uniqueName) : [];
-    const historyAffected = request.type === 'delete' && (
-      rows.some(row => (row.corrections || []).some(record => referencesPerson(record, current, uniqueName))) ||
-      readSpeakerActionLog(note).actions.some(action => referencesPerson(action, current, uniqueName) || affectedClearIds.has(action.id)) ||
-      (note.speaker_label_undo && referencesPerson(JSON.parse(note.speaker_label_undo), current, uniqueName)));
+    const historyAffected = request.type === 'delete' &&
+      readSpeakerActionLog(note).actions.some(action => referencesPerson(action, current, uniqueName) || affectedClearIds.has(action.id));
     if (rowIds.length || suggestionIds.length || mappingRows.length || embeddingRows.length || historyAffected) {
       affected.push({ note, rows, rowIds, suggestionIds, mappingRows, embeddingRows });
       segmentCount += activeRowCount;
@@ -266,15 +264,12 @@ function countPersonHistory(db, id) {
   const seenClearIds = new Set();
   for (const note of allNotes(db)) {
     const ids = new Set();
-    for (const row of readTranscriptDocument(note.transcript).rows)
-      for (const correction of row.corrections || []) if (referencesPerson(correction, person, unique)) ids.add(correction.id);
     for (const action of readSpeakerActionLog(note).actions)
       if (referencesPerson(action, person, unique) || clearIds.has(action.id)) {
         ids.add(action.id);
         if (clearIds.has(action.id)) seenClearIds.add(action.id);
       }
     count += ids.size;
-    if (note.speaker_label_undo && referencesPerson(JSON.parse(note.speaker_label_undo), person, unique)) count++;
   }
   return count + [...clearIds].filter(id => !seenClearIds.has(id)).length;
 }
@@ -547,8 +542,6 @@ function deletePerson(database, built) {
     const doc = readTranscriptDocument(note.transcript);
     const log = readSpeakerActionLog(note);
     const invalidCorrectionIds = new Set();
-    for (const row of doc.rows) for (const record of row.corrections || [])
-      if (referencesPerson(record, current, uniqueName)) invalidCorrectionIds.add(record.id);
     for (const action of log.actions) if (['correction', 'reconsideration'].includes(action.kind) &&
       referencesPerson(action, current, uniqueName)) invalidCorrectionIds.add(action.id);
     const targetRows = rowIdsByNote.get(note.id) || new Set();
@@ -558,11 +551,7 @@ function deletePerson(database, built) {
     let highWater = doc.unknownNumberHighWater || 0;
     const rows = doc.rows.map(row => {
       const next = { ...row };
-      const old = next.corrections || [];
-      const kept = old.filter(record => !invalidCorrectionIds.has(record.id));
-      for (const record of old) if (invalidCorrectionIds.has(record.id)) removedHistory.add(record.id);
-      if (old.length !== kept.length) changedHistory = true;
-      if (kept.length) next.corrections = kept; else delete next.corrections;
+      delete next.corrections;
       if (targetRows.has(row.id)) {
         highWater++;
         delete next.suggestedProfileId;
@@ -600,17 +589,14 @@ function deletePerson(database, built) {
         changedHistory = true;
       } else actions.push(action);
     }
-    const legacy = note.speaker_label_undo ? JSON.parse(note.speaker_label_undo) : null;
-    const nextLegacy = legacy && referencesPerson(legacy, current, uniqueName) ? null : note.speaker_label_undo;
-    if (nextLegacy === null && legacy) { removedHistory.add('legacy'); changedHistory = true; }
     historyCount += removedHistory.size;
-    for (const actionId of removedHistory) if (actionId !== 'legacy') {
+    for (const actionId of removedHistory) {
       history.invalidateAction(db, actionId, note.id);
       history.invalidateAction(db, actionId);
     }
     if (targetRows.size || suggestionRows.size || changedHistory || actions.length !== log.actions.length) {
-      db.prepare('UPDATE notes SET transcript = ?, speaker_action_log = ?, speaker_label_undo = ? WHERE id = ?')
-        .run(writeTranscriptDocument(rows, highWater), JSON.stringify({ ...log, actions }), nextLegacy, note.id);
+      db.prepare('UPDATE notes SET transcript = ?, speaker_action_log = ?, speaker_label_undo = NULL WHERE id = ?')
+        .run(writeTranscriptDocument(rows, highWater), JSON.stringify({ ...log, actions }), note.id);
       changedNoteIds.add(note.id);
     }
   }
@@ -718,10 +704,14 @@ function listReviewRows(database, selectedProfileId = null) {
   }
   for (const note of notes(database.db)) {
     const map = mappingByNote.get(note.id) || [];
+    const changedRows = new Set(readSpeakerActionLog(note).actions
+      .filter(action => ['correction', 'split'].includes(action.kind) && action.event?.afterFinalAnalysis)
+      .flatMap(action => action.event?.affectedRowIds || action.event?.rowIds || []));
     for (const row of readTranscriptDocument(note.transcript).rows) {
       if (row.deleted) continue;
       const reason = row.uncertainty?.reason ||
-        (row.changedAfterFinalAnalysis ? 'changed_after_final' : !row.speakerAssessmentAvailable && !row.speakerLocked && !row.speakerName ? 'unassessed' : null);
+        (changedRows.has(row.id) || row.changedAfterFinal || row.changedAfterFinalAnalysis ? 'changed_after_final'
+          : !row.speakerAssessmentAvailable && !row.speakerLocked && !row.speakerName ? 'unassessed' : null);
       const profileId = rowProfile(row, map) || byName.get(normalized(row.speakerName)) || null;
       if (selectedProfileId != null ? profileId !== selectedProfileId : !reason) continue;
       result.push({ noteId: note.id, noteTitle: note.title, rowId: row.id, text: row.text,

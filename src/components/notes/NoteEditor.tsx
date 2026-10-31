@@ -816,6 +816,7 @@ export default function NoteEditor({
     try {
       const result = await window.electronAPI?.applySpeakerCorrection?.({
         ...request, noteId: note.id, rows: before,
+        afterFinalAnalysis: !isRecording && !isDiarizing,
       });
       if (!result?.success || !result.rows) {
         if (isRecording && setSpeakerCorrectionPending(false)) void persistLiveTranscript();
@@ -867,7 +868,7 @@ export default function NoteEditor({
     } finally {
       releaseCorrection();
     }
-  }, [displaySegments, isRecording, note.id, refreshSpeakerProfiles, t]);
+  }, [displaySegments, isRecording, isDiarizing, note.id, refreshSpeakerProfiles, t]);
 
   const handleMapSpeaker = useCallback(async (
     speakerId: string, displayName: string, email?: string | null, profileId?: number | null
@@ -1605,6 +1606,8 @@ export default function NoteEditor({
               isRecording ? (
                 <LiveMeetingTranscriptChat
                   noteId={note.id}
+                  speakerActionLog={note.speaker_action_log}
+                  readOnly={!canEditNote}
                   focusRowId={peopleFocusRowId}
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   speakerMappings={speakerMappings}
@@ -1614,21 +1617,23 @@ export default function NoteEditor({
                   sessionDiarizationEnabled={sessionDiarizationEnabled}
                   sessionExpectedCount={sessionExpectedCount}
                   userTouchedStepper={userTouchedStepper}
-                  onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
-                  onSetSessionExpectedCount={onSetSessionExpectedCount}
-                  onMapSpeaker={handleMapSpeaker}
-                  onAssignSpeakerScope={handleAssignSpeakerScope}
-                  onSplitCluster={isRecording ? undefined : handleSplitCluster}
-                  onUndoCorrection={handleUndoSpeakerCorrection}
-                  onConfirmSuggestion={handleConfirmSuggestion}
-                  onDismissSuggestion={handleDismissSuggestion}
-                  onAttachSpeakerEmail={handleAttachSpeakerEmail}
+                  onSetSessionDiarizationEnabled={canEditNote ? onSetSessionDiarizationEnabled : undefined}
+                  onSetSessionExpectedCount={canEditNote ? onSetSessionExpectedCount : undefined}
+                  onMapSpeaker={canEditNote ? handleMapSpeaker : undefined}
+                  onAssignSpeakerScope={canEditNote ? handleAssignSpeakerScope : undefined}
+                  onSplitCluster={canEditNote && !isRecording ? handleSplitCluster : undefined}
+                  onUndoCorrection={canEditNote ? handleUndoSpeakerCorrection : undefined}
+                  onConfirmSuggestion={canEditNote ? handleConfirmSuggestion : undefined}
+                  onDismissSuggestion={canEditNote ? handleDismissSuggestion : undefined}
+                  onAttachSpeakerEmail={canEditNote ? handleAttachSpeakerEmail : undefined}
                 />
               ) : (
                 <MeetingTranscriptChat
                   focusRowId={peopleFocusRowId}
                   contentClassName={PAGE_CONTENT_WIDTH_CLASS}
                   noteId={note.id}
+                  speakerActionLog={note.speaker_action_log}
+                  readOnly={!canEditNote}
                   segments={displaySegments}
                   speakerMappings={speakerMappings}
                   speakerProfiles={knownSpeakers}
@@ -1637,17 +1642,17 @@ export default function NoteEditor({
                   sessionDiarizationEnabled={sessionDiarizationEnabled}
                   sessionExpectedCount={sessionExpectedCount}
                   userTouchedStepper={userTouchedStepper}
-                  onSetSessionDiarizationEnabled={onSetSessionDiarizationEnabled}
-                  onSetSessionExpectedCount={onSetSessionExpectedCount}
-                  onMapSpeaker={handleMapSpeaker}
-                  onAssignSpeakerScope={handleAssignSpeakerScope}
-                  onSplitCluster={isRecording ? undefined : handleSplitCluster}
-                  onUndoCorrection={handleUndoSpeakerCorrection}
-                  onConfirmSuggestion={handleConfirmSuggestion}
-                  onDismissSuggestion={handleDismissSuggestion}
-                  onAttachSpeakerEmail={handleAttachSpeakerEmail}
+                  onSetSessionDiarizationEnabled={canEditNote ? onSetSessionDiarizationEnabled : undefined}
+                  onSetSessionExpectedCount={canEditNote ? onSetSessionExpectedCount : undefined}
+                  onMapSpeaker={canEditNote ? handleMapSpeaker : undefined}
+                  onAssignSpeakerScope={canEditNote ? handleAssignSpeakerScope : undefined}
+                  onSplitCluster={canEditNote && !isRecording ? handleSplitCluster : undefined}
+                  onUndoCorrection={canEditNote ? handleUndoSpeakerCorrection : undefined}
+                  onConfirmSuggestion={canEditNote ? handleConfirmSuggestion : undefined}
+                  onDismissSuggestion={canEditNote ? handleDismissSuggestion : undefined}
+                  onAttachSpeakerEmail={canEditNote ? handleAttachSpeakerEmail : undefined}
                   selectedSegmentIds={selectedSegmentIds}
-                  onToggleSelect={handleToggleSelect}
+                  onToggleSelect={canEditNote ? handleToggleSelect : undefined}
                   reviewOnly={reviewOnly && reviewCount > 0}
                 />
               )
@@ -1716,7 +1721,7 @@ export default function NoteEditor({
               background: "linear-gradient(to bottom, transparent, var(--color-background))",
             }}
           />
-          {!isRecording && selectedSegmentIds.size > 0 && (
+          {canEditNote && !isRecording && selectedSegmentIds.size > 0 && (
             <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
               <SelectionBar
                 onClear={handleClearSelection}

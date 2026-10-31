@@ -1148,5 +1148,6 @@ test("stale finalisation after a correction is rejected on retry and preserves U
   assert.equal(saved.speakerName, undefined);
   assert.equal(saved.speakerIsPlaceholder, true);
   assert.equal(saved.speakerLockSource, "user");
-  assert.equal(saved.corrections[0].id, "correction-1");
+  const log = JSON.parse(db.getNote(note.id).speaker_action_log);
+  assert.equal(log.actions[0].id, "correction-1");
 });

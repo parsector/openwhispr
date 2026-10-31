@@ -5305,6 +5305,7 @@
     "voiceConflict": "These approved samples sound unlike one another. Remove or split the odd sample before this voice can name rows.",
     "noEnrollmentCandidates": "No eligible audio spans remain. Corrected rows and expired audio are excluded.",
     "enrollmentRows": "Row {{rows}}",
+    "enrollmentDuration": "{{seconds}} seconds",
     "neverCorrected": "Never corrected",
     "listen": "Listen",
     "playing": "Playing…",

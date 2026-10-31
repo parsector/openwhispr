@@ -5305,6 +5305,7 @@
     "voiceConflict": "I campioni approvati sembrano voci diverse. Rimuovi o separa quello discordante.",
     "noEnrollmentCandidates": "Non ci sono segmenti audio idonei.",
     "enrollmentRows": "Riga {{rows}}",
+    "enrollmentDuration": "{{seconds}} secondi",
     "neverCorrected": "Mai corretta",
     "listen": "Ascolta",
     "playing": "Riproduzione…",

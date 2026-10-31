@@ -5305,6 +5305,7 @@
     "voiceConflict": "As amostras aprovadas parecem vozes diferentes. Remova ou separe a amostra divergente.",
     "noEnrollmentCandidates": "Não há trechos de áudio elegíveis.",
     "enrollmentRows": "Linha {{rows}}",
+    "enrollmentDuration": "{{seconds}} segundos",
     "neverCorrected": "Nunca corrigida",
     "listen": "Ouvir",
     "playing": "Reproduzindo…",

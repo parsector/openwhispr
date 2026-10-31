@@ -1805,6 +1805,28 @@ class DatabaseManager {
         try { this.db.exec(`ALTER TABLE notes ADD COLUMN ${column}`); }
         catch (err) { if (!err.message.includes("duplicate column")) throw err; }
       }
+      // The action log is the durable owner of speaker edits. Move the old row
+      // records and adoption stack once, with each note committed atomically.
+      const { migrateSpeakerHistory } = require('./speakerActionLog');
+      const legacySpeakerNotes = this.db.prepare(`SELECT id, transcript, speaker_action_log, speaker_label_undo
+        FROM notes WHERE speaker_label_undo IS NOT NULL OR transcript LIKE '%"corrections"%'`).all();
+      const saveSpeakerHistory = this.db.prepare(`UPDATE notes SET transcript = ?, speaker_action_log = ?,
+        speaker_label_undo = NULL WHERE id = ?`);
+      for (const note of legacySpeakerNotes) {
+        try {
+          const migrated = migrateSpeakerHistory(note);
+          if (migrated?.error) {
+            debugLogger.error('Speaker history migration exceeds action log limit', { noteId: note.id }, 'database');
+            continue;
+          }
+          if (migrated) this.db.transaction(() => saveSpeakerHistory.run(
+            migrated.transcript, migrated.speaker_action_log, note.id))();
+        } catch (error) {
+          // Preserve the original note if its history cannot be decoded.
+          debugLogger.error('Speaker history migration failed', { noteId: note.id,
+            error: error.message }, 'database');
+        }
+      }
       this.db.exec(`CREATE TABLE IF NOT EXISTS transcript_deletion_quarantine (
         client_note_id TEXT NOT NULL, marker_json TEXT NOT NULL, reason TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
