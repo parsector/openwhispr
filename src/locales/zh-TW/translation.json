@@ -5276,6 +5276,8 @@
   },
   "people": {
     "actionHistory": "操作紀錄",
+    "deletedPerson": "已刪除的人物",
+    "noteInTrash": "在垃圾桶中；復原會還原筆記",
     "noActions": "尚無操作。",
     "correctionAction": "逐字稿修正",
     "mappingAction": "說話者對應",

@@ -5276,6 +5276,8 @@
   },
   "people": {
     "actionHistory": "Historique des actions",
+    "deletedPerson": "une personne supprimée",
+    "noteInTrash": "Dans la corbeille ; Annuler restaure la note",
     "noActions": "Aucune action pour le moment.",
     "correctionAction": "Correction de transcription",
     "mappingAction": "Association du locuteur",

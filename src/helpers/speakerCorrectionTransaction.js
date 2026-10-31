@@ -11,7 +11,7 @@ const FIELDS = [
   "uncertainty",
 ];
 const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
-const { readSpeakerActionLog, appendAction, removeNewestAction, MAX_ACTION_LOG_BYTES } = require('./speakerActionLog');
+const { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES } = require('./speakerActionLog');
 const globalHistory = require('./speakerGlobalHistory');
 const MAX_CORRECTION_BYTES = MAX_ACTION_LOG_BYTES;
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
@@ -135,12 +135,13 @@ function applySpeakerCorrection(database, identifier, request) {
         committedMapping = { runId: target.runId, clusterId: target.clusterId, value: after };
       }
     } else {
-      const action = log.actions.at(-1);
-      if (action?.unavailableReason) return { success: false, error: action.unavailableReason };
+      const action = newestAvailableAction(log);
       if (!log.actions.some((entry) => entry.kind === 'correction' && entry.id === id))
         return { success: false, error: 'correction_missing' };
+      if (!action) return { success: false, error: log.actions.at(-1)?.unavailableReason || 'later_change' };
       if (action.kind !== 'correction' || action.id !== id)
         return { success: false, error: 'later_change' };
+      if (note.deleted_at) database.db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(noteId);
       const event = action.event;
       nextLog = removeNewestAction(log);
       rows = rows.map((row) => {
@@ -176,8 +177,8 @@ function applySpeakerCorrection(database, identifier, request) {
     if (request.type === 'apply') globalHistory.add(database.db, { id, kind: 'correction',
       profileId: committedProfileId, noteId, label: request.name || 'Unknown' });
     else globalHistory.remove(database.db, id, noteId);
-    if (request.type === "undo" && log.actions.at(-1)?.event?.createdProfileId)
-      database.removeUnusedNamedSpeakerProfile?.(log.actions.at(-1).event.createdProfileId);
+    if (request.type === "undo" && newestAvailableAction(log)?.event?.createdProfileId)
+      database.removeUnusedNamedSpeakerProfile?.(newestAvailableAction(log).event.createdProfileId);
     if (committedMapping && identifier &&
       (identifier.activeRunId === undefined || identifier.activeRunId === committedMapping.runId)) {
       const { clusterId, value } = committedMapping;

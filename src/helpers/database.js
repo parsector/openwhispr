@@ -3985,6 +3985,7 @@ class DatabaseManager {
       }
 
       if (deletedNoteIds.length > 0) {
+        require('./speakerGlobalHistory').retireNotes(this.db, `SELECT id FROM notes WHERE id IN (${notePlaceholders})`, deletedNoteIds);
         this.db
           .prepare(`DELETE FROM speaker_mappings WHERE note_id IN (${notePlaceholders})`)
           .run(...deletedNoteIds);
@@ -4474,6 +4475,7 @@ class DatabaseManager {
   // Speaker rows cascade on note delete (ON DELETE CASCADE), but callers that
   // only tombstone notes still need the explicit cleanup.
   _deleteSpeakerRowsForNotes(noteIdSubquery, param) {
+    require('./speakerGlobalHistory').retireNotes(this.db, noteIdSubquery, [param]);
     this.db.prepare(`DELETE FROM speaker_mappings WHERE note_id IN (${noteIdSubquery})`).run(param);
     this.db
       .prepare(`DELETE FROM note_speaker_embeddings WHERE note_id IN (${noteIdSubquery})`)
@@ -6706,17 +6708,19 @@ class DatabaseManager {
   }
 
   undoSpeakerMapping(noteId) {
-    const { readSpeakerActionLog, removeNewestAction } = require('./speakerActionLog');
+    const { readSpeakerActionLog, removeNewestAction, newestAvailableAction } = require('./speakerActionLog');
     return this.db.transaction(() => {
       const note = this.getNote(noteId);
       if (!note) return { success: false, error: 'note_missing' };
       const log = readSpeakerActionLog(note);
       if (log.quarantined) return { success: false, error: 'history_quarantined' };
-      const action = log.actions.at(-1);
-      if (action?.unavailableReason) return { success: false, error: action.unavailableReason };
+      const action = newestAvailableAction(log);
+      if (!action && log.actions.at(-1)?.unavailableReason)
+        return { success: false, error: log.actions.at(-1).unavailableReason };
       if (action?.kind !== 'mapping') return { success: false, error: 'later_change' };
       const globalHistory = require('./speakerGlobalHistory');
       if (!globalHistory.canUndo(this.db, action.id, noteId)) return { success: false, error: 'later_change' };
+      if (note.deleted_at) this.db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(noteId);
       if (action.before) this.db.prepare(
         'INSERT OR REPLACE INTO speaker_mappings (note_id, speaker_id, profile_id, display_name) VALUES (?, ?, ?, ?)'
       ).run(noteId, action.speakerId, action.before.profile_id, action.before.display_name);
@@ -7122,7 +7126,7 @@ class DatabaseManager {
   takeCloudSpeakerLabels(id, undo = false) {
     if (!this.db) throw new Error("Database not initialized");
     const { readTranscriptDocument, writeTranscriptDocument, isTranscriptDocument } = require("./transcriptDocument");
-    const { readSpeakerActionLog, appendAction, removeNewestAction } = require('./speakerActionLog');
+    const { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableAction } = require('./speakerActionLog');
     const fields = ["speakerName", "speakerIsPlaceholder", "unknownNumber", "speaker",
       "diarizationRunId", "speakerStatus", "speakerLocked", "speakerLockSource",
       "speakerAssessmentAvailable", "suggestedName", "suggestedProfileId", "uncertainty"];
@@ -7150,8 +7154,7 @@ class DatabaseManager {
         delete stack[0].after;
       }
       if (undo) {
-        const action = log.actions.at(-1);
-        if (action?.unavailableReason) return { success: false, error: action.unavailableReason };
+        const action = newestAvailableAction(log);
         if (action?.kind !== 'adoption') return { success: false, error: 'later_change' };
         const globalHistory = require('./speakerGlobalHistory');
         const latest = globalHistory.latest(this.db);
@@ -7161,11 +7164,12 @@ class DatabaseManager {
         if (!migratedLegacy
           ? !globalHistory.canUndo(this.db, action.id, id)
           : latest && latest.note_id !== id) return { success: false, error: 'later_change' };
-        const record = stack.at(-1);
+        const record = action.record;
         const document = readTranscriptDocument(note.transcript);
         const byId = new Map(document.rows.map((row) => [row.id, row]));
         if (!record || !record.rows || record.rows.some(({ id: rowId }) => !byId.has(rowId)))
           return { success: false, error: "later_change" };
+        if (note.deleted_at) this.db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(id);
         for (const table of ["speaker_mappings", "speaker_run_mappings"])
           this.db.prepare(`DELETE FROM ${table} WHERE note_id = ?`).run(id);
         for (const row of record.mappings || []) this.db.prepare(

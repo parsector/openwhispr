@@ -166,7 +166,7 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
         <h3 className="text-sm font-semibold">{t("people.actionHistory")}</h3>
         {actionHistory.length === 0 && <p className="mt-2 text-xs text-muted-foreground">{t("people.noActions")}</p>}
         <ol className="mt-2 space-y-2">{actionHistory.map((action, index) => <li key={`${action.id}:${action.noteId}`} className="flex items-center justify-between gap-3 text-xs">
-          <span>{action.kind === "clear_voice" ? t("people.clearVoice") : action.kind === "correction" ? t("people.correctionAction") : action.kind === "mapping" ? t("people.mappingAction") : action.kind === "adoption" ? t("people.adoptionAction") : t(`people.actions.${action.kind}`, { defaultValue: action.kind })} · {action.label}</span>
+          <span>{action.kind === "clear_voice" ? t("people.clearVoice") : action.kind === "correction" ? t("people.correctionAction") : action.kind === "mapping" ? t("people.mappingAction") : action.kind === "adoption" ? t("people.adoptionAction") : t(`people.actions.${action.kind}`, { defaultValue: action.kind })} · {action.label === "deleted_person" ? t("people.deletedPerson") : action.label}{action.noteInTrash ? ` · ${t("people.noteInTrash")}` : ""}</span>
           {action.unavailableReason ? <span className="text-muted-foreground">{actionErrorText(action.unavailableReason)}</span>
             : <button type="button" className={button} disabled={working || index !== actionHistory.findIndex(item => !item.unavailableReason)} onClick={() => void undoHistory(action)}>{t("people.undo")}</button>}
         </li>)}</ol>

@@ -5276,6 +5276,8 @@
   },
   "people": {
     "actionHistory": "Action history",
+    "deletedPerson": "a deleted person",
+    "noteInTrash": "In trash; Undo restores the note",
     "noActions": "No actions yet.",
     "correctionAction": "Transcript correction",
     "mappingAction": "Speaker mapping",

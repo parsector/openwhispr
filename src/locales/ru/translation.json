@@ -5320,6 +5320,8 @@
   },
   "people": {
     "actionHistory": "История действий",
+    "deletedPerson": "удалённый человек",
+    "noteInTrash": "В корзине; отмена восстановит заметку",
     "noActions": "Действий пока нет.",
     "correctionAction": "Исправление расшифровки",
     "mappingAction": "Связь с говорящим",

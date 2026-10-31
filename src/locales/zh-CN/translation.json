@@ -5276,6 +5276,8 @@
   },
   "people": {
     "actionHistory": "操作历史",
+    "deletedPerson": "已删除的人物",
+    "noteInTrash": "在回收站中；撤销会恢复笔记",
     "noActions": "暂无操作。",
     "correctionAction": "转录修正",
     "mappingAction": "说话人映射",

@@ -1,6 +1,6 @@
 const { randomUUID } = require('node:crypto');
 const { readTranscriptDocument, writeTranscriptDocument } = require('./transcriptDocument');
-const { readSpeakerActionLog, appendAction, removeNewestAction } = require('./speakerActionLog');
+const { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableAction } = require('./speakerActionLog');
 const { isEventGuest } = require('./eventAttendees');
 const history = require('./speakerGlobalHistory');
 
@@ -26,7 +26,7 @@ function allMappings(db) {
     }
   return grouped;
 }
-function ownedEmbeddings(db, noteId, mappings, profileId, rows, personName, uniqueName) {
+function ownedSpeakerIds(mappings, profileId, rows, personName, uniqueName) {
   const speakers = new Set(mappings.filter(m => m.profile_id === profileId)
     .map(m => m.speaker_id || m.cluster_id));
   for (const row of rows) {
@@ -35,6 +35,10 @@ function ownedEmbeddings(db, noteId, mappings, profileId, rows, personName, uniq
     if (mapped === profileId || uniqueName && mapped == null && normalized(row.speakerName) === normalized(personName))
       speakers.add(row.speaker);
   }
+  return speakers;
+}
+function ownedEmbeddings(db, noteId, mappings, profileId, rows, personName, uniqueName) {
+  const speakers = ownedSpeakerIds(mappings, profileId, rows, personName, uniqueName);
   return db.prepare('SELECT note_id, speaker_id, embedding FROM note_speaker_embeddings WHERE note_id = ?')
     .all(noteId).filter(row => speakers.has(row.speaker_id));
 }
@@ -389,9 +393,11 @@ function undoPersonAction(database, id) {
       const note = database.getNote(noteId);
       return { note, log: note && readSpeakerActionLog(note) };
     });
-    if (affected.some(x => !x.note || x.log.actions.at(-1)?.id !== id)) return { success: false, error: 'later_change' };
+    if (affected.some(x => !x.note || newestAvailableAction(x.log)?.id !== id)) return { success: false, error: 'later_change' };
     const person = action.profileBefore;
     if (!person) return { success: false, error: 'action_missing' };
+    for (const { note } of affected) if (note.deleted_at)
+      db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(note.id);
     if (action.action === 'merge' || action.action === 'delete') writeProfile(db, person);
     else db.prepare('UPDATE speaker_profiles SET display_name = ?, email = ?, embedding = ?, sample_count = ?, updated_at = ? WHERE id = ?')
       .run(person.display_name, person.email, Buffer.from(person.embedding, 'base64'), person.sample_count, person.updated_at, person.id);
@@ -399,7 +405,7 @@ function undoPersonAction(database, id) {
       db.prepare('UPDATE person_attendance SET profile_id = ? WHERE note_id = ? AND identity_key = ? AND profile_id = ?')
         .run(person.id, row.note_id, row.identity_key, action.survivorId);
     for (const { note, log } of affected) {
-      const entry = log.actions.at(-1);
+      const entry = newestAvailableAction(log);
       const doc = readTranscriptDocument(note.transcript);
       const before = new Map(entry.before.map(row => [row.id, row]));
       const fields = ['speakerName', 'speakerIsPlaceholder', 'unknownNumber', 'suggestedProfileId', 'correctionRevision'];
@@ -456,8 +462,13 @@ function deletePerson(database, built) {
     const snapshot = JSON.parse(saved.snapshot);
     if (!snapshot.profiles.some(p => p.id === current.id)) continue;
     snapshot.profiles = snapshot.profiles.filter(p => p.id !== current.id);
-    const ownedSpeakers = new Set(snapshot.mappings.filter(m => m.profile_id === current.id)
-      .map(m => `${m.note_id}:${m.speaker_id || m.cluster_id}`));
+    const ownedSpeakers = new Set();
+    for (const note of allNotes(db)) {
+      const mappings = snapshot.mappings.filter(m => m.note_id === note.id);
+      const rows = readTranscriptDocument(note.transcript).rows;
+      for (const speaker of ownedSpeakerIds(mappings, current.id, rows, current.display_name, uniqueName))
+        ownedSpeakers.add(`${note.id}:${speaker}`);
+    }
     snapshot.noteEmbeddings = (snapshot.noteEmbeddings || []).filter(row => !ownedSpeakers.has(`${row.note_id}:${row.speaker_id}`));
     snapshot.mappings = snapshot.mappings.filter(m => m.profile_id !== current.id);
     snapshot.personDeleted = true;
@@ -548,7 +559,7 @@ function deletePerson(database, built) {
     db.prepare('DELETE FROM note_speaker_embeddings WHERE note_id = ? AND speaker_id = ?').run(row.note_id, row.speaker_id);
   db.prepare('UPDATE person_attendance SET profile_id = NULL WHERE profile_id = ?').run(current.id);
   db.prepare('DELETE FROM speaker_profiles WHERE id = ?').run(current.id);
-  history.add(db, { id: randomUUID(), kind: 'delete', profileId: current.id, label: current.display_name });
+  history.add(db, { id: randomUUID(), kind: 'delete', profileId: current.id, label: 'deleted_person' });
   history.invalidateProfile(db, current.id);
   return { success: true, id: null, ...preview, historyCount, noteIds: [...changedNoteIds] };
 }
@@ -608,11 +619,13 @@ function undoClearVoiceData(database, id) {
     const { profiles, mappings, noteEmbeddings, noteIds, personDeleted } = JSON.parse(saved.snapshot);
     if (personDeleted) return { success: false, error: 'person_deleted' };
     const notesToUpdate = noteIds.map(noteId => database.getNote(noteId));
-    if (notesToUpdate.some(note => !note || readSpeakerActionLog(note).actions.at(-1)?.id !== id))
+    if (notesToUpdate.some(note => !note || newestAvailableAction(readSpeakerActionLog(note))?.id !== id))
       return { success: false, error: 'later_change' };
     if (profiles.some(p => !profile(db, p.id))) return { success: false, error: 'person_deleted' };
     if (db.prepare('SELECT COUNT(*) AS n FROM speaker_mappings').get().n || db.prepare('SELECT COUNT(*) AS n FROM speaker_run_mappings').get().n)
       return { success: false, error: 'later_change' };
+    for (const note of notesToUpdate) if (note.deleted_at)
+      db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(note.id);
     for (const p of profiles) db.prepare('UPDATE speaker_profiles SET embedding = ?, sample_count = ? WHERE id = ?')
       .run(Buffer.from(p.embedding, 'base64'), p.sample_count, p.id);
     for (const m of mappings) {

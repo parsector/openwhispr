@@ -32,6 +32,112 @@ function fixture(t) {
   const rows = (id) => readTranscriptDocument(db.getNote(id).transcript).rows;
   return { db, person, note, rows };
 }
+test('permanent note deletion retires its correction and a trashed note says so', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const older = applyPersonAction(f.db, { type: 'reset', profileId: alex.id });
+  const note = f.note('correction', [{ id: 'a', speaker: 'speaker_0' }], []);
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  assert.equal(applySpeakerCorrection(f.db, null, { type: 'apply', noteId: note, id: 'correction-delete', scope: 'row', rowIds: ['a'], name: 'Someone' }).success, true);
+  assert.equal(f.db.deleteNote(note).success, true);
+  assert.equal(listPeopleActions(f.db).find(a => a.id === 'correction-delete').noteInTrash, 1);
+  assert.equal(f.db.hardDeleteNote(note).success, true);
+  assert.equal(listPeopleActions(f.db).some(a => a.id === 'correction-delete'), false);
+  assert.equal(undoPersonAction(f.db, older.id).success, true);
+});
+test('local folder deletion retires note corrections and exposes older undo', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const older = applyPersonAction(f.db, { type: 'reset', profileId: alex.id });
+  const folder = f.db.createFolder('Disposable').folder;
+  const note = f.note('inside', [{ id: 'a', speaker: 'speaker_0' }], []);
+  f.db.db.prepare('UPDATE notes SET folder_id = ? WHERE id = ?').run(folder.id, note);
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  assert.equal(applySpeakerCorrection(f.db, null, { type: 'apply', noteId: note, id: 'folder-correction', scope: 'row', rowIds: ['a'], name: 'Someone' }).success, true);
+  assert.equal(f.db.deleteFolder(folder.id).success, true);
+  assert.equal(listPeopleActions(f.db).some(a => a.id === 'folder-correction'), false);
+  assert.equal(undoPersonAction(f.db, older.id).success, true);
+});
+test('deleting one note retires a multi-note global rename without stranding older undo', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1), bob = f.person('Bob', 2);
+  const older = applyPersonAction(f.db, { type: 'reset', profileId: alex.id });
+  const doomed = f.note('doomed', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Bob' }], [['speaker_0', bob]]);
+  const survivor = f.note('survivor', [{ id: 'b', speaker: 'speaker_1', speakerName: 'Bob' }], [['speaker_1', bob]]);
+  const rename = applyPersonAction(f.db, { type: 'rename', profileId: bob.id, name: 'Robert' });
+  assert.equal(rename.success, true);
+  assert.equal(f.db.hardDeleteNote(doomed).success, true);
+  assert.equal(listPeopleActions(f.db).find(a => a.id === rename.id).unavailableReason, 'action_missing');
+  assert.equal(readSpeakerActionLog(f.db.getNote(survivor)).actions.at(-1).unavailableReason, 'action_missing');
+  assert.equal(undoPersonAction(f.db, older.id).success, true);
+});
+test('undoing a correction in trash restores the note before changing its transcript', t => {
+  const f = fixture(t); if (!f) return;
+  const note = f.note('trashed', [{ id: 'a', speaker: 'speaker_0' }], []);
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  assert.equal(applySpeakerCorrection(f.db, null, { type: 'apply', noteId: note, id: 'correction-trash', scope: 'row', rowIds: ['a'], name: 'Alex' }).success, true);
+  assert.equal(f.db.deleteNote(note).success, true);
+  assert.equal(applySpeakerCorrection(f.db, null, { type: 'undo', noteId: note, id: 'correction-trash' }).success, true);
+  assert.equal(f.db.getNote(note).deleted_at, null);
+  assert.equal(f.rows(note)[0].speakerName, undefined);
+});
+test('unavailable note markers cannot strand an older person action', t => {
+  const f = fixture(t); if (!f) return;
+  const bob = f.person('Bob', 1), alex = f.person('Alex', 2);
+  const note = f.note('Bob', [{ id: 'b', speaker: 'speaker_0', speakerName: 'Bob' }], [['speaker_0', bob]]);
+  const rename = applyPersonAction(f.db, { type: 'rename', profileId: bob.id, name: 'Robert' });
+  assert.equal(rename.success, true);
+  assert.equal(clearVoiceData(f.db, previewClearVoiceData(f.db)).success, true);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: alex.id }).success, true);
+  assert.equal(listPeopleActions(f.db).find(a => a.id === rename.id).unavailableReason, null);
+  assert.equal(undoPersonAction(f.db, rename.id).success, true);
+  assert.equal(f.rows(note)[0].speakerName, 'Bob');
+});
+test('deletion removes unmapped name-only biometric bytes from clear snapshots', t => {
+  const f = fixture(t); if (!f) return;
+  const alex = f.person('Alex', 1);
+  const note = f.note('name only', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Alex' }], []);
+  f.db.db.prepare('INSERT INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)').run(note, 'speaker_0', Buffer.alloc(2048, 3));
+  const clear = clearVoiceData(f.db, previewClearVoiceData(f.db));
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: alex.id }).success, true);
+  const saved = JSON.parse(f.db.db.prepare('SELECT snapshot FROM speaker_voice_clear_actions WHERE id = ?').get(clear.id).snapshot);
+  assert.equal(saved.noteEmbeddings.some(row => row.note_id === note && row.speaker_id === 'speaker_0'), false);
+  assert.equal(saved.profiles.some(row => row.id === alex.id), false);
+  assert.equal(JSON.stringify(saved).includes(Buffer.alloc(2048, 3).toString('base64')), false);
+  assert.equal(JSON.stringify(saved).includes(Buffer.alloc(2048, 1).toString('base64')), false);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 0);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM speaker_profiles WHERE id = ?').get(alex.id).n, 0);
+});
+test('deleted identity names are purged from persisted history across restart', t => {
+  const f = fixture(t); if (!f) return;
+  const secret = 'Private Person Name';
+  const person = f.person(secret, 1);
+  assert.equal(applyPersonAction(f.db, { type: 'rename', profileId: person.id, name: 'Private New Name' }).success, true);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: person.id }).success, true);
+  const reopened = new DatabaseManager();
+  t.after(() => reopened.db.close());
+  const actions = listPeopleActions(reopened);
+  assert.equal(actions[0].kind, 'delete');
+  assert.equal(actions[0].label, 'deleted_person');
+  assert.equal(JSON.stringify(actions).includes(secret), false);
+  assert.equal(JSON.stringify(actions).includes('Private New Name'), false);
+  assert.equal(JSON.stringify(reopened.db.prepare('SELECT * FROM speaker_global_actions').all()).includes(secret), false);
+  reopened.db.prepare("UPDATE speaker_global_actions SET label = ? WHERE kind = 'delete'").run(secret);
+  assert.equal(JSON.stringify(listPeopleActions(reopened)).includes(secret), false);
+});
+test('history compacts 200 renames and displays the newest undoable action', t => {
+  const f = fixture(t); if (!f) return;
+  const person = f.person('Alex', 1), deleted = f.person('Deleted', 2);
+  const older = applyPersonAction(f.db, { type: 'rename', profileId: person.id, name: 'Alec' });
+  let newest;
+  for (let i = 0; i < 200; i++) newest = applyPersonAction(f.db, { type: 'rename', profileId: deleted.id, name: `Deleted ${i}` });
+  assert.equal(listPeopleActions(f.db).find(a => !a.unavailableReason).id, newest.id);
+  assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: deleted.id }).success, true);
+  const actions = listPeopleActions(f.db);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM speaker_global_actions').get().n <= 100, true);
+  assert.equal(actions.find(a => !a.unavailableReason).id, older.id);
+  assert.equal(undoPersonAction(f.db, older.id).success, true);
+});
 test('people list counts notes and segments and flags near duplicates and used once', t => {
   const f = fixture(t); if (!f) return;
   const alex = f.person('Alexandra', 1), typo = f.person('Alexndra', 2);

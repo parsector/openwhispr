@@ -3773,7 +3773,7 @@ declare global {
 
       // Speaker name mapping
       listPeople?: () => Promise<Array<{ id: number; displayName: string; email: string | null; noteCount: number; meetingCount: number; segmentCount: number; lastHeard: string | null; lastSeen: string | null; sampleCount: number; hasVoice: boolean; legacyVoice: boolean; needsReapproval: boolean; usedOnce: boolean; duplicates: Array<{ id: number; name: string }> }>>;
-      listPeopleActions?: () => Promise<Array<{ id: string; kind: string; profileId: number | null; noteId: number | null; label: string; unavailableReason: string | null; createdAt: string }>>;
+      listPeopleActions?: () => Promise<Array<{ id: string; kind: string; profileId: number | null; noteId: number | null; label: string; unavailableReason: string | null; noteInTrash: 0 | 1; createdAt: string }>>;
       undoPeopleMapping?: (noteId: number) => Promise<{ success: boolean; error?: string }>;
       onPeopleChanged?: (callback: () => void) => () => void;
       speakerHistoryStatus?: (noteId: number) => Promise<{ quarantined: boolean }>;

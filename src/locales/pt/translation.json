@@ -5276,6 +5276,8 @@
   },
   "people": {
     "actionHistory": "Histórico de ações",
+    "deletedPerson": "uma pessoa excluída",
+    "noteInTrash": "Na lixeira; Desfazer restaura a nota",
     "noActions": "Ainda não há ações.",
     "correctionAction": "Correção da transcrição",
     "mappingAction": "Mapeamento de falante",

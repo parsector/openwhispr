@@ -5276,6 +5276,8 @@
   },
   "people": {
     "actionHistory": "Cronologia delle azioni",
+    "deletedPerson": "una persona eliminata",
+    "noteInTrash": "Nel cestino; Annulla ripristina la nota",
     "noActions": "Nessuna azione.",
     "correctionAction": "Correzione della trascrizione",
     "mappingAction": "Associazione relatore",

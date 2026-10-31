@@ -5394,6 +5394,8 @@
   },
   "people": {
     "actionHistory": "سجل الإجراءات",
+    "deletedPerson": "شخص محذوف",
+    "noteInTrash": "في سلة المهملات؛ التراجع يستعيد الملاحظة",
     "noActions": "لا توجد إجراءات بعد.",
     "correctionAction": "تصحيح النص",
     "mappingAction": "ربط المتحدث",

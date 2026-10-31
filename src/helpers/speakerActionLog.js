@@ -78,7 +78,12 @@ function appendAction(log, action) {
 }
 
 function removeNewestAction(log) {
-  return { ...log, actions: log.actions.slice(0, -1) };
+  const index = log.actions.findLastIndex(action => !action.unavailableReason);
+  return { ...log, actions: log.actions.filter((_, i) => i !== index) };
 }
 
-module.exports = { readSpeakerActionLog, appendAction, removeNewestAction, MAX_ACTION_LOG_BYTES };
+function newestAvailableAction(log) {
+  return log.actions.findLast(action => !action.unavailableReason);
+}
+
+module.exports = { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES };

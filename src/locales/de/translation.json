@@ -5276,6 +5276,8 @@
   },
   "people": {
     "actionHistory": "Aktionsverlauf",
+    "deletedPerson": "eine gelöschte Person",
+    "noteInTrash": "Im Papierkorb; Rückgängig stellt die Notiz wieder her",
     "noActions": "Noch keine Aktionen.",
     "correctionAction": "Transkriptkorrektur",
     "mappingAction": "Sprecherzuordnung",

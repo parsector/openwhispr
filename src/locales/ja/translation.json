@@ -5276,6 +5276,8 @@
   },
   "people": {
     "actionHistory": "操作履歴",
+    "deletedPerson": "削除された人物",
+    "noteInTrash": "ゴミ箱にあります。元に戻すとノートが復元されます",
     "noActions": "操作はまだありません。",
     "correctionAction": "文字起こしの修正",
     "mappingAction": "話者の対応付け",
