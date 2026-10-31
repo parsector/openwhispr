@@ -12,6 +12,7 @@ import { latestCorrection } from "../../utils/transcriptCorrections";
 import type { Commitment } from "../../types/electron";
 import { groupFor } from "../todos/TodoGroups";
 import { sourceChipsByIndex } from "../todos/sourceChips";
+import { MeetingAudioPlayback } from "../../utils/meetingAudioPlayback";
 import {
   isSelfSideSegment,
   isTranscriptSpeakerLocked,
@@ -1024,15 +1025,19 @@ export function MeetingTranscriptChat({
 }: MeetingTranscriptChatProps) {
   const segments = useMemo(() => normalizeTranscriptSegments(providedSegments), [providedSegments]);
   const { t } = useTranslation();
-  const [audioStatus, setAudioStatus] = useState<{ state: string; reason?: string | null; bytes: number; startedAt?: number; keep?: boolean } | null>(null);
+  const [audioStatus, setAudioStatus] = useState<{ state: string; reason?: string | null; bytes: number; startedAt?: number; recordingId?: string | number; keep?: boolean } | null>(null);
   const [audioUsage, setAudioUsage] = useState<{ usedBytes: number; budgetBytes: number; days: 3 | 7 | 30; evictions: Array<{ noteId: number; title: string; at: number }> } | null>(null);
   const [audioMessage, setAudioMessage] = useState("");
   const [playingRowId, setPlayingRowId] = useState<string | null>(null);
-  const playerRef = useRef<HTMLAudioElement | null>(null);
-  const playerUrlRef = useRef<string | null>(null);
+  const playbackRef = useRef<MeetingAudioPlayback | null>(null);
+  if (!playbackRef.current) playbackRef.current = new MeetingAudioPlayback();
+  const statusRequestRef = useRef(0);
   const refreshAudio = useCallback(() => {
     if (noteId == null) return;
-    void window.electronAPI?.meetingAudioStatus?.(noteId).then((status) => setAudioStatus(status));
+    const request = ++statusRequestRef.current;
+    void window.electronAPI?.meetingAudioStatus?.(noteId).then((status) => {
+      if (request === statusRequestRef.current) setAudioStatus(status);
+    });
     void window.electronAPI?.meetingAudioUsage?.().then((usage) => setAudioUsage(usage));
   }, [noteId]);
   useEffect(() => {
@@ -1040,27 +1045,39 @@ export function MeetingTranscriptChat({
     const timer = window.setInterval(refreshAudio, isRecording ? 5000 : 30000);
     return () => window.clearInterval(timer);
   }, [refreshAudio, isRecording]);
-  useEffect(() => () => {
-    playerRef.current?.pause();
-    if (playerUrlRef.current) URL.revokeObjectURL(playerUrlRef.current);
-  }, []);
+  useEffect(() => () => { playbackRef.current?.invalidate(); statusRequestRef.current++; }, [noteId]);
+  useEffect(() => {
+    if (["deleted", "expired", "evicted", "unavailable", "key_unavailable"].includes(audioStatus?.state || "")) {
+      playbackRef.current?.invalidate();
+      setPlayingRowId(null);
+    }
+  }, [audioStatus?.state]);
+  useEffect(() => window.electronAPI?.onMeetingAudioChanged?.((change) => {
+    if (change.noteId !== noteId) return;
+    playbackRef.current?.invalidate();
+    statusRequestRef.current++;
+    setPlayingRowId(null);
+    setAudioStatus({ state: change.state, bytes: 0 });
+    refreshAudio();
+  }), [noteId, refreshAudio]);
   const playAudio = useCallback(async (segment: TranscriptSegment) => {
     if (noteId == null || (!segment.audioSpan && segment.timestamp == null) || audioStatus?.startedAt == null) return;
     if (playingRowId === segment.id) {
-      playerRef.current?.pause();
+      playbackRef.current?.invalidate();
       setPlayingRowId(null);
       return;
     }
-    playerRef.current?.pause();
-    if (playerUrlRef.current) URL.revokeObjectURL(playerUrlRef.current);
+    const request = playbackRef.current!.request();
     const position = segment.timestamp != null && segment.timestamp > 1000000000000
       ? (segment.timestamp - audioStatus.startedAt) / 1000
       : (segment.timestamp ?? (segment.audioSpan?.startSample ?? 0) / 24000);
-    const span = segment.wordTimings?.length && segment.audioSpan?.recordingId === noteId ? segment.audioSpan : null;
+    const span = segment.wordTimings?.length && segment.audioSpan?.recordingId ===
+      (audioStatus.recordingId ?? noteId) ? segment.audioSpan : null;
     const from = Math.max(0, span ? span.startSample / 24000 : position - 6);
     const to = span ? span.endSample / 24000 : Math.max(from + 0.25, position + 2);
     try {
       const response = await window.electronAPI?.meetingAudioSpan?.(noteId, span?.trackId || segment.source, from, to);
+      if (!playbackRef.current?.isCurrent(request)) return;
       if (!response?.wav) {
         setAudioMessage(t(`meetingAudio.${response?.state === "not_flushed" ? "notFlushed" : "unavailable"}`));
         refreshAudio();
@@ -1069,11 +1086,11 @@ export function MeetingTranscriptChat({
       const binary = atob(response.wav);
       const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
       const url = URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
-      playerUrlRef.current = url;
       const player = new Audio(url);
-      playerRef.current = player;
-      player.onended = () => setPlayingRowId(null);
+      if (!playbackRef.current?.install(request, url, player)) return;
+      player.onended = () => { if (playbackRef.current?.isCurrent(request)) setPlayingRowId(null); };
       await player.play();
+      if (!playbackRef.current?.isCurrent(request)) return;
       setPlayingRowId(segment.id);
       setAudioMessage(response.partial ? t("meetingAudio.partial") : "");
     } catch {
@@ -1084,9 +1101,10 @@ export function MeetingTranscriptChat({
     if (noteId == null || !audioStatus) return;
     const size = `${new Intl.NumberFormat().format(audioStatus.bytes)} B`;
     if (!window.confirm(t("meetingAudio.confirmDelete", { size }))) return;
-    await window.electronAPI?.meetingAudioDelete?.(noteId);
-    playerRef.current?.pause();
+    playbackRef.current?.invalidate();
+    statusRequestRef.current++;
     setPlayingRowId(null);
+    await window.electronAPI?.meetingAudioDelete?.(noteId);
     refreshAudio();
   }, [noteId, audioStatus, refreshAudio, t]);
   const [sourceChips, setSourceChips] = useState<{ noteId: number; rows: Commitment[] } | null>(null);

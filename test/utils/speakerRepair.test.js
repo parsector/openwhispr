@@ -23,6 +23,43 @@ test('resumed session and old session never duplicate Unknown speaker 1', async 
   assert.deepEqual(merged.segments.map(s => s.unknownNumber), [1, 2]);
 });
 
+test('split child keeps its own id when its text equals a sibling', async () => {
+  const { mergeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const existing = [
+    { ...row('a', 'run'), text: 'hello thanks' },
+    { ...row('b', 'run'), text: 'thanks' },
+  ];
+  const incoming = [
+    { ...row('a', 'run'), text: 'hello' },
+    { ...row('child', 'run'), text: 'thanks', parentRowId: 'a', splitStartWord: 1 },
+    { ...row('b', 'run'), text: 'thanks' },
+  ];
+  assert.deepEqual(mergeTranscriptSegments(existing, incoming).map(item => item.id), ['a', 'b', 'child']);
+});
+
+test('locked Unknown keeps its number when a new final cluster appears first', async () => {
+  const { normalizeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const rows = [
+    { ...row('new', 'final', 'speaker_2'), unknownNumber: 1 },
+    { ...row('locked', 'live', 'speaker_0'), unknownNumber: 1,
+      speakerLocked: true, speakerLockSource: 'user', speakerIsPlaceholder: true },
+  ];
+  const result = normalizeTranscriptSegments(rows, 1);
+  assert.equal(result[1].unknownNumber, 1);
+  assert.notEqual(result[0].unknownNumber, 1);
+});
+
+test('two locked Unknown rows in one cluster retain one shared number', async () => {
+  const { normalizeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const rows = [
+    { ...row('a', 'run'), unknownNumber: 3, speakerLocked: true,
+      speakerLockSource: 'user', speakerIsPlaceholder: true },
+    { ...row('b', 'run'), unknownNumber: 3, speakerLocked: true,
+      speakerLockSource: 'user', speakerIsPlaceholder: true },
+  ];
+  assert.deepEqual(normalizeTranscriptSegments(rows, 3).map(item => item.unknownNumber), [3, 3]);
+});
+
 test('the 51st correction leaves the first event undoable', async () => {
   const { correctTranscriptRows, undoTranscriptCorrection } = await import('../../src/utils/transcriptCorrections.ts');
   let rows = [row('a', 'one')];

@@ -9,8 +9,14 @@ const MODEL_RATE = 16000;
 const MIN_SPANS = 3;
 const MIN_MEETINGS = 2;
 const MAX_SAMPLES = 20;
-// Conservative guard until the owner's labelled audio can calibrate a boundary.
-const MIN_OWN_SIMILARITY = 0.65;
+// These are uncalibrated guards, not thresholds measured on owner-labelled audio.
+const calibration = Object.freeze({
+  ownSimilarity: { value: 0.65, status: 'uncalibrated' },
+  minRms: { value: 0.01, status: 'uncalibrated' },
+  clippingFraction: { value: 0.01, status: 'uncalibrated' },
+  echoCorrelation: { value: 0.88, status: 'uncalibrated' },
+});
+const MIN_OWN_SIMILARITY = calibration.ownSimilarity.value;
 const played = new Map();
 
 const vector = bytes => new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
@@ -42,7 +48,7 @@ function clean(db, sample) {
   const ids = JSON.parse(sample.row_ids || '[]');
   return ids.length > 0 && ids.every(id => {
     const row = rows.find(item => item.id === id);
-    return row && !row.deleted && !row.corrections?.length &&
+    return row && !row.deleted && !(row.corrections || []).some(item => !item.initialAttribution) &&
       !Number(row.correctionRevision) && attributed(db, sample.note_id, row, sample.profile_id);
   });
 }
@@ -58,9 +64,12 @@ function state(db, profileId) {
   const meetings = new Set(good.map(sample => sample.note_id)).size;
   // Graduation rule: three uncorrected, internally consistent approved spans
   // from at least two recordings. A correction to any contributing row demotes.
-  const usable = good.length >= MIN_SPANS && meetings >= MIN_MEETINGS && !conflict && good.length === all.length;
+  const requiresReview = !!db.prepare('SELECT voice_needs_reapproval FROM speaker_profiles WHERE id = ?')
+    .get(profileId)?.voice_needs_reapproval;
+  const usable = good.length >= MIN_SPANS && meetings >= MIN_MEETINGS && !conflict &&
+    good.length === all.length && !requiresReview;
   return { cleanSpans: good.length, meetings, approvedSpans: all.length, conflict, usable,
-    vectors: conflict ? [] : vectors, good };
+    requiresReview, vectors: conflict ? [] : vectors, good };
 }
 function progress(database, profileId) {
   const { cleanSpans, meetings, approvedSpans, conflict, usable } = state(database.db, profileId);
@@ -100,7 +109,8 @@ function rebuild(db, profileId) {
     if (centroid) embedding = packed(centroid);
   }
   db.prepare('UPDATE speaker_profiles SET embedding = ?, sample_count = ?, voice_usable = ?, voice_needs_reapproval = ? WHERE id = ?')
-    .run(embedding, result.cleanSpans, Number(result.usable), Number(result.conflict || result.good.length !== result.approvedSpans), profileId);
+    .run(embedding, result.cleanSpans, Number(result.usable),
+      Number(result.requiresReview || result.conflict || result.good.length !== result.approvedSpans), profileId);
   return result;
 }
 function candidateId(profileId, noteId, rowId, span) {
@@ -118,11 +128,12 @@ function listCandidates(database, store, profileId) {
     const rows = readTranscriptDocument(note.transcript).rows;
     for (const row of rows) {
       const span = row.audioSpan;
-      if (row.deleted || row.corrections?.length || Number(row.correctionRevision) ||
+      if (row.deleted || (row.corrections || []).some(item => !item.initialAttribution) || Number(row.correctionRevision) ||
         row.uncertainty || row.overlap || row.speakerStatus === 'provisional' ||
         row.speakerStatus === 'suggested' ||
         !attributed(db, note.id, row, profileId) ||
-        !span || span.recordingId !== note.id || !['mic', 'system'].includes(span.trackId)) continue;
+        !span || span.recordingId !== (audioState.recordingId ?? note.id) ||
+        !['mic', 'system'].includes(span.trackId)) continue;
       const overlapsOtherVoice = rows.some(other => other !== row && !other.deleted &&
         other.speaker !== row.speaker && other.audioSpan?.trackId === span.trackId &&
         other.audioSpan?.startSample < span.endSample && other.audioSpan?.endSample > span.startSample);
@@ -147,6 +158,9 @@ function listCandidates(database, store, profileId) {
       offered.push({ id, profileId, noteId: note.id, noteTitle: note.title,
         meetingDate: note.created_at, rowIds: [row.id], track: span.trackId,
         startSample, endSample, durationSeconds: duration,
+        revision: createHash('sha256').update(JSON.stringify([row.text, row.speaker,
+          row.speakerName, row.speakerLockSource, row.speakerStatus, row.suggestedProfileId,
+          row.correctionRevision, row.corrections, row.audioSpan])).digest('hex'),
         everCorrected: false });
     }
   }
@@ -170,8 +184,24 @@ function play(database, store, id) {
     candidate.startSample / RATE, candidate.endSample / RATE);
   if (audio.state !== 'available' || audio.partial) return { state: 'unavailable' };
   const token = randomUUID();
-  played.set(id, { token, expires: Date.now() + 10 * 60 * 1000 });
+  const now = (store.now || Date.now)();
+  played.set(id, { token, revision: candidate.revision,
+    completeAfter: now + Math.ceil(candidate.durationSeconds * 1000),
+    expires: now + 10 * 60 * 1000, completed: false });
   return { state: 'available', wav: audio.wav, token, candidate };
+}
+function complete(database, store, id, token) {
+  const session = played.get(id);
+  const now = (store.now || Date.now)();
+  if (!session || session.token !== token || session.expires < now || now < session.completeAfter)
+    return { success: false, error: 'playback_required' };
+  const candidate = locate(database, store, id);
+  if (!candidate || candidate.revision !== session.revision) {
+    played.delete(id);
+    return { success: false, error: 'candidate_unavailable' };
+  }
+  session.completed = true;
+  return { success: true };
 }
 async function embed(wav, extractor) {
   if (wav.subarray(0, 4).toString() !== 'RIFF') return null;
@@ -183,7 +213,8 @@ async function embed(wav, extractor) {
     power += amplitude * amplitude;
     if (Math.abs(amplitude) >= 32750) clipped++;
   }
-  if (Math.sqrt(power / samples) / 32768 < 0.01 || clipped / samples > 0.01) return null;
+  if (Math.sqrt(power / samples) / 32768 < calibration.minRms.value ||
+      clipped / samples > calibration.clippingFraction.value) return null;
   const windows = [];
   const windowLength = Math.min(samples, RATE * 3);
   for (let k = 0; k < 3; k++) {
@@ -214,15 +245,16 @@ function echoLike(wav, other) {
     const a = wav.readInt16LE(44 + i * 2), b = other.readInt16LE(44 + i * 2);
     dot += a * b; left += a * a; right += b * b;
   }
-  return left > 0 && right > 0 && dot / Math.sqrt(left * right) > 0.88;
+  return left > 0 && right > 0 && dot / Math.sqrt(left * right) > calibration.echoCorrelation.value;
 }
 async function decide(database, store, extractor, id, choice, token) {
   const playback = played.get(id);
-  played.delete(id);
-  if (!['approve', 'reject'].includes(choice) || !playback || playback.token !== token || playback.expires < Date.now())
+  if (!['approve', 'reject'].includes(choice) || !playback || playback.token !== token ||
+      !playback.completed || playback.expires < (store.now || Date.now)())
     return { success: false, error: 'playback_required' };
   const candidate = locate(database, store, id);
-  if (!candidate) return { success: false, error: 'candidate_unavailable' };
+  played.delete(id);
+  if (!candidate || candidate.revision !== playback.revision) return { success: false, error: 'candidate_unavailable' };
   const audio = store.span(candidate.noteId, candidate.track,
     candidate.startSample / RATE, candidate.endSample / RATE);
   if (audio.state !== 'available' || audio.partial) return { success: false, error: 'audio_unavailable' };
@@ -247,6 +279,7 @@ async function decide(database, store, extractor, id, choice, token) {
         embedding, approved_at, row_ids, meeting_date) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`)
         .run(id, candidate.profileId, candidate.noteId, candidate.track, candidate.startSample,
           candidate.endSample, packed(embedding), JSON.stringify(candidate.rowIds), candidate.meetingDate);
+      db.prepare('UPDATE speaker_profiles SET voice_needs_reapproval = 0 WHERE id = ?').run(candidate.profileId);
       rebuild(db, candidate.profileId);
     } else {
       db.prepare(`INSERT INTO voice_enrollment_candidates (id, profile_id, note_id, track, start_sample,
@@ -308,13 +341,26 @@ function rowCorrected(db, noteId, rowIds) {
       !db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'voice_exemplars'").get()) return;
   const affected = db.prepare(`SELECT DISTINCT profile_id FROM voice_exemplars WHERE note_id = ?`).all(noteId);
   for (const { profile_id } of affected) {
-    const touched = samples(db, profile_id).some(sample => sample.note_id === noteId &&
+    const touched = samples(db, profile_id).filter(sample => sample.note_id === noteId &&
       JSON.parse(sample.row_ids || '[]').some(id => rowIds.includes(id)));
-    if (touched) {
+    if (touched.length) {
+      for (const sample of touched) db.prepare('DELETE FROM voice_exemplars WHERE id = ?').run(sample.id);
+      db.prepare('UPDATE speaker_profiles SET voice_usable = 0, voice_needs_reapproval = 1 WHERE id = ?').run(profile_id);
       rebuild(db, profile_id);
-      db.prepare('UPDATE speaker_profiles SET voice_needs_reapproval = 1 WHERE id = ?').run(profile_id);
     }
   }
+}
+function attributionChangedRows(beforeRaw, afterRaw) {
+  const before = new Map(readTranscriptDocument(beforeRaw).rows.map(row => [row.id, row]));
+  const after = readTranscriptDocument(afterRaw).rows;
+  const fields = ['speaker', 'speakerName', 'speakerIsPlaceholder', 'suggestedProfileId',
+    'speakerLockSource', 'speakerStatus', 'diarizationRunId', 'correctionRevision',
+    'audioSpan', 'deleted'];
+  return after.filter(row => {
+    const prior = before.get(row.id);
+    return !prior || fields.some(field => JSON.stringify(prior[field]) !== JSON.stringify(row[field]));
+  }).map(row => row.id).concat([...before.keys()].filter(id =>
+    !after.some(row => row.id === id)));
 }
 function snapshotEvidence(db, actionId, profileId = null, mergedInto = null) {
   db.exec('CREATE TABLE IF NOT EXISTS voice_sample_action_snapshots (id TEXT PRIMARY KEY, snapshot TEXT NOT NULL)');
@@ -334,8 +380,9 @@ function snapshotEvidence(db, actionId, profileId = null, mergedInto = null) {
       survivorBefore: survivor && { ...survivor, embedding: survivor.embedding.toString('base64') } }));
   return { exemplars: exemplars.length, candidates: candidates.length };
 }
-function removeEvidence(db, profileId = null) {
+function removeEvidence(db, profileId = null, preserveRejections = false) {
   for (const table of ['voice_exemplars', 'voice_enrollment_candidates']) {
+    if (table === 'voice_enrollment_candidates' && preserveRejections) continue;
     const where = profileId == null ? '' : ' WHERE profile_id = ?';
     db.prepare(`DELETE FROM ${table}${where}`).run(...(profileId == null ? [] : [profileId]));
   }
@@ -347,8 +394,10 @@ function restoreEvidence(db, actionId) {
   if (!found) return [];
   const { exemplars, candidates, derivedProfiles = [], mergedInto, survivorBefore } = JSON.parse(found.snapshot);
   const profiles = new Set(derivedProfiles);
+  const sourceDeleted = noteId => !!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='meeting_audio_tombstones'").get() &&
+    !!db.prepare('SELECT 1 FROM meeting_audio_tombstones WHERE note_id = ?').get(noteId);
   for (const row of exemplars) {
-    if (!db.prepare('SELECT 1 FROM notes WHERE id = ?').get(row.note_id) ||
+    if (sourceDeleted(row.note_id) || !db.prepare('SELECT 1 FROM notes WHERE id = ?').get(row.note_id) ||
         !db.prepare('SELECT 1 FROM speaker_profiles WHERE id = ?').get(row.profile_id)) continue;
     const columns = Object.keys(row);
     db.prepare(`INSERT OR REPLACE INTO voice_exemplars (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`)
@@ -356,7 +405,7 @@ function restoreEvidence(db, actionId) {
     profiles.add(row.profile_id);
   }
   for (const row of candidates) {
-    if (!db.prepare('SELECT 1 FROM notes WHERE id = ?').get(row.note_id) ||
+    if (sourceDeleted(row.note_id) || !db.prepare('SELECT 1 FROM notes WHERE id = ?').get(row.note_id) ||
         !db.prepare('SELECT 1 FROM speaker_profiles WHERE id = ?').get(row.profile_id)) continue;
     const columns = Object.keys(row);
     db.prepare(`INSERT OR REPLACE INTO voice_enrollment_candidates (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`)
@@ -383,6 +432,9 @@ function pruneSnapshots(db, field, id) {
       snapshot[table] = snapshot[table].filter(row => row[field] !== id);
       changed ||= snapshot[table].length !== before;
     }
+    if (field === 'note_id' && changed && snapshot.survivorBefore) {
+      snapshot.survivorBefore = null;
+    }
     if (field === 'profile_id' && snapshot.derivedProfiles?.includes(id)) {
       snapshot.derivedProfiles = snapshot.derivedProfiles.filter(profileId => profileId !== id);
       changed = true;
@@ -399,8 +451,15 @@ function pruneSnapshots(db, field, id) {
   }
 }
 function removeNoteEvidence(db, noteId) {
-  const affected = db.prepare('SELECT DISTINCT profile_id FROM voice_exemplars WHERE note_id = ?')
-    .all(noteId).map(row => row.profile_id);
+  const affected = new Set(db.prepare('SELECT DISTINCT profile_id FROM voice_exemplars WHERE note_id = ?')
+    .all(noteId).map(row => row.profile_id));
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_sample_action_snapshots'").get())
+    for (const saved of db.prepare('SELECT snapshot FROM voice_sample_action_snapshots').all())
+      for (const row of JSON.parse(saved.snapshot).exemplars || [])
+        if (row.note_id === noteId) affected.add(row.profile_id);
+  db.exec('CREATE TABLE IF NOT EXISTS meeting_audio_tombstones (note_id INTEGER PRIMARY KEY)');
+  db.prepare('INSERT OR IGNORE INTO meeting_audio_tombstones (note_id) VALUES (?)').run(noteId);
+  require('./peopleActions').scrubDeletedRecordingSnapshots(db, noteId, [...affected]);
   pruneSnapshots(db, 'note_id', noteId);
   if (db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'speaker_global_actions'").get())
     db.prepare(`UPDATE speaker_global_actions SET unavailable_reason = 'audio_deleted'
@@ -414,5 +473,6 @@ function removeNoteEvidence(db, noteId) {
     db.prepare('UPDATE speaker_profiles SET voice_needs_reapproval = 1 WHERE id = ?').run(profileId);
   }
 }
-module.exports = { listCandidates, listSamples, play, decide, progress, rebuild, undo, removeSample, rowCorrected,
-  snapshotEvidence, removeEvidence, restoreEvidence, pruneSnapshots, removeNoteEvidence };
+module.exports = { listCandidates, listSamples, play, complete, decide, progress, rebuild, undo, removeSample, rowCorrected,
+  snapshotEvidence, removeEvidence, restoreEvidence, pruneSnapshots, removeNoteEvidence, calibration,
+  attributionChangedRows };

@@ -263,7 +263,9 @@ class LiveSpeakerIdentifier {
     if (!rows?.length || rows.some(row => row.speakerLockSource === 'user' && !row.speakerName))
       return refused('explicit_unknown');
     if (rows.some(row => row.source !== 'system' || row.audioSpan &&
-      (row.audioSpan.trackId !== 'system' || row.audioSpan.recordingId !== noteId)))
+      (row.audioSpan.trackId !== 'system' ||
+        row.audioSpan.recordingId !== noteId &&
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.audioSpan.recordingId))))
       return refused('not_current_meeting');
     if (rows.some(row => row.speakerLocked || row.speakerLockSource === 'user')) return refused('locked');
     if (rows.some(row => row.overlap || row.uncertainty?.reason === 'overlapping_speech'))

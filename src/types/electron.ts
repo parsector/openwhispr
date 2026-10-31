@@ -3659,6 +3659,7 @@ declare global {
         reason?: string | null;
         bytes: number;
         startedAt?: number;
+        recordingId?: string | number;
         keep?: boolean;
       }>;
       meetingAudioUsage?: () => Promise<{ usedBytes: number; budgetBytes: number; days: 3 | 7 | 30; evictions: Array<{ noteId: number; title: string; at: number }> }>;
@@ -3669,6 +3670,7 @@ declare global {
         partial?: boolean;
       }>;
       meetingAudioDelete?: (noteId: number) => Promise<{ state: string; freedBytes?: number }>;
+      onMeetingAudioChanged?: (callback: (change: { noteId: number; state: string }) => void) => () => void;
       meetingAudioSetPolicy?: (policy: { days: 3 | 7 | 30; budgetBytes: number }) => Promise<{
         usedBytes: number; budgetBytes: number; removed: Array<{ noteId: number; reason: string }>;
       }>;
@@ -3777,6 +3779,7 @@ declare global {
       listVoiceEnrollmentSamples?: (profileId: number) => Promise<Array<{ id: string; profileId: number; noteId: number; noteTitle: string; meetingDate: string; rowIds: string[]; durationSeconds: number; odd: boolean }>>;
       removeVoiceEnrollmentSample?: (id: string) => Promise<{ success: boolean; error?: string }>;
       playVoiceEnrollmentCandidate?: (id: string) => Promise<{ state: string; wav?: string; token?: string }>;
+      completeVoiceEnrollmentCandidate?: (id: string, token: string) => Promise<{ success: boolean; error?: string }>;
       decideVoiceEnrollmentCandidate?: (id: string, choice: 'approve' | 'reject', token: string) => Promise<{ success: boolean; error?: string }>;
       undoVoiceEnrollmentAction?: (id: string) => Promise<{ success: boolean; error?: string }>;
       listPeopleActions?: () => Promise<Array<{ id: string; kind: string; profileId: number | null; noteId: number | null; label: string; unavailableReason: string | null; noteInTrash: 0 | 1; createdAt: string }>>;

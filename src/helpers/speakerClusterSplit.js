@@ -59,7 +59,7 @@ async function proposeClusterSplit(rows, selectedIds, noteId, audioStore, extrac
   if (track && extractor?.isAvailable?.()) {
     for (const row of rows) {
       const span = row.audioSpan;
-      if (!span || span.recordingId !== noteId || span.trackId !== track ||
+      if (!span || span.recordingId !== (audioStore.status(noteId).recordingId ?? noteId) || span.trackId !== track ||
         row.uncertainty?.reason === "overlapping_speech") continue;
       const end = span.endSample / 24000;
       const start = Math.max(span.startSample / 24000, end - 8);

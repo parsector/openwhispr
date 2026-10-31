@@ -12,6 +12,32 @@ const crypto = require("crypto");
 const { readTranscriptDocument } = require("../src/helpers/transcriptDocument");
 const { evaluateSpeakerAccuracy } = require("./lib/speaker-accuracy-eval");
 
+function pcmWavDuration(file) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const size = fs.fstatSync(fd).size;
+    const header = Buffer.alloc(12);
+    if (fs.readSync(fd, header, 0, 12, 0) !== 12 ||
+        header.toString('ascii', 0, 4) !== 'RIFF' || header.toString('ascii', 8, 12) !== 'WAVE') return null;
+    let byteRate = 0, dataBytes = 0;
+    for (let offset = 12; offset + 8 <= size;) {
+      const chunk = Buffer.alloc(8);
+      fs.readSync(fd, chunk, 0, 8, offset);
+      const length = chunk.readUInt32LE(4);
+      if (offset + 8 + length > size) return null;
+      if (chunk.toString('ascii', 0, 4) === 'fmt ' && length >= 16) {
+        const fmt = Buffer.alloc(16);
+        fs.readSync(fd, fmt, 0, 16, offset + 8);
+        if (fmt.readUInt16LE(0) !== 1) return null;
+        byteRate = fmt.readUInt32LE(8);
+      }
+      if (chunk.toString('ascii', 0, 4) === 'data') dataBytes += length;
+      offset += 8 + length + (length % 2);
+    }
+    return byteRate > 0 && dataBytes > 0 ? dataBytes / byteRate : null;
+  } finally { fs.closeSync(fd); }
+}
+
 function main() {
   const flag = process.argv.indexOf("--manifest");
   if (flag < 0 || !process.argv[flag + 1]) {
@@ -32,12 +58,15 @@ function main() {
   } finally { fs.closeSync(fd); }
   const digest = hash.digest("hex");
   if (!manifest.sha256 || digest !== manifest.sha256) throw Error("Audio SHA-256 does not match manifest");
+  const measuredDuration = pcmWavDuration(audioPath);
   const final = JSON.parse(fs.readFileSync(path.resolve(base, manifest.final), "utf8"));
   const rows = Array.isArray(final) ? final : readTranscriptDocument(
     typeof final.transcript === "string" ? final.transcript : JSON.stringify(final)).rows;
   const actions = manifest.actions ? JSON.parse(fs.readFileSync(path.resolve(base, manifest.actions), "utf8")).actions : null;
-  const result = evaluateSpeakerAccuracy(manifest.truth, rows, manifest.durationSeconds, actions);
-  process.stdout.write(JSON.stringify({ audioSha256: digest, ...result }, null, 2) + "\n");
+  const result = evaluateSpeakerAccuracy(manifest.truth, rows,
+    measuredDuration ?? manifest.durationSeconds, actions);
+  process.stdout.write(JSON.stringify({ audioSha256: digest,
+    durationVerified: measuredDuration != null, ...result }, null, 2) + "\n");
 }
 
 try { main(); } catch (error) { console.error(error.message); process.exitCode = 1; }

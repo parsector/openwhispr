@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { randomUUID } = require("crypto");
 const { spawnSync } = require("child_process");
 const { getFFmpegPath } = require("./ffmpegUtils");
 const { encryptBytes, decryptBytes } = require("./secretCrypto");
@@ -10,9 +11,11 @@ const DEFAULT_BUDGET = 2 * 1024 * 1024 * 1024;
 const TRACKS = ["mic", "system"];
 
 function writeJsonAtomic(file, value) {
-  const temp = `${file}.pending`;
-  fs.writeFileSync(temp, JSON.stringify(value), { mode: 0o600 });
-  fs.renameSync(temp, file);
+  const temp = `${file}.${randomUUID()}.pending`;
+  try {
+    fs.writeFileSync(temp, JSON.stringify(value), { flag: "wx", mode: 0o600 });
+    fs.renameSync(temp, file);
+  } finally { fs.rmSync(temp, { force: true }); }
 }
 
 function encode(pcm) {
@@ -67,14 +70,17 @@ function unpack(bytes) {
 }
 
 class MeetingAudioStore {
-  constructor(root, { database = null, now = Date.now, encryption = { encryptBytes, decryptBytes }, onEvicted = null } = {}) {
+  constructor(root, { database = null, now = Date.now, encryption = { encryptBytes, decryptBytes }, onEvicted = null,
+    onChanged = null } = {}) {
     this.root = root;
     this.database = database;
     this.now = now;
     this.encryption = encryption;
     this.onEvicted = onEvicted;
+    this.onChanged = onChanged;
     this.active = new Map();
     fs.mkdirSync(root, { recursive: true, mode: 0o700 });
+    if (!fs.lstatSync(root).isDirectory()) throw new Error("Unsafe meeting audio root");
     this.policyFile = path.join(root, "policy.json");
     this.policy = this._readJson(this.policyFile) || { days: 3, budgetBytes: DEFAULT_BUDGET };
     this.noticeFile = path.join(root, "evictions.json");
@@ -87,9 +93,57 @@ class MeetingAudioStore {
     try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; }
   }
 
-  _dir(noteId) { return path.join(this.root, String(noteId)); }
+  _dir(noteId) {
+    this._noteId(noteId);
+    const dir = path.join(this.root, String(noteId));
+    if (fs.existsSync(dir) && !fs.lstatSync(dir).isDirectory())
+      throw new Error("Unsafe meeting audio directory");
+    return dir;
+  }
   _manifestPath(noteId) { return path.join(this._dir(noteId), "manifest.json"); }
-  _manifest(noteId) { return this._readJson(this._manifestPath(noteId)); }
+  _noteIdentity(noteId) {
+    const db = this.database?.db;
+    if (!db || !db.prepare("PRAGMA table_info(notes)").all().some(column => column.name === "client_note_id")) return null;
+    return db.prepare("SELECT client_note_id FROM notes WHERE id = ?").get(noteId)?.client_note_id || null;
+  }
+  _manifest(noteId) {
+    this._noteId(noteId);
+    const file = this._manifestPath(noteId);
+    if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) return null;
+    const manifest = this._readJson(file);
+    if (!manifest || manifest.noteId !== noteId) return null;
+    const identity = this._noteIdentity(noteId);
+    if (identity && manifest.noteIdentity !== identity) return null;
+    if (!["recording", "complete", "incomplete", "deleted", "expired", "evicted"].includes(manifest.status)) return null;
+    try {
+      for (const track of TRACKS) {
+        const chunks = manifest.tracks?.[track]?.chunks;
+        if (manifest.tracks?.[track] && !Array.isArray(chunks)) return null;
+        for (const chunk of chunks || []) this._chunkFile(noteId, chunk.file);
+      }
+    } catch { return null; }
+    return manifest;
+  }
+  _chunkFile(noteId, name) {
+    if (typeof name !== "string" || !/^(mic|system)-\d{7}\.owac$/.test(name) || path.basename(name) !== name)
+      throw new Error("Invalid audio chunk name");
+    const dir = this._dir(noteId);
+    const file = path.resolve(dir, name);
+    if (path.dirname(file) !== path.resolve(dir) ||
+        fs.existsSync(file) && !fs.lstatSync(file).isFile()) throw new Error("Unsafe audio chunk path");
+    return file;
+  }
+  _ownedChunks(noteId) {
+    const dir = this._dir(noteId);
+    if (!fs.existsSync(dir)) return [];
+    if (!fs.lstatSync(dir).isDirectory()) throw new Error("Unsafe meeting audio directory");
+    return fs.readdirSync(dir).filter(name => /^(mic|system)-\d{7}\.owac$/.test(name))
+      .map(name => {
+        const file = path.resolve(dir, name);
+        if (path.dirname(file) !== path.resolve(dir)) throw new Error("Unsafe audio chunk path");
+        return file;
+      });
+  }
   _noteId(noteId) {
     if (!Number.isSafeInteger(noteId) || noteId <= 0) throw new Error("Invalid meeting note ID");
     return noteId;
@@ -103,15 +157,22 @@ class MeetingAudioStore {
     const dir = this._dir(noteId);
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     let manifest = this._manifest(noteId);
+    if (manifest && ["deleted", "expired", "evicted"].includes(manifest.status))
+      throw new Error("Meeting audio was deleted");
+    if (!manifest && fs.existsSync(this._manifestPath(noteId))) {
+      // A stale or mismatched recording must not attach to a reused note ID.
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    }
     const prior = manifest && TRACKS.flatMap((track) => manifest.tracks?.[track]?.chunks || [])[0];
     if (prior) {
-      try { this.encryption.decryptBytes(fs.readFileSync(path.join(dir, prior.file))); }
+      try { this.encryption.decryptBytes(fs.readFileSync(this._chunkFile(noteId, prior.file))); }
       catch { throw new Error("Audio encryption key is unavailable for this meeting"); }
     }
     if (!manifest || !manifest.tracks?.mic || !manifest.tracks?.system ||
       !["recording", "complete", "incomplete"].includes(manifest.status)) {
       manifest = {
-        version: 1, noteId, startedAt, status: "recording",
+        version: 1, noteId, noteIdentity: this._noteIdentity(noteId), recordingId: randomUUID(), startedAt, status: "recording",
         retentionDays: this.policy.days, keep: false, reason: null,
         tracks: Object.fromEntries(TRACKS.map((track) => [track, {
           startedAt, sampleRate: RATE, codec: "ogg/opus", byteLength: 0,
@@ -172,7 +233,7 @@ class MeetingAudioStore {
     }
     // The authenticated chunk is durable before its index entry. Repair can
     // recover a chunk if the process dies before the manifest rename.
-    const chunkFile = path.join(this._dir(noteId), filename);
+    const chunkFile = this._chunkFile(noteId, filename);
     fs.writeFileSync(chunkFile, payload, { flag: "wx", mode: 0o600 });
     state.chunks.push(entry);
     state.sampleCount += sampleCount;
@@ -197,11 +258,15 @@ class MeetingAudioStore {
   fail(noteId, reason) {
     const session = this.active.get(noteId);
     let manifest = session?.manifest || this._manifest(noteId);
+    for (const track of TRACKS) session?.pending[track]?.fill(0);
     this.active.delete(noteId);
+    const raw = this._readJson(this._manifestPath(noteId));
+    if (["deleted", "expired", "evicted"].includes(raw?.status)) return;
     if (!manifest) {
       this._noteId(noteId);
       fs.mkdirSync(this._dir(noteId), { recursive: true, mode: 0o700 });
-      manifest = { version: 1, noteId, startedAt: this.now(), retentionDays: this.policy.days,
+      manifest = { version: 1, noteId, noteIdentity: this._noteIdentity(noteId), recordingId: randomUUID(),
+        startedAt: this.now(), retentionDays: this.policy.days,
         keep: false, tracks: {} };
     }
     manifest.status = "incomplete";
@@ -214,7 +279,8 @@ class MeetingAudioStore {
       if (!/^\d+$/.test(name)) continue;
       const noteId = Number(name);
       const manifest = this._manifest(noteId);
-      if (!manifest || manifest.version !== 1) continue;
+      if (!manifest || manifest.version !== 1 ||
+          ["deleted", "expired", "evicted"].includes(manifest.status)) continue;
       let changed = false;
       if (manifest.status === "recording") {
         manifest.status = "incomplete";
@@ -229,8 +295,9 @@ class MeetingAudioStore {
         let byteLength = 0;
         for (const fileName of fs.readdirSync(this._dir(noteId)).filter((file) =>
           new RegExp(`^${track}-\\d{7}\\.owac$`).test(file)).sort()) {
-          const file = path.join(this._dir(noteId), fileName);
+          let file;
           try {
+            file = this._chunkFile(noteId, fileName);
             const bytes = fs.readFileSync(file);
             const { entry } = unpack(this.encryption.decryptBytes(bytes));
             if (entry.file !== fileName || !Number.isSafeInteger(entry.startSample) ||
@@ -239,10 +306,16 @@ class MeetingAudioStore {
             sampleCount = Math.max(sampleCount, entry.startSample + entry.sampleCount);
             byteLength += bytes.length;
           } catch {
-            // A missing or changed key must never rewrite the manifest around
-            // undecryptable ciphertext. It can be repaired after key recovery.
-            if (changed) writeJsonAtomic(this._manifestPath(noteId), manifest);
-            return;
+            // Preserve an indexed ciphertext chunk if its key is temporarily
+            // unavailable; continue recovering independent chunks and meetings.
+            const prior = state.chunks.find(chunk => chunk.file === fileName);
+            if (prior && Number.isSafeInteger(prior.startSample) &&
+                Number.isSafeInteger(prior.sampleCount) && prior.sampleCount > 0) {
+              entries.push(prior);
+              sampleCount = Math.max(sampleCount, prior.startSample + prior.sampleCount);
+              byteLength += prior.byteLength || (file ? fs.lstatSync(file).size : 0);
+            }
+            continue;
           }
         }
         if (entries.length !== state.chunks.length || entries.some((entry, index) =>
@@ -265,11 +338,14 @@ class MeetingAudioStore {
       bytes: TRACKS.reduce((sum, track) => sum + (manifest.tracks?.[track]?.byteLength || 0), 0),
       tracks: manifest.tracks,
       startedAt: manifest.startedAt,
+      recordingId: manifest.recordingId ?? noteId,
       keep: manifest.keep,
     };
     const first = TRACKS.flatMap((track) => manifest.tracks?.[track]?.chunks || [])[0];
     if (first) {
-      const file = path.join(this._dir(noteId), first.file);
+      let file;
+      try { file = this._chunkFile(noteId, first.file); }
+      catch { result.state = "unavailable"; result.reason = "Invalid stored audio chunk"; return result; }
       if (!fs.existsSync(file)) { result.state = "unavailable"; result.reason = "Stored audio chunk is missing"; }
       else {
         try { this.encryption.decryptBytes(fs.readFileSync(file)); }
@@ -302,7 +378,7 @@ class MeetingAudioStore {
       if (chunkEnd <= start || chunk.startSample >= end) continue;
       let decoded;
       let plaintext;
-      try { plaintext = this.encryption.decryptBytes(fs.readFileSync(path.join(this._dir(noteId), chunk.file))); }
+      try { plaintext = this.encryption.decryptBytes(fs.readFileSync(this._chunkFile(noteId, chunk.file))); }
       catch { return { state: "key_unavailable" }; }
       try { decoded = decode(unpack(plaintext).ogg); }
       catch { return { state: "unavailable" }; }
@@ -324,22 +400,29 @@ class MeetingAudioStore {
     this._noteId(noteId);
     if (!["deleted", "expired", "evicted"].includes(reason)) throw new Error("Invalid deletion reason");
     const manifest = this._manifest(noteId);
-    if (!manifest) return { state: "unavailable", freedBytes: 0 };
+    if (!manifest && !fs.existsSync(this._dir(noteId))) return { state: "unavailable", freedBytes: 0 };
+    const active = this.active.get(noteId);
+    for (const track of TRACKS) active?.pending[track]?.fill(0);
     this.active.delete(noteId);
     let freedBytes = 0;
+    // Remove all owned chunks, including a durable write not yet indexed.
+    for (const file of this._ownedChunks(noteId)) {
+      const size = fs.lstatSync(file).size;
+      fs.unlinkSync(file);
+      freedBytes += size;
+    }
+    const tombstone = manifest || { version: 1, noteId, noteIdentity: this._noteIdentity(noteId),
+      recordingId: randomUUID(), tracks: {} };
     for (const track of TRACKS) {
-      for (const chunk of manifest.tracks?.[track]?.chunks || []) {
-        const file = path.join(this._dir(noteId), chunk.file);
-        try { freedBytes += fs.statSync(file).size; fs.unlinkSync(file); } catch {}
-      }
-      if (manifest.tracks?.[track]) {
-        manifest.tracks[track].chunks = [];
-        manifest.tracks[track].byteLength = 0;
+      if (tombstone.tracks?.[track]) {
+        tombstone.tracks[track].chunks = [];
+        tombstone.tracks[track].byteLength = 0;
       }
     }
-    manifest.status = reason;
-    manifest.reason = reason;
-    writeJsonAtomic(this._manifestPath(noteId), manifest);
+    tombstone.status = reason;
+    tombstone.reason = reason;
+    writeJsonAtomic(this._manifestPath(noteId), tombstone);
+    this.onChanged?.({ noteId, state: reason });
     this._removeDerivedVoice(noteId);
     if (reason === "evicted") {
       const title = this.database?.getNote?.(noteId)?.title || `#${noteId}`;
@@ -353,6 +436,16 @@ class MeetingAudioStore {
   purge(noteId) {
     this.delete(noteId);
     fs.rmSync(this._dir(noteId), { recursive: true, force: true });
+  }
+
+  purgeAll() {
+    const noteIds = fs.existsSync(this.root) ? fs.readdirSync(this.root)
+      .filter(name => /^\d+$/.test(name)).map(Number) : [];
+    for (const session of this.active.values())
+      for (const track of TRACKS) session.pending[track]?.fill(0);
+    this.active.clear();
+    fs.rmSync(this.root, { recursive: true, force: true });
+    for (const noteId of noteIds) this.onChanged?.({ noteId, state: "deleted" });
   }
 
   _removeDerivedVoice(noteId) {
@@ -434,7 +527,7 @@ class MeetingAudioStore {
     for (const manifest of candidates.sort((a, b) => a.startedAt - b.startedAt)) {
       if (usedBytes + incomingBytes <= this.policy.budgetBytes) break;
       if (this.active.has(manifest.noteId)) continue;
-      const result = this.delete(manifest.noteId, "evicted");
+      const result = this.delete(this._noteId(manifest.noteId), "evicted");
       usedBytes -= result.freedBytes;
       removed.push({ noteId: manifest.noteId, reason: "evicted", ...result });
     }

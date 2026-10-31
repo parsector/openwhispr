@@ -70,3 +70,11 @@ test("device cleanup revokes every stored connector login before the files and r
     assert.ok(revoke < at, `connector logins are revoked before ${later}`);
   }
 });
+
+test("device cleanup erases meeting recordings and their key before removing SQLite", () => {
+  const source = cleanupHandler[1];
+  const audio = source.indexOf("this.meetingAudioStore.purgeAll()");
+  const key = source.indexOf("secretCrypto.clearDeviceKey()");
+  const db = source.indexOf("this.databaseManager?.db?.close()");
+  assert.ok(audio >= 0 && key > audio && db > key);
+});

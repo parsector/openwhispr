@@ -83,7 +83,12 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
       const player = new Audio(url);
       enrollmentPlayer.current = player;
       player.onended = () => { if (request === enrollmentRequest.current) {
-        setListeningId(null); setListened({ id: candidate.id, token: result.token! });
+        void window.electronAPI.completeVoiceEnrollmentCandidate?.(candidate.id, result.token!)
+          .then(completed => { if (request === enrollmentRequest.current && completed?.success) {
+            setListeningId(null); setListened({ id: candidate.id, token: result.token! });
+          } else if (request === enrollmentRequest.current) {
+            setListeningId(null); setEnrollmentError("playback_required");
+          } });
       } };
       await player.play();
     } catch { if (request === enrollmentRequest.current) {

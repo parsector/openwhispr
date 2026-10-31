@@ -609,10 +609,12 @@ class DiarizationManager {
         const matchedSpan = overlapSpan ?? nearestSpan;
         // Only simultaneous, distinct diarization voices count as cross-talk.
         // A handoff with adjacent turns has zero intersection and stays assignable.
-        const simultaneous = !!bounds && diarizationSegments.some((first, i) =>
+        const overlapStart = bounds ? segStart : segStart - 0.5;
+        const overlapEnd = bounds ? segEnd : segEnd + 0.5;
+        const simultaneous = diarizationSegments.some((first, i) =>
           diarizationSegments.slice(i + 1).some((second) =>
             first.speaker !== second.speaker &&
-            Math.min(segEnd, first.end, second.end) - Math.max(segStart, first.start, second.start) >= 0.1));
+            Math.min(overlapEnd, first.end, second.end) - Math.max(overlapStart, first.start, second.start) >= 0.1));
         enriched.uncertainty = simultaneous
           ? { reason: "overlapping_speech" }
           : shortSpanReason(matchedSpan) || enriched.uncertainty;

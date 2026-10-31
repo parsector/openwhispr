@@ -173,6 +173,10 @@ export const mergeTranscriptSegments = (
   });
 
   const usedIndexes = new Set<number>();
+  const reservedExactIndexes = new Set(incomingSegments.flatMap((segment) => {
+    const index = segment.id ? existingById.get(segment.id) : undefined;
+    return index === undefined ? [] : [index];
+  }));
   const enrichedByIndex = new Map<number, TranscriptSegment>();
   const unmatchedIncoming: TranscriptSegment[] = [];
 
@@ -186,25 +190,29 @@ export const mergeTranscriptSegments = (
     let matchIndex = segment.id ? existingById.get(segment.id) : undefined;
     if (matchIndex !== undefined && usedIndexes.has(matchIndex)) matchIndex = undefined;
 
-    if (matchIndex === undefined) {
-      matchIndex = findUnused(existingByKey.get(getSegmentMatchKey(segment)));
+    const newSplitChild = !!segment.parentRowId && segment.parentRowId !== segment.id &&
+      !existingById.has(segment.id);
+    if (matchIndex === undefined && !newSplitChild) {
+      matchIndex = findUnused(existingByKey.get(getSegmentMatchKey(segment))?.filter(
+        candidateIndex => !reservedExactIndexes.has(candidateIndex)));
     }
 
-    if (matchIndex === undefined) {
+    if (matchIndex === undefined && !newSplitChild) {
       const fallbackIndex = existingSegments.findIndex(
         (candidate, existingIndex) =>
           !usedIndexes.has(existingIndex) &&
+          !reservedExactIndexes.has(existingIndex) &&
           candidate.source === segment.source &&
           candidate.text === segment.text
       );
       if (fallbackIndex >= 0) matchIndex = fallbackIndex;
     }
 
-    if (matchIndex === undefined && Number.isFinite(segment.timestamp)) {
+    if (matchIndex === undefined && !newSplitChild && Number.isFinite(segment.timestamp)) {
       const candidates = existingSegments
         .map((row, existingIndex) => ({ row, existingIndex }))
         .filter(({ row, existingIndex }) =>
-          !usedIndexes.has(existingIndex) && row.source === segment.source &&
+          !usedIndexes.has(existingIndex) && !reservedExactIndexes.has(existingIndex) && row.source === segment.source &&
           Number.isFinite(row.timestamp) &&
           Math.abs((row.timestamp as number) - (segment.timestamp as number)) <= 0.5
         );

@@ -59,19 +59,19 @@ function _initKeychain() {
   try {
     const entry = new Entry(SERVICE, ACCOUNT);
     let stored = null;
-    try {
-      stored = entry.getPassword();
-    } catch {}
+    stored = entry.getPassword();
     if (stored) {
       const key = Buffer.from(stored, "base64");
       if (key.length !== KEY_LEN) throw new Error("stored key length invalid");
       masterKey = key;
     } else {
-      masterKey = crypto.randomBytes(KEY_LEN);
+      if (fs.existsSync(_backupPath())) {
+        if (!_loadMasterKeyBackup()) throw new Error("Existing master key backup is unreadable");
+      } else masterKey = crypto.randomBytes(KEY_LEN);
       entry.setPassword(masterKey.toString("base64"));
-      // Write the safeStorage backup only when the key is first generated.
-      // Re-writing on every launch invokes a second Keychain backend on macOS.
-      _saveMasterKeyBackup();
+      // Write a backup only for a newly generated key. Never replace the
+      // existing backup after a Keychain read failure or missing entry.
+      if (!fs.existsSync(_backupPath())) _saveMasterKeyBackup();
     }
     return true;
   } catch (error) {
@@ -162,4 +162,21 @@ function decryptBytes(blob) {
   return Buffer.concat([decipher.update(blob.subarray(IV_LEN, -TAG_LEN)), decipher.final()]);
 }
 
-module.exports = { encrypt, decrypt, isAvailable, encryptBytes, decryptBytes };
+function clearDeviceKey() {
+  // The device erasure path calls this only after every recording is removed.
+  try {
+    const { Entry } = require("@napi-rs/keyring");
+    const entry = new Entry(SERVICE, ACCOUNT);
+    try { entry.deletePassword(); }
+    catch (error) {
+      if (!/NoEntry|no entry|not found/i.test(String(error?.message))) throw error;
+    }
+  } finally {
+    fs.rmSync(_backupPath(), { force: true });
+    if (masterKey) masterKey.fill(0);
+    masterKey = null;
+    mode = null;
+  }
+}
+
+module.exports = { encrypt, decrypt, isAvailable, encryptBytes, decryptBytes, clearDeviceKey };

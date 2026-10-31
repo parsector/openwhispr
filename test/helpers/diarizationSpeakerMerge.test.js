@@ -61,6 +61,18 @@ test("genuine simultaneous voices are refused and marked for review", () => {
   });
 });
 
+test("unaligned overlapping diarization intervals refuse a name", () => {
+  const manager = new DiarizationManager();
+  const [row] = manager.mergeWithTranscript(
+    [{ id: 'approximate', ...systemSegment(10, 'both speaking') }],
+    [{ start: 10, end: 12, speaker: 'speaker_00' },
+      { start: 10.4, end: 11.4, speaker: 'speaker_01' }]
+  );
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerIsPlaceholder, true);
+  assert.equal(row.uncertainty?.reason, 'overlapping_speech');
+});
+
 test("explicit locked Unknown survives final diarization untouched", () => {
   const manager = new DiarizationManager();
   const [row] = manager.mergeWithTranscript(

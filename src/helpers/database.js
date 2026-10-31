@@ -3875,7 +3875,17 @@ class DatabaseManager {
       const stmt = this.db.prepare(
         `UPDATE notes SET ${fields.join(", ")} WHERE id = ? AND ${accountScope.sql}`
       );
-      const result = stmt.run(...values, ...accountScope.params);
+      const enrollment = updates.transcript !== undefined &&
+        this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_exemplars'").get() &&
+        this.db.prepare('SELECT 1 FROM voice_exemplars WHERE note_id = ? LIMIT 1').get(id)
+        ? require('./voiceEnrollment') : null;
+      const changedRowIds = enrollment
+        ? enrollment.attributionChangedRows(previous.transcript, updates.transcript) : [];
+      const result = this.db.transaction(() => {
+        const written = stmt.run(...values, ...accountScope.params);
+        if (written.changes && changedRowIds.length) enrollment.rowCorrected(this.db, id, changedRowIds);
+        return written;
+      })();
       if (result.changes === 0) return { success: false, error: "Note not found" };
       const fetchStmt = this.db.prepare("SELECT * FROM notes WHERE id = ?");
       const note = fetchStmt.get(id);
@@ -6725,6 +6735,11 @@ class DatabaseManager {
         this.db.prepare(
           "INSERT OR REPLACE INTO speaker_mappings (note_id, speaker_id, profile_id, display_name) VALUES (?, ?, ?, ?)"
         ).run(noteId, speakerId, profileId, displayName);
+        if (before?.profile_id !== profileId) {
+          const ids = require('./transcriptDocument').readTranscriptDocument(note.transcript).rows
+            .filter(row => row.speaker === speakerId).map(row => row.id);
+          require('./voiceEnrollment').rowCorrected(this.db, noteId, ids);
+        }
         this.db.prepare('UPDATE notes SET speaker_action_log = ?, speaker_label_undo = NULL WHERE id = ?')
           .run(JSON.stringify(next), noteId);
         require('./speakerGlobalHistory').add(this.db, { id: next.actions.at(-1).id,
@@ -6751,11 +6766,18 @@ class DatabaseManager {
       const globalHistory = require('./speakerGlobalHistory');
       if (!globalHistory.canUndo(this.db, action.id, noteId)) return { success: false, error: 'later_change' };
       if (note.deleted_at) this.db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(noteId);
+      const current = this.db.prepare('SELECT profile_id FROM speaker_mappings WHERE note_id = ? AND speaker_id = ?')
+        .get(noteId, action.speakerId);
       if (action.before) this.db.prepare(
         'INSERT OR REPLACE INTO speaker_mappings (note_id, speaker_id, profile_id, display_name) VALUES (?, ?, ?, ?)'
       ).run(noteId, action.speakerId, action.before.profile_id, action.before.display_name);
       else this.db.prepare('DELETE FROM speaker_mappings WHERE note_id = ? AND speaker_id = ?')
         .run(noteId, action.speakerId);
+      if (current?.profile_id !== action.before?.profile_id) {
+        const ids = require('./transcriptDocument').readTranscriptDocument(note.transcript).rows
+          .filter(row => row.speaker === action.speakerId).map(row => row.id);
+        require('./voiceEnrollment').rowCorrected(this.db, noteId, ids);
+      }
       this.db.prepare('UPDATE notes SET speaker_action_log = ?, speaker_label_undo = NULL WHERE id = ?')
         .run(JSON.stringify(removeNewestAction(log)), noteId);
       globalHistory.remove(this.db, action.id, noteId);
@@ -6787,6 +6809,8 @@ class DatabaseManager {
       ).run(noteId, targetId, source.profile_id ?? profileId, source.display_name || displayName);
       this.db.prepare("DELETE FROM speaker_mappings WHERE note_id = ? AND speaker_id = ?")
         .run(noteId, sourceId);
+      require('./voiceEnrollment').rowCorrected(this.db, noteId,
+        rows.filter(row => row.speaker === sourceId || row.speaker === targetId).map(row => row.id));
       return true;
     })();
   }
@@ -6809,17 +6833,33 @@ class DatabaseManager {
   }
 
   setSpeakerRunMapping(noteId, runId, clusterId, profileId, displayName) {
-    this.db.prepare(
-      "INSERT OR REPLACE INTO speaker_run_mappings (note_id, run_id, cluster_id, profile_id, display_name) VALUES (?, ?, ?, ?, ?)"
-    ).run(noteId, runId || "legacy", clusterId, profileId, displayName);
-    return { success: true };
+    return this.db.transaction(() => {
+      const prior = this.getSpeakerRunMapping(noteId, runId, clusterId);
+      this.db.prepare(
+        "INSERT OR REPLACE INTO speaker_run_mappings (note_id, run_id, cluster_id, profile_id, display_name) VALUES (?, ?, ?, ?, ?)"
+      ).run(noteId, runId || "legacy", clusterId, profileId, displayName);
+      if (prior?.profile_id !== profileId) {
+        const rows = require('./transcriptDocument').readTranscriptDocument(this.getNote(noteId)?.transcript).rows;
+        require('./voiceEnrollment').rowCorrected(this.db, noteId, rows.filter(row =>
+          (row.diarizationRunId || 'legacy') === (runId || 'legacy') && row.speaker === clusterId).map(row => row.id));
+      }
+      return { success: true };
+    })();
   }
 
   removeSpeakerRunMapping(noteId, runId, clusterId) {
-    this.db.prepare(
-      "DELETE FROM speaker_run_mappings WHERE note_id = ? AND run_id = ? AND cluster_id = ?"
-    ).run(noteId, runId || "legacy", clusterId);
-    return { success: true };
+    return this.db.transaction(() => {
+      const prior = this.getSpeakerRunMapping(noteId, runId, clusterId);
+      this.db.prepare(
+        "DELETE FROM speaker_run_mappings WHERE note_id = ? AND run_id = ? AND cluster_id = ?"
+      ).run(noteId, runId || "legacy", clusterId);
+      if (prior?.profile_id != null) {
+        const rows = require('./transcriptDocument').readTranscriptDocument(this.getNote(noteId)?.transcript).rows;
+        require('./voiceEnrollment').rowCorrected(this.db, noteId, rows.filter(row =>
+          (row.diarizationRunId || 'legacy') === (runId || 'legacy') && row.speaker === clusterId).map(row => row.id));
+      }
+      return { success: true };
+    })();
   }
 
   saveNoteSpeakerEmbeddings(noteId, embeddings) {
@@ -7173,6 +7213,7 @@ class DatabaseManager {
       const log = readSpeakerActionLog(note);
       if (log.quarantined) return { success: false, error: 'history_quarantined' };
       const stack = log.actions.filter((action) => action.kind === 'adoption').map((action) => action.record);
+      let changedRowIds = [];
       // Commit 8 stored one whole-transcript snapshot. Convert it on use so
       // existing users keep its undo without restoring stale transcript text.
       if (stack[0]?.before && stack[0]?.after && !stack[0].rows) {
@@ -7195,6 +7236,7 @@ class DatabaseManager {
           ? !globalHistory.canUndo(this.db, action.id, id)
           : latest && latest.note_id !== id) return { success: false, error: 'later_change' };
         const record = action.record;
+        changedRowIds = record?.rows?.map(row => row.id) || [];
         const document = readTranscriptDocument(note.transcript);
         const byId = new Map(document.rows.map((row) => [row.id, row]));
         if (!record || !record.rows || record.rows.some(({ id: rowId }) => !byId.has(rowId)))
@@ -7247,6 +7289,7 @@ class DatabaseManager {
           id: row.id, before: attribution(previous.get(row.id) || {}),
           after: attribution(row), revision: Number(row.correctionRevision) || 0,
         }));
+        changedRowIds = snapshots.map(row => row.id);
         const mappings = this.db.prepare("SELECT * FROM speaker_mappings WHERE note_id = ?").all(id);
         const runMappings = this.db.prepare("SELECT * FROM speaker_run_mappings WHERE note_id = ?").all(id);
         const nextLog = appendAction(log, { kind: 'adoption',
@@ -7260,6 +7303,7 @@ class DatabaseManager {
         require('./speakerGlobalHistory').add(this.db, { id: nextLog.actions.at(-1).id,
           kind: 'adoption', noteId: id, label: note.title || 'Note' });
       }
+      require('./voiceEnrollment').rowCorrected(this.db, id, changedRowIds);
       return { success: true, note: this.getNote(id) };
     })();
   }

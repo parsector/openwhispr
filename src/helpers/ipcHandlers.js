@@ -710,7 +710,8 @@ class IPCHandlers {
     this.audioStorageManager = new AudioStorageManager();
     this.meetingAudioStore = new MeetingAudioStore(
       path.join(app.getPath("userData"), "meeting-audio"),
-      { database: this.databaseManager, onEvicted: ({ title }) => {
+      { database: this.databaseManager, onChanged: (change) =>
+        broadcastToWindows("meeting-audio-changed", change), onEvicted: ({ title }) => {
         try {
           new Notification({ title: i18nMain.t("meetingAudio.evicted"),
             body: i18nMain.t("meetingAudio.evictedNotes", { titles: title }) }).show();
@@ -4878,6 +4879,21 @@ class IPCHandlers {
         const { describeError } = require("./connectors/errorSummary");
         const { errorName, errorCode } = describeError(e);
         errors.push(`Connector revoke: ${errorCode ?? errorName}`);
+      }
+
+      // Remove recordings and in-memory PCM before the database can be reset
+      // and assign the same numeric note ids to new notes.
+      try {
+        this.meetingAudioStore.purgeAll();
+      } catch (e) {
+        errors.push(`Meeting audio: ${e.message}`);
+        return { success: false, message: "Meeting audio could not be erased", errors };
+      }
+      try {
+        const secretCrypto = require("./secretCrypto");
+        secretCrypto.clearDeviceKey();
+      } catch (e) {
+        errors.push(`Audio key: ${e.message}`);
       }
 
       // Close DB connection before deleting the file
@@ -13133,6 +13149,8 @@ class IPCHandlers {
       const result = require('./voiceEnrollment').play(this.databaseManager, this.meetingAudioStore, id);
       return result.wav ? { ...result, wav: result.wav.toString('base64') } : result;
     });
+    ipcMain.handle("voice-enrollment-complete", (_event, id, token) =>
+      require('./voiceEnrollment').complete(this.databaseManager, this.meetingAudioStore, id, token));
     ipcMain.handle("voice-enrollment-decide", async (_event, id, choice, token) => {
       const result = await require('./voiceEnrollment').decide(this.databaseManager, this.meetingAudioStore,
         require('./speakerEmbeddings'), id, choice, token);
@@ -13776,7 +13794,8 @@ class IPCHandlers {
           alignedRows,
           diarizationSegments,
           { diarizedSource, speakerIndexBase,
-            recordingId: recordingStartedAt != null ? noteId : null,
+            recordingId: recordingStartedAt != null
+              ? this.meetingAudioStore.status(noteId).recordingId : null,
             audioStartOffsetSeconds: audioStartOffsets[diarizedSource],
             audioStartOffsets }
         );

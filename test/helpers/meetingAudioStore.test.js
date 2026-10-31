@@ -35,7 +35,7 @@ function fixture(t) {
     INSERT INTO voice_exemplars VALUES('sample-1', 7, 1, 'mic');`);
   t.after(() => db.close());
   const makeStore = () => new MeetingAudioStore(root, { database: { db }, now: () => clock, encryption });
-  return { root, db, makeStore, setClock: (value) => { clock = value; }, clock };
+  return { root, db, encryption, makeStore, setClock: (value) => { clock = value; }, clock };
 }
 
 function signal(seconds, frequency) {
@@ -174,6 +174,152 @@ test("missing encryption key fails closed without a plaintext file", (t) => {
   } });
   assert.throws(() => store.begin(3), /key is unavailable/);
   assert.equal(fs.existsSync(path.join(f.root, "3")), false);
+});
+
+test("a manifest cannot redirect deletion or evict another note", (t) => {
+  const f = fixture(t);
+  const store = f.makeStore();
+  store.begin(1); store.append(1, "mic", signal(6, 440)); store.finish(1);
+  store.begin(2); store.append(2, "mic", signal(6, 660)); store.finish(2);
+  const outside = `${f.root}.db`;
+  fs.writeFileSync(outside, "real database");
+  t.after(() => fs.rmSync(outside, { force: true }));
+  const file = path.join(f.root, "1", "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(file));
+  manifest.noteId = 2;
+  manifest.tracks.mic.chunks.push({ file: `../../${path.basename(outside)}`, startSample: 0, sampleCount: 1 });
+  fs.writeFileSync(file, JSON.stringify(manifest));
+  store.delete(1);
+  assert.equal(fs.readFileSync(outside, "utf8"), "real database");
+  assert.equal(store.status(2).state, "complete");
+  const secondManifest = path.join(f.root, "2", "manifest.json");
+  const second = JSON.parse(fs.readFileSync(secondManifest));
+  second.status = "recording";
+  fs.writeFileSync(secondManifest, JSON.stringify(second));
+  manifest.status = "complete";
+  fs.writeFileSync(file, JSON.stringify(manifest));
+  store.enforce(Number.MAX_SAFE_INTEGER);
+  assert.ok(fs.readdirSync(path.join(f.root, "2")).some(name => name.endsWith(".owac")));
+});
+
+test('symlink chunks are never read or followed during deletion', t => {
+  const f = fixture(t);
+  const store = f.makeStore();
+  store.begin(1); store.append(1, 'mic', signal(6, 440)); store.finish(1);
+  const outside = `${f.root}.db`;
+  fs.writeFileSync(outside, 'real database');
+  t.after(() => fs.rmSync(outside, { force: true }));
+  const chunk = store.status(1).tracks.mic.chunks[0].file;
+  fs.rmSync(path.join(f.root, '1', chunk));
+  fs.symlinkSync(outside, path.join(f.root, '1', chunk));
+  assert.equal(store.status(1).state, 'unavailable');
+  store.delete(1);
+  assert.equal(fs.readFileSync(outside, 'utf8'), 'real database');
+});
+
+test("deletion removes unindexed tails and repair never resurrects tombstones", (t) => {
+  const f = fixture(t);
+  let store = f.makeStore();
+  store.begin(1); store.append(1, "mic", signal(6, 440)); store.finish(1);
+  const dir = path.join(f.root, "1");
+  const first = store.status(1).tracks.mic.chunks[0].file;
+  fs.copyFileSync(path.join(dir, first), path.join(dir, "mic-0000002.owac"));
+  store.delete(1);
+  assert.deepEqual(fs.readdirSync(dir), ["manifest.json"]);
+  store.fail(1, 'late capture error');
+  store = f.makeStore();
+  assert.equal(store.status(1).state, "deleted");
+  assert.equal(store.status(1).tracks.mic.chunks.length, 0);
+});
+
+test('a failed unlink is reported and a later delete retries every owned chunk', t => {
+  const f = fixture(t);
+  const store = f.makeStore();
+  store.begin(1); store.append(1, 'mic', signal(6, 440)); store.finish(1);
+  const original = fs.unlinkSync;
+  let failed = false;
+  fs.unlinkSync = function(file) {
+    if (!failed && String(file).endsWith('.owac')) { failed = true; throw Error('disk denied'); }
+    return original.apply(this, arguments);
+  };
+  try { assert.throws(() => store.delete(1), /disk denied/); }
+  finally { fs.unlinkSync = original; }
+  assert.equal(store.status(1).state, 'complete');
+  assert.equal(store.delete(1).state, 'deleted');
+  assert.deepEqual(fs.readdirSync(path.join(f.root, '1')), ['manifest.json']);
+});
+
+test("one corrupt chunk does not prevent repair of a later meeting", (t) => {
+  const f = fixture(t);
+  let store = f.makeStore();
+  for (const id of [1, 2]) { store.begin(id); store.append(id, "mic", signal(6, 440)); store.finish(id); }
+  const first = store.status(1).tracks.mic.chunks[0].file;
+  fs.writeFileSync(path.join(f.root, "1", first), "corrupt");
+  const file = path.join(f.root, "2", "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(file));
+  manifest.tracks.mic.chunks = [];
+  fs.writeFileSync(file, JSON.stringify(manifest));
+  store = f.makeStore();
+  assert.equal(store.status(2).tracks.mic.chunks.length, 2);
+});
+
+test("device erasure drops live buffers and ciphertext; a reused note id cannot reach old audio", (t) => {
+  const f = fixture(t);
+  f.db.exec("ALTER TABLE notes ADD COLUMN client_note_id TEXT");
+  f.db.prepare("UPDATE notes SET client_note_id = 'first-note' WHERE id = 1").run();
+  let store = f.makeStore();
+  store.begin(1); store.append(1, "mic", signal(6, 440)); store.finish(1);
+  assert.equal(store.status(1).state, "complete");
+  f.db.prepare("UPDATE notes SET client_note_id = 'second-note' WHERE id = 1").run();
+  assert.equal(store.status(1).state, "unavailable");
+  store.begin(1);
+  assert.equal(store.status(1).tracks.mic.chunks.length, 0);
+  store.append(1, "mic", signal(1, 660));
+  store.purgeAll();
+  assert.equal(fs.existsSync(f.root), false);
+  assert.equal(store.active.size, 0);
+  store = f.makeStore();
+  assert.equal(store.status(1).state, "unavailable");
+});
+
+test('physical database reset leaves no recording for reused note one', t => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-device-wipe-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const dbPath = path.join(home, 'transcriptions.db');
+  const root = path.join(home, 'meeting-audio');
+  let db = new Database(dbPath);
+  db.exec("CREATE TABLE notes(id INTEGER PRIMARY KEY, client_note_id TEXT); INSERT INTO notes VALUES (1, 'before-wipe')");
+  const encryption = { encryptBytes: bytes => bytes, decryptBytes: bytes => bytes };
+  const store = new MeetingAudioStore(root, { database: { db }, encryption });
+  store.begin(1); store.append(1, 'mic', signal(6, 440)); store.finish(1);
+  const oldRecordingId = store.status(1).recordingId;
+  assert.match(oldRecordingId, /^[0-9a-f-]{36}$/i);
+  assert.notEqual(oldRecordingId, '1');
+  assert.ok(fs.readdirSync(path.join(root, '1')).some(file => file.endsWith('.owac')));
+  store.purgeAll();
+  assert.equal(fs.existsSync(root), false);
+  db.close(); fs.unlinkSync(dbPath);
+  db = new Database(dbPath);
+  t.after(() => db.close());
+  db.exec("CREATE TABLE notes(id INTEGER PRIMARY KEY, client_note_id TEXT); INSERT INTO notes VALUES (1, 'after-wipe')");
+  const reopened = new MeetingAudioStore(root, { database: { db }, encryption });
+  assert.equal(reopened.status(1).state, 'unavailable');
+  assert.deepEqual(fs.readdirSync(root), []);
+  reopened.begin(1);
+  assert.notEqual(reopened.status(1).recordingId, oldRecordingId);
+});
+
+test('deletion and device purge notify every window to discard playback', t => {
+  const f = fixture(t);
+  const changes = [];
+  const store = new MeetingAudioStore(f.root, { database: { db: f.db },
+    encryption: f.encryption, onChanged: change => changes.push(change) });
+  store.begin(1); store.append(1, 'mic', signal(6, 440)); store.finish(1);
+  store.delete(1);
+  assert.deepEqual(changes, [{ noteId: 1, state: 'deleted' }]);
+  store.purgeAll();
+  assert.deepEqual(changes.at(-1), { noteId: 1, state: 'deleted' });
+  assert.equal(changes.length, 2);
 });
 
 test("a replaced key leaves existing ciphertext and its manifest intact", (t) => {

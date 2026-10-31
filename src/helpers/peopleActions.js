@@ -45,8 +45,46 @@ function ownedEmbeddings(db, noteId, mappings, profileId, rows, personName, uniq
 const savedEmbedding = row => ({ note_id: row.note_id, speaker_id: row.speaker_id,
   embedding: Buffer.from(row.embedding).toString('base64') });
 function restoreEmbeddings(db, rows) {
-  for (const row of rows || []) db.prepare('INSERT OR REPLACE INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)')
+  for (const row of rows || []) {
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='meeting_audio_tombstones'").get() &&
+        db.prepare('SELECT 1 FROM meeting_audio_tombstones WHERE note_id = ?').get(row.note_id)) continue;
+    db.prepare('INSERT OR REPLACE INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)')
     .run(row.note_id, row.speaker_id, Buffer.from(row.embedding, 'base64'));
+  }
+}
+function scrubDeletedRecordingSnapshots(db, noteId, affectedProfiles = []) {
+  const cleared = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='speaker_voice_clear_actions'").get();
+  if (cleared) for (const saved of db.prepare('SELECT id, snapshot FROM speaker_voice_clear_actions').all()) {
+    const snapshot = JSON.parse(saved.snapshot);
+    snapshot.noteEmbeddings = (snapshot.noteEmbeddings || []).filter(row => row.note_id !== noteId);
+    for (const profile of snapshot.profiles || []) if (affectedProfiles.includes(profile.id)) {
+      profile.embedding = '';
+      profile.sample_count = 0;
+    }
+    db.prepare('UPDATE speaker_voice_clear_actions SET snapshot = ? WHERE id = ?')
+      .run(JSON.stringify(snapshot), saved.id);
+  }
+  const reset = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='speaker_person_voice_actions'").get();
+  if (reset) for (const saved of db.prepare('SELECT id, profile_id, snapshot FROM speaker_person_voice_actions').all()) {
+    if (!affectedProfiles.includes(saved.profile_id)) continue;
+    const snapshot = JSON.parse(saved.snapshot);
+    snapshot.embedding = '';
+    snapshot.sample_count = 0;
+    db.prepare('UPDATE speaker_person_voice_actions SET snapshot = ? WHERE id = ?')
+      .run(JSON.stringify(snapshot), saved.id);
+  }
+  for (const note of db.prepare('SELECT id, speaker_action_log FROM notes WHERE speaker_action_log IS NOT NULL').all()) {
+    let log;
+    try { log = JSON.parse(note.speaker_action_log); }
+    catch { continue; } // Malformed history cannot be restored by the action handlers.
+    let changed = false;
+    for (const action of log.actions || []) if (action.embeddingBefore) {
+      const kept = action.embeddingBefore.filter(row => row.note_id !== noteId);
+      changed ||= kept.length !== action.embeddingBefore.length;
+      action.embeddingBefore = kept;
+    }
+    if (changed) db.prepare('UPDATE notes SET speaker_action_log = ? WHERE id = ?').run(JSON.stringify(log), note.id);
+  }
 }
 function rowProfile(row, noteMappings) {
   if (row.speakerLockSource === 'user' && row.suggestedProfileId) return row.suggestedProfileId;
@@ -272,6 +310,7 @@ function applyPersonAction(database, request) {
       else {
         db.prepare('UPDATE person_attendance SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
         db.prepare('UPDATE voice_exemplars SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
+        db.prepare('UPDATE voice_enrollment_candidates SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
         if (db.prepare('SELECT 1 FROM voice_exemplars WHERE profile_id = ? LIMIT 1').get(survivor.id))
           require('./voiceEnrollment').rebuild(db, survivor.id);
         db.prepare('DELETE FROM speaker_profiles WHERE id = ?').run(current.id);
@@ -331,6 +370,7 @@ function applyPersonAction(database, request) {
         .run(survivor?.id || null, nextName || '', current.id);
       if (request.type === 'merge') {
         db.prepare('UPDATE voice_exemplars SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
+        db.prepare('UPDATE voice_enrollment_candidates SET profile_id = ? WHERE profile_id = ?').run(survivor.id, current.id);
         if (db.prepare('SELECT 1 FROM voice_exemplars WHERE profile_id = ? LIMIT 1').get(survivor.id))
           require('./voiceEnrollment').rebuild(db, survivor.id);
       } else {
@@ -347,7 +387,7 @@ function applyPersonAction(database, request) {
       for (const table of ['speaker_mappings', 'speaker_run_mappings']) db.prepare(`DELETE FROM ${table} WHERE profile_id = ?`).run(current.id);
       db.prepare('UPDATE speaker_profiles SET embedding = ?, sample_count = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
         .run(Buffer.alloc(0), current.id);
-      require('./voiceEnrollment').removeEvidence(db, current.id);
+      require('./voiceEnrollment').removeEvidence(db, current.id, true);
     }
     history.add(db, { id, kind: request.type, profileId: current.id, label: current.display_name });
     return { success: true, id, ...preview, noteIds: affected.map(a => a.note.id) };
@@ -692,4 +732,4 @@ function listReviewRows(database, selectedProfileId = null) {
   return result;
 }
 module.exports = { listPeople, registerAttendees, listReviewRows, previewPersonAction, applyPersonAction, undoPersonAction,
-  previewClearVoiceData, clearVoiceData, undoClearVoiceData, listPeopleActions };
+  previewClearVoiceData, clearVoiceData, undoClearVoiceData, listPeopleActions, scrubDeletedRecordingSnapshots };

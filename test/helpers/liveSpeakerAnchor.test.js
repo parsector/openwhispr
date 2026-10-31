@@ -27,9 +27,11 @@ function fixture(t) {
   t.after(() => { db.db.close(); fs.rmSync(ownDir, { recursive: true, force: true }); });
   const person = db.createNamedSpeakerProfile('Alex');
   const wav = Buffer.alloc(44 + 24000 * 2 * 4);
+  let reviewClock = Date.now();
   wav.write('RIFF');
   for (let i = 0; i < 24000 * 4; i++) wav.writeInt16LE(Math.round(10000 * Math.sin(i / 24)), 44 + i * 2);
-  const audio = { status: () => ({ state: 'complete' }), span: () => ({ state: 'available', wav, partial: false }) };
+  const audio = { now: () => reviewClock, status: () => ({ state: 'complete' }),
+    span: () => ({ state: 'available', wav, partial: false }) };
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };
   const note = (title, count) => {
     const id = db.saveNote(title, '', 'meeting').note.id;
@@ -51,13 +53,18 @@ function fixture(t) {
   db.updateNote(liveNoteId, { transcript: JSON.stringify({ version: 2, rows: [row] }) });
   const name = () => applySpeakerCorrection(db, identifier, { type: 'apply', noteId: liveNoteId, id: 'name-1', scope: 'cluster',
     target: { runId: 'run-live', clusterId: 'speaker_0' }, rowIds: ['live-row'], name: 'Alex', profileId: person.id });
-  return { db, person, audio, extractor, note, identifier, liveNoteId, row, name };
+  const completeReview = (id, token) => {
+    reviewClock += 5000;
+    assert.equal(enrollment.complete(db, audio, id, token).success, true);
+  };
+  return { db, person, audio, extractor, note, identifier, liveNoteId, row, name, completeReview };
 }
 
 async function graduate(f) {
   f.note('Earlier one', 2); f.note('Earlier two', 1);
   for (const candidate of enrollment.listCandidates(f.db, f.audio, f.person.id)) {
     const { token } = enrollment.play(f.db, f.audio, candidate.id);
+    f.completeReview(candidate.id, token);
     assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token)).success, true);
   }
 }

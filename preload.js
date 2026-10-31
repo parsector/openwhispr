@@ -611,6 +611,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   listVoiceEnrollmentSamples: (profileId) => ipcRenderer.invoke('voice-enrollment-samples', profileId),
   removeVoiceEnrollmentSample: (id) => ipcRenderer.invoke('voice-enrollment-remove', id),
   playVoiceEnrollmentCandidate: (id) => ipcRenderer.invoke('voice-enrollment-play', id),
+  completeVoiceEnrollmentCandidate: (id, token) => ipcRenderer.invoke('voice-enrollment-complete', id, token),
   decideVoiceEnrollmentCandidate: (id, choice, token) => ipcRenderer.invoke('voice-enrollment-decide', id, choice, token),
   undoVoiceEnrollmentAction: (id) => ipcRenderer.invoke('voice-enrollment-undo', id),
   listPeopleActions: () => ipcRenderer.invoke("people-action-history"),
@@ -1031,6 +1032,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingAudioSpan: (noteId, track, startSeconds, endSeconds) =>
     ipcRenderer.invoke("meeting-audio-span", noteId, track, startSeconds, endSeconds),
   meetingAudioDelete: (noteId) => ipcRenderer.invoke("meeting-audio-delete", noteId),
+  onMeetingAudioChanged: registerListener("meeting-audio-changed", (callback) => (_event, data) => callback(data)),
   meetingAudioSetPolicy: (policy) => ipcRenderer.invoke("meeting-audio-policy", policy),
   meetingAudioSetKeep: (noteId, keep) => ipcRenderer.invoke("meeting-audio-keep", noteId, keep),
   onMeetingTranscriptionSegment: registerListener(

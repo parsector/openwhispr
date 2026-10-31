@@ -96,6 +96,8 @@ function applySpeakerCorrection(database, identifier, request) {
       const snapshots = {};
       const timestamp = new Date().toISOString();
       const sequence = log.nextSequence;
+      const initialAttribution = !!name && affected.every(row => !row.speakerName &&
+        !row.speakerLocked && !Number(row.correctionRevision) && !(row.corrections?.length));
       rows = rows.map((row) => {
         if (!affectedSet.has(row.id)) return row;
         const previous = snapshot(row);
@@ -106,7 +108,7 @@ function applySpeakerCorrection(database, identifier, request) {
           speakerStatus: "locked",
           speakerLocked: true,
           speakerLockSource: "user",
-          correctionRevision: (Number(row.correctionRevision) || 0) + 1,
+          correctionRevision: initialAttribution ? 0 : (Number(row.correctionRevision) || 0) + 1,
           suggestedName: undefined,
           suggestedProfileId: chosenProfileId ?? undefined,
           uncertainty: undefined,
@@ -116,6 +118,7 @@ function applySpeakerCorrection(database, identifier, request) {
           id,
           rowId: row.id,
           sequence,
+          initialAttribution,
         };
         return { ...next, corrections: [...(row.corrections || []), record] };
       });
@@ -124,7 +127,7 @@ function applySpeakerCorrection(database, identifier, request) {
         diarizationRunId: affected[0].diarizationRunId,
         clusterId: scope === "cluster" ? target.clusterId : undefined,
         target: scope === "cluster" ? target : { rowIds: affectedRowIds },
-        affectedRowIds, snapshots, mappingChanged: !!key,
+        affectedRowIds, snapshots, mappingChanged: !!key, initialAttribution,
         mappingBefore: before && { displayName: before.display_name, profileId: before.profile_id },
         mappingAfter: after && { displayName: after.display_name, profileId: after.profile_id },
         createdProfileId: createdProfile?.id,

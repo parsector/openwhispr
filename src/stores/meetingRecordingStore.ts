@@ -58,7 +58,7 @@ import { persistFinalTranscriptAroundStop } from "../helpers/meetingTranscriptPe
 
 export interface TranscriptSegment {
   id: string;
-  audioSpan?: { recordingId: number; trackId: "mic" | "system"; startSample: number; endSample: number };
+  audioSpan?: { recordingId: string | number; trackId: "mic" | "system"; startSample: number; endSample: number };
   wordTimings?: Array<{ word: string; start: number; end: number }>;
   parentRowId?: string;
   splitStartWord?: number;

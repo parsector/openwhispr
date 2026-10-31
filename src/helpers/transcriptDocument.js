@@ -127,9 +127,13 @@ function allocateUnknownNumbers(rows, noteHighWater = 0) {
     Math.max(Number(row.unknownNumber) || 0, Number(row.unknownNumberHighWater) || 0))) + 1;
   const numbers = new Map();
   const owned = new Set();
-  for (const [key, members] of groups) {
+  const priorityGroups = [...groups].sort((left, right) =>
+    Number(right[1].some(row => row.speakerLocked && row.speakerIsPlaceholder)) -
+    Number(left[1].some(row => row.speakerLocked && row.speakerIsPlaceholder)));
+  for (const [key, members] of priorityGroups) {
     const counts = new Map();
-    for (const row of members) if (Number(row.unknownNumber) > 0)
+    const locked = members.filter(row => row.speakerLocked && row.speakerIsPlaceholder);
+    for (const row of locked.length ? locked : members) if (Number(row.unknownNumber) > 0)
       counts.set(row.unknownNumber, (counts.get(row.unknownNumber) || 0) + 1);
     const preferred = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
     if (preferred && !owned.has(preferred)) {
