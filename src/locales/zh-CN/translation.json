@@ -3175,6 +3175,18 @@
     },
     "speaker": {
       "correctionSaveFailed": "无法保存说话人更改。请重试。",
+      "anchorActive": "正在使用你刚确认的声音。",
+      "anchorReason": {
+        "not_graduated": "此声音尚未通过审核。",
+        "too_short": "此声音太短，无法测量。",
+        "overlapping": "重叠语音不能作为参照。",
+        "locked": "已锁定的声群不能作为参照。",
+        "explicit_unknown": "明确标为未知的声音不能作为参照。",
+        "mixed": "此声群可能包含多个声音。",
+        "ambiguous_match": "声音匹配过于模糊。",
+        "not_current_meeting": "此声群不属于当前会议。",
+        "unavailable": "目前无法测量声音。"
+      },
       "laterChangeReplaced": "后续更改已覆盖此更改。请先撤销后续更改。",
       "you": "你",
       "them": "对方",

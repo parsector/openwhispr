@@ -3175,6 +3175,18 @@
     },
     "speaker": {
       "correctionSaveFailed": "Não foi possível salvar a alteração do falante. Tente novamente.",
+      "anchorActive": "Usando a voz que você acabou de confirmar.",
+      "anchorReason": {
+        "not_graduated": "Esta voz ainda não foi validada.",
+        "too_short": "Esta voz é curta demais para ser medida.",
+        "overlapping": "Falas sobrepostas não podem servir de referência.",
+        "locked": "Um grupo bloqueado não pode servir de referência.",
+        "explicit_unknown": "Uma voz marcada como desconhecida não pode servir de referência.",
+        "mixed": "Este grupo pode conter várias vozes.",
+        "ambiguous_match": "A correspondência de voz é ambígua demais.",
+        "not_current_meeting": "Este grupo não pertence à reunião ativa.",
+        "unavailable": "A medição de voz não está disponível agora."
+      },
       "laterChangeReplaced": "Uma alteração posterior substituiu esta. Desfaça primeiro a alteração posterior.",
       "you": "Você",
       "them": "Outro",

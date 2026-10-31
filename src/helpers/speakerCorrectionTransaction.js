@@ -13,6 +13,7 @@ const FIELDS = [
 const { readTranscriptDocument, writeTranscriptDocument, normalizeRowIds } = require("./transcriptDocument");
 const { readSpeakerActionLog, appendAction, removeNewestAction, newestAvailableAction, MAX_ACTION_LOG_BYTES } = require('./speakerActionLog');
 const globalHistory = require('./speakerGlobalHistory');
+const debugLogger = require('./debugLogger');
 const MAX_CORRECTION_BYTES = MAX_ACTION_LOG_BYTES;
 const SPLIT_FIELDS = ["speaker", "speakerName", "speakerIsPlaceholder", "speakerStatus",
   "unknownNumber", "uncertainty", "speakerLocked", "speakerLockSource"];
@@ -32,6 +33,8 @@ function applySpeakerCorrection(database, identifier, request) {
     return { success: false, error: "invalid_request" };
   let committedMapping = null;
   let committedProfileId = null;
+  let anchorInput = null;
+  const invalidatedClusters = new Set();
   const run = database.db.transaction(() => {
     const note = database.getNote(noteId);
     if (!note) return { success: false, error: "note_missing" };
@@ -64,6 +67,11 @@ function applySpeakerCorrection(database, identifier, request) {
           : ids.has(row.id)
       ));
       if (!affected.length) return { success: false, error: "target_missing" };
+      for (const row of affected) if (row.diarizationRunId === identifier?.activeRunId && row.speaker)
+        invalidatedClusters.add(row.speaker);
+      if (scope === 'cluster') anchorInput = { speakerId: target.clusterId,
+        runId: target.runId, noteId,
+        rows: affected.map(row => ({ ...row })), name };
       // Naming is the only step that links an attendee identity to transcript rows.
       // Register this note first so a speaker can reuse its attendee-only person.
       const canPersistIdentity = name && profileId == null && database.createNamedSpeakerProfile;
@@ -152,6 +160,7 @@ function applySpeakerCorrection(database, identifier, request) {
       if (cluster.length < 2 || !reviewed.size || selected.size >= cluster.length ||
         [...selected].some((rowId) => !cluster.some((row) => row.id === rowId)))
         return { success: false, error: "invalid_split" };
+      invalidatedClusters.add(target.clusterId);
       const used = [
         ...rows.map((row) => row.speaker),
         ...(database.getSpeakerMappings?.(noteId) || []).map((mapping) => mapping.speaker_id),
@@ -198,6 +207,10 @@ function applySpeakerCorrection(database, identifier, request) {
         return { success: false, error: 'later_change' };
       if (note.deleted_at) database.db.prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?").run(noteId);
       const event = action.event;
+      if (event.clusterId) invalidatedClusters.add(event.clusterId);
+      for (const row of rows) if (event.affectedRowIds?.includes(row.id) || event.rowIds?.includes(row.id))
+        if (row.diarizationRunId === identifier?.activeRunId && row.speaker)
+          invalidatedClusters.add(row.speaker);
       nextLog = removeNewestAction(log);
       if (action.kind === 'split') {
         rows = rows.map((row) => {
@@ -276,7 +289,26 @@ function applySpeakerCorrection(database, identifier, request) {
       identifier[key] && new Map(identifier[key]),
     ]);
   try {
-    return run();
+    const result = run();
+    if (result.success) {
+      result.anchorInvalidated = [...invalidatedClusters].some(cluster => !!identifier?.getAnchorState?.(cluster));
+      for (const cluster of invalidatedClusters) identifier?.invalidateAnchor?.(cluster);
+    }
+    if (result.success) {
+      try { identifier?.revalidateAnchors?.(); }
+      catch { identifier?.invalidateAnchor?.(); }
+    }
+    if (result.success && anchorInput && identifier?.activateAnchor) {
+      try {
+        result.anchor = anchorInput.name
+          ? identifier.activateAnchor({ ...anchorInput, profileId: committedProfileId })
+          : { state: 'refused', reason: 'explicit_unknown' };
+      } catch (error) {
+        debugLogger.warn('Live speaker anchor measurement failed', { error: error.message });
+        result.anchor = { state: 'refused', reason: 'unavailable' };
+      }
+    }
+    return result;
   } catch (error) {
     for (const [key, snapshot] of caches || []) {
       if (snapshot) identifier[key] = snapshot;

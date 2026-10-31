@@ -3816,7 +3816,10 @@ declare global {
         mapping?: { runId?: string; clusterId: string; value: { display_name?: string; displayName?: string } | null } | null;
         report?: { movedRows: number; retainedRows: number; acousticRows: number;
           newClusterId: string; evidence: string } | null;
+        anchor?: { state: "active" | "refused"; reason: string | null };
+        anchorInvalidated?: boolean;
       }>;
+      getLiveSpeakerAnchorState?: (noteId: number, runId: string | null) => Promise<boolean>;
       getSpeakerProfiles?: () => Promise<
         Array<{
           id: number;

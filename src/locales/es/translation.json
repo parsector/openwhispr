@@ -3227,6 +3227,18 @@
     },
     "speaker": {
       "correctionSaveFailed": "No se pudo guardar el cambio de hablante. Inténtalo de nuevo.",
+      "anchorActive": "Se está usando la voz que acabas de confirmar.",
+      "anchorReason": {
+        "not_graduated": "Esta voz aún no está validada.",
+        "too_short": "Esta voz es demasiado breve para medirla.",
+        "overlapping": "El habla superpuesta no puede servir de referencia.",
+        "locked": "Un grupo bloqueado no puede servir de referencia.",
+        "explicit_unknown": "Una voz marcada como desconocida no puede servir de referencia.",
+        "mixed": "Este grupo puede contener varias voces.",
+        "ambiguous_match": "La coincidencia de voz es demasiado ambigua.",
+        "not_current_meeting": "Este grupo no pertenece a la reunión activa.",
+        "unavailable": "La medición de voz no está disponible ahora."
+      },
       "laterChangeReplaced": "Un cambio posterior reemplazó este. Deshaz primero el cambio posterior.",
       "you": "Tú",
       "them": "Ellos",

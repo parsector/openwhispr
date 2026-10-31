@@ -3175,6 +3175,18 @@
     },
     "speaker": {
       "correctionSaveFailed": "無法儲存說話者變更。請重試。",
+      "anchorActive": "正在使用你剛確認的聲音。",
+      "anchorReason": {
+        "not_graduated": "此聲音尚未通過審核。",
+        "too_short": "此聲音太短，無法測量。",
+        "overlapping": "重疊語音不能作為參照。",
+        "locked": "已鎖定的聲群不能作為參照。",
+        "explicit_unknown": "明確標為未知的聲音不能作為參照。",
+        "mixed": "此聲群可能包含多個聲音。",
+        "ambiguous_match": "聲音比對過於模糊。",
+        "not_current_meeting": "此聲群不屬於目前會議。",
+        "unavailable": "目前無法測量聲音。"
+      },
       "laterChangeReplaced": "後續變更已覆蓋此變更。請先復原後續變更。",
       "you": "你",
       "them": "對方",

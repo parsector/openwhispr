@@ -3520,6 +3520,18 @@
     },
     "speaker": {
       "correctionSaveFailed": "Impossible d’enregistrer le changement de locuteur. Réessayez.",
+      "anchorActive": "La voix que vous venez de confirmer est utilisée.",
+      "anchorReason": {
+        "not_graduated": "Cette voix n’est pas encore validée.",
+        "too_short": "Cette voix est trop courte pour être mesurée.",
+        "overlapping": "Une parole chevauchante ne peut pas servir de référence.",
+        "locked": "Un groupe verrouillé ne peut pas servir de référence.",
+        "explicit_unknown": "Une voix explicitement inconnue ne peut pas servir de référence.",
+        "mixed": "Ce groupe peut contenir plusieurs voix.",
+        "ambiguous_match": "La correspondance vocale est trop ambiguë.",
+        "not_current_meeting": "Ce groupe ne fait pas partie de la réunion active.",
+        "unavailable": "La mesure vocale est indisponible pour le moment."
+      },
       "laterChangeReplaced": "Une modification ultérieure a remplacé celle-ci. Annulez d’abord la modification ultérieure.",
       "you": "Vous",
       "them": "Eux",

@@ -453,6 +453,18 @@ export default function NoteEditor({
   const [reviewOnly, setReviewOnly] = useState(false);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerCorrectionError, setSpeakerCorrectionError] = useState<string | null>(null);
+  const [speakerAnchorStatus, setSpeakerAnchorStatus] = useState<{ state: "active" | "refused"; reason: string | null } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setSpeakerAnchorStatus(null);
+    if (isRecording) {
+      void window.electronAPI?.getLiveSpeakerAnchorState?.(note.id, getActiveRecordingSessionId())
+        .then((active) => {
+          if (!cancelled && active) setSpeakerAnchorStatus({ state: "active", reason: null });
+        });
+    }
+    return () => { cancelled = true; };
+  }, [note.id, isRecording]);
   const [speakerSplitReport, setSpeakerSplitReport] = useState<string | null>(null);
   const [speakerHistoryQuarantined, setSpeakerHistoryQuarantined] = useState(false);
   useEffect(() => {
@@ -701,9 +713,25 @@ export default function NoteEditor({
     const refresh = () => {
       refreshSpeakerMappings(note.id);
       refreshSpeakerProfiles();
+      if (isRecording && speakerAnchorStatus?.state === "active") {
+        void window.electronAPI?.getLiveSpeakerAnchorState?.(note.id, getActiveRecordingSessionId())
+          .then((active) => {
+            if (!active) setSpeakerAnchorStatus((current) => current?.state === "active" ? null : current);
+          });
+      }
     };
     return window.electronAPI?.onPeopleChanged?.(refresh);
-  }, [note.id, refreshSpeakerProfiles, refreshSpeakerMappings]);
+  }, [note.id, isRecording, speakerAnchorStatus, refreshSpeakerProfiles, refreshSpeakerMappings]);
+
+  useEffect(() => {
+    if (!isRecording) return;
+    return window.electronAPI?.onMeetingSpeakersMerged?.(() => {
+      void window.electronAPI?.getLiveSpeakerAnchorState?.(note.id, getActiveRecordingSessionId())
+        .then((active) => {
+          if (!active) setSpeakerAnchorStatus((current) => current?.state === "active" ? null : current);
+        });
+    });
+  }, [note.id, isRecording]);
 
   useEffect(() => {
     let timer: number | undefined;
@@ -798,6 +826,11 @@ export default function NoteEditor({
         return false;
       }
       const committed = result.rows;
+      if (isRecording) {
+        if (result.anchor) setSpeakerAnchorStatus(result.anchor);
+        else if (request.type === "undo" || request.type === "split" || result.anchorInvalidated)
+          setSpeakerAnchorStatus(null);
+      }
       if (result.report) setSpeakerSplitReport(t("notes.speaker.splitReport", {
         moved: result.report.movedRows, retained: result.report.retainedRows,
         acoustic: result.report.acousticRows,
@@ -1560,6 +1593,11 @@ export default function NoteEditor({
 
         {speakerHistoryQuarantined && <p role="status" className="px-4 py-2 text-sm text-destructive">{t("notes.speaker.historyQuarantined")}</p>}
         {speakerCorrectionError && <p role="alert" className="px-4 py-2 text-sm text-destructive">{speakerCorrectionError}</p>}
+        {isRecording && speakerAnchorStatus && <p role="status" className="px-4 py-2 text-xs text-muted-foreground">
+          {speakerAnchorStatus.state === "active"
+            ? t("notes.speaker.anchorActive")
+            : t(`notes.speaker.anchorReason.${speakerAnchorStatus.reason || "not_current_meeting"}`)}
+        </p>}
         {speakerSplitReport && <p role="status" className="px-4 py-2 text-sm text-muted-foreground">{speakerSplitReport}</p>}
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">

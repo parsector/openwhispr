@@ -604,6 +604,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Speaker name mapping
   getSpeakerMappings: (noteId) => ipcRenderer.invoke("get-speaker-mappings", noteId),
   applySpeakerCorrection: (request) => ipcRenderer.invoke("apply-speaker-correction", request),
+  getLiveSpeakerAnchorState: (noteId, runId) => ipcRenderer.invoke("get-live-speaker-anchor-state", noteId, runId),
   getSpeakerProfiles: () => ipcRenderer.invoke("get-speaker-profiles"),
   listPeople: () => ipcRenderer.invoke("people-list"),
   listVoiceEnrollmentCandidates: (profileId) => ipcRenderer.invoke('voice-enrollment-candidates', profileId),

@@ -3103,6 +3103,18 @@
     },
     "speaker": {
       "correctionSaveFailed": "話者の変更を保存できませんでした。もう一度お試しください。",
+      "anchorActive": "確認したばかりの声を使用しています。",
+      "anchorReason": {
+        "not_graduated": "この声はまだ承認されていません。",
+        "too_short": "この声は短すぎて測定できません。",
+        "overlapping": "重なった発話は基準にできません。",
+        "locked": "ロックされたクラスターは基準にできません。",
+        "explicit_unknown": "明示的に不明とした声は基準にできません。",
+        "mixed": "このクラスターには複数の声が含まれる可能性があります。",
+        "ambiguous_match": "声の一致が曖昧すぎます。",
+        "not_current_meeting": "このクラスターは進行中の会議に属しません。",
+        "unavailable": "現在、声を測定できません。"
+      },
       "laterChangeReplaced": "後の変更によって上書きされています。先に後の変更を元に戻してください。",
       "you": "あなた",
       "them": "相手",

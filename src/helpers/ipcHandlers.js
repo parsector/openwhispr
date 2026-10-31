@@ -2938,7 +2938,9 @@ class IPCHandlers {
     ipcMain.handle("meeting-audio-delete", (_event, noteId) => {
       const note = this.databaseManager.getNote(noteId);
       if (!note || note.deleted_at) return { state: "unavailable" };
-      return this.meetingAudioStore.delete(noteId);
+      const result = this.meetingAudioStore.delete(noteId);
+      liveSpeakerIdentifier.revalidateAnchors();
+      return result;
     });
     ipcMain.handle("meeting-audio-policy", (_event, policy) =>
       this.meetingAudioStore.setPolicy(policy));
@@ -8905,9 +8907,10 @@ class IPCHandlers {
               ) {
                 const patch = {
                   speaker: identification.speakerId,
-                  speakerName: displayName || seg.speakerName,
+                  speakerName: identification.uncertainty ? undefined : displayName || seg.speakerName,
                   speakerIsPlaceholder: !displayName,
                   suggestedName: meetingOneOnOneAttendee?.displayName,
+                  uncertainty: identification.uncertainty,
                 };
                 if (displayName) applyConfirmedSpeaker(seg, patch);
                 else applySuggestedSpeaker(seg, patch);
@@ -13078,6 +13081,9 @@ class IPCHandlers {
       return this.databaseManager.getSpeakerMappings(noteId);
     });
 
+    ipcMain.handle("get-live-speaker-anchor-state", (_event, noteId, runId) =>
+      liveSpeakerIdentifier.hasActiveAnchor(noteId, runId));
+
     ipcMain.handle("apply-speaker-correction", async (_event, request) => {
       try {
         if (request?.type === "split") {
@@ -13120,7 +13126,7 @@ class IPCHandlers {
       require('./voiceEnrollment').listSamples(this.databaseManager, profileId));
     ipcMain.handle("voice-enrollment-remove", (_event, sampleId) => {
       const result = require('./voiceEnrollment').removeSample(this.databaseManager, sampleId);
-      if (result.success) { this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
+      if (result.success) { liveSpeakerIdentifier.revalidateAnchors(); this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
       return result;
     });
     ipcMain.handle("voice-enrollment-play", (_event, id) => {
@@ -13130,12 +13136,12 @@ class IPCHandlers {
     ipcMain.handle("voice-enrollment-decide", async (_event, id, choice, token) => {
       const result = await require('./voiceEnrollment').decide(this.databaseManager, this.meetingAudioStore,
         require('./speakerEmbeddings'), id, choice, token);
-      if (result.success) { this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
+      if (result.success) { liveSpeakerIdentifier.revalidateAnchors(); this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
       return result;
     });
     ipcMain.handle("voice-enrollment-undo", (_event, id) => {
       const result = require('./voiceEnrollment').undo(this.databaseManager, id);
-      if (result.success) { this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
+      if (result.success) { liveSpeakerIdentifier.revalidateAnchors(); this.notifyVectorChanges(); broadcastToWindows('people-changed'); }
       return result;
     });
     ipcMain.handle("people-action-history", () => require("./peopleActions").listPeopleActions(this.databaseManager));

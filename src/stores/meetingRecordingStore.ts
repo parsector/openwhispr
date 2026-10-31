@@ -93,6 +93,7 @@ interface SpeakerIdentification {
   speakerId: string;
   displayName?: string | null;
   suggestedName?: string | null;
+  uncertainty?: { reason: string };
   startTime: number;
   endTime: number;
 }
@@ -599,7 +600,7 @@ function applySpeakerIdentification(
     !isSegmentWithinIdentificationWindow(segment, identification) ||
     (segment.speaker && !segment.speakerIsPlaceholder && segment.speakerStatus !== "provisional") ||
     segment.speakerLocked ||
-    segment.uncertainty?.reason === "too_short"
+    ["too_short", "overlapping_speech"].includes(segment.uncertainty?.reason || "")
   ) {
     return segment;
   }
@@ -607,10 +608,11 @@ function applySpeakerIdentification(
   return normalizeTranscriptSegment({
     ...segment,
     speaker: identification.speakerId,
-    speakerName: identification.displayName ?? segment.speakerName,
+    speakerName: identification.uncertainty ? undefined : identification.displayName ?? segment.speakerName,
     suggestedName: identification.suggestedName ?? segment.suggestedName,
     speakerIsPlaceholder: !identification.displayName,
-    speakerStatus: identification.displayName ? "confirmed" : "suggested",
+    speakerStatus: identification.uncertainty ? "provisional" : identification.displayName ? "confirmed" : "suggested",
+    uncertainty: identification.uncertainty,
     speakerAssessmentAvailable: true,
   });
 }
@@ -1230,7 +1232,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         if (activeRecordingSessionId !== sessionId) return;
         reserveSpeakerIndex(data.speakerId);
         setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
-        rememberSystemSpeaker(data.speakerId, data.displayName ?? null, false, data.endTime);
+        rememberSystemSpeaker(data.speakerId, data.displayName ?? null, !data.displayName, data.endTime);
         speakerIdentifications = [
           ...speakerIdentifications.filter(
             (id) => id.endTime >= data.endTime - SPEAKER_IDENTIFICATION_RETENTION_MS

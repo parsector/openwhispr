@@ -3175,6 +3175,18 @@
     },
     "speaker": {
       "correctionSaveFailed": "Impossibile salvare la modifica dell’interlocutore. Riprova.",
+      "anchorActive": "Uso la voce che hai appena confermato.",
+      "anchorReason": {
+        "not_graduated": "Questa voce non è ancora convalidata.",
+        "too_short": "Questa voce è troppo breve da misurare.",
+        "overlapping": "Il parlato sovrapposto non può fare da riferimento.",
+        "locked": "Un gruppo bloccato non può fare da riferimento.",
+        "explicit_unknown": "Una voce segnata come sconosciuta non può fare da riferimento.",
+        "mixed": "Questo gruppo potrebbe contenere più voci.",
+        "ambiguous_match": "La corrispondenza vocale è troppo ambigua.",
+        "not_current_meeting": "Questo gruppo non appartiene alla riunione attiva.",
+        "unavailable": "La misurazione della voce non è disponibile al momento."
+      },
       "laterChangeReplaced": "Una modifica successiva ha sostituito questa. Annulla prima la modifica successiva.",
       "you": "Tu",
       "them": "Loro",

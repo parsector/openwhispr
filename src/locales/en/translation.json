@@ -3672,6 +3672,18 @@
     },
     "speaker": {
       "correctionSaveFailed": "Could not save the speaker change. Try again.",
+      "anchorActive": "Using the voice you just confirmed.",
+      "anchorReason": {
+        "not_graduated": "This voice is not graduated yet.",
+        "too_short": "This voice is too short to measure.",
+        "overlapping": "Overlapping speech cannot anchor this voice.",
+        "locked": "A locked cluster cannot become an anchor.",
+        "explicit_unknown": "An explicit Unknown cannot become an anchor.",
+        "mixed": "This cluster may contain mixed voices.",
+        "ambiguous_match": "The voice match is too ambiguous to anchor.",
+        "not_current_meeting": "This cluster is not in the active meeting.",
+        "unavailable": "Voice measurement is unavailable right now."
+      },
       "laterChangeReplaced": "A later change replaced this. Undo that change first.",
       "you": "You",
       "them": "Them",
