@@ -32,3 +32,13 @@ test('older row-only action log entries project onto their row', async () => {
   assert.deepEqual(row.corrections.map(action => action.id), ['old']);
   assert.equal(row.changedAfterFinal, true);
 });
+
+test('a permanently unavailable row action carries its reason instead of an ordering claim', async () => {
+  const { projectSpeakerActions } = await import('../../src/utils/speakerActionProjection.ts');
+  const rows = [{ id: 'row-a', text: 'Hello', source: 'system' }];
+  const log = JSON.stringify({ actions: [{ kind: 'correction', id: 'blocked', sequence: 1,
+    unavailableReason: 'history_quarantined', event: { affectedRowIds: ['row-a'] } }] });
+  const [row] = projectSpeakerActions(rows, log);
+  assert.equal(row.corrections[0].undoAvailable, false);
+  assert.equal(row.corrections[0].unavailableReason, 'history_quarantined');
+});

@@ -15,6 +15,10 @@ type EnrollmentCandidate = Awaited<ReturnType<NonNullable<typeof window.electron
 type EnrollmentSample = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listVoiceEnrollmentSamples>>>[number];
 const field = "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const button = "rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+type CalibrationValues = { similarityFloor: number; runnerUpMargin: number;
+  minimumVoicedSeconds: number; overlapToleranceSeconds: number };
+const calibrationFields: Array<keyof CalibrationValues> = ["similarityFloor", "runnerUpMargin",
+  "minimumVoicedSeconds", "overlapToleranceSeconds"];
 
 export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: number, rowId: string) => void }) {
   const { t } = useTranslation();
@@ -22,6 +26,10 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
   const [tab, setTab] = useState<"people" | "review">("people");
   const [people, setPeople] = useState<Person[]>([]);
   const [actionHistory, setActionHistory] = useState<HistoryAction[]>([]);
+  const [calibration, setCalibration] = useState<{ values: CalibrationValues; status: string } | null>(null);
+  const [calibrationDraft, setCalibrationDraft] = useState<CalibrationValues | null>(null);
+  const [calibrationReport, setCalibrationReport] = useState<Record<string, unknown> | null>(null);
+  const [calibrationError, setCalibrationError] = useState("");
   const [review, setReview] = useState<Review[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState(false);
@@ -63,6 +71,26 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
   useEffect(() => { if (enrollingId !== null) enrollmentPanelRef.current?.focus(); }, [enrollingId]);
   useEffect(() => { if (report) reportRef.current?.focus(); }, [report?.id]);
   useEffect(() => () => { enrollmentPlayer.current?.pause(); if (enrollmentUrl.current) URL.revokeObjectURL(enrollmentUrl.current); }, []);
+  useEffect(() => { void window.electronAPI.speakerCalibrationSettings?.().then(result => {
+    setCalibration(result); setCalibrationDraft(result.values);
+  }).catch(() => setCalibrationError(t("people.calibrationUnavailable"))); }, [t]);
+  const importCalibrationReport = async (file: File) => {
+    try {
+      const report = JSON.parse(await file.text());
+      if (report.version !== 1 || !report.recommended || !report.evidence) throw Error("Invalid report");
+      const values = Object.fromEntries(calibrationFields.map(key => [key, Number(report.recommended[key])])) as CalibrationValues;
+      if (calibrationFields.some(key => !Number.isFinite(values[key]))) throw Error("Invalid threshold");
+      setCalibrationDraft(values);
+      setCalibrationReport(report); setCalibrationError("");
+    } catch { setCalibrationReport(null); setCalibrationError(t("people.calibrationInvalidReport")); }
+  };
+  const applyCalibration = async () => {
+    if (!calibrationDraft) return;
+    const result = await window.electronAPI.applySpeakerCalibration?.(calibrationDraft, calibrationReport);
+    if (!result?.success || !result.values) { setCalibrationError(result?.error || t("people.calibrationUnavailable")); return; }
+    setCalibration({ values: result.values, status: result.status || "uncalibrated" });
+    setCalibrationReport(null); setCalibrationError("");
+  };
   const openEnrollment = async (profileId: number) => {
     enrollmentTrigger.current = document.activeElement as HTMLElement;
     const request = ++enrollmentRequest.current;
@@ -280,10 +308,32 @@ export default function PeoplePage({ onOpenNote }: { onOpenNote?: (noteId: numbe
     {loading && <div role="status" className="space-y-2" aria-label={t("people.loading")}>{[0, 1, 2].map(i => <div key={i} className="h-16 animate-pulse rounded-lg bg-surface-2" />)}<p className="text-sm text-muted-foreground">{t("people.loading")}</p></div>}
     {error && !loading && <div role="alert" className="rounded-xl border border-destructive/30 p-5"><p className="font-medium">{t("people.loadError")}</p><button type="button" className={`${button} mt-3`} onClick={() => void refresh()}>{t("people.retry")}</button></div>}
     {!loading && !error && tab === "people" && <div role="tabpanel" className="space-y-4">
+      <section className="rounded-xl border border-border p-4" aria-label={t("people.calibrationTitle")}>
+        <SectionHeader title={t("people.calibrationTitle")} />
+        <p className="mt-1 text-xs text-muted-foreground">{t("people.calibrationInstructions")}</p>
+        <p className="mt-2 text-xs font-medium">{t("people.calibrationStatus")}: {t(calibration?.status === "calibrated" ? "people.calibrated" : "people.uncalibrated")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("people.calibrationOtherGuesses")}</p>
+        {calibrationDraft && <div className="mt-3 grid gap-3 sm:grid-cols-2">{calibrationFields.map(key => <label key={key} className="text-xs">
+          <span className="block mb-1">{t(`people.calibrationFields.${key}`)} · {t("people.calibrationCurrent")}: {calibration?.values[key] ?? "—"}</span>
+          <input dir="ltr" className={field} type="number" step="0.01" min="0" value={calibrationDraft[key]}
+            onChange={event => { setCalibrationReport(null); setCalibrationDraft({ ...calibrationDraft, [key]: Number(event.target.value) }); }} />
+        </label>)}</div>}
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+          <label className={button}>{t("people.calibrationImport")}
+            <input dir="ltr" className="sr-only" type="file" accept="application/json,.json" onChange={event => {
+              const file = event.target.files?.[0]; if (file) void importCalibrationReport(file);
+            }} />
+          </label>
+          <button type="button" className={button} disabled={!calibrationDraft} onClick={() => void applyCalibration()}>{t("people.calibrationApply")}</button>
+          {calibrationReport && <span>{t(calibrationReport.synthetic ? "people.calibrationSynthetic" : "people.calibrationReportReady")}</span>}
+        </div>
+        {calibrationError && <p role="alert" className="mt-2 text-xs text-destructive">{calibrationError}</p>}
+      </section>
       <section className="rounded-xl border border-border p-4" aria-label={t("people.actionHistory")}>
         <SectionHeader title={t("people.actionHistory")} />
+        <p className="mt-1 text-xs text-muted-foreground">{t("people.undoOrder")}</p>
         {actionHistory.length === 0 && <p className="mt-2 text-xs text-muted-foreground">{t("people.noActions")}</p>}
-        <ol className="mt-2 space-y-2">{actionHistory.map((action, index) => <li key={`${action.id}:${action.noteId}`} className="flex items-center justify-between gap-3 text-xs">
+        <ol className="mt-2 space-y-2">{actionHistory.map((action, index) => <li key={`${action.id}:${action.noteId}`} className={`flex items-center justify-between gap-3 text-xs ${index !== newestActionIndex ? "opacity-60" : "rounded-lg bg-surface-2/50 p-2"}`}>
           <span className="min-w-0 break-words">{action.kind === "clear_voice" ? t("people.clearVoice") : ["apply", "correction"].includes(action.kind) ? t("people.correctionAction") : action.kind === "split" ? t("notes.speaker.splitCluster") : action.kind === "enrollment" ? t(action.label.startsWith("approve:") ? "people.approveSample" : action.label.startsWith("reject:") ? "people.rejectSample" : "people.removeSample") : action.kind === "reconsideration" ? t("notes.speaker.reason.approved_voice") : action.kind === "mapping" ? t("people.mappingAction") : action.kind === "adoption" ? t("people.adoptionAction") : t(`people.actions.${action.kind}`)}{["rename", "merge", "delete", "reset", "apply", "correction", "mapping", "adoption"].includes(action.kind) && <> · {action.label === "deleted_person" ? t("people.deletedPerson") : action.label === "Unknown" ? t("people.unknown") : action.label}</>}{action.noteInTrash ? ` · ${t("people.noteInTrash")}` : ""}</span>
           {action.unavailableReason ? <span className="text-muted-foreground">{actionErrorText(action.unavailableReason)}</span>
             : index !== newestActionIndex ? <span className="text-muted-foreground">{t("people.errors.later_change")}</span>

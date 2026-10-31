@@ -5,6 +5,7 @@ const { MAX_EMBEDDING_SECONDS } = speakerEmbeddings;
 const { downsample24kTo16k, pcm16ToFloat32 } = require("../utils/audioUtils");
 const { MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
 const { normalizeSpeakerIndexBase } = require("./speakerIndexBase");
+const speakerThresholds = require("./speakerDecisionThresholds");
 
 function clampMaxSpeakers(value) {
   const n = Number(value);
@@ -35,22 +36,23 @@ const SAMPLE_RATE = 16000;
 const VAD_WINDOW_SIZE = 512;
 const MIN_SEGMENT_SECONDS = 1.5;
 const MIN_SEGMENT_SAMPLES = Math.round(SAMPLE_RATE * MIN_SEGMENT_SECONDS);
-const LIVE_IDENTIFICATION_MIN_SECONDS = 1.6;
-const LIVE_IDENTIFICATION_MIN_SAMPLES = Math.round(SAMPLE_RATE * LIVE_IDENTIFICATION_MIN_SECONDS);
 const LIVE_IDENTIFICATION_INTERVAL_SECONDS = 1.0;
 const LIVE_IDENTIFICATION_INTERVAL_SAMPLES = Math.round(
   SAMPLE_RATE * LIVE_IDENTIFICATION_INTERVAL_SECONDS
 );
 const MAX_EMBEDDING_SAMPLES = SAMPLE_RATE * MAX_EMBEDDING_SECONDS;
 const SPEECH_CHUNKS_MAX_SAMPLES = MAX_EMBEDDING_SAMPLES * 4;
+// Local VAD and reclustering guards remain uncalibrated guesses.
 const SPEECH_THRESHOLD = 0.15;
 const SILENCE_THRESHOLD = 0.08;
 const SILENCE_WINDOWS_TO_END = 24;
-const MATCH_THRESHOLD = 0.65;
-const MATCH_MARGIN = 0.03;
-const ANCHOR_THRESHOLD = 0.60;
-const ANCHOR_MARGIN = 0.08;
-const ANCHOR_MIN_VOICED_SAMPLES = SAMPLE_RATE * 3;
+// Anchor defaults below are still guesses until an owner report is applied.
+const matchFloor = () => speakerThresholds.current().values.similarityFloor;
+const matchMargin = () => speakerThresholds.current().values.runnerUpMargin;
+const anchorFloor = () => speakerThresholds.current().status === 'calibrated' ? matchFloor() : 0.60;
+const anchorMargin = () => speakerThresholds.current().status === 'calibrated' ? matchMargin() : 0.08;
+const anchorMinSamples = () => SAMPLE_RATE * (speakerThresholds.current().status === 'calibrated'
+  ? speakerThresholds.current().values.minimumVoicedSeconds : 3);
 const ANCHOR_MIN_CONSISTENCY = 0.80;
 const RECLUSTER_SIMILARITY = 0.93;
 const RECLUSTER_MARGIN = 0.08;
@@ -255,12 +257,12 @@ class LiveSpeakerIdentifier {
           Array.isArray(profile.embedding) ? Float32Array.from(profile.embedding) : getBufferFloat32View(profile.embedding)) }))
       .sort((a, b) => b.similarity - a.similarity);
     const best = ranked[0];
-    if (!best || best.similarity < MATCH_THRESHOLD) return { reason: 'no_match' };
+    if (!best || best.similarity < matchFloor()) return { reason: 'no_match' };
     let runnerUp = ranked[1]?.similarity || 0;
     for (const [id, other] of this.transientEmbeddings) if (id !== speakerId &&
         (this.transientCohorts.get(id) || 'system') === (this.transientCohorts.get(speakerId) || 'system'))
       runnerUp = Math.max(runnerUp, speakerEmbeddings.cosineSimilarity(centroid, other));
-    if (best.similarity - runnerUp < ANCHOR_MARGIN) return { reason: 'close_match' };
+    if (best.similarity - runnerUp < anchorMargin()) return { reason: 'close_match' };
     return { profile: best.profile };
   }
 
@@ -320,7 +322,7 @@ class LiveSpeakerIdentifier {
     catch { return refused('not_graduated'); }
     const profile = profiles.find(item => item.id === profileId && item.voice_usable === 1);
     if (!profile) return refused('not_graduated');
-    if ((this.transientVoicedSamples.get(speakerId) || 0) < ANCHOR_MIN_VOICED_SAMPLES ||
+    if ((this.transientVoicedSamples.get(speakerId) || 0) < anchorMinSamples() ||
         (this.transientObservations.get(speakerId) || 0) < 2)
       return refused('too_short');
     if ((this.transientMinimumSimilarity.get(speakerId) ?? 1) < ANCHOR_MIN_CONSISTENCY)
@@ -332,7 +334,7 @@ class LiveSpeakerIdentifier {
       speakerEmbeddings.cosineSimilarity(centroid, getBufferFloat32View(item.embedding)));
     for (const [id, other] of this.transientEmbeddings) if (id !== speakerId)
       alternatives.push(speakerEmbeddings.cosineSimilarity(centroid, other));
-    if (own < MATCH_THRESHOLD || own - Math.max(0, ...alternatives) < ANCHOR_MARGIN)
+    if (own < matchFloor() || own - Math.max(0, ...alternatives) < anchorMargin())
       return refused('ambiguous_match');
     const state = { state: 'active', reason: null };
     this.anchors.set(speakerId, { state, centroid, profileId, runId, noteId, cohort: 'system',
@@ -836,7 +838,7 @@ class LiveSpeakerIdentifier {
     // Runs on every speech window (~31x/sec), so the cheap gates must come
     // first — concatenating up to 32s of float32 per window is ~64 MB/s of
     // wasted main-thread memcpy during continuous speech.
-    if (totalSampleCount(this.speechChunks) < LIVE_IDENTIFICATION_MIN_SAMPLES) {
+    if (totalSampleCount(this.speechChunks) < SAMPLE_RATE * speakerThresholds.current().values.minimumVoicedSeconds) {
       return;
     }
 
@@ -940,8 +942,8 @@ class LiveSpeakerIdentifier {
       }
     }
 
-    return bestSimilarity >= MATCH_THRESHOLD &&
-      bestSimilarity - secondBestSimilarity >= MATCH_MARGIN
+    return bestSimilarity >= matchFloor() &&
+      bestSimilarity - secondBestSimilarity >= matchMargin()
       ? bestSpeakerId
       : null;
   }
@@ -982,8 +984,8 @@ class LiveSpeakerIdentifier {
       }
     }
 
-    return bestSimilarity >= MATCH_THRESHOLD &&
-      bestSimilarity - secondBestSimilarity >= MATCH_MARGIN
+    return bestSimilarity >= matchFloor() &&
+      bestSimilarity - secondBestSimilarity >= matchMargin()
       ? bestProfile
       : null;
   }
@@ -1008,7 +1010,7 @@ class LiveSpeakerIdentifier {
       for (const profile of profiles) if (profile.id !== best.anchor.profileId && profile.embedding)
         runnerUp = Math.max(runnerUp, speakerEmbeddings.cosineSimilarity(embedding,
           getBufferFloat32View(profile.embedding)));
-      if (best.similarity >= ANCHOR_THRESHOLD && best.similarity - runnerUp >= ANCHOR_MARGIN)
+      if (best.similarity >= anchorFloor() && best.similarity - runnerUp >= anchorMargin())
         return { speakerId: best.id, displayName: this.transientDisplayNames.get(best.id) || null };
       // A confirmed label does not make disagreeing audio belong to it.
       const transient = this.currentSegmentSpeakerId || this._findTransientMatch(embedding, cohort);

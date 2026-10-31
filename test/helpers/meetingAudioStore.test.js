@@ -139,6 +139,24 @@ test("expiry and explicit deletion remove audio and derived voice, retain correc
   assert.equal(f.db.prepare("SELECT transcript FROM notes WHERE id=2").get().transcript, "second transcript");
 });
 
+test("stored meeting audio survives restart, exports on request, and deletion makes it unplayable", (t) => {
+  const f = fixture(t);
+  const source = signal(6, 440);
+  let store = f.makeStore();
+  store.begin(1); store.append(1, "mic", source); store.finish(1);
+  const encrypted = fs.readFileSync(path.join(f.root, "1", store.status(1).tracks.mic.chunks[0].file));
+  assert.equal(encrypted.includes(source.subarray(0, 128)), false);
+  store = f.makeStore();
+  assert.equal(store.status(1).state, "complete");
+  assert.equal(store.span(1, "mic", 1, 2).durationSeconds, 1);
+  const exported = path.join(f.root, "owner-export.wav");
+  assert.equal(store.exportTrack(1, "mic", exported), 6);
+  assert.ok(correlation(fs.readFileSync(exported).subarray(44), source) > .95);
+  assert.equal(store.delete(1).state, "deleted");
+  assert.equal(store.span(1, "mic", 1, 2).state, "deleted");
+  assert.equal(store.status(1).state, "deleted");
+});
+
 test("budget evicts the oldest recording and keep only exempts age expiry", (t) => {
   const f = fixture(t);
   const store = f.makeStore();

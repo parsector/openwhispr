@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import type { Commitment } from "../../types/electron";
 import { groupFor } from "../todos/TodoGroups";
 import { sourceChipsByIndex } from "../todos/sourceChips";
-import { MeetingAudioPlayback } from "../../utils/meetingAudioPlayback";
+import { MeetingAudioPlayback, playbackRange } from "../../utils/meetingAudioPlayback";
 import {
   isSelfSideSegment,
   isTranscriptSpeakerLocked,
@@ -881,7 +881,7 @@ const SegmentRow = memo(function SegmentRow({
       style={isNewest ? { animation: "agent-message-in 200ms ease-out both" } : undefined}
     >
       {labelElement}
-      {(segment.uncertainty || segment.changedAfterFinal || segment.machineReason || rowChangeNote || (onUndoCorrection && rowAction?.undoAvailable) || segment.quarantinedCorrections?.length ||
+      {(segment.uncertainty || segment.changedAfterFinal || segment.machineReason || rowChangeNote || (onUndoCorrection && rowAction) || segment.quarantinedCorrections?.length ||
         (!segment.speakerAssessmentAvailable && !segment.speakerLocked && !segment.speakerName)) && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-1 pb-0.5 text-[11px] text-muted-foreground">
         {segment.importedUnlabeled && !segment.speakerName &&
           <span>{t("notes.speaker.importedUnlabeled")}</span>}
@@ -898,6 +898,10 @@ const SegmentRow = memo(function SegmentRow({
         {rowChangeNote && <span dir="auto" className="min-w-0 break-words">{rowChangeNote}</span>}
         {onUndoCorrection && rowAction?.undoAvailable && <button type="button" className="underline underline-offset-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onUndoCorrection(rowAction.id)}>{t("notes.speaker.restore")}</button>}
+        {onUndoCorrection && rowAction && !rowAction.undoAvailable &&
+          <span>{rowAction.unavailableReason
+            ? t(`people.errors.${rowAction.unavailableReason}`, { defaultValue: t("people.actionError") })
+            : t("people.undoOrder")}</span>}
       </div>}
       <div className="relative max-w-[80%]">
         <div
@@ -1066,15 +1070,10 @@ export function MeetingTranscriptChat({
       return;
     }
     const request = playbackRef.current!.request();
-    const position = segment.timestamp != null && segment.timestamp > 1000000000000
-      ? (segment.timestamp - (audioStatus?.startedAt || 0)) / 1000
-      : (segment.timestamp ?? (segment.audioSpan?.startSample ?? 0) / 24000);
-    const span = segment.wordTimings?.length && segment.audioSpan?.recordingId ===
-      (audioStatus.recordingId ?? noteId) ? segment.audioSpan : null;
-    const from = Math.max(0, span ? span.startSample / 24000 : position - 6);
-    const to = span ? span.endSample / 24000 : Math.max(from + 0.25, position + 2);
+    const { from, to, track } = playbackRange(segment, segments,
+      audioStatus?.recordingId ?? noteId, audioStatus?.startedAt);
     try {
-      const response = await window.electronAPI?.meetingAudioSpan?.(noteId, span?.trackId || segment.source, from, to);
+      const response = await window.electronAPI?.meetingAudioSpan?.(noteId, track, from, to);
       if (!playbackRef.current?.isCurrent(request)) return;
       if (!response?.wav) {
         setAudioMessage(t(`meetingAudio.${response?.state === "not_flushed" ? "notFlushed" : "unavailable"}`));
@@ -1094,7 +1093,7 @@ export function MeetingTranscriptChat({
     } catch {
       setAudioMessage(t("meetingAudio.unavailable"));
     }
-  }, [noteId, audioStatus, playingRowId, refreshAudio, t]);
+  }, [noteId, audioStatus, playingRowId, refreshAudio, t, segments]);
   const deleteAudio = useCallback(async () => {
     if (noteId == null || !audioStatus) return;
     const size = `${new Intl.NumberFormat().format(audioStatus.bytes)} B`;
@@ -1300,6 +1299,14 @@ export function MeetingTranscriptChat({
             {t("meetingAudio.delete")}
           </button>}
         </>}
+        {(audioStatus.state === "complete" || audioStatus.state === "incomplete") && noteId != null &&
+          <button type="button" className="underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => void window.electronAPI?.exportMeetingCalibration?.(noteId).then(result => {
+              if (result?.success) setAudioMessage(t("meetingAudio.calibrationExported", { folder: result.folder }));
+              else if (!result?.canceled) setAudioMessage(result?.error || t("meetingAudio.unavailable"));
+            }).catch(() => setAudioMessage(t("meetingAudio.unavailable")))}>
+            {t("meetingAudio.exportCalibration")}
+          </button>}
         {audioMessage && <span>{audioMessage}</span>}
       </div>}
       {(isRecording || isDiarizing) && (

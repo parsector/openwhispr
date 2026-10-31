@@ -26,6 +26,7 @@ export function projectSpeakerActions(rows: TranscriptSegment[], rawLog?: string
         previous: action.event.snapshots?.[rowId]?.previous || {},
         next: action.event.snapshots?.[rowId]?.next || {},
         undoAvailable: newest?.id === action.id,
+        unavailableReason: action.unavailableReason,
         initialAttribution: !!action.event.initialAttribution,
         afterFinalAnalysis: !!action.event.afterFinalAnalysis } as TranscriptCorrection);
       byRow.set(rowId, history);

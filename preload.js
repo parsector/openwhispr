@@ -1029,9 +1029,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingTranscriptionCancel: () => ipcRenderer.invoke("meeting-transcription-cancel"),
   meetingAudioStatus: (noteId) => ipcRenderer.invoke("meeting-audio-status", noteId),
   meetingAudioUsage: () => ipcRenderer.invoke("meeting-audio-usage"),
+  speakerCalibrationSettings: () => ipcRenderer.invoke("speaker-calibration-settings"),
+  applySpeakerCalibration: (values, report) => ipcRenderer.invoke("speaker-calibration-apply", values, report),
   meetingAudioSpan: (noteId, track, startSeconds, endSeconds) =>
     ipcRenderer.invoke("meeting-audio-span", noteId, track, startSeconds, endSeconds),
   meetingAudioDelete: (noteId) => ipcRenderer.invoke("meeting-audio-delete", noteId),
+  exportMeetingCalibration: (noteId) => ipcRenderer.invoke("export-meeting-calibration", noteId),
   onMeetingAudioChanged: registerListener("meeting-audio-changed", (callback) => (_event, data) => callback(data)),
   meetingAudioSetPolicy: (policy) => ipcRenderer.invoke("meeting-audio-policy", policy),
   meetingAudioSetKeep: (noteId, keep) => ipcRenderer.invoke("meeting-audio-keep", noteId, keep),

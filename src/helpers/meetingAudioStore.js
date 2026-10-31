@@ -396,6 +396,38 @@ class MeetingAudioStore {
       partial: end < requestedEnd || covered < requestedEnd - start, codec: "audio/wav" };
   }
 
+  // Explicit owner export. Decode one encrypted chunk at a time; do not retain
+  // a second whole-meeting PCM buffer or change the retained recording.
+  exportTrack(noteId, track, destination) {
+    this._noteId(noteId);
+    if (!TRACKS.includes(track)) throw Error("Invalid audio track");
+    const chunks = this._manifest(noteId)?.tracks?.[track]?.chunks;
+    if (!chunks?.length) return false;
+    const fd = fs.openSync(destination, "wx", 0o600);
+    try {
+      fs.writeSync(fd, wav(Buffer.alloc(0)).subarray(0, 44));
+      let samples = 0;
+      for (const chunk of chunks) {
+        if (chunk.startSample !== samples) throw Error("Stored audio has a gap");
+        const pcm = decode(unpack(this.encryption.decryptBytes(
+          fs.readFileSync(this._chunkFile(noteId, chunk.file)))).ogg);
+        if (pcm.length !== chunk.sampleCount * 2) throw Error("Stored audio chunk length changed");
+        fs.writeSync(fd, pcm);
+        samples += chunk.sampleCount;
+      }
+      const bytes = samples * 2;
+      const header = wav(Buffer.alloc(0)).subarray(0, 44);
+      header.writeUInt32LE(bytes + 36, 4);
+      header.writeUInt32LE(bytes, 40);
+      fs.writeSync(fd, header, 0, 44, 0);
+      return samples / RATE;
+    } catch (error) {
+      fs.closeSync(fd);
+      fs.rmSync(destination, { force: true });
+      throw error;
+    } finally { try { fs.closeSync(fd); } catch {} }
+  }
+
   delete(noteId, reason = "deleted") {
     this._noteId(noteId);
     if (!["deleted", "expired", "evicted"].includes(reason)) throw new Error("Invalid deletion reason");

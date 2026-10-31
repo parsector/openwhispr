@@ -708,6 +708,8 @@ class IPCHandlers {
     this._activeRecordingPipeline = null;
     this._onboardingDemoSession = null;
     this.audioStorageManager = new AudioStorageManager();
+    require("./speakerDecisionThresholds").configure(
+      path.join(app.getPath("userData"), "speaker-decision-thresholds.json"));
     this.meetingAudioStore = new MeetingAudioStore(
       path.join(app.getPath("userData"), "meeting-audio"),
       { database: this.databaseManager, onChanged: (change) =>
@@ -2930,11 +2932,46 @@ class IPCHandlers {
         ? this.meetingAudioStore.status(noteId) : { state: "unavailable", bytes: 0 };
     });
     ipcMain.handle("meeting-audio-usage", () => this.meetingAudioStore.usage());
+    ipcMain.handle("speaker-calibration-settings", () => require("./speakerDecisionThresholds").current());
+    ipcMain.handle("speaker-calibration-apply", (_event, values, report) => {
+      if (report && Object.keys(values || {}).some(key => report.recommended?.[key] !== values[key]))
+        return { success: false, error: "Values differ from the selected report" };
+      try { return { success: true, ...require("./speakerDecisionThresholds").apply(values, report) }; }
+      catch (error) { return { success: false, error: error.message }; }
+    });
     ipcMain.handle("meeting-audio-span", (_event, noteId, track, start, end) => {
       const note = this.databaseManager.getNote(noteId);
       if (!note || note.deleted_at) return { state: "unavailable" };
       const result = this.meetingAudioStore.span(noteId, track, start, end);
       return result.wav ? { ...result, wav: result.wav.toString("base64") } : result;
+    });
+    ipcMain.handle("export-meeting-calibration", async (_event, noteId) => {
+      const note = this.databaseManager.getNote(noteId);
+      if (!note || note.deleted_at) return { success: false, error: "Meeting not found" };
+      const status = this.meetingAudioStore.status(noteId);
+      if (!["complete", "incomplete"].includes(status.state))
+        return { success: false, error: "Stored meeting audio is unavailable" };
+      const { dialog } = require("electron");
+      const choice = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"],
+        title: "Choose where to export calibration data" });
+      if (choice.canceled || !choice.filePaths?.[0]) return { success: false, canceled: true };
+      const folder = fs.mkdtempSync(path.join(choice.filePaths[0], `openwhispr-meeting-${noteId}-`));
+      try {
+        const audio = {};
+        for (const track of ["mic", "system"]) {
+          const file = `${track}.wav`;
+          const duration = this.meetingAudioStore.exportTrack(noteId, track, path.join(folder, file));
+          if (duration) audio[track] = { file, durationSeconds: duration };
+        }
+        if (!Object.keys(audio).length) throw Error("No stored audio track could be exported");
+        const labels = require("./speakerCalibrationExport").buildCalibrationLabels(note, audio);
+        if (!labels.rows.length) throw Error("No transcript rows to label");
+        fs.writeFileSync(path.join(folder, "labels.json"), JSON.stringify(labels, null, 2), { mode: 0o600 });
+        return { success: true, folder };
+      } catch (error) {
+        fs.rmSync(folder, { recursive: true, force: true });
+        return { success: false, error: error.message };
+      }
     });
     ipcMain.handle("meeting-audio-delete", (_event, noteId) => {
       const note = this.databaseManager.getNote(noteId);

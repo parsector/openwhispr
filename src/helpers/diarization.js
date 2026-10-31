@@ -13,6 +13,7 @@ const { getFFmpegPath } = require("./ffmpegUtils");
 const { getSafeTempDir } = require("./safeTempDir");
 const { applyConfirmedSpeaker } = require("./speakerAssignmentPolicy");
 const { shortSpanReason } = require("./speakerUncertainty");
+const speakerThresholds = require("./speakerDecisionThresholds");
 const { buildSpeakerRenumber } = require("./speakerIndexBase");
 const sidecarPidFile = require("./sidecarPidFile");
 const {
@@ -614,7 +615,7 @@ class DiarizationManager {
         const simultaneous = diarizationSegments.some((first, i) =>
           diarizationSegments.slice(i + 1).some((second) =>
             first.speaker !== second.speaker &&
-            Math.min(overlapEnd, first.end, second.end) - Math.max(overlapStart, first.start, second.start) >= 0.1));
+            Math.min(overlapEnd, first.end, second.end) - Math.max(overlapStart, first.start, second.start) >= speakerThresholds.current().values.overlapToleranceSeconds));
         enriched.uncertainty = simultaneous
           ? { reason: "overlapping_speech" }
           : shortSpanReason(matchedSpan) || enriched.uncertainty;

@@ -24,7 +24,7 @@ test('People headings use the Settings section header token at every level', () 
   assert.match(people, /import \{ SectionHeader, SETTINGS_ROW_TITLE_CLASS \} from "\.\.\/ui\/SettingsSection"/);
   assert.match(shared, /SETTINGS_ROW_TITLE_CLASS = "text-xs font-medium text-foreground"/);
   assert.match(people, /\$\{SETTINGS_ROW_TITLE_CLASS\}/);
-  assert.equal((people.match(/<SectionHeader\b/g) || []).length, 6);
+  assert.equal((people.match(/<SectionHeader\b/g) || []).length, 7);
   assert.doesNotMatch(people, /<h[1-6]\b/);
   assert.doesNotMatch(people, /t\("people\.noVoice"\)/);
 });

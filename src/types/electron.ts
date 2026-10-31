@@ -3663,6 +3663,8 @@ declare global {
         keep?: boolean;
       }>;
       meetingAudioUsage?: () => Promise<{ usedBytes: number; budgetBytes: number; days: 3 | 7 | 30; evictions: Array<{ noteId: number; title: string; at: number }> }>;
+      speakerCalibrationSettings?: () => Promise<{ values: { similarityFloor: number; runnerUpMargin: number; minimumVoicedSeconds: number; overlapToleranceSeconds: number }; status: string; evidence?: unknown }>;
+      applySpeakerCalibration?: (values: { similarityFloor: number; runnerUpMargin: number; minimumVoicedSeconds: number; overlapToleranceSeconds: number }, report?: unknown) => Promise<{ success: boolean; values?: { similarityFloor: number; runnerUpMargin: number; minimumVoicedSeconds: number; overlapToleranceSeconds: number }; status?: string; error?: string }>;
       meetingAudioSpan?: (noteId: number, track: "mic" | "system", startSeconds: number, endSeconds: number) => Promise<{
         state: string;
         wav?: string;
@@ -3670,6 +3672,7 @@ declare global {
         partial?: boolean;
       }>;
       meetingAudioDelete?: (noteId: number) => Promise<{ state: string; freedBytes?: number }>;
+      exportMeetingCalibration?: (noteId: number) => Promise<{ success: boolean; folder?: string; error?: string; canceled?: boolean }>;
       onMeetingAudioChanged?: (callback: (change: { noteId: number; state: string }) => void) => () => void;
       meetingAudioSetPolicy?: (policy: { days: 3 | 7 | 30; budgetBytes: number }) => Promise<{
         usedBytes: number; budgetBytes: number; removed: Array<{ noteId: number; reason: string }>;

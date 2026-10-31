@@ -1039,6 +1039,25 @@ test("speaker correction rolls back a run mapping when transcript persistence fa
   assert.equal(db.getSpeakerRunMapping(note.id, "run-1", "speaker_0"), null);
 });
 
+test("owner can name adjacent meeting rows Speaker A and Speaker B durably", (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  const { readTranscriptDocument } = require("../../src/helpers/transcriptDocument");
+  const initial = [
+    { id: "a", source: "system", text: "First", speaker: "speaker_0", diarizationRunId: "run-a" },
+    { id: "b", source: "system", text: "Second", speaker: "speaker_1", diarizationRunId: "run-a" },
+  ];
+  const note = db.saveNote("Meeting", "", "meeting", null, null, null, null, JSON.stringify(initial)).note;
+  for (const [id, name] of [["a", "Speaker A"], ["b", "Speaker B"]]) {
+    assert.equal(applySpeakerCorrection(db, null, { type: "apply", noteId: note.id,
+      id: `name-${id}`, scope: "row", rowIds: [id], name, rows: [] }).success, true);
+  }
+  const saved = readTranscriptDocument(db.getNote(note.id).transcript).rows;
+  assert.deepEqual(saved.map(row => row.speakerName), ["Speaker A", "Speaker B"]);
+  assert.deepEqual(saved.map(row => row.speakerLocked), [true, true]);
+});
+
 test("cluster Unknown saves and undoes against the real SQLite run mapping", (t) => {
   const db = createDb(t);
   if (!db) return;
