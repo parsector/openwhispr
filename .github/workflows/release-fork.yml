@@ -235,6 +235,8 @@ jobs:
           done
           echo '::error::npm ci failed after 3 attempts'
           exit 1
+      - name: Extract release notes from changelog
+        run: node scripts/extract-release-notes.mjs "${{ needs.prepare.outputs.version }}" release-notes.md
       - name: Compile macOS arm64 helpers
         run: |
           npm run compile:globe -- --arch arm64
@@ -439,7 +441,7 @@ jobs:
           echo "CSC_NAME=$csc_name" >> "$GITHUB_ENV"
       - name: Create draft release
         if: ${{ !inputs.dry_run }}
-        run: gh release create "$RELEASE_TAG" --draft --target "${{ needs.prepare.outputs.sha }}" --title "$RELEASE_TAG" --notes "OpenWhispr $RELEASE_TAG (macOS arm64)"
+        run: gh release create "$RELEASE_TAG" --draft --target "${{ needs.prepare.outputs.sha }}" --title "$RELEASE_TAG" --notes-file release-notes.md
       - name: Configure unsigned build
         if: env.SIGNING_CERT_BASE64 == ''
         run: echo 'CSC_IDENTITY_AUTO_DISCOVERY=false' >> "$GITHUB_ENV"
@@ -476,6 +478,9 @@ jobs:
           cp dist/latest-mac.yml dist/latest-arm64-mac.yml
           test -n "$(find dist -maxdepth 1 -name '*.dmg' -print -quit)"
           test -n "$(find dist -maxdepth 1 -name '*-mac.zip' -print -quit)"
+          node scripts/inject-release-notes.mjs dist/latest-arm64-mac.yml release-notes.md "${{ needs.prepare.outputs.version }}"
+      - name: Verify arm64 update metadata notes
+        run: node scripts/inject-release-notes.mjs --verify dist/latest-arm64-mac.yml release-notes.md "${{ needs.prepare.outputs.version }}"
       - name: Upload arm64 update metadata to draft
         if: ${{ !inputs.dry_run }}
         run: gh release upload "$RELEASE_TAG" dist/latest-arm64-mac.yml --clobber

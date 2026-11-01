@@ -1,0 +1,11 @@
+version: 1.11.0
+files:
+  - url: OpenWhispr-1.11.0-arm64-mac.zip
+    sha512: /raqhXxcaM62nGe+1Kpsw51xm5/ss67mkZynWR1ckaSPAVUMBo2/nSdCeBQ99AlP8EcAt7YYwjzb2JJUl9rWbA==
+    size: 342333120
+  - url: OpenWhispr-1.11.0-arm64.dmg
+    sha512: ERD5wK3LOen7RwduwLZtpE68z78O/pOintAiqEh6lV4OIVi3h/JcwCmclGEoHNfIJHt5sjJamIGC8ps8IFFLDg==
+    size: 343498605
+path: OpenWhispr-1.11.0-arm64-mac.zip
+sha512: /raqhXxcaM62nGe+1Kpsw51xm5/ss67mkZynWR1ckaSPAVUMBo2/nSdCeBQ99AlP8EcAt7YYwjzb2JJUl9rWbA==
+releaseDate: '2026-10-29T10:19:03.977Z'
