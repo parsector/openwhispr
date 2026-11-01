@@ -7,7 +7,9 @@ function readTranscriptDocument(raw) {
   } catch {
     parsed = [];
   }
-  const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.rows) ? parsed.rows : [];
+  const rows = (
+    Array.isArray(parsed) ? parsed : Array.isArray(parsed?.rows) ? parsed.rows : []
+  ).filter((row) => row && typeof row === "object" && !Array.isArray(row));
   const highWater = Math.max(
     0,
     Number(Array.isArray(parsed) ? 0 : parsed.unknownNumberHighWater) || 0,

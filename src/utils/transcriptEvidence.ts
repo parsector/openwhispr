@@ -44,22 +44,40 @@ function codePointBoundary(text: string, index: number): number {
 }
 
 function speakerLabel(segment: TranscriptSegment, speakerMappings: Record<string, string>): string {
+  const recorderLabel =
+    typeof segment.recorderName === "string" && segment.recorderName
+      ? segment.recorderName
+      : NOTE_TAKER_LABEL;
+  if (
+    segment.speaker === "you" &&
+    !segment.recorderName &&
+    !segment.speakerLocked &&
+    segment.speakerLockSource !== "user"
+  )
+    return NOTE_TAKER_LABEL;
   // Stored JSON is untrusted: a malformed name must not block the transcript.
   const resolved: unknown = resolveSegmentSpeakerName(segment, speakerMappings);
   if (typeof resolved === "string" && resolved) {
-    return isYouSpeakerName(resolved, i18n.t("notes.speaker.you")) ? NOTE_TAKER_LABEL : resolved;
+    if (!isYouSpeakerName(resolved, i18n.t("notes.speaker.you"))) return resolved;
+    if (segment.speakerLocked || segment.speakerLockSource === "user" || segment.diarizationRunId)
+      return recorderLabel;
+    if (segment.speaker && segment.speaker !== "you" && speakerMappings[segment.speaker])
+      return resolved;
+    return recorderLabel;
   }
   if (segment.speaker === "you" && !segment.speakerLocked && segment.speakerLockSource !== "user")
-    return NOTE_TAKER_LABEL;
-  // Numbered from 1, as the note shows speakers. An in-person meeting is
-  // diarized on the mic, so a numbered mic speaker isn't the note taker.
+    return recorderLabel;
+  // Numbered mic clusters may contain several people, so keep the row number.
   const numbered = typeof segment.speaker === "string" && /^speaker_(\d+)$/.exec(segment.speaker);
   if (numbered)
     return i18n.t("notes.speaker.unknownNumber", {
       n: segment.unknownNumber ?? Number(numbered[1]) + 1,
     });
   if (segment.source === "mic")
-    return i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
+    return (
+      segment.recorderName ||
+      i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 })
+    );
   if (typeof segment.speaker === "string" && segment.speaker)
     return i18n.t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 });
   return segment.source === "system" ||

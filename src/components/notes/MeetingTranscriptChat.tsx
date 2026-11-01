@@ -24,6 +24,7 @@ import {
   isTranscriptSpeakerLocked,
   isYouSpeakerName,
   normalizeTranscriptSegments,
+  resolveMappedSpeakerName,
   resolveSegmentSpeakerName,
   type TranscriptSpeakerStatus,
 } from "../../utils/transcriptSpeakerState";
@@ -510,9 +511,11 @@ function SpeakerLabel({
   speakerId,
   segment,
   resolvedName,
+  isNameFromMapping,
   speakerProfiles,
   participants,
   isOriginallyYou,
+  recorderLabel,
   self,
   onMap,
   onAssignScope,
@@ -528,11 +531,19 @@ function SpeakerLabel({
   speakerId: string;
   segment: TranscriptSegment;
   resolvedName?: string;
+  isNameFromMapping: boolean;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
   isOriginallyYou: boolean;
+  recorderLabel: string;
   self?: "offer" | "exclude";
-  onMap?: (speakerId: string, name: string, email?: string | null, profileId?: number) => void;
+  onMap?: (
+    speakerId: string,
+    name: string,
+    email?: string | null,
+    profileId?: number,
+    recorderName?: string
+  ) => void;
   onAssignScope?: (
     scope: "row" | "selected" | "cluster",
     rowId: string,
@@ -545,7 +556,7 @@ function SpeakerLabel({
   selectedRowIds?: Set<string>;
   selectedClusterCount: number;
   clusterRowCount: number;
-  onConfirm?: (speakerId: string, name: string, profileId: number) => void;
+  onConfirm?: (speakerId: string, name: string, profileId: number, recorderName?: string) => void;
   onDismiss?: (speakerId: string) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
@@ -566,11 +577,20 @@ function SpeakerLabel({
 
   const hasSuggestion = !!segment.suggestedName && !resolvedName;
 
+  const shownName =
+    resolvedName && !isNameFromMapping && isYouSpeakerName(resolvedName, t("notes.speaker.you"))
+      ? recorderLabel
+      : resolvedName;
   const displayLabel =
-    resolvedName ||
+    shownName ||
     storedName ||
+    (segment.source === "mic" &&
+    !speakerId &&
+    (segment.recorderName || recorderLabel !== t("notes.speaker.you"))
+      ? recorderLabel
+      : undefined) ||
     (isOriginallyYou && !isTranscriptSpeakerLocked(segment)
-      ? t("notes.speaker.you")
+      ? recorderLabel
       : speakerId === "speaker_mic"
         ? t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 })
         : t("notes.speaker.unknownNumber", { n: segment.unknownNumber ?? 1 }));
@@ -666,7 +686,11 @@ function SpeakerLabel({
             participants={participants}
             onSelectName={(name, email, profileId) => {
               if (scope === "cluster" || !onAssignScope) {
-                if (segment.speaker) onMap?.(speakerId, name, email, profileId);
+                if (segment.speaker) {
+                  if (segment.recorderName)
+                    onMap?.(speakerId, name, email, profileId, segment.recorderName);
+                  else onMap?.(speakerId, name, email, profileId);
+                }
               } else if (email) onAssignScope(scope, segment.id, name, profileId, email);
               else onAssignScope(scope, segment.id, name, profileId);
               setOpen(false);
@@ -710,13 +734,20 @@ function SpeakerLabel({
       {hasSuggestion && (
         <span className="group inline-flex items-center gap-1 mb-0.5 px-1">
           <span dir="auto" className="text-[11px] font-medium italic text-muted-foreground/70">
-            {segment.suggestedName}
+            {isYouSpeakerName(segment.suggestedName!, t("notes.speaker.you"))
+              ? recorderLabel
+              : segment.suggestedName}
           </span>
           {onConfirm && (
             <button
               type="button"
               onClick={() =>
-                onConfirm(speakerId, segment.suggestedName!, segment.suggestedProfileId!)
+                onConfirm(
+                  speakerId,
+                  segment.suggestedName!,
+                  segment.suggestedProfileId!,
+                  segment.recorderName
+                )
               }
               className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 rounded transition-opacity cursor-pointer text-muted-foreground hover:text-success"
               aria-label={t("notes.speaker.confirmed")}
@@ -834,12 +865,14 @@ interface SegmentRowProps {
   sourceChips?: Commitment[];
   onOpenSourceTodos?: () => void;
   selfSide: boolean;
+  recorderLabel: string;
   sameSpeaker: boolean;
   isFirst: boolean;
   isNewest: boolean;
   colorIdx: number;
   isSelected: boolean;
   activeName?: string;
+  isNameFromMapping: boolean;
   matchedProfile?: SpeakerProfileLite;
   speakerProfiles?: SpeakerProfileLite[];
   participants?: Array<{ email: string; displayName: string | null }>;
@@ -859,9 +892,15 @@ interface SegmentRowProps {
     speakerId: string,
     displayName: string,
     email?: string | null,
-    profileId?: number
+    profileId?: number,
+    recorderName?: string
   ) => void;
-  onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
+  onConfirmSuggestion?: (
+    speakerId: string,
+    suggestedName: string,
+    profileId: number,
+    recorderName?: string
+  ) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
@@ -882,12 +921,14 @@ const SegmentRow = memo(function SegmentRow({
   sourceChips,
   onOpenSourceTodos,
   selfSide,
+  recorderLabel,
   sameSpeaker,
   isFirst,
   isNewest,
   colorIdx,
   isSelected,
   activeName,
+  isNameFromMapping,
   matchedProfile,
   speakerProfiles,
   participants,
@@ -935,15 +976,17 @@ const SegmentRow = memo(function SegmentRow({
         ? `${t("people.correctionAction")}: ${rowAction.previous.speakerName || t("people.unknown")} → ${rowAction.next.speakerName || t("people.unknown")}`
         : null;
 
-  const labelElement = hasSpeaker && (
+  const labelElement = hasSpeaker ? (
     <div className="flex items-center gap-1">
       <SpeakerLabel
         speakerId={segment.speaker || ""}
         segment={segment}
         resolvedName={activeName}
+        isNameFromMapping={isNameFromMapping}
         speakerProfiles={speakerProfiles}
         participants={participants}
         isOriginallyYou={isOriginallyYou}
+        recorderLabel={segment.recorderName || recorderLabel}
         self={self}
         onMap={onMapSpeaker}
         onAssignScope={onAssignSpeakerScope}
@@ -964,7 +1007,13 @@ const SegmentRow = memo(function SegmentRow({
         />
       )}
     </div>
-  );
+  ) : segment.source === "mic" ? (
+    <span className="text-[11px] font-medium mb-0.5 px-1.5" dir="auto">
+      {activeName && !isYouSpeakerName(activeName, t("notes.speaker.you"))
+        ? activeName
+        : segment.recorderName || recorderLabel}
+    </span>
+  ) : null;
 
   return (
     <div
@@ -1166,15 +1215,23 @@ interface MeetingTranscriptChatProps {
     speakerId: string,
     displayName: string,
     email?: string | null,
-    profileId?: number
+    profileId?: number,
+    recorderName?: string
   ) => void;
-  onConfirmSuggestion?: (speakerId: string, suggestedName: string, profileId: number) => void;
+  onConfirmSuggestion?: (
+    speakerId: string,
+    suggestedName: string,
+    profileId: number,
+    recorderName?: string
+  ) => void;
   onDismissSuggestion?: (speakerId: string) => void;
   onAttachSpeakerEmail?: (profileId: number, email: string | null) => void;
   onToggleSelect?: (segmentId: string) => void;
   reviewOnly?: boolean;
   contentClassName?: string;
   focusRowId?: string;
+  /** Label for the recorder's own lines; "You" unless the note is someone else's. */
+  recorderLabel?: string;
 }
 
 export function MeetingTranscriptChat({
@@ -1208,6 +1265,7 @@ export function MeetingTranscriptChat({
   reviewOnly = false,
   focusRowId,
   contentClassName,
+  recorderLabel: recorderLabelProp,
 }: MeetingTranscriptChatProps) {
   const segments = useMemo(
     () => normalizeTranscriptSegments(projectSpeakerActions(providedSegments, speakerActionLog)),
@@ -1462,11 +1520,18 @@ export function MeetingTranscriptChat({
   // Per-segment derivations hoisted out of the row map: rows receive them as
   // stable props, so partial ticks (which change neither input) skip every row.
   const youLabel = t("notes.speaker.you");
+  const recorderLabel = recorderLabelProp ?? youLabel;
   const rowMeta = useMemo(
     () =>
       segments.map((segment) => ({
-        key: getEffectiveSpeakerKey(segment, speakerMappings),
+        key: `${getEffectiveSpeakerKey(segment, speakerMappings)}:${segment.recorderName ?? ""}`,
         activeName: resolveSegmentSpeakerName(segment, speakerMappings),
+        isNameFromMapping:
+          !isTranscriptSpeakerLocked(segment) &&
+          !segment.diarizationRunId &&
+          !!segment.speaker &&
+          !(segment.speaker === "you" && segment.recorderName) &&
+          !!speakerMappings?.[segment.speaker],
         selfSide: isSelfSideSegment(segment, speakerMappings, youLabel),
       })),
     [segments, speakerMappings, youLabel]
@@ -1788,7 +1853,7 @@ export function MeetingTranscriptChat({
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const i = shownIndexes[virtualItem.index];
               const segment = segments[i];
-              const { key, activeName, selfSide } = rowMeta[i];
+              const { key, activeName, isNameFromMapping, selfSide } = rowMeta[i];
               const isSystemSpeaker = !!segment.speaker && !selfSide;
               let audioUnavailableReason: "timebase" | "gap" | "track" | undefined;
               if (
@@ -1831,14 +1896,21 @@ export function MeetingTranscriptChat({
                     sourceChips={chipsByIndex.get(i)}
                     onOpenSourceTodos={noteId == null ? undefined : openSourceTodos}
                     selfSide={selfSide}
+                    recorderLabel={recorderLabel}
                     sameSpeaker={
-                      i > 0 && rowMeta[i - 1].key === key && rowMeta[i - 1].selfSide === selfSide
+                      i > 0 &&
+                      rowMeta[i - 1].key === key &&
+                      rowMeta[i - 1].selfSide === selfSide &&
+                      (rowMeta[i - 1].isNameFromMapping === isNameFromMapping ||
+                        !isYouSpeakerName(activeName ?? "", youLabel) ||
+                        (segment.recorderName || recorderLabel) === youLabel)
                     }
                     isFirst={i === 0}
                     isNewest={i === segments.length - 1}
                     colorIdx={isSystemSpeaker ? (colorByKey.get(key) ?? 0) : 0}
                     isSelected={selectedSegmentIds?.has(segment.id) ?? false}
                     activeName={activeName}
+                    isNameFromMapping={isNameFromMapping}
                     matchedProfile={activeName ? profilesByName.get(activeName) : undefined}
                     speakerProfiles={speakerProfiles}
                     participants={participants}

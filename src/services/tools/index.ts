@@ -19,6 +19,12 @@ import {
   registerConnectorTools,
   type ConnectorToolSettings,
 } from "./connectors/connectorToolModules";
+import {
+  createLoadSkillTool,
+  createProposeSkillTool,
+  createUpdateSkillTool,
+  type SkillToolDeps,
+} from "./skillTools";
 import type { ContainerScope } from "../../types/chat";
 import { createDelegateTaskTool, type AgentProject } from "./delegateTaskTool";
 import { createRunPresetTool, type AgentPreset } from "./runPresetTool";
@@ -49,6 +55,8 @@ interface ToolRegistrySettings {
   agentAllowed?: boolean;
   /** Main-process callers replace renderer-backed execution without changing assembly. */
   executionOverrides?: Partial<Record<string, import("./ToolRegistry").ToolDefinition["execute"]>>;
+  /** The user's skills; load_skill is offered once one is usable. */
+  skills?: SkillToolDeps;
 }
 
 export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry {
@@ -100,6 +108,20 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   for (const [name, execute] of Object.entries(settings.executionOverrides || {})) {
     const tool = registry.get(name);
     if (tool && execute) registry.register({ ...tool, execute });
+  }
+
+  if (settings.skills) {
+    const hasSkills = settings.skills.usable.length > 0;
+    if (hasSkills) {
+      registry.register(createLoadSkillTool(settings.skills));
+      registry.register(createUpdateSkillTool(settings.skills.usable));
+    }
+    // A skill card writes only on this computer, so it needs no sign-in, plan or connector.
+    // Someone with no skills makes their first through the skill creator, so every other
+    // request leaves the tool out.
+    if (hasSkills || settings.skills.creatorAttached) {
+      registry.register(createProposeSkillTool());
+    }
   }
 
   return registry;

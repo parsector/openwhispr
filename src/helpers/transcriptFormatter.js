@@ -1,20 +1,28 @@
 const { i18nMain } = require("./i18nMain");
+const { isSpeakerLocked } = require("./speakerAssignmentPolicy");
 
 function resolveSpeaker(seg, speakerMappings) {
-  if (seg.speakerLocked || seg.speakerLockSource === "user") {
-    return (
-      (seg.speakerName && !seg.speakerIsPlaceholder ? seg.speakerName : null) ||
-      i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 })
-    );
+  if (seg.speakerLocked || seg.speakerLockSource === "user" || seg.diarizationRunId) {
+    if (seg.speakerName && !seg.speakerIsPlaceholder) {
+      const name = seg.speakerName.trim().toLowerCase();
+      const isSelfName =
+        name === "you" || name === i18nMain.t("transcript.speaker.you").toLowerCase();
+      return isSelfName && seg.recorderName ? seg.recorderName : seg.speakerName;
+    }
+    return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
   }
-  if (seg.diarizationRunId) {
-    return seg.speakerName && !seg.speakerIsPlaceholder
-      ? seg.speakerName
-      : i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+  const mappedName =
+    seg.speaker && !seg.speakerIsPlaceholder && !(seg.speaker === "you" && seg.recorderName)
+      ? speakerMappings[seg.speaker]
+      : undefined;
+  if (mappedName) return mappedName;
+  if (seg.speakerName && !seg.speakerIsPlaceholder) {
+    const name = seg.speakerName.trim().toLowerCase();
+    const isSelfName =
+      name === "you" || name === i18nMain.t("transcript.speaker.you").toLowerCase();
+    return isSelfName && seg.recorderName ? seg.recorderName : seg.speakerName;
   }
-  if (seg.speakerName && !seg.speakerIsPlaceholder) return seg.speakerName;
-  if (seg.speaker && !seg.speakerIsPlaceholder && speakerMappings[seg.speaker])
-    return speakerMappings[seg.speaker];
+  if (seg.speaker === "you" && seg.recorderName) return seg.recorderName;
   if (seg.speaker === "you") return i18nMain.t("transcript.speaker.you");
   if (
     typeof seg.speaker === "string" &&
@@ -28,7 +36,9 @@ function resolveSpeaker(seg, speakerMappings) {
       return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || num + 1 });
   }
   if (seg.source === "mic")
-    return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+    return (
+      seg.recorderName || i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 })
+    );
   if (seg.source === "system")
     return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
   return typeof seg.speakerName === "string" && seg.speakerName
@@ -47,6 +57,8 @@ function speakerKey(seg) {
     seg.unknownNumber || "",
     named,
     seg.speaker ? "" : seg.source || "",
+    seg.recorderName || "",
+    isSpeakerLocked(seg),
   ].join("\u0000");
 }
 

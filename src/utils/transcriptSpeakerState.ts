@@ -105,7 +105,10 @@ export const lockTranscriptSpeaker = (
   });
 
 const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSegment) => {
-  const merged = { ...incoming } as TranscriptSegment;
+  const merged = {
+    ...incoming,
+    ...(existing.recorderName ? { recorderName: existing.recorderName } : {}),
+  } as TranscriptSegment;
   const sameText = normalizeText(existing.text) === normalizeText(incoming.text);
   if (sameText && !merged.wordTimings && existing.wordTimings)
     merged.wordTimings = existing.wordTimings;
@@ -329,6 +332,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       timebase: segment.timebase,
       speaker: segment.speaker,
       speakerName: segment.speakerName,
+      recorderName: segment.recorderName,
       speakerIsPlaceholder: segment.speakerIsPlaceholder,
       suggestedName: segment.suggestedName,
       suggestedProfileId: segment.suggestedProfileId,
@@ -345,15 +349,16 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
 // user correcting one stretch of it. The correction has to outrank the cluster,
 // or reassigning part of a mis-split block appears to do nothing (#1533). This
 // mirrors the precedence the exporter already applies in transcriptFormatter.js.
-export const resolveSegmentSpeakerName = (
+export const resolveMappedSpeakerName = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string | undefined => {
-  if (isTranscriptSpeakerLocked(segment))
+  if (isTranscriptSpeakerLocked(segment) || segment.diarizationRunId)
     return segment.speakerIsPlaceholder ? undefined : segment.speakerName;
-  if (segment.diarizationRunId)
-    return segment.speakerIsPlaceholder ? undefined : segment.speakerName;
-  const mapped = segment.speaker ? speakerMappings?.[segment.speaker] : undefined;
+  const mapped =
+    segment.speaker && !(segment.speaker === "you" && segment.recorderName)
+      ? speakerMappings?.[segment.speaker]
+      : undefined;
   if (mapped) return mapped;
   if (segment.speakerIsPlaceholder) return undefined;
   return (
@@ -365,6 +370,13 @@ export const resolveSegmentSpeakerName = (
       : undefined)
   );
 };
+
+export const resolveSegmentSpeakerName = (
+  segment: TranscriptSegment,
+  speakerMappings?: Record<string, string>
+): string | undefined =>
+  resolveMappedSpeakerName(segment, speakerMappings) ||
+  (segment.speakerIsPlaceholder ? undefined : segment.speakerName);
 
 // Naming a speaker "You" is how the user marks their own voice. The name is
 // stored in the UI language it was saved in, so English "You" counts in every

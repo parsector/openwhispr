@@ -1,6 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+Object.defineProperty(globalThis, "localStorage", {
+  configurable: true,
+  value: { getItem: () => null, setItem() {}, removeItem() {} },
+});
+
 const project = { name: "openwhispr", defaultHarness: "claude", model: "sonnet" };
 function context() {
   let slots = 0;

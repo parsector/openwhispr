@@ -15,7 +15,10 @@ import { isExplicitSpeakerCount, resolveExpectedSpeakerCount } from "../utils/pa
 import { isMeetingAutoEndEligible } from "../helpers/meetingRecordingSession";
 
 /** Start a meeting recording seeded with the note's transcript and speaker setup. */
-export function startRecordingForNote(note: NoteItem | null): Promise<boolean> {
+export function startRecordingForNote(
+  note: NoteItem | null,
+  recorderName?: string
+): Promise<boolean> {
   return startRecording({
     noteId: note?.id ?? null,
     noteTitle: note?.title ?? null,
@@ -23,6 +26,7 @@ export function startRecordingForNote(note: NoteItem | null): Promise<boolean> {
     seedSegments: parseSeedSegments(note?.transcript, note?.id),
     seedTranscriptRaw: note?.transcript,
     seedUnknownHighWater: readTranscriptDocument(note?.transcript).unknownNumberHighWater,
+    recorderName,
     diarizationEnabled: note?.diarization_enabled == null ? null : note.diarization_enabled === 1,
     expectedCount: resolveExpectedSpeakerCount(note),
     expectedCountIsExplicit: isExplicitSpeakerCount(note?.expected_speaker_count),

@@ -1,6 +1,11 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
+Object.defineProperty(globalThis, "localStorage", {
+  configurable: true,
+  value: { getItem: () => null, setItem() {}, removeItem() {} },
+});
+
 const preset = {
   id: "p1",
   name: "Review PR",
