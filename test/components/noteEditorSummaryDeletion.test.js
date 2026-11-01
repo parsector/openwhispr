@@ -121,18 +121,42 @@ test("imported and failed-analysis rows do not claim a post-final correction", a
     return control.props;
   };
   try {
-    for (const [index, [kind, completed]] of [["imported", false], ["failed", false], ["completed", true]].entries()) {
-      const note = { ...NOTE, id: index + 1, note_type: kind === "imported" ? "upload" : "meeting",
-        transcript: JSON.stringify([{ id: "row-a", text: "hello", source: "system",
-          speaker: "speaker_0", finalAnalysisCompleted: completed }]) };
+    for (const [index, [kind, completed]] of [
+      ["imported", false],
+      ["failed", false],
+      ["completed", true],
+    ].entries()) {
+      const note = {
+        ...NOTE,
+        id: index + 1,
+        note_type: kind === "imported" ? "upload" : "meeting",
+        transcript: JSON.stringify([
+          {
+            id: "row-a",
+            text: "hello",
+            source: "system",
+            speaker: "speaker_0",
+            finalAnalysisCompleted: completed,
+          },
+        ]),
+      };
       await render(undefined, { note });
-      await React.act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+      await React.act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
       await click("transcript");
       const control = correctionControl();
-      await React.act(async () => control.onAssignSpeakerScope("row", control.segments[0].id, "Sam"));
+      await React.act(async () =>
+        control.onAssignSpeakerScope("row", control.segments[0].id, "Sam")
+      );
     }
-    assert.deepEqual(requests.map(request => request.afterFinalAnalysis), [false, false, true]);
-  } finally { await unmount(); }
+    assert.deepEqual(
+      requests.map((request) => request.afterFinalAnalysis),
+      [false, false, true]
+    );
+  } finally {
+    await unmount();
+  }
 });
 
 // The summary callout runs a template, so the note view needs one loaded.
@@ -178,6 +202,19 @@ async function loadNoteEditor(t, permission) {
         getSpeakerProfiles: async () => [],
         getSpeakerMappings: async () => [],
         getActions: async () => [TEMPLATE, DEFAULT_TEMPLATE, ...(globalThis.__noteActions ?? [])],
+        applySpeakerCorrection: async (request) => {
+          const ids = new Set(request.rowIds || []);
+          const rows = request.rows.map((row) => {
+            const affected = request.scope === "cluster"
+              ? row.speaker === request.target?.clusterId && row.diarizationRunId === request.target?.runId
+              : ids.has(row.id);
+            return affected ? { ...row, speakerName: request.name, speakerLocked: true } : row;
+          });
+          await globalThis.window.electronAPI.updateNote?.(request.noteId, {
+            transcript: JSON.stringify(rows),
+          });
+          return { success: true, rows };
+        },
       },
     },
   });
@@ -242,7 +279,11 @@ async function loadNoteEditor(t, permission) {
           getShareSettings: () => new Promise(() => {}),
         };
       `,
-      "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }`,
+      "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }
+export function useSpaceRoster(cloudSpaceId) {
+  globalThis.__noteEditorRosterId = cloudSpaceId;
+  return globalThis.__noteEditorRoster ? new Map(globalThis.__noteEditorRoster.map(member => [member.user_id, member])) : null;
+}`,
     },
   });
 
@@ -319,52 +360,111 @@ test("deleting the AI summary moves the selection to Your notes", async (t) => {
 
 test("a mounted recording editor refreshes people and follows same-note row navigation", async (t) => {
   const { render, latest } = await loadNoteEditor(t);
-  let profileReads = 0, mappingReads = 0, peopleChanged;
-  window.electronAPI.getSpeakerProfiles = async () => { profileReads++; return []; };
-  window.electronAPI.getSpeakerMappings = async () => { mappingReads++; return []; };
-  window.electronAPI.onPeopleChanged = (callback) => { peopleChanged = callback; return () => {}; };
+  let profileReads = 0,
+    mappingReads = 0,
+    peopleChanged;
+  window.electronAPI.getSpeakerProfiles = async () => {
+    profileReads++;
+    return [];
+  };
+  window.electronAPI.getSpeakerMappings = async () => {
+    mappingReads++;
+    return [];
+  };
+  window.electronAPI.onPeopleChanged = (callback) => {
+    peopleChanged = callback;
+    return () => {};
+  };
   const listeners = new Map();
   window.addEventListener = (type, callback) => listeners.set(type, callback);
   window.removeEventListener = (type) => listeners.delete(type);
   window.dispatchEvent = (event) => listeners.get(event.type)?.(event);
   window.setTimeout = setTimeout;
   window.clearTimeout = clearTimeout;
-  window.sessionStorage = { removeItem() {}, getItem() { return null; } };
-  await render(null, { isRecording: true, note: { ...NOTE,
-    transcript: JSON.stringify([{ id: "row-1", text: "hello", source: "system", speaker: "speaker_0" }]) } });
+  window.sessionStorage = {
+    removeItem() {},
+    getItem() {
+      return null;
+    },
+  };
+  await render(null, {
+    isRecording: true,
+    note: {
+      ...NOTE,
+      transcript: JSON.stringify([
+        { id: "row-1", text: "hello", source: "system", speaker: "speaker_0" },
+      ]),
+    },
+  });
   assert.equal(typeof peopleChanged, "function");
-  const initialProfileReads = profileReads, initialMappingReads = mappingReads;
-  await React.act(async () => { peopleChanged(); await Promise.resolve(); });
+  const initialProfileReads = profileReads,
+    initialMappingReads = mappingReads;
+  await React.act(async () => {
+    peopleChanged();
+    await Promise.resolve();
+  });
   assert.ok(profileReads > initialProfileReads);
   assert.ok(mappingReads > initialMappingReads);
   await React.act(async () => {
-    window.dispatchEvent({ type: "people-review-navigate", detail: { noteId: NOTE.id, rowId: "row-1" } });
-    await new Promise(resolve => setTimeout(resolve, 10));
+    window.dispatchEvent({
+      type: "people-review-navigate",
+      detail: { noteId: NOTE.id, rowId: "row-1" },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
   });
   let resolveOldProfiles, resolveOldMappings;
-  window.electronAPI.getSpeakerProfiles = () => new Promise(resolve => { resolveOldProfiles = resolve; });
-  window.electronAPI.getSpeakerMappings = () => new Promise(resolve => { resolveOldMappings = resolve; });
+  window.electronAPI.getSpeakerProfiles = () =>
+    new Promise((resolve) => {
+      resolveOldProfiles = resolve;
+    });
+  window.electronAPI.getSpeakerMappings = () =>
+    new Promise((resolve) => {
+      resolveOldMappings = resolve;
+    });
   peopleChanged();
-  window.electronAPI.getSpeakerProfiles = async () => [{ id: 11, display_name: "Sam", email: null }];
-  window.electronAPI.getSpeakerMappings = async () => [{ speaker_id: "speaker_0", display_name: "Sam" }];
-  await React.act(async () => { peopleChanged(); await Promise.resolve(); });
+  window.electronAPI.getSpeakerProfiles = async () => [
+    { id: 11, display_name: "Sam", email: null },
+  ];
+  window.electronAPI.getSpeakerMappings = async () => [
+    { speaker_id: "speaker_0", display_name: "Sam" },
+  ];
+  await React.act(async () => {
+    peopleChanged();
+    await Promise.resolve();
+  });
   await React.act(async () => {
     resolveOldProfiles([{ id: 10, display_name: "Alex", email: null }]);
     resolveOldMappings([{ speaker_id: "speaker_0", display_name: "Alex" }]);
     await Promise.resolve();
   });
   const liveProps = [];
-  walk(latest(), node => { if (Array.isArray(node.props.speakerProfiles) && node.props.speakerMappings) liveProps.push(node.props); });
-  assert.ok(liveProps.some(props => props.speakerProfiles.some(profile => profile.display_name === "Sam")));
-  assert.ok(liveProps.some(props => props.speakerMappings.speaker_0 === "Sam"));
-  assert.ok(liveProps.every(props => !props.speakerProfiles.some(profile => profile.display_name === "Alex")));
+  walk(latest(), (node) => {
+    if (Array.isArray(node.props.speakerProfiles) && node.props.speakerMappings)
+      liveProps.push(node.props);
+  });
+  assert.ok(
+    liveProps.some((props) =>
+      props.speakerProfiles.some((profile) => profile.display_name === "Sam")
+    )
+  );
+  assert.ok(liveProps.some((props) => props.speakerMappings.speaker_0 === "Sam"));
+  assert.ok(
+    liveProps.every(
+      (props) => !props.speakerProfiles.some((profile) => profile.display_name === "Alex")
+    )
+  );
   await React.act(async () => {
-    window.dispatchEvent({ type: "people-review-navigate", detail: { noteId: NOTE.id, rowId: "row-1" } });
-    await new Promise(resolve => setTimeout(resolve, 10));
+    window.dispatchEvent({
+      type: "people-review-navigate",
+      detail: { noteId: NOTE.id, rowId: "row-1" },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
   });
   assert.equal(collectSegments(latest()).get("transcript") !== undefined, true);
   let focusRow;
-  walk(latest(), node => { if (node.props.focusRowId) focusRow = node.props.focusRowId; });
+  walk(latest(), (node) => {
+    if (node.props.focusRowId) focusRow = node.props.focusRowId;
+  });
   assert.equal(focusRow, "row-1");
 });
 
@@ -593,7 +693,7 @@ test("the note's chat labels speakers as get_note does and leaves attendees to t
   await render(ENHANCEMENT, { note: { ...NOTE, transcript } });
   assert.equal(
     chatTranscript(),
-    `## Meeting Context\nThe user taking these notes is Chad <chad@example.com>.\n\n${lines}`
+    `## Meeting Context\nThe note taker is Chad <chad@example.com>.\n\n${lines}`
   );
   assert.doesNotMatch(chatTranscript(), /Dana Wu|Invited participants/);
 
@@ -1041,4 +1141,383 @@ test("the note header hands its event link to the dropdown, changeable only by e
   } finally {
     await unmount();
   }
+});
+
+test("a teammate's This is me correction saves their identity for display and generation", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+  };
+  t.after(() => delete globalThis.__noteEditorAuth);
+  const { render, click, latest, unmount } = await loadNoteEditor(t, "editor");
+  const saved = [];
+  const corrections = [];
+  const applyCorrection = globalThis.window.electronAPI.applySpeakerCorrection;
+  globalThis.window.electronAPI.applySpeakerCorrection = async (request) => {
+    corrections.push(request);
+    return applyCorrection(request);
+  };
+  globalThis.window.electronAPI.updateNote = async (_id, patch) => saved.push(patch);
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      cloud_id: "shared-note",
+      owner_user_id: "alice",
+      transcript: JSON.stringify([{ source: "mic", speaker: "speaker_0", text: "I'll send it." }]),
+    },
+  });
+  await click("transcript");
+  await React.act(async () => {
+    let chat;
+    walk(latest(), (node) => {
+      if (node.props.onMapSpeaker) chat = node;
+    });
+    await chat.props.onMapSpeaker("speaker_0", "You");
+  });
+  assert.equal(corrections[0].name, "Bob Viewer", "the viewer's correction uses their identity");
+  const firstTranscript = saved.find((patch) => patch.transcript)?.transcript;
+  assert.equal(JSON.parse(firstTranscript)[0].speakerName, "Bob Viewer");
+  const { buildLlmTranscript } = await import("../../src/utils/llmTranscript.ts");
+  assert.equal(
+    buildLlmTranscript(JSON.parse(firstTranscript), {}, "Alice", (key) => key),
+    "Bob Viewer: I'll send it."
+  );
+  await React.act(async () => {
+    let chat;
+    walk(latest(), (node) => {
+      if (node.props.onToggleSelect) chat = node;
+    });
+    chat.props.onToggleSelect(chat.props.segments[0].id);
+  });
+  await React.act(async () => {
+    let selection;
+    walk(latest(), (node) => {
+      if (node.props.onAssignName) selection = node;
+    });
+    await selection.props.onAssignName("You");
+  });
+  assert.equal(
+    JSON.parse(saved.filter((patch) => patch.transcript).at(-1).transcript)[0].speakerName,
+    "Bob Viewer"
+  );
+  await unmount();
+});
+
+for (const [session, recorderName, expectedName] of [
+  ["original", undefined, "Alice Recorder"],
+  ["appended", "Carol Recorder", "Carol Recorder"],
+]) {
+  test(`confirming an inherited ${session} self suggestion preserves its recorder`, async (t) => {
+    globalThis.__noteEditorAuth = {
+      isSignedIn: true,
+      user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+    };
+    t.after(() => delete globalThis.__noteEditorAuth);
+    const { render, click, latest, unmount } = await loadNoteEditor(t, "editor");
+    const saved = [];
+    globalThis.window.electronAPI.setSpeakerMapping = async () => {};
+    globalThis.window.electronAPI.updateNote = async (_id, patch) => saved.push(patch);
+    await render(undefined, {
+      note: {
+        ...NOTE,
+        cloud_id: "shared-note",
+        owner_user_id: "alice",
+        participants: JSON.stringify([
+          { email: "alice@example.com", displayName: "Alice Recorder", self: true },
+        ]),
+        transcript: JSON.stringify([
+          {
+            source: "mic",
+            speaker: "speaker_0",
+            text: "I'll send it.",
+            suggestedName: "You",
+            suggestedProfileId: 7,
+            recorderName,
+          },
+        ]),
+      },
+    });
+    await click("transcript");
+    await React.act(async () => {
+      let chat;
+      walk(latest(), (node) => {
+        if (node.props.onConfirmSuggestion) chat = node;
+      });
+      await chat.props.onConfirmSuggestion("speaker_0", "You", 7, recorderName);
+    });
+    assert.equal(JSON.parse(saved.at(-1).transcript)[0].speakerName, expectedName);
+    await unmount();
+  });
+}
+
+test("confirming the current recorder's self suggestion preserves their global self profile", async (t) => {
+  const { createDb } = require("../helpers/harness/db");
+  const db = createDb(t);
+  assert.ok(db);
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+  };
+  t.after(() => delete globalThis.__noteEditorAuth);
+  let cleanup = () => {};
+  t.after(() => cleanup());
+  const { render, click, latest, unmount } = await loadNoteEditor(t, "editor");
+  cleanup = unmount;
+  const embedding = Buffer.from(new Float32Array([1, 0]).buffer);
+  const selfProfile = db.upsertSpeakerProfile("You", null, embedding);
+  const note = db.saveNote("Shared meeting", "", "meeting").note;
+  const corrections = [];
+  const applyCorrection = globalThis.window.electronAPI.applySpeakerCorrection;
+  Object.assign(globalThis.window.electronAPI, {
+    getSpeakerProfiles: async () => db.getSpeakerProfiles(),
+    applySpeakerCorrection: async (request) => {
+      corrections.push(request);
+      return applyCorrection(request);
+    },
+    updateNote: async (...args) => db.updateNote(...args),
+  });
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      id: note.id,
+      cloud_id: "shared-note",
+      owner_user_id: "alice",
+      created_by_user_id: "alice",
+      transcript: JSON.stringify([
+        {
+          source: "mic",
+          speaker: "speaker_0",
+          text: "I'll send it.",
+          suggestedName: "You",
+          suggestedProfileId: selfProfile.id,
+          recorderName: "Bob Viewer",
+        },
+      ]),
+    },
+  });
+  await click("transcript");
+  await React.act(async () => {
+    let chat;
+    walk(latest(), (node) => {
+      if (node.props.onConfirmSuggestion) chat = node;
+    });
+    await chat.props.onConfirmSuggestion("speaker_0", "You", selfProfile.id, "Bob Viewer");
+  });
+  assert.equal(corrections[0].name, "Bob Viewer");
+  assert.equal(corrections[0].profileId, selfProfile.id);
+  assert.equal(
+    db.getSpeakerProfiles().find((profile) => profile.id === selfProfile.id).display_name,
+    "You"
+  );
+  await unmount();
+  cleanup = () => {};
+});
+
+test("the owner can correct a teammate's self row without renaming earlier sessions", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "alice", name: "Alice Owner", email: "alice@example.com" },
+  };
+  t.after(() => delete globalThis.__noteEditorAuth);
+  const { render, click, latest, unmount } = await loadNoteEditor(t, "editor");
+  const saved = [];
+  globalThis.window.electronAPI.setSpeakerMapping = async () => {
+    throw new Error("a cross-session self ID must not create a global mapping");
+  };
+  globalThis.window.electronAPI.updateNote = async (_id, patch) => saved.push(patch);
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      cloud_id: "shared-note",
+      owner_user_id: "alice",
+      transcript: JSON.stringify([
+        {
+          source: "mic",
+          speaker: "you",
+          text: "Old words",
+          speakerName: "Original correction",
+          speakerLocked: true,
+        },
+        { source: "mic", speaker: "you", text: "New words", recorderName: "Bob Viewer" },
+      ]),
+    },
+  });
+  await click("transcript");
+  await React.act(async () => {
+    let chat;
+    walk(latest(), (node) => {
+      if (node.props.onMapSpeaker) chat = node;
+    });
+    await chat.props.onMapSpeaker("you", "You", null, undefined, "Bob Viewer");
+  });
+  const segments = JSON.parse(saved.at(-1).transcript);
+  assert.equal(segments[0].speakerName, "Original correction");
+  assert.equal(segments[1].speakerName, "Alice Owner");
+  const { buildLlmTranscript } = await import("../../src/utils/llmTranscript.ts");
+  assert.equal(
+    buildLlmTranscript(segments, {}, "Alice Owner", (key) => key),
+    "Original correction: Old words\nAlice Owner: New words"
+  );
+  await unmount();
+});
+
+test("the editor resolves the creator separately from custodian permissions and self corrections", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+  };
+  globalThis.__noteEditorRoster = [
+    { user_id: "alice", name: "Alice Recorder", email: "alice@example.com" },
+  ];
+  t.after(() => {
+    delete globalThis.__noteEditorAuth;
+    delete globalThis.__noteEditorRoster;
+    delete globalThis.__noteEditorRosterId;
+    delete globalThis.__embeddedChatOptions;
+  });
+  const { render, click, latest, unmount, vite } = await loadNoteEditor(t, "editor");
+  const { loadSpaces } = await vite.ssrLoadModule("/stores/noteStore.ts");
+  globalThis.window.electronAPI.getSpaces = async () => [
+    { id: 1, kind: "team", cloud_space_id: "team" },
+  ];
+  await loadSpaces();
+  const saved = [];
+  globalThis.window.electronAPI.setSpeakerMapping = async () => {};
+  globalThis.window.electronAPI.updateNote = async (_id, patch) => saved.push(patch);
+  const note = {
+    ...NOTE,
+    cloud_id: "shared-note",
+    owner_user_id: "bob",
+    created_by_user_id: "alice",
+    space_id: 1,
+    transcript: JSON.stringify([{ source: "mic", speaker: "you", text: "Original words" }]),
+  };
+  await render(undefined, { note });
+  await click("transcript");
+  let chat;
+  let dropdown;
+  walk(latest(), (node) => {
+    if (node.props.onMapSpeaker) chat = node;
+    if ("ownedByUser" in node.props) dropdown = node;
+  });
+  assert.equal(chat.props.recorderLabel, "Alice Recorder");
+  assert.equal(
+    globalThis.__noteEditorRosterId,
+    "team",
+    "custodians still load the recorder's roster"
+  );
+  assert.equal(dropdown.props.ownedByUser, true, "permission ownership remains the custodian's");
+  assert.equal(globalThis.__embeddedChatOptions.noteOwnedByUser, false);
+  assert.match(
+    globalThis.__embeddedChatOptions.noteTranscript,
+    /Someone other than the user took these notes/
+  );
+  await React.act(async () => chat.props.onMapSpeaker("you", "You"));
+  assert.equal(JSON.parse(saved.at(-1).transcript)[0].speakerName, "Bob Viewer");
+
+  await render(undefined, { note: { ...note, created_by_user_id: null, participants: null } });
+  walk(latest(), (node) => {
+    if (node.props.onMapSpeaker) chat = node;
+  });
+  assert.equal(chat.props.recorderLabel, "notes.speaker.noteTaker");
+  assert.equal(
+    globalThis.__noteEditorRosterId,
+    null,
+    "a cleared creator never uses the owner's roster"
+  );
+  assert.equal(globalThis.__embeddedChatOptions.noteOwnedByUser, false);
+  await unmount();
+});
+
+test("diarization keeps stored recorder labels separate from viewer-local self mappings", async (t) => {
+  globalThis.__noteEditorAuth = {
+    isSignedIn: true,
+    user: { id: "bob", name: "Bob Viewer", email: "bob@example.com" },
+  };
+  t.after(() => {
+    delete globalThis.__noteEditorAuth;
+    delete globalThis.__embeddedChatOptions;
+  });
+  const { render, unmount, vite } = await loadNoteEditor(t, "editor");
+  globalThis.window.electronAPI.getSpeakerMappings = async () => [
+    { speaker_id: "speaker_2", display_name: "You" },
+  ];
+  const segments = [
+    { id: "original", source: "mic", speaker: "speaker_0", speakerName: "You", text: "Original" },
+    {
+      id: "appended",
+      source: "mic",
+      speaker: "speaker_1",
+      speakerName: "You",
+      recorderName: "Carol Recorder",
+      text: "Appended",
+    },
+    { id: "viewer", source: "mic", speaker: "speaker_2", text: "Viewer" },
+  ];
+  await render(undefined, {
+    note: {
+      ...NOTE,
+      cloud_id: "shared-note",
+      owner_user_id: "alice",
+      transcript: JSON.stringify(segments),
+    },
+  });
+  const before = globalThis.__embeddedChatOptions.noteTranscript;
+  assert.match(before, /Note taker: Original\nCarol Recorder: Appended\nYou: Viewer$/);
+  const { useMeetingRecordingStore } = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  await React.act(async () =>
+    useMeetingRecordingStore.setState({ completedDiarization: { noteId: NOTE.id, segments } })
+  );
+  assert.equal(globalThis.__embeddedChatOptions.noteTranscript, before);
+  await unmount();
+});
+
+test("only the org's meeting switch shows a banner; other restrictions explain themselves on the record button", async (t) => {
+  const { render, latest, unmount, vite } = await loadNoteEditor(t);
+  const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const messages = () => {
+    const out = [];
+    walk(latest(), (node) => {
+      if (node.props.role === "status") out.push(node.props.children);
+    });
+    return out;
+  };
+  for (const audioUploadEnabled of [true, false]) {
+    await React.act(async () => {
+      usePolicyStore.setState({
+        status: "managed",
+        policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled } },
+      });
+    });
+    await render(undefined, { recordingAllowed: false });
+    assert.ok(messages().includes("notes.meeting.recordingDisabledByOrg"));
+    assert.ok(collectEditorValues(latest()).includes(NOTE.content), "saved notes remain readable");
+    await React.act(async () => {
+      usePolicyStore.setState({
+        policy: { features: { meetingRecordingEnabled: true, audioUploadEnabled } },
+      });
+    });
+    await render(undefined, { recordingAllowed: true });
+    assert.ok(!messages().includes("notes.meeting.recordingDisabledByOrg"));
+  }
+  const recordReason = () => {
+    let reason;
+    walk(latest(), (node) => {
+      if ("disabledReason" in node.props) reason = node.props.disabledReason;
+    });
+    return reason;
+  };
+  for (const [policy, expected] of [
+    [{ status: "loading", policy: null }, "common.policyUnresolved"],
+    [
+      { status: "managed", policy: { features: { meetingRecordingEnabled: true } } },
+      "notes.meeting.restrictedByOrg",
+    ],
+  ]) {
+    await React.act(async () => usePolicyStore.setState(policy));
+    await render(undefined, { recordingAllowed: false });
+    assert.deepEqual(messages(), [], `${policy.status}: no banner`);
+    assert.equal(recordReason(), expected);
+  }
+  await unmount();
 });

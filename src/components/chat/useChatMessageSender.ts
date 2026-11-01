@@ -83,6 +83,9 @@ export function useChatMessageSender({
           await streaming.sendToAI(text, [...previousMessages, userMessage], {
             ...options,
             conversationId: convId,
+            // A late result still belongs to this conversation after navigation or New chat.
+            persistAssistantMessage: (content, toolCalls) =>
+              persistence.saveAssistantMessage(content, toolCalls, convId),
           });
         } catch (error) {
           if (isCurrent()) throw error;

@@ -17,7 +17,12 @@ export function parseTranscriptSegmentsWithMigration(
     const document = migrateTranscriptDocument(raw, noteId);
     return {
       segments: normalizeTranscriptSegments(
-        document.rows.filter((row: { deleted?: boolean }) => !row.deleted) as TranscriptSegment[],
+        document.rows
+          .filter((row: { deleted?: boolean }) => !row.deleted)
+          .map((row: TranscriptSegment) => ({
+            ...row,
+            recorderName: typeof row.recorderName === "string" ? row.recorderName : undefined,
+          })),
         document.unknownNumberHighWater
       ),
       migrated: document.migrated,
