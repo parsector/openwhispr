@@ -976,6 +976,16 @@ a svg:hover,
   cursor: pointer;
 }
 
+/* Native date/time indicators and popups use the app theme, including inline fields.
+   Text color alone does not theme browser-painted calendar controls. */
+input:is([type="date"], [type="time"], [type="datetime-local"]) {
+  color-scheme: light;
+}
+
+.dark input:is([type="date"], [type="time"], [type="datetime-local"]) {
+  color-scheme: dark;
+}
+
 /* Premium input styling with subtle depth */
 input:not(.input-inline),
 textarea:not(.input-inline) {
