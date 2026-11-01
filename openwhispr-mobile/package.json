@@ -127,6 +127,7 @@
     "typescript": "~5.9.2"
   },
   "overrides": {
+    "decode-uri-component": "0.5.1",
     "@esbuild-kit/core-utils": {
       "esbuild": "0.25.12"
     },
