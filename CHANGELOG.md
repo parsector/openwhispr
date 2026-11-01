@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.0] - 2026-11-01
+
+People and voices are easier to manage across a meeting: speaker rows keep their identity, and changes to a person reach the transcripts they appear in. You can listen before enrolling a voice, keep meeting audio for later playback, and calibrate speaker decisions against your own labelled meetings. This fork also includes 20 upstream commits while keeping its telemetry-free, upsell-free behaviour.
+
+### People and speaker identity
+
+- **A speaker keeps the same identity across a meeting.** Renaming, merging or deleting a person rewrites every affected transcript. Corrections are transactional, and you can undo them in order.
+- **The People screen shows the contacts in the meeting attendee picker,** including people without a voice profile. It flags duplicates and previews which transcripts a merge will affect before you confirm. You can Reset voice for one person or Clear all voice data.
+- **Voice enrolment starts off.** When you turn it on, candidate spans are offered for listening; approval becomes available only after playback. A voice needs three clean spans from at least two recordings before it suggests a person.
+- **Naming someone live can carry through the meeting.** If their voice has graduated, naming them anchors that voice for the rest of the meeting.
+
+### Meeting audio and playback
+
+- **Keep meeting audio for later review.** Two encrypted tracks can be retained for 3, 7 or 30 days, or kept, subject to a disk budget. Play a span from its transcript row, or delete the audio while keeping the transcript.
+- **A transcript row now plays its own words.** Playback starts at speech onset rather than when recognition finished, and stopping and restarting a recording no longer shifts playback by minutes.
+- **Calibrate speaker decisions with your own meetings.** `npm run calibrate -- --meeting <folder>` sweeps decision thresholds over labelled meetings, and Settings applies the result. Until then, the thresholds are marked uncalibrated.
+
+### History and upstream
+
+- **Each note has one ordered action log.** Undo works newest-first, and the History screen explains that order.
+- **20 upstream commits merged.** They include skills, workspace policies, enterprise audio and mobile changes. This fork keeps its telemetry-free, upsell-free behaviour.
+
 ## [1.11.0] - 2026-10-29
 
 Business and Enterprise teams now share a dictionary, the assistant can follow skills you keep for recurring work, and the workspace you're in moves to the bottom of the sidebar with your account in the top bar. Whisper checks that GPU acceleration really started and falls back to Vulkan, and organizations can turn off meeting recording and audio upload separately. This release also fixes a launch crash on devices used by two accounts, the macOS paste that could insert your previous clipboard, and dictionary words lost on a new device.
