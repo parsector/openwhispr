@@ -158,12 +158,14 @@ async function main() {
     audioSha256: measured.audioSha256, methods: {
       similarity: labels.synthetic ? 'fixture values' : 'leave-one-row-out local CAMPPlus embedding centroids',
       voicedDuration: labels.synthetic ? 'fixture values' : '20 ms RMS above 0.01 (uncalibrated energy proxy)',
-      overlap: labels.synthetic ? 'fixture values' : 'cross-person transcript interval intersection (approximate)' },
+      overlap: labels.synthetic ? 'fixture values' : 'cross-person transcript interval intersection (approximate)',
+      currentAccuracy: 'rightPersonRate is accuracy over machine claims only on non-overlap rows; machineClaimRowsScored is the denominator and noMachineClaimRows counts rows excluded for no machine claim' },
     ...result };
   const reportPath = path.join(base, 'calibration-report.json');
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
   console.log(`Calibration dataset: ${report.synthetic ? 'SYNTHETIC FIXTURE — NOT OWNER DATA' : 'owner-reviewed local audio'}`);
   console.log(`Rows: ${result.evidence.rowCount}; duration: ${measured.durationSeconds.toFixed(2)}s`);
+  console.log(`Current accuracy: machine claims only; ${result.metrics.noMachineClaimRows} row excluded for no machine claim`);
   console.log('floor margin voiced_s overlap_s right_person refusal overlap_detect wrong');
   for (const row of result.table) console.log([row.similarityFloor, row.runnerUpMargin,
     row.minimumVoicedSeconds, row.overlapToleranceSeconds,

@@ -94,15 +94,18 @@ function sweepCalibration(rows, durationSeconds, candidates = CANDIDATES) {
   const recommended = Object.fromEntries(Object.keys(CANDIDATES).map((key) => [key, winner[key]]));
   const nonOverlap = rows.filter((row) => !row.trueOverlap);
   const overlap = rows.filter((row) => row.trueOverlap);
+  const machineClaims = nonOverlap.filter(
+    (row) => typeof row.machineLabel === "string" && row.machineLabel.length > 0
+  );
+  const noMachineClaimRows = rows.filter((row) => !row.machineLabel).length;
   const metrics = {
     rightPersonRate: rate(
-      nonOverlap.filter((row) => (row.machineLabel ?? row.currentLabel) === row.truePerson).length,
-      nonOverlap.length
+      machineClaims.filter((row) => row.machineLabel === row.truePerson).length,
+      machineClaims.length
     ),
-    refusalRate: rate(
-      rows.filter((row) => !(row.machineLabel ?? row.currentLabel)).length,
-      rows.length
-    ),
+    machineClaimRowsScored: machineClaims.length,
+    noMachineClaimRows,
+    refusalRate: rate(noMachineClaimRows, rows.length),
     overlapDetectionRate: rate(
       overlap.filter((row) => row.currentOverlapDetected).length,
       overlap.length
