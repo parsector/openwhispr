@@ -3823,6 +3823,7 @@
       "label": "Intervenant {{n}}",
       "identifyingSpeakers": "Identification des intervenants...",
       "liveAccuracyHint": "Identification des intervenants en cours. La précision des étiquettes s'améliorera à la fin de l'appel.",
+      "noApprovedVoices": "Les voix restent sans nom tant qu’une voix n’a pas été enregistrée et approuvée.",
       "speakersIdentified": "Intervenants identifiés",
       "typeNamePlaceholder": "Saisir un nom",
       "nameOrEmailPlaceholder": "Tapez un nom ou un e-mail",

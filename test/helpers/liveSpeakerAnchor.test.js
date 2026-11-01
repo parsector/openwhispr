@@ -107,6 +107,26 @@ test('a provisional voice changes no acoustic identification and explains why', 
   assert.notEqual(f.identifier._resolveSpeakerForEmbedding(probe).displayName, 'Alex');
 });
 
+test('a mic anchor stays in the mic cohort and cannot name a system row', async t => {
+  const f = fixture(t);
+  await graduate(f);
+  const identifier = new LiveSpeakerIdentifier();
+  identifier.running = true;
+  identifier.activeRunId = 'run-live';
+  identifier.getSpeakerProfiles = f.identifier.getSpeakerProfiles;
+  const anchorVoice = unit(0.8, 0.6);
+  identifier._resolveSpeakerForEmbedding(anchorVoice, { cohort: 'mic', updateCentroid: true, voicedSamples: 16000 * 4 });
+  identifier._resolveSpeakerForEmbedding(anchorVoice, { cohort: 'mic', updateCentroid: true, voicedSamples: 16000 * 4 });
+  const row = { source: 'mic', audioSpan: { recordingId: f.liveNoteId, trackId: 'mic' } };
+  assert.equal(identifier.activateAnchor({ speakerId: 'speaker_0', profileId: f.person.id,
+    rows: [row], runId: 'run-live', noteId: f.liveNoteId }).state, 'active');
+  const probe = unit(0.02, 1);
+  assert.equal(identifier._resolveSpeakerForEmbedding(probe, { cohort: 'mic' }).displayName, 'Alex');
+  assert.notEqual(identifier._resolveSpeakerForEmbedding(probe, { cohort: 'system' }).displayName, 'Alex');
+  assert.equal(identifier.activateAnchor({ speakerId: 'speaker_0', profileId: f.person.id,
+    rows: [{ ...row, source: 'system' }], runId: 'run-live', noteId: f.liveNoteId }).reason, 'not_current_meeting');
+});
+
 test('an anchor abstains when a later voice has a close rival', async t => {
   const f = fixture(t);
   await graduate(f);
@@ -170,6 +190,12 @@ test('overlapping, locked, explicit Unknown, short and ambiguous clusters have s
     const f = fixture(sub);
     await graduate(f);
     f.identifier._assignSpeakerId(unit(0.85, 0.53));
+    assert.equal(f.name().anchor.reason, 'ambiguous_match');
+  });
+  await t.test('below similarity floor', async sub => {
+    const f = fixture(sub);
+    await graduate(f);
+    f.identifier.transientEmbeddings.set('speaker_0', unit(0.6, 0.8));
     assert.equal(f.name().anchor.reason, 'ambiguous_match');
   });
 });

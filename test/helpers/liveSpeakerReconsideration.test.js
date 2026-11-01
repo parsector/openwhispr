@@ -103,6 +103,19 @@ test('a live row not yet saved is reconciled and logged at graduation', async t 
   assert.equal(JSON.parse(reconciled).rows[0].machineReason, 'approved_voice');
 });
 
+test('a mic cohort becomes nameable after graduation without confirming the mic row', async t => {
+  const f = fixture(t);
+  const micRow = { ...f.row, source: 'mic', audioSpan: { ...f.row.audioSpan, trackId: 'mic' } };
+  f.db.updateNote(f.noteId, { transcript: JSON.stringify({ version: 2, rows: [micRow] }) });
+  f.identifier.transientCohorts.set('speaker_3', 'mic');
+  await f.graduate();
+  const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
+  assert.equal(result.assignments.length, 1);
+  const row = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  assert.equal(row.speakerName, 'Alex');
+  assert.equal(row.speakerStatus, 'provisional');
+});
+
 test('explicit Unknown, locked, overlap and mixed audio have distinct eligibility states', async t => {
   const cases = [
     [{ speakerLockSource: 'user', speakerLocked: true, speakerName: undefined }, 'explicit-unknown'],

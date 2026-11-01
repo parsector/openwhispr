@@ -102,6 +102,19 @@ function reconcile(IPCHandlers, databaseManager, liveSpeakerId) {
   );
 }
 
+test("offline system diarization cannot inherit a mic cohort name", () => {
+  const { IPCHandlers } = loadHandlers();
+  const { calls, databaseManager } = createMappingRecorder([]);
+  const fakeThis = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
+  const rows = [{ source: "system", speaker: "speaker_0" }];
+  const result = fakeThis._reconcileLiveSpeakerState({
+    speaker_3: { cohort: "mic", displayName: "Alex", profileId: 5, noteId: NOTE_ID, embedding },
+  }, { speaker_0: embedding }, rows);
+  assert.deepEqual([...result], []);
+  assert.equal(rows[0].speakerName, undefined);
+  assert.deepEqual(calls.set, []);
+});
+
 test("reconciliation leaves an existing same-id mapping alone", () => {
   const { IPCHandlers } = loadHandlers();
   const { calls, databaseManager } = createMappingRecorder([

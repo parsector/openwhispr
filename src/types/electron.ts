@@ -4011,6 +4011,7 @@ declare global {
       ) => () => void;
       onMeetingSpeakerIdentified?: (
         callback: (data: {
+          cohort: "mic" | "system";
           speakerId: string;
           displayName?: string | null;
           suggestedName?: string | null;
@@ -4312,6 +4313,7 @@ declare global {
           display_name: string;
           email: string | null;
           sample_count: number;
+          voice_usable: number;
           created_at: string;
           updated_at: string;
         }>

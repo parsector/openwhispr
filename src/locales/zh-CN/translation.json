@@ -3470,6 +3470,7 @@
       "label": "发言者 {{n}}",
       "identifyingSpeakers": "正在识别发言者...",
       "liveAccuracyHint": "正在识别发言者。通话结束后，标签准确性会提升。",
+      "noApprovedVoices": "在录入并批准至少一个声音之前，语音不会显示姓名。",
       "speakersIdentified": "已识别发言者",
       "typeNamePlaceholder": "输入姓名",
       "knownSpeakers": "已知说话者",

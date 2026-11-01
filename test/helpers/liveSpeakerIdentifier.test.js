@@ -75,6 +75,61 @@ const ambiguousVoice = unit([0.7, 0.7, 0.14]);
 const sameVoice = unit([0.98, 0.2, 0]);
 const voiceC = unit([0.05, 0.05, 0.99]);
 
+test("mic-only captured speech identifies a graduated voice in the mic cohort", async (t) => {
+  const { LiveSpeakerIdentifier, restore } = loadIdentifier({
+    extractEmbeddingFromSamples: async () => voiceA,
+    ort: () => ({ InferenceSession: { create: async () => ({ inputNames: [], outputNames: [] }) } }),
+  });
+  t.after(restore);
+  const identifier = new LiveSpeakerIdentifier();
+  stubDownloadedModels(identifier);
+  const rows = [1, 2, 3].map((number) => ({
+    source: "mic", speakerName: `Unknown speaker ${number}`,
+  }));
+  identifier._getVadProbability = async () => 1;
+  assert.equal(await identifier.start({
+    getSpeakerProfiles: () => [{ id: 1, display_name: "Alex", embedding: voiceA, voice_usable: 1 }],
+    onSpeakerIdentified: (result) => {
+      for (const row of rows)
+        if (result.cohort === row.source && result.displayName) row.speakerName = result.displayName;
+    },
+  }), true);
+  await identifier.feedAudio(Buffer.alloc(24000 * 2 * 4, 1), "mic");
+  assert.deepEqual(rows.map((row) => row.speakerName), ["Alex", "Alex", "Alex"]);
+  assert.equal(identifier.transientCohorts.get("speaker_0"), "mic");
+  await identifier.stop();
+});
+
+test("interleaved mic and system capture keeps separate clocks and clusters", async (t) => {
+  const { LiveSpeakerIdentifier, restore } = loadIdentifier({
+    extractEmbeddingFromSamples: async () => voiceA,
+    ort: () => ({ InferenceSession: { create: async () => ({ inputNames: [], outputNames: [] }) } }),
+  });
+  t.after(restore);
+  const identifier = new LiveSpeakerIdentifier();
+  stubDownloadedModels(identifier);
+  identifier._getVadProbability = async () => 1;
+  const events = [];
+  await identifier.start({
+    getSpeakerProfiles: () => [{ id: 1, display_name: "Alex", embedding: voiceA, voice_usable: 1 }],
+    onSpeakerIdentified: (event) => events.push(event),
+  });
+  const chunk = Buffer.alloc(24000 * 2 * 2, 1);
+  await identifier.feedAudio(chunk, "mic");
+  await identifier.feedAudio(chunk, "system");
+  await identifier.feedAudio(chunk, "mic");
+  await identifier.feedAudio(chunk, "system");
+  const mic = events.find((event) => event.cohort === "mic");
+  const system = events.find((event) => event.cohort === "system");
+  assert.equal(mic.displayName, "Alex");
+  assert.equal(system.displayName, "Alex");
+  assert.notEqual(mic.speakerId, system.speakerId);
+  assert.equal(identifier.transientCohorts.get(mic.speakerId), "mic");
+  assert.equal(identifier.transientCohorts.get(system.speakerId), "system");
+  assert.ok(mic.endTime <= 2.5 && system.endTime <= 2.5, "each clock counts only its own track");
+  await identifier.stop();
+});
+
 function seedMergedSession(identifier) {
   identifier.setMaxSpeakers(3);
   identifier._assignSpeakerId(voiceA);

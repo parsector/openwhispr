@@ -36,7 +36,7 @@ function fixture(t) {
   const note = (suffix, count = 1) => {
     const saved = db.saveNote(`Meeting ${suffix}`, '', 'meeting');
     const noteId = (saved.note || saved).id;
-    const rows = Array.from({ length: count }, (_, i) => ({ id: `${suffix}-${i}`, speaker: 'speaker_0',
+    const rows = Array.from({ length: count }, (_, i) => ({ id: `${suffix}-${i}`, source: 'mic', speaker: 'speaker_0',
       speakerName: 'Alex', speakerLockSource: 'user', suggestedProfileId: person.id,
       audioSpan: { recordingId: noteId, trackId: 'mic', startSample: i * 24000 * 5,
         endSample: (i * 5 + 4) * 24000 } }));
@@ -58,6 +58,7 @@ test('fresh identity stays unenrolled; approval needs playback; rejection is dur
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
   const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
   assert.equal(candidate.noteId, noteId);
+  assert.equal(candidate.track, 'mic');
   assert.deepEqual(candidate.rowIds, ['one-0']);
   assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', null)).success, false);
   const played = enrollment.play(f.db, f.audio, candidate.id);

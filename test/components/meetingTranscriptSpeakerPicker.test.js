@@ -107,6 +107,15 @@ const createsAny = () =>
 const chat = (segments, extra) => (React, mod) =>
   React.createElement(mod.MeetingTranscriptChat, { segments, speakerMappings: {}, ...extra });
 
+test("a running meeting with no approved voice explains unnamed rows once", async (t) => {
+  await mount(t, chat([
+    { id: "mic-1", text: "hello", source: "mic", speaker: "speaker_0" },
+    { id: "mic-2", text: "again", source: "mic", speaker: "speaker_1" },
+  ], { isRecording: true, speakerProfiles: [], sessionDiarizationEnabled: true }));
+  const key = "notes.speaker.noApprovedVoices";
+  assert.equal(happyWindow.document.body.textContent.split(key).length - 1, 1);
+});
+
 test("This is me names an in-person cluster You", async (t) => {
   const calls = [];
   const { act } = await mount(

@@ -3398,6 +3398,7 @@
       "label": "話者 {{n}}",
       "identifyingSpeakers": "話者を識別中...",
       "liveAccuracyHint": "話者を識別中です。通話終了後にラベルの精度が向上します。",
+      "noApprovedVoices": "声を登録して承認するまで、話者の名前は表示されません。",
       "speakersIdentified": "話者を識別しました",
       "typeNamePlaceholder": "名前を入力",
       "knownSpeakers": "登録済みの話者",

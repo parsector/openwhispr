@@ -76,6 +76,20 @@ const VAD_SESSION_OPTIONS = {
   interOpNumThreads: 1,
   executionMode: "sequential",
 };
+const STREAM_STATE_FIELDS = [
+  "pcmRemainder",
+  "audioRemainder",
+  "vadStates",
+  "speechChunks",
+  "speechActive",
+  "silenceWindows",
+  "sampleCursor",
+  "segmentStartSample",
+  "segmentEndSample",
+  "currentSegmentSpeakerId",
+  "currentSegmentSpeakerName",
+  "lastLiveIdentificationSample",
+];
 
 function appendFloat32(existing, next) {
   if (!existing.length) return next;
@@ -221,6 +235,7 @@ class LiveSpeakerIdentifier {
         displayName: this.transientDisplayNames.get(speakerId) || null,
         profileId: this.transientProfileIds.get(speakerId) ?? null,
         noteId: this.transientNoteIds.get(speakerId) ?? null,
+        cohort: this.transientCohorts.get(speakerId) || "system",
       };
     }
 
@@ -330,13 +345,14 @@ class LiveSpeakerIdentifier {
   activateAnchor({ speakerId, profileId, rows, runId, noteId }) {
     this.invalidateAnchor(speakerId);
     const refused = (reason) => ({ state: "refused", reason });
+    const cohort = this.transientCohorts.get(speakerId);
     if (
       !this.running ||
       !runId ||
       runId !== this.activeRunId ||
       !speakerId ||
       !this.transientEmbeddings.has(speakerId) ||
-      (this.transientCohorts.get(speakerId) || "system") !== "system"
+      !["mic", "system"].includes(cohort)
     )
       return refused("not_current_meeting");
     if (!profileId) return refused("not_graduated");
@@ -345,9 +361,9 @@ class LiveSpeakerIdentifier {
     if (
       rows.some(
         (row) =>
-          row.source !== "system" ||
+          row.source !== cohort ||
           (row.audioSpan &&
-            (row.audioSpan.trackId !== "system" ||
+            (row.audioSpan.trackId !== cohort ||
               (row.audioSpan.recordingId !== noteId &&
                 !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
                   row.audioSpan.recordingId
@@ -387,7 +403,8 @@ class LiveSpeakerIdentifier {
         speakerEmbeddings.cosineSimilarity(centroid, getBufferFloat32View(item.embedding))
       );
     for (const [id, other] of this.transientEmbeddings)
-      if (id !== speakerId) alternatives.push(speakerEmbeddings.cosineSimilarity(centroid, other));
+      if (id !== speakerId && this.transientCohorts.get(id) === cohort)
+        alternatives.push(speakerEmbeddings.cosineSimilarity(centroid, other));
     if (own < matchFloor() || own - Math.max(0, ...alternatives) < anchorMargin())
       return refused("ambiguous_match");
     const state = { state: "active", reason: null };
@@ -397,7 +414,7 @@ class LiveSpeakerIdentifier {
       profileId,
       runId,
       noteId,
-      cohort: "system",
+      cohort,
       profileBytes: Buffer.from(profile.embedding),
     });
     this.clusterEligibility.set(speakerId, "anchored");
@@ -442,14 +459,14 @@ class LiveSpeakerIdentifier {
   async stop() {
     this.running = false;
     await this.queue;
-
-    if (this.speechActive && this.audioRemainder.length > 0) {
-      this.speechChunks.push(this.audioRemainder);
-      this.audioRemainder = new Float32Array(0);
-    }
-
-    if (this.speechActive) {
-      await this._finalizeSpeechSegment();
+    this._saveStreamState();
+    for (const cohort of this.streamStates.keys()) {
+      this._selectStream(cohort);
+      if (this.speechActive && this.audioRemainder.length > 0) {
+        this.speechChunks.push(this.audioRemainder);
+        this.audioRemainder = new Float32Array(0);
+      }
+      if (this.speechActive) await this._finalizeSpeechSegment();
     }
 
     const transientState = this.getTransientState();
@@ -487,7 +504,10 @@ class LiveSpeakerIdentifier {
         const bestAlternative = (index, otherIndex) =>
           speakers.reduce(
             (best, [id, embedding], k) =>
-              k === index || k === otherIndex || removed.has(id)
+              k === index ||
+              k === otherIndex ||
+              removed.has(id) ||
+              this.transientCohorts.get(id) !== this.transientCohorts.get(speakers[index][0])
                 ? best
                 : Math.max(best, speakerEmbeddings.cosineSimilarity(speakers[index][1], embedding)),
             0
@@ -583,13 +603,17 @@ class LiveSpeakerIdentifier {
     return merges;
   }
 
-  feedAudio(pcmBuffer) {
+  feedAudio(pcmBuffer, cohort = "system") {
     if (!this.running || !pcmBuffer?.length) {
       return Promise.resolve();
     }
 
     this.queue = this.queue
-      .then(() => this._processAudio(pcmBuffer))
+      .then(async () => {
+        this._selectStream(cohort);
+        await this._processAudio(pcmBuffer);
+        this._saveStreamState();
+      })
       .catch((error) => {
         debugLogger.warn("Live speaker identification failed", { error: error.message });
       });
@@ -759,6 +783,43 @@ class LiveSpeakerIdentifier {
     this.currentSegmentSpeakerName = null;
     this.lastLiveIdentificationSample = 0;
     this._resetVadRuntimeState();
+    this.activeCohort = "system";
+    this.streamStates = new Map();
+    this._saveStreamState();
+  }
+
+  _saveStreamState() {
+    if (!this.streamStates) return;
+    this.streamStates.set(
+      this.activeCohort,
+      Object.fromEntries(STREAM_STATE_FIELDS.map((field) => [field, this[field]]))
+    );
+  }
+
+  _selectStream(cohort) {
+    if (cohort === this.activeCohort) return;
+    this._saveStreamState();
+    let state = this.streamStates.get(cohort);
+    if (!state) {
+      state = {
+        pcmRemainder: Buffer.alloc(0),
+        audioRemainder: new Float32Array(0),
+        vadStates: new Map(),
+        speechChunks: [],
+        speechActive: false,
+        silenceWindows: 0,
+        sampleCursor: 0,
+        segmentStartSample: 0,
+        segmentEndSample: 0,
+        currentSegmentSpeakerId: null,
+        currentSegmentSpeakerName: null,
+        lastLiveIdentificationSample: 0,
+      };
+      for (const [name, value] of this.vadStates)
+        state.vadStates.set(name, new Float32Array(value.length));
+    }
+    for (const field of STREAM_STATE_FIELDS) this[field] = state[field];
+    this.activeCohort = cohort;
   }
 
   _resetVadRuntimeState() {
@@ -937,7 +998,10 @@ class LiveSpeakerIdentifier {
       return;
     }
 
-    const resolved = this._resolveSpeakerForEmbedding(embedding, { updateCentroid: false });
+    const resolved = this._resolveSpeakerForEmbedding(embedding, {
+      updateCentroid: false,
+      cohort: this.activeCohort,
+    });
     if (!resolved?.speakerId) {
       return;
     }
@@ -949,6 +1013,7 @@ class LiveSpeakerIdentifier {
     if (!this.enabled) return;
 
     this.onSpeakerIdentified?.({
+      cohort: this.activeCohort,
       speakerId: resolved.speakerId,
       displayName: resolved.displayName || null,
       uncertainty: resolved.uncertainty,
@@ -977,6 +1042,7 @@ class LiveSpeakerIdentifier {
     const resolved = this._resolveSpeakerForEmbedding(embedding, {
       updateCentroid: true,
       voicedSamples: samples.length,
+      cohort: this.activeCohort,
     });
     if (!resolved?.speakerId) {
       return;
@@ -992,6 +1058,7 @@ class LiveSpeakerIdentifier {
 
     if (this.enabled) {
       this.onSpeakerIdentified?.({
+        cohort: this.activeCohort,
         speakerId,
         displayName,
         uncertainty: resolved.uncertainty,

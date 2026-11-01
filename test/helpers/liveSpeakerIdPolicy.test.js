@@ -27,11 +27,11 @@ test("Linux loopback (PipeWire portal) supports live speaker identification", as
   assert.equal(supportsLiveSpeakerIdentification("loopback", "linux"), true);
 });
 
-test("unsupported mode never identifies speakers", async () => {
+test("unsupported system audio still identifies microphone speakers", async () => {
   const { supportsLiveSpeakerIdentification } = await load();
 
   for (const platform of ["darwin", "win32", "linux"]) {
-    assert.equal(supportsLiveSpeakerIdentification("unsupported", platform), false);
+    assert.equal(supportsLiveSpeakerIdentification("unsupported", platform), true);
   }
 });
 

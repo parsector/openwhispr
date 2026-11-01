@@ -3470,6 +3470,7 @@
       "label": "Participante {{n}}",
       "identifyingSpeakers": "Identificando participantes...",
       "liveAccuracyHint": "Ainda identificando participantes. A precisão dos rótulos melhorará quando a chamada terminar.",
+      "noApprovedVoices": "As vozes ficam sem nome até que uma seja cadastrada e aprovada.",
       "speakersIdentified": "Participantes identificados",
       "typeNamePlaceholder": "Digite um nome",
       "knownSpeakers": "Falantes conhecidos",

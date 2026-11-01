@@ -148,7 +148,12 @@ export interface Enhancement {
 
 type MeetingViewMode = "raw" | "transcript" | "enhanced";
 
-type SpeakerProfileOption = { id?: number; display_name: string; email: string | null };
+type SpeakerProfileOption = {
+  id?: number;
+  display_name: string;
+  email: string | null;
+  voice_usable?: number;
+};
 
 function buildKnownSpeakers(
   profiles: SpeakerProfileOption[],
@@ -506,7 +511,7 @@ export default function NoteEditor({
   }, [note.id, note.speaker_action_log, note.speaker_label_undo]);
   const correctionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [speakerProfiles, setSpeakerProfiles] = useState<
-    Array<{ id: number; display_name: string; email: string | null }>
+    Array<{ id: number; display_name: string; email: string | null; voice_usable: number }>
   >([]);
   const editorRef = useRef<Editor | null>(null);
 
@@ -668,6 +673,7 @@ export default function NoteEditor({
           id: profile.id,
           display_name: profile.display_name,
           email: profile.email,
+          voice_usable: profile.voice_usable,
         }))
       );
     });
