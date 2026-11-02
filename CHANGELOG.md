@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.1] - 2026-11-01
+
+Speaking in a room with your laptop now names people as the meeting runs, the calibration figures no longer count your own labels as the machine's work, and calibration runs inside the app instead of through an exported file.
+
+### Speaker naming
+
+- **A room recording names people mid-meeting.** Live naming was scoped to the system track, so a meeting captured only through your microphone never named anyone even with an approved voice. Microphone rows now identify in their own cohort, and a microphone voice still cannot borrow a system-track anchor or the reverse.
+- **The transcript says why nothing is named.** With no approved voice yet, a running meeting explains once that voices stay unnamed until one is enrolled and approved, instead of leaving you guessing.
+- **Enrolment accepts microphone spans.** A voice approved from a room recording appears in the candidate list like any other.
+
+### Calibration
+
+- **Your labels are no longer reported as machine output.** The export took the pre-correction value from the action log and fell back to your current label when it could not find it, so a row you named yourself showed `machineLabel` equal to your own name. It now exports `null` with `machineLabelUnavailable: "no_machine_assignment"`, and accuracy counts only real machine claims, with the excluded rows reported separately.
+- **Calibrate inside the app.** Settings → People → Speaker calibration analyses your own finished notes — all of them or a date range — using the labels you already made in the transcripts. Similarity floor and runner-up margin are recomputed from the stored voice vectors against your profiles as they are today; live figures are marked as estimates from re-embedded audio.
+- **Two gates get no recommendation.** Overlap tolerance and minimum voiced seconds keep their current values and stay uncalibrated, because the turn durations and overlap intervals they were tuned against were never stored.
+- **Applying values is undoable.** A calibration is recorded as an ordered action with the previous and new values, the evidence scope and the exclusions, so it can be undone without touching a single correction.
+- **A plausible-looking report cannot calibrate anything.** Each threshold needs its own support — reviewed rows, distinct people and machine claims — or it stays visibly uncalibrated.
+
 ## [1.12.0] - 2026-11-01
 
 People and voices are easier to manage across a meeting: speaker rows keep their identity, and changes to a person reach the transcripts they appear in. You can listen before enrolling a voice, keep meeting audio for later playback, and calibrate speaker decisions against your own labelled meetings. This fork also includes 20 upstream commits while keeping its telemetry-free, upsell-free behaviour.
