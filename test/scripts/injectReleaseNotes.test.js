@@ -40,3 +40,23 @@ test("injects exact notes into a real-shaped feed without changing other keys, t
   });
   assert.equal(verify.status, 0, verify.stderr);
 });
+
+test("rejects raw HTML release notes before changing the update feed", (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "release-notes-html-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const feedPath = path.join(dir, "latest-arm64-mac.yml");
+  const notesPath = path.join(dir, "release-notes.md");
+  const feed = fixture("release-feed.yml");
+  fs.writeFileSync(feedPath, feed);
+  fs.writeFileSync(
+    notesPath,
+    "## [1.11.0] - 2026-01-01\n\n- **Fixed** notes\n\n<script>window.pwned = true</script>\n"
+  );
+
+  const result = spawnSync(process.execPath, [script, feedPath, notesPath, "1.11.0"], {
+    encoding: "utf8",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /raw HTML/i);
+  assert.equal(fs.readFileSync(feedPath, "utf8"), feed);
+});

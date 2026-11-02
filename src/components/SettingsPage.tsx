@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "./ui/BidiInterpolatedText";
+import { ReleaseNotes } from "./ui/ReleaseNotes";
 import { Badge } from "./ui/badge";
 import {
   RefreshCw,
@@ -3923,10 +3924,7 @@ EOF`,
                             value={updateInfo.version}
                           />
                         </p>
-                        <div
-                          className="text-xs text-muted-foreground [&_ul]:list-disc [&_ul]:ps-4 [&_ul]:space-y-1 [&_ol]:list-decimal [&_ol]:ps-4 [&_ol]:space-y-1 [&_li]:ps-1 [&_p]:mb-2 [&_p:last-child]:mb-0 [&_a]:text-link [&_a]:underline"
-                          dangerouslySetInnerHTML={{ __html: updateInfo.releaseNotes }}
-                        />
+                        <ReleaseNotes notes={updateInfo.releaseNotes} />
                       </div>
                     )}
                   </SettingsPanelRow>

@@ -11,7 +11,7 @@ const start = lines.findIndex((line) => line.startsWith(`## [${version}] - `));
 if (start === -1) throw new Error(`CHANGELOG.md is missing the ## [${version}] release section`);
 const next = lines.findIndex((line, index) => index > start && /^## \[/.test(line));
 const section = lines
-  .slice(start + 1, next === -1 ? undefined : next)
+  .slice(start, next === -1 ? undefined : next)
   .join("\n")
   .trim();
 if (!section) throw new Error(`CHANGELOG.md has an empty ## [${version}] release section`);

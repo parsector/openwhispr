@@ -14,6 +14,12 @@ if (!feedPath || !notesPath || !expectedVersion) {
 
 const notes = fs.readFileSync(notesPath, "utf8");
 if (!notes.trim()) throw new Error("Release notes are empty");
+if (!notes.startsWith(`## [${expectedVersion}] - `)) {
+  throw new Error(`Release notes must start with the ## [${expectedVersion}] version heading`);
+}
+if (/<\/?[a-z][^>]*>/i.test(notes)) {
+  throw new Error("Release notes must use Markdown without raw HTML");
+}
 const original = fs.readFileSync(feedPath, "utf8");
 const before = yaml.load(original);
 if (!before || typeof before !== "object" || Array.isArray(before))
