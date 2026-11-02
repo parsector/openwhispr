@@ -1316,6 +1316,13 @@ class DatabaseManager {
           FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
         )
       `);
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS note_speaker_completion (
+          note_id INTEGER PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
+          had_speaker_embeddings INTEGER NOT NULL,
+          completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
 
       // Local voice evidence has explicit recording provenance. The cache in
       // speaker_profiles is invalidated whenever its source audio is removed.
@@ -7900,6 +7907,21 @@ class DatabaseManager {
       );
       throw error;
     }
+  }
+
+  saveNoteSpeakerCompletion(noteId, hadSpeakerEmbeddings) {
+    this.db
+      .prepare(
+        "INSERT OR REPLACE INTO note_speaker_completion (note_id, had_speaker_embeddings) VALUES (?, ?)"
+      )
+      .run(noteId, hadSpeakerEmbeddings ? 1 : 0);
+  }
+
+  getNoteSpeakerCompletion(noteId) {
+    const row = this.db
+      .prepare("SELECT had_speaker_embeddings FROM note_speaker_completion WHERE note_id = ?")
+      .get(noteId);
+    return row ? { hadSpeakerEmbeddings: Boolean(row.had_speaker_embeddings) } : null;
   }
 
   getPendingNotes(spaceKind = null) {

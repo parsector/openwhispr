@@ -44,6 +44,26 @@ test("live row comparison is explicitly estimated and never uses a centroid as a
   assert.equal(report.analyses.estimated.reason.includes("32 kb/s Opus"), true);
 });
 
+test("reconstructed reviewed audio is labelled and can calibrate only with the full evidence gate", () => {
+  const report = buildReport({
+    rows: rows.map((row) => ({
+      ...row,
+      vectorSource: "reconstructed-row-audio",
+      liveVector: row.vector,
+    })),
+    profiles,
+    scope: { kind: "all" },
+    modelFingerprint: "b".repeat(64),
+    reviewedCount: 40,
+  });
+  assert.equal(report.evidence.reconstructedRows, 40);
+  assert.equal(report.evidence.storedRows, 0);
+  assert.equal(report.analyses.exact.rows, 0);
+  assert.equal(report.support.similarityFloor.method, "reconstructed-row-audio");
+  assert.equal(report.support.similarityFloor.status, "calibrated");
+  assert.match(report.evidence.coverage, /40 of 40 reviewed rows reconstructed/);
+});
+
 test("applying a supported report records an ordered action and undo restores status and values", () => {
   const fs = require("node:fs");
   const os = require("node:os");
@@ -193,6 +213,7 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
     assert.equal(job.progress.reembeddedRows, 1);
     assert.equal(job.progress.bytesRead, 1234);
     assert.equal(job.report.analyses.estimated.rows, 1);
+    assert.equal(job.report.support.similarityFloor.method, "stored-centroid-current-profiles");
     assert.equal(await reportStillCurrent(job.report, database, audioStore, model), true);
     note.transcript = JSON.stringify([{ ...row, text: "edited after calibration" }]);
     assert.equal(await reportStillCurrent(job.report, database, audioStore, model), false);
@@ -218,6 +239,108 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
     );
     assert.equal(cancelled.state, "cancelled");
     assert.equal(cancelled.report, undefined);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("missing centroids use retained row audio and never write speaker training data", async () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { runJob } = require("../../src/helpers/speakerInAppCalibration");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-backfill-"));
+  const modelPath = path.join(dir, "model.onnx");
+  fs.writeFileSync(modelPath, "fixture model");
+  const row = {
+    id: "reviewed",
+    source: "system",
+    speaker: "split-1",
+    speakerName: "Ada",
+    speakerLockSource: "user",
+    audioSpan: { trackId: "system", recordingId: 1, startSample: 0, endSample: 48000 },
+  };
+  const note = {
+    id: 1,
+    transcript: JSON.stringify([row]),
+    speaker_action_log: null,
+    created_at: "2026-10-01",
+  };
+  const wav = Buffer.alloc(44 + 48000 * 2);
+  wav.write("data", 36);
+  wav.writeUInt32LE(48000 * 2, 40);
+  wav.writeUInt32LE(24000, 24);
+  let writes = 0;
+  let completion = { hadSpeakerEmbeddings: false };
+  let storedEmbeddings = [];
+  const database = {
+    db: { prepare: () => ({ all: () => [note] }) },
+    getNoteSpeakerEmbeddings: () => storedEmbeddings,
+    getNoteSpeakerCompletion: () => completion,
+    getSpeakerProfiles: () => [
+      { id: 1, display_name: "Ada", embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
+      { id: 2, display_name: "Ben", embedding: Buffer.from(new Float32Array([0, 1]).buffer) },
+    ],
+    saveNoteSpeakerEmbeddings: () => {
+      writes++;
+    },
+    saveSpeakerProfile: () => {
+      writes++;
+    },
+    saveVoiceExemplar: () => {
+      writes++;
+    },
+  };
+  let state = "complete";
+  const audioStore = {
+    status: () => ({
+      state,
+      recordingId: 1,
+      tracks: { system: { chunks: [{ startSample: 0, sampleCount: 48000 }] } },
+    }),
+    span: () => ({ wav, bytesRead: 1234 }),
+  };
+  const model = {
+    isAvailable: () => true,
+    getModelPath: () => modelPath,
+    extractEmbeddingFromSamples: async () => new Float32Array([1, 0]),
+  };
+  const job = () => ({
+    cancelled: false,
+    state: "running",
+    progress: { totalRows: 0, processedRows: 0, reembeddedRows: 0, bytesRead: 0, elapsedMs: 0 },
+  });
+  try {
+    const retained = job();
+    await runJob(retained, database, audioStore, { kind: "all" }, { notes: 1, rows: 1 }, model);
+    assert.equal(retained.report.evidence.reconstructedRows, 1);
+    assert.equal(retained.report.evidence.coverage, "1 of 1 reviewed rows reconstructed");
+    assert.equal(
+      retained.report.evidence.missingVectorDiagnostics[0].reason,
+      "completion_without_speakerEmbeddings"
+    );
+    assert.equal(retained.report.analyses.calibration.rows, 1);
+    assert.equal(retained.report.support.similarityFloor.status, "uncalibrated");
+    assert.equal(writes, 0);
+    completion = null;
+    const noEvent = job();
+    await runJob(noEvent, database, audioStore, { kind: "all" }, { notes: 1, rows: 1 }, model);
+    assert.equal(noEvent.report.evidence.missingVectorDiagnostics[0].reason, "no_completion_event");
+    completion = { hadSpeakerEmbeddings: true };
+    storedEmbeddings = [
+      { speaker_id: "speaker_1", embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
+    ];
+    const mismatched = job();
+    await runJob(mismatched, database, audioStore, { kind: "all" }, { notes: 1, rows: 1 }, model);
+    assert.equal(
+      mismatched.report.evidence.missingVectorDiagnostics[0].reason,
+      "speaker_id_vs_speaker_key_mismatch"
+    );
+    state = "expired";
+    const expired = job();
+    await runJob(expired, database, audioStore, { kind: "all" }, { notes: 1, rows: 1 }, model);
+    assert.equal(expired.report.evidence.reconstructedRows, 0);
+    assert.ok(expired.report.evidence.exclusions.some((item) => item.reason === "audio_expired"));
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

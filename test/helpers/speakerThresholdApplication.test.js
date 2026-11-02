@@ -97,3 +97,39 @@ test("a supported exact report calibrates each supported threshold and routes th
     config.configure(null);
   }
 });
+
+test("a fully reconstructed report keeps its method when applied and reloaded", () => {
+  const config = require("../../src/helpers/speakerDecisionThresholds");
+  const { buildReport } = require("../../src/helpers/speakerInAppCalibration");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-reconstructed-threshold-"));
+  const file = path.join(dir, "thresholds.json");
+  try {
+    config.configure(file);
+    const report = buildReport({
+      rows: Array.from({ length: 36 }, (_, i) => ({
+        noteId: 1 + Math.floor(i / 12),
+        rowId: `row-${i}`,
+        revision: `revision-${i}`,
+        truePerson: i % 2 ? "Ben" : "Ada",
+        machineLabel: i % 2 ? "Ben" : "Ada",
+        clusterId: `cluster-${i}`,
+        vector: i % 2 ? [0, 1] : [1, 0],
+        vectorSource: "reconstructed-row-audio",
+        audioFingerprint: "a".repeat(64),
+      })),
+      profiles: [
+        { id: 1, name: "Ada", vector: [1, 0] },
+        { id: 2, name: "Ben", vector: [0, 1] },
+      ],
+      scope: { kind: "all" },
+      modelFingerprint: "b".repeat(64),
+    });
+    const applied = config.apply({ ...config.DEFAULTS, ...report.recommended }, report);
+    assert.equal(applied.statuses.similarityFloor, "calibrated");
+    assert.equal(applied.evidence.method, "reconstructed-row-audio");
+    assert.equal(config.configure(file).statuses.similarityFloor, "calibrated");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    config.configure(null);
+  }
+});

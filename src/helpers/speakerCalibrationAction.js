@@ -11,7 +11,7 @@ function apply(database, report) {
   if (
     !report ||
     report.version !== 2 ||
-    report.method !== "stored-centroid-current-profiles" ||
+    !["stored-centroid-current-profiles", "reconstructed-row-audio"].includes(report.method) ||
     !Object.keys(report.recommended || {}).length ||
     Object.keys(report.recommended).some(
       (key) => !["similarityFloor", "runnerUpMargin"].includes(key)

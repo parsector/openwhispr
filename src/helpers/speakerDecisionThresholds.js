@@ -27,7 +27,7 @@ function current() {
 }
 function validStoredEvidence(evidence) {
   return (
-    evidence?.method === "stored-centroid-current-profiles" &&
+    ["stored-centroid-current-profiles", "reconstructed-row-audio"].includes(evidence?.method) &&
     typeof evidence.reportId === "string" &&
     /^[a-f0-9-]{36}$/i.test(evidence.reportId) &&
     evidence.scope &&
@@ -35,7 +35,8 @@ function validStoredEvidence(evidence) {
     evidence.notes >= 3 &&
     evidence.distinctPeople >= 2 &&
     evidence.machineClaims >= 10 &&
-    evidence.exactClusters >= 12 &&
+    (evidence.calibrationRows ?? evidence.exactClusters) >= 12 &&
+    (evidence.method !== "reconstructed-row-audio" || evidence.reconstructedRows > 0) &&
     Array.isArray(evidence.revisions) &&
     evidence.revisions.length === evidence.reviewedRows &&
     Array.isArray(evidence.exclusions) &&
@@ -99,7 +100,7 @@ function apply(values, report = null) {
   const validReport =
     report?.version === 2 &&
     report?.synthetic === false &&
-    report?.method === "stored-centroid-current-profiles" &&
+    ["stored-centroid-current-profiles", "reconstructed-row-audio"].includes(report?.method) &&
     typeof report.id === "string" &&
     /^[a-f0-9-]{36}$/i.test(report.id) &&
     report.scope &&
@@ -107,7 +108,8 @@ function apply(values, report = null) {
     report.evidence?.notes >= 3 &&
     report.evidence?.distinctPeople >= 2 &&
     report.evidence?.machineClaims >= 10 &&
-    report.evidence?.exactClusters >= 12 &&
+    (report.evidence?.calibrationRows ?? report.evidence?.exactClusters) >= 12 &&
+    (report.method !== "reconstructed-row-audio" || report.evidence?.reconstructedRows > 0) &&
     Array.isArray(report.evidence.revisions) &&
     report.evidence.revisions.length === report.evidence.reviewedRows &&
     Array.isArray(report.evidence.exclusions) &&
@@ -123,7 +125,9 @@ function apply(values, report = null) {
       validReport &&
       ["similarityFloor", "runnerUpMargin"].includes(key) &&
       report.support?.[key]?.status === "calibrated" &&
-      report.support[key].method === "exact" &&
+      (report.support[key].method === report.method ||
+        (report.method === "stored-centroid-current-profiles" &&
+          report.support[key].method === "exact")) &&
       report.support[key].rows >= 12 &&
       report.support[key].machineClaims >= 10 &&
       report.recommended?.[key] === values[key]

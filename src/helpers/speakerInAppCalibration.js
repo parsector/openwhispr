@@ -67,11 +67,19 @@ function buildReport({
   modelFingerprint,
   exclusions = [],
   bytesRead = 0,
+  reviewedCount = rows.length,
+  missingVectorDiagnostics = [],
   generatedAt = new Date().toISOString(),
   synthetic = false,
 }) {
   const byCluster = new Map();
-  for (const row of rows.filter((item) => item.vector)) {
+  const storedRows = rows.filter(
+    (item) => item.vector && item.vectorSource !== "reconstructed-row-audio"
+  );
+  const reconstructedRows = rows.filter(
+    (item) => item.vector && item.vectorSource === "reconstructed-row-audio"
+  );
+  for (const row of storedRows) {
     const key = `${row.noteId}:${row.clusterId}`;
     if (!byCluster.has(key)) byCluster.set(key, []);
     byCluster.get(key).push(row);
@@ -84,6 +92,7 @@ function buildReport({
     } else clusters.push(members[0]);
   }
   const exact = sweep(clusters, profiles, "vector");
+  const calibration = sweep([...clusters, ...reconstructedRows], profiles, "vector");
   const estimated = sweep(rows, profiles, "liveVector");
   const people = new Set(rows.map((row) => row.truePerson).filter(Boolean));
   const notes = new Set(rows.map((row) => row.noteId));
@@ -124,35 +133,41 @@ function buildReport({
     missing.push("Need 30 reviewed rows across three notes and two people");
   if (claims < 10) missing.push("Need ten recorded machine claims");
   if (profiles.length < 2) missing.push("Need two current voice profiles");
-  if (exact.rows < 12) missing.push("Need twelve consistent stored clusters");
+  if (calibration.rows < 12)
+    missing.push("Need twelve consistent stored clusters or reconstructed rows");
   if (Object.keys(audioFingerprints).length !== notes.size)
     missing.push("Need retained-audio fingerprints for every included note");
   if (!/^[a-f0-9]{64}$/.test(modelFingerprint || ""))
     missing.push("Speaker model fingerprint unavailable");
-  const exactStatus = gate && exact.rows >= 12 ? "calibrated" : "uncalibrated";
-  const exactReason = exactStatus === "calibrated" ? undefined : missing.join("; ");
+  const calibrationStatus = gate && calibration.rows >= 12 ? "calibrated" : "uncalibrated";
+  const calibrationReason = calibrationStatus === "calibrated" ? undefined : missing.join("; ");
+  const method = reconstructedRows.length
+    ? "reconstructed-row-audio"
+    : "stored-centroid-current-profiles";
   const support = {
     similarityFloor: {
-      status: exactStatus,
-      method: "exact",
-      rows: exact.rows,
+      status: calibrationStatus,
+      method,
+      rows: calibration.rows,
       machineClaims: claims,
-      ...(exactReason ? { reason: exactReason } : {}),
+      ...(calibrationReason ? { reason: calibrationReason } : {}),
     },
     runnerUpMargin: {
-      status: exactStatus,
-      method: "exact",
-      rows: exact.rows,
+      status: calibrationStatus,
+      method,
+      rows: calibration.rows,
       machineClaims: claims,
-      ...(exactReason ? { reason: exactReason } : {}),
+      ...(calibrationReason ? { reason: calibrationReason } : {}),
     },
     minimumVoicedSeconds: {
       status: "uncalibrated",
+      method: "insufficient-original-evidence",
       reason:
         "The production gate used matched diarization-turn duration, which was not stored. Need those original turns and durations.",
     },
     overlapToleranceSeconds: {
       status: "uncalibrated",
+      method: "insufficient-original-evidence",
       reason:
         "The stored overlap flag is one outcome at one tolerance. Need original overlap intervals or exactly reproducible diarization evidence.",
     },
@@ -160,13 +175,13 @@ function buildReport({
   const recommended = Object.fromEntries(
     ["similarityFloor", "runnerUpMargin"]
       .filter((key) => support[key].status === "calibrated")
-      .map((key) => [key, exact.winner[key]])
+      .map((key) => [key, calibration.winner[key]])
   );
   return {
     version: 2,
     id: randomUUID(),
     synthetic,
-    method: "stored-centroid-current-profiles",
+    method,
     generatedAt,
     scope,
     evidence: {
@@ -175,6 +190,12 @@ function buildReport({
       distinctPeople: people.size,
       machineClaims: claims,
       exactClusters: exact.rows,
+      calibrationRows: calibration.rows,
+      storedRows: storedRows.length,
+      reconstructedRows: reconstructedRows.length,
+      reviewedCandidates: reviewedCount,
+      coverage: `${reconstructedRows.length} of ${reviewedCount} reviewed rows reconstructed`,
+      missingVectorDiagnostics,
       estimatedRows: estimated.rows,
       bytesRead,
       revisions,
@@ -189,6 +210,12 @@ function buildReport({
     },
     analyses: {
       exact: { label: "Measured against your profiles as they are today", ...exact },
+      calibration: {
+        label: reconstructedRows.length
+          ? "Calibration using reconstructed row audio against current profiles"
+          : "Calibration using stored centroids against current profiles",
+        ...calibration,
+      },
       estimated: {
         label: "Estimate: live decisions from re-embedded reviewed rows",
         reason:
@@ -209,7 +236,9 @@ function collectRows(database, audioStore, scope, budget) {
     )
     .all(...(scope.kind === "range" ? [scope.from, scope.to] : []), budget.notes);
   const rows = [],
-    exclusions = [];
+    exclusions = [],
+    missingVectorDiagnostics = [];
+  let reviewedCount = 0;
   for (const note of chosen) {
     const status = audioStore.status(note.id);
     if (status.state === "recording") continue;
@@ -219,6 +248,7 @@ function collectRows(database, audioStore, scope, budget) {
         .getNoteSpeakerEmbeddings(note.id)
         .map((item) => [String(item.speaker_id), vectorOf(item.embedding)])
     );
+    const completion = database.getNoteSpeakerCompletion?.(note.id);
     const reviewedIds = new Set(
       readSpeakerActionLog(note)
         .actions.filter((a) => a.event?.actor !== "machine")
@@ -240,10 +270,35 @@ function collectRows(database, audioStore, scope, budget) {
         !(row.speakerLockSource === "user" || reviewedIds.has(row.id))
       )
         continue;
+      reviewedCount++;
       const vector = vectors.get(String(row.speaker));
       if (!vector) {
-        exclusions.push({ noteId: note.id, rowId: row.id, reason: "stored_centroid_missing" });
-        continue;
+        const reason = vectors.size
+          ? "speaker_id_vs_speaker_key_mismatch"
+          : !completion
+            ? "no_completion_event"
+            : !completion.hadSpeakerEmbeddings
+              ? "completion_without_speakerEmbeddings"
+              : "completion_embeddings_not_saved";
+        if (
+          !missingVectorDiagnostics.some(
+            (item) => item.noteId === note.id && item.reason === reason
+          )
+        ) {
+          const explanations = {
+            no_completion_event: "No diarization completion event was recorded",
+            completion_without_speakerEmbeddings: "Diarization completed without speakerEmbeddings",
+            speaker_id_vs_speaker_key_mismatch:
+              "Stored speaker_id keys do not match the reviewed rows' speaker keys",
+            completion_embeddings_not_saved:
+              "Diarization supplied speakerEmbeddings, but none were saved",
+          };
+          missingVectorDiagnostics.push({
+            noteId: note.id,
+            reason,
+            message: `Note ${note.id}: ${explanations[reason]}; reviewed rows need reconstructed audio.`,
+          });
+        }
       }
       rows.push({
         noteId: note.id,
@@ -253,6 +308,7 @@ function collectRows(database, audioStore, scope, budget) {
         machineLabel: label.machineLabel,
         clusterId: String(row.speaker),
         vector,
+        vectorSource: vector ? "stored-centroid-current-profiles" : null,
         track: label.track,
         start: label.start,
         end: label.end,
@@ -261,11 +317,12 @@ function collectRows(database, audioStore, scope, budget) {
         recordingId: status.recordingId,
         audioManifestFingerprint: sha(JSON.stringify(status.tracks || {})),
         audioAvailable: ["complete", "incomplete"].includes(status.state),
+        audioState: status.state,
       });
     }
     if (rows.length >= budget.rows) break;
   }
-  return { rows, exclusions };
+  return { rows, exclusions, reviewedCount, missingVectorDiagnostics };
 }
 function pcm16FromWav(wav) {
   const data = wav.indexOf(Buffer.from("data"));
@@ -286,7 +343,12 @@ async function runJob(
   model = require("./speakerEmbeddings")
 ) {
   const started = Date.now();
-  const { rows, exclusions } = collectRows(database, audioStore, scope, budget);
+  const { rows, exclusions, reviewedCount, missingVectorDiagnostics } = collectRows(
+    database,
+    audioStore,
+    scope,
+    budget
+  );
   job.progress.totalRows = rows.length;
   let modelFingerprint = null;
   if (model.isAvailable()) {
@@ -310,7 +372,9 @@ async function runJob(
       exclusions.push({
         noteId: row.noteId,
         rowId: row.rowId,
-        reason: "audio_or_exact_span_unavailable",
+        reason: !row.audioAvailable
+          ? `audio_${row.audioState}`
+          : "audio_or_exact_span_unavailable",
       });
     } else if (!modelFingerprint) {
       exclusions.push({
@@ -335,8 +399,13 @@ async function runJob(
           row.liveVector = Array.from(
             (await model.extractEmbeddingFromSamples(pcm16FromWav(span.wav))) || []
           );
-          if (row.liveVector.length) job.progress.reembeddedRows++;
-          else
+          if (row.liveVector.length) {
+            job.progress.reembeddedRows++;
+            if (!row.vector) {
+              row.vector = row.liveVector;
+              row.vectorSource = "reconstructed-row-audio";
+            }
+          } else
             exclusions.push({
               noteId: row.noteId,
               rowId: row.rowId,
@@ -363,12 +432,14 @@ async function runJob(
     .map((p) => ({ id: p.id, name: p.display_name, vector: vectorOf(p.embedding) }))
     .sort((a, b) => a.id - b.id);
   job.report = buildReport({
-    rows,
+    rows: rows.filter((row) => row.vector),
     profiles,
     scope,
     modelFingerprint,
     exclusions,
     bytesRead: job.progress.bytesRead,
+    reviewedCount,
+    missingVectorDiagnostics,
   });
   job.progress.elapsedMs = Date.now() - started;
   job.state = "complete";

@@ -3294,6 +3294,11 @@ class IPCHandlers {
       setImmediate(() =>
         require("./speakerInAppCalibration")
           .runJob(job, this.databaseManager, this.meetingAudioStore, scope, bounded)
+          .then(() => {
+            for (const item of job.report?.evidence?.missingVectorDiagnostics || []) {
+              debugLogger.warn("Speaker calibration missing stored vectors", item, "speaker");
+            }
+          })
           .catch((error) => {
             job.state = "failed";
             job.error = error.message;
@@ -15100,6 +15105,19 @@ class IPCHandlers {
     ].map(({ text, source, timestamp }) => ({ text, source, timestamp }));
     const send = (payload) => {
       if (win && !win.isDestroyed()) {
+        if (noteId != null) {
+          try {
+            this.databaseManager?.saveNoteSpeakerCompletion?.(
+              noteId,
+              Boolean(payload.speakerEmbeddings && Object.keys(payload.speakerEmbeddings).length)
+            );
+          } catch (error) {
+            debugLogger.warn("Could not record speaker completion evidence", {
+              noteId,
+              error: error.message,
+            });
+          }
+        }
         win.webContents.send("meeting-diarization-complete", {
           sessionId,
           noteId,

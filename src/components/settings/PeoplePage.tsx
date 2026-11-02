@@ -942,12 +942,23 @@ export default function PeoplePage({
                   {calibrationReport.evidence.distinctPeople} {t("people.calibrationPeople")};{" "}
                   {calibrationReport.evidence.machineClaims} {t("people.calibrationClaims")}
                 </p>
+                <p>{calibrationReport.evidence.coverage}</p>
+                {calibrationReport.evidence.reconstructedRows > 0 &&
+                  calibrationReport.evidence.storedRows === 0 && (
+                    <p>
+                      All calibration vectors were reconstructed from row audio. No stored centroid
+                      measurement is available.
+                    </p>
+                  )}
+                {calibrationReport.evidence.missingVectorDiagnostics.map((diagnostic) => (
+                  <p key={`${diagnostic.noteId}:${diagnostic.reason}`}>{diagnostic.message}</p>
+                ))}
                 <p>
                   {calibrationReport.scope.kind === "range"
                     ? `${calibrationReport.scope.from} – ${calibrationReport.scope.to}`
                     : t("people.calibrationAll")}
                 </p>
-                {(["exact", "estimated"] as const).map((kind) => {
+                {(["exact", "calibration", "estimated"] as const).map((kind) => {
                   const analysis = calibrationReport.analyses[kind];
                   return (
                     <div key={kind} className="rounded-lg bg-muted/40 p-3">
@@ -1018,6 +1029,9 @@ export default function PeoplePage({
                         )
                       : t("people.uncalibrated")}{" "}
                     {calibrationReport.support[key]?.reason}
+                    {calibrationReport.support[key]?.method && (
+                      <> · {calibrationReport.support[key].method}</>
+                    )}
                   </p>
                 ))}
                 <details>

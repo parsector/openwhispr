@@ -3966,11 +3966,29 @@ declare global {
             distinctPeople: number;
             machineClaims: number;
             exactClusters: number;
+            calibrationRows: number;
+            storedRows: number;
+            reconstructedRows: number;
+            reviewedCandidates: number;
+            coverage: string;
+            missingVectorDiagnostics: Array<{ noteId: number; reason: string; message: string }>;
             estimatedRows: number;
             exclusions: Array<{ reason: string }>;
           };
           analyses: {
             exact: {
+              label: string;
+              rows: number;
+              winner: { right: number; wrong: number; refused: number };
+              table: Array<{
+                similarityFloor: number;
+                runnerUpMargin: number;
+                right: number;
+                wrong: number;
+                refused: number;
+              }>;
+            };
+            calibration: {
               label: string;
               rows: number;
               winner: { right: number; wrong: number; refused: number };
@@ -3996,7 +4014,7 @@ declare global {
               }>;
             };
           };
-          support: Record<string, { status: string; reason?: string }>;
+          support: Record<string, { status: string; method?: string; reason?: string }>;
         };
         error?: string;
       } | null>;
