@@ -76,6 +76,12 @@ function buildReport({
   exclusions = [],
   bytesRead = 0,
   reviewedCount = rows.length,
+  consideredCount = reviewedCount,
+  rowBudget = consideredCount,
+  noteBudget = new Set(rows.map((row) => row.noteId)).size,
+  selectedNotes = new Set(rows.map((row) => row.noteId)).size,
+  placementCounts = { exact: 0, approximate: 0, unavailable: 0 },
+  embeddingCounts = { embedded: 0, refused: 0 },
   missingVectorDiagnostics = [],
   noteCentroidCompletions = [],
   noteEmbeddingFingerprints = {},
@@ -204,7 +210,20 @@ function buildReport({
       storedRows: storedRows.length,
       reconstructedRows: reconstructedRows.length,
       reviewedCandidates: reviewedCount,
-      coverage: `${reconstructedRows.length} of ${reviewedCount} reviewed rows reconstructed`,
+      consideredRows: consideredCount,
+      rowBudget,
+      noteBudget,
+      selectedNotes,
+      truncatedByRowBudget: consideredCount < reviewedCount,
+      placementCounts,
+      embeddingCounts,
+      coverage: `considered ${consideredCount} of ${reviewedCount} reviewed rows in ${selectedNotes} selected ${selectedNotes === 1 ? "note" : "notes"} (row budget ${rowBudget}, note budget ${noteBudget}${consideredCount < reviewedCount ? "; row cap truncated the set" : ""}); ${reconstructedRows.length} reconstructed`,
+      exclusionCounts: Object.fromEntries(
+        [...new Set(allExclusions.map((item) => item.reason))].map((reason) => [
+          reason,
+          allExclusions.filter((item) => item.reason === reason).length,
+        ])
+      ),
       missingVectorDiagnostics,
       noteCentroidCompletions,
       estimatedRows: estimated.rows,
@@ -282,7 +301,6 @@ function collectRows(database, audioStore, scope, budget) {
     );
     const rowsBeforeNote = rows.length;
     for (const label of labels) {
-      if (rows.length >= budget.rows) break;
       const row = transcriptRows.get(label.rowId);
       if (
         !row ||
@@ -292,6 +310,7 @@ function collectRows(database, audioStore, scope, budget) {
       )
         continue;
       reviewedCount++;
+      if (rows.length >= budget.rows) continue;
       const vector = vectors.get(String(row.speaker));
       if (!vector) {
         const reason =
@@ -335,6 +354,10 @@ function collectRows(database, audioStore, scope, budget) {
         track: label.track,
         start: label.start,
         end: label.end,
+        from: label.from,
+        to: label.to,
+        playbackUnavailableReason: label.unavailableReason,
+        playbackPlaceable: !label.unavailableReason,
         approximate: label.approximate,
         audioFingerprint: null,
         recordingId: status.recordingId,
@@ -345,12 +368,13 @@ function collectRows(database, audioStore, scope, budget) {
     }
     if (rows.length > rowsBeforeNote)
       noteEmbeddingFingerprints[note.id] = noteEmbeddingsFingerprint(noteEmbeddings);
-    if (rows.length >= budget.rows) break;
   }
   return {
     rows,
     exclusions,
     reviewedCount,
+    consideredCount: rows.length,
+    selectedNotes: chosen.length,
     missingVectorDiagnostics,
     noteCentroidCompletions,
     noteEmbeddingFingerprints,
@@ -379,6 +403,8 @@ async function runJob(
     rows,
     exclusions,
     reviewedCount,
+    consideredCount,
+    selectedNotes,
     missingVectorDiagnostics,
     noteCentroidCompletions,
     noteEmbeddingFingerprints,
@@ -399,14 +425,19 @@ async function runJob(
     }
     if (
       !row.audioAvailable ||
-      row.approximate ||
-      !Number.isFinite(row.end) ||
-      row.end - row.start < 1.5
+      row.playbackUnavailableReason ||
+      !Number.isFinite(row.from) ||
+      !Number.isFinite(row.to) ||
+      Math.min(row.end, row.to) - Math.max(row.start, row.from) < 1.5
     ) {
       exclusions.push({
         noteId: row.noteId,
         rowId: row.rowId,
-        reason: !row.audioAvailable ? `audio_${row.audioState}` : "audio_or_exact_span_unavailable",
+        reason: !row.audioAvailable
+          ? `audio_${row.audioState}`
+          : row.playbackUnavailableReason
+            ? `playback_${row.playbackUnavailableReason}`
+            : "span_too_short",
       });
     } else if (!modelFingerprint) {
       exclusions.push({
@@ -415,12 +446,7 @@ async function runJob(
         reason: "speaker_model_unavailable",
       });
     } else {
-      const span = audioStore.span(
-        row.noteId,
-        row.track,
-        Math.max(row.start, row.end - 8),
-        row.end
-      );
+      const span = audioStore.span(row.noteId, row.track, Math.max(row.from, row.to - 8), row.to);
       if (span.wav) {
         job.progress.bytesRead += span.bytesRead || span.wav.length;
         if (span.partial)
@@ -471,6 +497,16 @@ async function runJob(
     exclusions,
     bytesRead: job.progress.bytesRead,
     reviewedCount,
+    consideredCount,
+    rowBudget: budget.rows,
+    noteBudget: budget.notes,
+    selectedNotes,
+    placementCounts: {
+      exact: rows.filter((row) => row.playbackPlaceable && !row.approximate).length,
+      approximate: rows.filter((row) => row.playbackPlaceable && row.approximate).length,
+      unavailable: rows.filter((row) => !row.playbackPlaceable).length,
+    },
+    embeddingCounts: { embedded: job.progress.reembeddedRows, refused: exclusions.length },
     missingVectorDiagnostics,
     noteCentroidCompletions,
     noteEmbeddingFingerprints,

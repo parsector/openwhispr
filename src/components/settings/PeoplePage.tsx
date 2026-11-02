@@ -986,6 +986,13 @@ export default function PeoplePage({
                   {calibrationReport.evidence.machineClaims} {t("people.calibrationClaims")}
                 </p>
                 <p>{calibrationReport.evidence.coverage}</p>
+                <p>
+                  Playback placed {calibrationReport.evidence.placementCounts.exact} exact and{" "}
+                  {calibrationReport.evidence.placementCounts.approximate} approximate rows;{" "}
+                  {calibrationReport.evidence.placementCounts.unavailable} could not be placed.
+                  Embedding evaluated {calibrationReport.evidence.embeddingCounts.embedded} rows and
+                  refused {calibrationReport.evidence.embeddingCounts.refused}.
+                </p>
                 {calibrationReport.evidence.reconstructedRows > 0 &&
                   calibrationReport.evidence.exactClusters === 0 && (
                     <p>
@@ -1083,19 +1090,13 @@ export default function PeoplePage({
                     {t("people.calibrationExclusions")}
                   </summary>
                   <ul className="mt-1 list-disc ps-5">
-                    {Object.entries(
-                      calibrationReport.evidence.exclusions.reduce<Record<string, number>>(
-                        (counts, exclusion) => {
-                          counts[exclusion.reason] = (counts[exclusion.reason] || 0) + 1;
-                          return counts;
-                        },
-                        {}
+                    {Object.entries(calibrationReport.evidence.exclusionCounts).map(
+                      ([reason, count]) => (
+                        <li key={reason}>
+                          {reason}: {count}
+                        </li>
                       )
-                    ).map(([reason, count]) => (
-                      <li key={reason}>
-                        {reason}: {count}
-                      </li>
-                    ))}
+                    )}
                   </ul>
                 </details>
                 <button
