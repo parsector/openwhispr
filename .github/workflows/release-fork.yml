@@ -287,6 +287,14 @@ jobs:
           umask 077
           CERTIFICATE_PATH="$RUNNER_TEMP/build_certificate.p12"
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          # macOS ships LibreSSL, whose pkcs12 has no -legacy flag; prefer OpenSSL 3 from Homebrew.
+          for candidate in "$(brew --prefix openssl@3 2>/dev/null || true)/bin" /opt/homebrew/opt/openssl@3/bin /usr/local/opt/openssl@3/bin; do
+            if [ -x "$candidate/openssl" ]; then
+              export PATH="$candidate:$PATH"
+              break
+            fi
+          done
+          openssl version
           echo 'expected: base64 of a .p12 containing the code-signing identity and its private key (single line, no wrapping)'
           cleaned=$(printf '%s' "$SIGNING_CERT_BASE64" | LC_ALL=C tr -d ' \t\r\n%')
           if [ -z "$cleaned" ]; then
