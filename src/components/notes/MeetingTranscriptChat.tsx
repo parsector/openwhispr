@@ -826,7 +826,11 @@ export function SelectionBar({
 }) {
   const [open, setOpen] = useState(false);
   const offerSelf = selectedSegments.some(
-    (segment) => !isSelfSideSegment(segment, speakerMappings, t("notes.speaker.you"))
+    (segment) =>
+      !isSelfSideSegment(segment, speakerMappings, t("notes.speaker.you")) ||
+      (segment.source === "mic" &&
+        segment.speaker !== "you" &&
+        !resolveSegmentSpeakerName(segment, speakerMappings))
   );
   return (
     <div

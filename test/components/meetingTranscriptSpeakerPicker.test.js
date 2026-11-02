@@ -494,7 +494,7 @@ test("adjacent, provisional, ambiguous, suggested, and channel-only rows keep a 
     speakerProfiles: [{ id: 3, display_name: "Alice", email: null }] }));
   const chips = [...happyWindow.document.querySelectorAll("[data-speaker-chip]")];
   assert.equal(chips.length, 5, "every meeting row has a speaker control");
-  assert.equal(chips[0].textContent.trim(), "notes.speaker.unknownNumber");
+  assert.equal(chips[0].textContent.trim(), "notes.speaker.yourMicrophone");
   assert.ok(!hasButton(YOU));
   for (const chip of chips) {
     assert.ok(!chip.closest(".pointer-events-none"), "the chip is reachable without hovering");
