@@ -32,6 +32,10 @@ const field =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring";
 const button =
   "rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-foreground/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+type CalibrationProgress = Awaited<
+  ReturnType<NonNullable<typeof window.electronAPI.speakerCalibrationProgress>>
+>;
+type CalibrationReport = NonNullable<NonNullable<CalibrationProgress>["report"]>;
 type CalibrationValues = {
   similarityFloor: number;
   runnerUpMargin: number;
@@ -58,10 +62,26 @@ export default function PeoplePage({
   const [calibration, setCalibration] = useState<{
     values: CalibrationValues;
     status: string;
+    statuses?: Record<string, string>;
   } | null>(null);
-  const [calibrationDraft, setCalibrationDraft] = useState<CalibrationValues | null>(null);
-  const [calibrationReport, setCalibrationReport] = useState<Record<string, unknown> | null>(null);
+  const [calibrationReport, setCalibrationReport] = useState<CalibrationReport>();
   const [calibrationError, setCalibrationError] = useState("");
+  const [calibrationScope, setCalibrationScope] = useState<"all" | "range">("all");
+  const [calibrationFrom, setCalibrationFrom] = useState("");
+  const [calibrationTo, setCalibrationTo] = useState("");
+  const [calibrationNotes, setCalibrationNotes] = useState(12);
+  const [calibrationRows, setCalibrationRows] = useState(400);
+  const [calibrationJob, setCalibrationJob] = useState<{
+    state: string;
+    progress: {
+      totalRows: number;
+      processedRows: number;
+      reembeddedRows: number;
+      bytesRead: number;
+      elapsedMs: number;
+    };
+  } | null>(null);
+  const [calibrationUndoId, setCalibrationUndoId] = useState<string | null>(null);
   const [review, setReview] = useState<Review[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState(false);
@@ -137,41 +157,81 @@ export default function PeoplePage({
       .speakerCalibrationSettings?.()
       .then((result) => {
         setCalibration(result);
-        setCalibrationDraft(result.values);
       })
       .catch(() => setCalibrationError(t("people.calibrationUnavailable")));
+    void window.electronAPI.speakerCalibrationProgress?.().then((job) => {
+      if (!job) return;
+      setCalibrationJob({ state: job.state, progress: job.progress });
+      if (job.report) setCalibrationReport(job.report);
+      if (job.error) setCalibrationError(job.error);
+    });
   }, [t]);
-  const importCalibrationReport = async (file: File) => {
-    try {
-      const report = JSON.parse(await file.text());
-      if (report.version !== 1 || !report.recommended || !report.evidence)
-        throw Error("Invalid report");
-      const values = Object.fromEntries(
-        calibrationFields.map((key) => [key, Number(report.recommended[key])])
-      ) as CalibrationValues;
-      if (calibrationFields.some((key) => !Number.isFinite(values[key])))
-        throw Error("Invalid threshold");
-      setCalibrationDraft(values);
-      setCalibrationReport(report);
-      setCalibrationError("");
-    } catch {
-      setCalibrationReport(null);
-      setCalibrationError(t("people.calibrationInvalidReport"));
+  useEffect(() => {
+    if (calibrationJob?.state !== "running") return;
+    const timer = window.setInterval(() => {
+      void window.electronAPI.speakerCalibrationProgress?.().then((job) => {
+        if (!job) return;
+        setCalibrationJob({ state: job.state, progress: job.progress });
+        if (job.report) setCalibrationReport(job.report);
+        if (job.error) setCalibrationError(job.error);
+      });
+    }, 400);
+    return () => window.clearInterval(timer);
+  }, [calibrationJob?.state]);
+  const startCalibration = async () => {
+    setCalibrationReport(undefined);
+    setCalibrationError("");
+    const result = await window.electronAPI.startSpeakerCalibration?.(
+      {
+        kind: calibrationScope,
+        ...(calibrationScope === "range" ? { from: calibrationFrom, to: calibrationTo } : {}),
+      },
+      { notes: calibrationNotes, rows: calibrationRows }
+    );
+    if (!result?.success) {
+      setCalibrationError(result?.error || t("people.calibrationUnavailable"));
+      return;
     }
+    setCalibrationJob({
+      state: "running",
+      progress: { totalRows: 0, processedRows: 0, reembeddedRows: 0, bytesRead: 0, elapsedMs: 0 },
+    });
   };
   const applyCalibration = async () => {
-    if (!calibrationDraft) return;
-    const result = await window.electronAPI.applySpeakerCalibration?.(
-      calibrationDraft,
-      calibrationReport
-    );
+    if (!calibrationReport) return;
+    const values = {
+      ...calibration?.values,
+      ...calibrationReport.recommended,
+    } as CalibrationValues;
+    const result = await window.electronAPI.applySpeakerCalibration?.(values, calibrationReport);
     if (!result?.success || !result.values) {
       setCalibrationError(result?.error || t("people.calibrationUnavailable"));
       return;
     }
-    setCalibration({ values: result.values, status: result.status || "uncalibrated" });
-    setCalibrationReport(null);
+    setCalibration({
+      values: result.values,
+      status: result.status || "uncalibrated",
+      statuses: result.statuses,
+    });
+    setCalibrationUndoId(result.id || null);
+    await refresh();
+    setCalibrationReport(undefined);
     setCalibrationError("");
+  };
+  const undoCalibration = async () => {
+    if (!calibrationUndoId) return;
+    const result = await window.electronAPI.undoSpeakerCalibration?.(calibrationUndoId);
+    if (!result?.success || !result.values) {
+      setCalibrationError(result?.error || t("people.calibrationUnavailable"));
+      return;
+    }
+    setCalibration({
+      values: result.values,
+      status: result.status || "uncalibrated",
+      statuses: result.statuses,
+    });
+    setCalibrationUndoId(null);
+    await refresh();
   };
   const openEnrollment = async (profileId: number) => {
     enrollmentTrigger.current = document.activeElement as HTMLElement;
@@ -561,23 +621,30 @@ export default function PeoplePage({
     setActionError("");
     try {
       const result =
-        action.kind === "clear_voice"
-          ? await window.electronAPI.undoClearVoiceData?.(action.id)
-          : action.kind === "enrollment"
-            ? await window.electronAPI.undoVoiceEnrollmentAction?.(action.id)
-            : ["apply", "correction", "split", "reconsideration"].includes(action.kind) &&
-                action.noteId
-              ? await window.electronAPI.applySpeakerCorrection?.({
-                  type: "undo",
-                  noteId: action.noteId,
-                  id: action.id,
-                })
-              : action.kind === "mapping" && action.noteId
-                ? await window.electronAPI.undoPeopleMapping?.(action.noteId)
-                : action.kind === "adoption" && action.noteId
-                  ? await window.electronAPI.takeCloudSpeakerLabels?.(action.noteId, true)
-                  : await window.electronAPI.undoPersonAction?.(action.id);
+        action.kind === "calibration"
+          ? await window.electronAPI.undoSpeakerCalibration?.(action.id)
+          : action.kind === "clear_voice"
+            ? await window.electronAPI.undoClearVoiceData?.(action.id)
+            : action.kind === "enrollment"
+              ? await window.electronAPI.undoVoiceEnrollmentAction?.(action.id)
+              : ["apply", "correction", "split", "reconsideration"].includes(action.kind) &&
+                  action.noteId
+                ? await window.electronAPI.applySpeakerCorrection?.({
+                    type: "undo",
+                    noteId: action.noteId,
+                    id: action.id,
+                  })
+                : action.kind === "mapping" && action.noteId
+                  ? await window.electronAPI.undoPeopleMapping?.(action.noteId)
+                  : action.kind === "adoption" && action.noteId
+                    ? await window.electronAPI.takeCloudSpeakerLabels?.(action.noteId, true)
+                    : await window.electronAPI.undoPersonAction?.(action.id);
       if (!result?.success) throw Error(result?.error || "persistence_failed");
+      if (action.kind === "calibration") {
+        const current = await window.electronAPI.speakerCalibrationSettings?.();
+        if (current) setCalibration(current);
+        setCalibrationUndoId(null);
+      }
       setReport(null);
       setClearReport(null);
       await refresh();
@@ -641,74 +708,247 @@ export default function PeoplePage({
             <p className="mt-1 text-xs text-muted-foreground">
               {t("people.calibrationInstructions")}
             </p>
-            <p className="mt-2 text-xs font-medium">
-              {t("people.calibrationStatus")}:{" "}
-              {t(
-                calibration?.status === "calibrated" ? "people.calibrated" : "people.uncalibrated"
-              )}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {t("people.calibrationOtherGuesses")}
-            </p>
-            {calibrationDraft && (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                {calibrationFields.map((key) => (
-                  <label key={key} className="text-xs">
-                    <span className="block mb-1">
-                      {t(`people.calibrationFields.${key}`)} · {t("people.calibrationCurrent")}:{" "}
-                      {calibration?.values[key] ?? "—"}
-                    </span>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <fieldset className="text-xs">
+                <legend>{t("people.calibrationScope")}</legend>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {(["all", "range"] as const).map((option) => (
+                    <label
+                      key={option}
+                      className={`${button} flex cursor-pointer items-center gap-2`}
+                    >
+                      <input
+                        type="radio"
+                        name="calibration-scope"
+                        className="accent-primary"
+                        checked={calibrationScope === option}
+                        onChange={() => setCalibrationScope(option)}
+                      />
+                      {t(option === "all" ? "people.calibrationAll" : "people.calibrationRange")}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              {calibrationScope === "range" && (
+                <div className="flex gap-2">
+                  <label className="text-xs">
+                    {t("people.calibrationFrom")}
                     <input
                       dir="ltr"
                       className={field}
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={calibrationDraft[key]}
-                      onChange={(event) => {
-                        setCalibrationReport(null);
-                        setCalibrationDraft({
-                          ...calibrationDraft,
-                          [key]: Number(event.target.value),
-                        });
-                      }}
+                      type="date"
+                      value={calibrationFrom}
+                      onChange={(event) => setCalibrationFrom(event.target.value)}
                     />
                   </label>
-                ))}
-              </div>
-            )}
-            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
-              <label className={button}>
-                {t("people.calibrationImport")}
+                  <label className="text-xs">
+                    {t("people.calibrationTo")}
+                    <input
+                      dir="ltr"
+                      className={field}
+                      type="date"
+                      value={calibrationTo}
+                      onChange={(event) => setCalibrationTo(event.target.value)}
+                    />
+                  </label>
+                </div>
+              )}
+              <label className="text-xs">
+                {t("people.calibrationNoteBudget")}
                 <input
                   dir="ltr"
-                  className="sr-only"
-                  type="file"
-                  accept="application/json,.json"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void importCalibrationReport(file);
-                  }}
+                  className={field}
+                  type="number"
+                  min="1"
+                  max="1000"
+                  value={calibrationNotes}
+                  onChange={(event) => setCalibrationNotes(Math.max(1, Number(event.target.value)))}
                 />
               </label>
+              <label className="text-xs">
+                {t("people.calibrationRowBudget")}
+                <input
+                  dir="ltr"
+                  className={field}
+                  type="number"
+                  min="1"
+                  max="10000"
+                  value={calibrationRows}
+                  onChange={(event) => setCalibrationRows(Math.max(1, Number(event.target.value)))}
+                />
+              </label>
+            </div>
+            <div className="mt-3 flex gap-2">
               <button
                 type="button"
                 className={button}
-                disabled={!calibrationDraft}
-                onClick={() => void applyCalibration()}
+                disabled={calibrationJob?.state === "running"}
+                onClick={() => void startCalibration()}
               >
-                {t("people.calibrationApply")}
+                {t("people.calibrationRun")}
               </button>
-              {calibrationReport && (
-                <span>
-                  {t(
-                    calibrationReport.synthetic
-                      ? "people.calibrationSynthetic"
-                      : "people.calibrationReportReady"
-                  )}
-                </span>
+              {calibrationJob?.state === "running" && (
+                <button
+                  type="button"
+                  className={button}
+                  onClick={() => void window.electronAPI.cancelSpeakerCalibration?.()}
+                >
+                  {t("people.calibrationCancel")}
+                </button>
+              )}
+              {calibrationUndoId && (
+                <button type="button" className={button} onClick={() => void undoCalibration()}>
+                  {t("people.calibrationUndo")}
+                </button>
               )}
             </div>
+            {calibrationJob && (
+              <p role="status" className="mt-2 text-xs text-muted-foreground">
+                {calibrationJob.state}: {calibrationJob.progress.processedRows}/
+                {calibrationJob.progress.totalRows} {t("people.calibrationRows")};{" "}
+                {calibrationJob.progress.reembeddedRows} {t("people.calibrationReembedded")};{" "}
+                {calibrationJob.progress.bytesRead} {t("people.calibrationBytes")};{" "}
+                {Math.round(calibrationJob.progress.elapsedMs / 1000)}{" "}
+                {t("people.calibrationSeconds")}
+              </p>
+            )}
+            {calibration && (
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {calibrationFields.map((key) => (
+                  <div key={key} className="rounded-lg bg-muted/40 p-3 text-xs">
+                    <strong className="block">{t(`people.calibrationFields.${key}`)}</strong>
+                    <span>
+                      {calibration.values[key]} ·{" "}
+                      {calibration.statuses?.[key] === "calibrated"
+                        ? t("people.calibrated")
+                        : t("people.uncalibrated")}
+                    </span>
+                    {key === "similarityFloor" && calibration.statuses?.[key] !== "calibrated" && (
+                      <p className="mt-1 text-muted-foreground">
+                        {t("people.calibrationFixedFloor")}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {calibrationReport && (
+              <div className="mt-4 space-y-2 text-xs">
+                <p className="font-medium">
+                  {calibrationReport.evidence.notes} {t("people.calibrationNotes")};{" "}
+                  {calibrationReport.evidence.reviewedRows} {t("people.calibrationRows")};{" "}
+                  {calibrationReport.evidence.distinctPeople} {t("people.calibrationPeople")};{" "}
+                  {calibrationReport.evidence.machineClaims} {t("people.calibrationClaims")}
+                </p>
+                <p>
+                  {calibrationReport.scope.kind === "range"
+                    ? `${calibrationReport.scope.from} – ${calibrationReport.scope.to}`
+                    : t("people.calibrationAll")}
+                </p>
+                {(["exact", "estimated"] as const).map((kind) => {
+                  const analysis = calibrationReport.analyses[kind];
+                  return (
+                    <div key={kind} className="rounded-lg bg-muted/40 p-3">
+                      <strong>{analysis.label}</strong>
+                      <p className="mt-1">
+                        {analysis.rows}{" "}
+                        {kind === "exact"
+                          ? t("people.calibrationClusters")
+                          : t("people.calibrationRows")}
+                      </p>
+                      {kind === "estimated" && (
+                        <p className="mt-1 text-muted-foreground">
+                          {calibrationReport.analyses.estimated.reason}
+                        </p>
+                      )}
+                      {analysis.rows > 0 && (
+                        <p className="mt-1">
+                          {kind === "estimated" ? `${t("people.calibrationEstimate")}: ` : ""}
+                          {analysis.winner.right} {t("people.calibrationRight")},{" "}
+                          {analysis.winner.wrong} {t("people.calibrationWrong")},{" "}
+                          {analysis.winner.refused} {t("people.calibrationRefused")}
+                        </p>
+                      )}
+                      <details className="mt-2">
+                        <summary className="cursor-pointer">
+                          {t("people.calibrationCandidates")}
+                        </summary>
+                        <div className="mt-2 max-h-48 overflow-auto">
+                          <table className="w-full text-start tabular-nums">
+                            <thead>
+                              <tr>
+                                <th className="text-start">
+                                  {t("people.calibrationFields.similarityFloor")}
+                                </th>
+                                <th className="text-start">
+                                  {t("people.calibrationFields.runnerUpMargin")}
+                                </th>
+                                <th className="text-start">{t("people.calibrationRight")}</th>
+                                <th className="text-start">{t("people.calibrationWrong")}</th>
+                                <th className="text-start">{t("people.calibrationRefused")}</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {analysis.table.map((candidate) => (
+                                <tr
+                                  key={`${candidate.similarityFloor}:${candidate.runnerUpMargin}`}
+                                >
+                                  <td>{candidate.similarityFloor}</td>
+                                  <td>{candidate.runnerUpMargin}</td>
+                                  <td>{candidate.right}</td>
+                                  <td>{candidate.wrong}</td>
+                                  <td>{candidate.refused}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    </div>
+                  );
+                })}
+                {calibrationFields.map((key) => (
+                  <p key={key}>
+                    {t(`people.calibrationFields.${key}`)}:{" "}
+                    {calibrationReport.support[key]?.status === "calibrated"
+                      ? String(
+                          calibrationReport.recommended[key as "similarityFloor" | "runnerUpMargin"]
+                        )
+                      : t("people.uncalibrated")}{" "}
+                    {calibrationReport.support[key]?.reason}
+                  </p>
+                ))}
+                <details>
+                  <summary className="cursor-pointer">
+                    {calibrationReport.evidence.exclusions.length}{" "}
+                    {t("people.calibrationExclusions")}
+                  </summary>
+                  <ul className="mt-1 list-disc ps-5">
+                    {Object.entries(
+                      calibrationReport.evidence.exclusions.reduce<Record<string, number>>(
+                        (counts, exclusion) => {
+                          counts[exclusion.reason] = (counts[exclusion.reason] || 0) + 1;
+                          return counts;
+                        },
+                        {}
+                      )
+                    ).map(([reason, count]) => (
+                      <li key={reason}>
+                        {reason}: {count}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+                <button
+                  type="button"
+                  className={button}
+                  disabled={!Object.keys(calibrationReport.recommended).length}
+                  onClick={() => void applyCalibration()}
+                >
+                  {t("people.calibrationApply")}
+                </button>
+              </div>
+            )}
             {calibrationError && (
               <p role="alert" className="mt-2 text-xs text-destructive">
                 {calibrationError}
@@ -731,27 +971,29 @@ export default function PeoplePage({
                   className={`flex items-center justify-between gap-3 text-xs ${index !== newestActionIndex ? "opacity-60" : "rounded-lg bg-surface-2/50 p-2"}`}
                 >
                   <span className="min-w-0 break-words">
-                    {action.kind === "clear_voice"
-                      ? t("people.clearVoice")
-                      : ["apply", "correction"].includes(action.kind)
-                        ? t("people.correctionAction")
-                        : action.kind === "split"
-                          ? t("notes.speaker.splitCluster")
-                          : action.kind === "enrollment"
-                            ? t(
-                                action.label.startsWith("approve:")
-                                  ? "people.approveSample"
-                                  : action.label.startsWith("reject:")
-                                    ? "people.rejectSample"
-                                    : "people.removeSample"
-                              )
-                            : action.kind === "reconsideration"
-                              ? t("notes.speaker.reason.approved_voice")
-                              : action.kind === "mapping"
-                                ? t("people.mappingAction")
-                                : action.kind === "adoption"
-                                  ? t("people.adoptionAction")
-                                  : t(`people.actions.${action.kind}`)}
+                    {action.kind === "calibration"
+                      ? t("people.calibrationTitle")
+                      : action.kind === "clear_voice"
+                        ? t("people.clearVoice")
+                        : ["apply", "correction"].includes(action.kind)
+                          ? t("people.correctionAction")
+                          : action.kind === "split"
+                            ? t("notes.speaker.splitCluster")
+                            : action.kind === "enrollment"
+                              ? t(
+                                  action.label.startsWith("approve:")
+                                    ? "people.approveSample"
+                                    : action.label.startsWith("reject:")
+                                      ? "people.rejectSample"
+                                      : "people.removeSample"
+                                )
+                              : action.kind === "reconsideration"
+                                ? t("notes.speaker.reason.approved_voice")
+                                : action.kind === "mapping"
+                                  ? t("people.mappingAction")
+                                  : action.kind === "adoption"
+                                    ? t("people.adoptionAction")
+                                    : t(`people.actions.${action.kind}`)}
                     {[
                       "rename",
                       "merge",

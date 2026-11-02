@@ -3265,14 +3265,89 @@ class IPCHandlers {
     ipcMain.handle("speaker-calibration-settings", () =>
       require("./speakerDecisionThresholds").current()
     );
-    ipcMain.handle("speaker-calibration-apply", (_event, values, report) => {
+    let calibrationJob = null;
+    ipcMain.handle("speaker-calibration-start", (_event, scope, budget) => {
+      if (calibrationJob?.state === "running")
+        return { success: false, error: "Calibration already running" };
       if (
-        report &&
-        Object.keys(values || {}).some((key) => report.recommended?.[key] !== values[key])
+        !scope ||
+        !["all", "range"].includes(scope.kind) ||
+        (scope.kind === "range" &&
+          (!/^\d{4}-\d{2}-\d{2}$/.test(scope.from || "") ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(scope.to || "") ||
+            scope.from > scope.to))
       )
-        return { success: false, error: "Values differ from the selected report" };
+        return { success: false, error: "Invalid date range" };
+      const bounded = {
+        notes: Math.min(1000, Math.max(1, Math.floor(Number(budget?.notes) || 12))),
+        rows: Math.min(10000, Math.max(1, Math.floor(Number(budget?.rows) || 400))),
+      };
+      calibrationJob = {
+        id: crypto.randomUUID(),
+        state: "running",
+        cancelled: false,
+        progress: { totalRows: 0, processedRows: 0, reembeddedRows: 0, bytesRead: 0, elapsedMs: 0 },
+        report: null,
+        error: null,
+      };
+      const job = calibrationJob;
+      setImmediate(() =>
+        require("./speakerInAppCalibration")
+          .runJob(job, this.databaseManager, this.meetingAudioStore, scope, bounded)
+          .catch((error) => {
+            job.state = "failed";
+            job.error = error.message;
+          })
+      );
+      return { success: true, id: job.id };
+    });
+    ipcMain.handle(
+      "speaker-calibration-progress",
+      () =>
+        calibrationJob && {
+          id: calibrationJob.id,
+          state: calibrationJob.state,
+          progress: calibrationJob.progress,
+          report: calibrationJob.report,
+          error: calibrationJob.error,
+        }
+    );
+    ipcMain.handle("speaker-calibration-cancel", () => {
+      if (calibrationJob?.state === "running") calibrationJob.cancelled = true;
+      return { success: true };
+    });
+    ipcMain.handle("speaker-calibration-apply", async (_event, _values, report) => {
+      if (
+        !calibrationJob ||
+        calibrationJob.state !== "complete" ||
+        calibrationJob.report?.id !== report?.id
+      )
+        return { success: false, error: "Run an in-app calibration first" };
       try {
-        return { success: true, ...require("./speakerDecisionThresholds").apply(values, report) };
+        if (
+          !(await require("./speakerInAppCalibration").reportStillCurrent(
+            calibrationJob.report,
+            this.databaseManager,
+            this.meetingAudioStore
+          ))
+        )
+          return {
+            success: false,
+            error: "Reviewed rows or profiles changed; run calibration again",
+          };
+        const result = require("./speakerCalibrationAction").apply(
+          this.databaseManager,
+          calibrationJob.report
+        );
+        calibrationJob = null;
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+    ipcMain.handle("speaker-calibration-undo", (_event, id) => {
+      try {
+        return require("./speakerCalibrationAction").undo(this.databaseManager, id);
       } catch (error) {
         return { success: false, error: error.message };
       }
@@ -15416,7 +15491,11 @@ class IPCHandlers {
                   continue;
                 }
 
-                if (bestProfile && bestSim > 0.6 && bestProfile.voice_usable === 1) {
+                if (
+                  bestProfile &&
+                  bestSim > require("./speakerDecisionThresholds").effectiveFloor() &&
+                  bestProfile.voice_usable === 1
+                ) {
                   for (const seg of enrichedSegments) {
                     if (seg.speaker === mappedId && seg.uncertainty?.reason !== "too_short") {
                       applyConfirmedSpeaker(seg, {

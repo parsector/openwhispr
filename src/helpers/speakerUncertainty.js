@@ -1,4 +1,4 @@
-const { current } = require("./speakerDecisionThresholds");
+const { current, effectiveFloor } = require("./speakerDecisionThresholds");
 // Reasons are emitted only when the corresponding measurement exists. Keep the
 // row payload open-ended so later analyzers can add evidence without migration.
 function matchReason(best, runnerUp) {
@@ -7,8 +7,7 @@ function matchReason(best, runnerUp) {
     return { reason: "close_match", candidates: [best.name, runnerUp.name] };
   }
   // This uncertainty-only default is another guess until owner calibration.
-  if (best.score <= (current().status === "calibrated" ? current().values.similarityFloor : 0.6))
-    return { reason: "not_sure" };
+  if (best.score <= effectiveFloor()) return { reason: "not_sure" };
   return null;
 }
 

@@ -3943,6 +3943,76 @@ declare global {
         days: 3 | 7 | 30;
         evictions: Array<{ noteId: number; title: string; at: number }>;
       }>;
+      startSpeakerCalibration?: (
+        scope: { kind: "all" | "range"; from?: string; to?: string },
+        budget: { notes: number; rows: number }
+      ) => Promise<{ success: boolean; id?: string; error?: string }>;
+      speakerCalibrationProgress?: () => Promise<{
+        state: string;
+        progress: {
+          totalRows: number;
+          processedRows: number;
+          reembeddedRows: number;
+          bytesRead: number;
+          elapsedMs: number;
+        };
+        report?: {
+          id: string;
+          scope: { kind: "all" | "range"; from?: string; to?: string };
+          recommended: Partial<{ similarityFloor: number; runnerUpMargin: number }>;
+          evidence: {
+            notes: number;
+            reviewedRows: number;
+            distinctPeople: number;
+            machineClaims: number;
+            exactClusters: number;
+            estimatedRows: number;
+            exclusions: Array<{ reason: string }>;
+          };
+          analyses: {
+            exact: {
+              label: string;
+              rows: number;
+              winner: { right: number; wrong: number; refused: number };
+              table: Array<{
+                similarityFloor: number;
+                runnerUpMargin: number;
+                right: number;
+                wrong: number;
+                refused: number;
+              }>;
+            };
+            estimated: {
+              label: string;
+              reason: string;
+              rows: number;
+              winner: { right: number; wrong: number; refused: number };
+              table: Array<{
+                similarityFloor: number;
+                runnerUpMargin: number;
+                right: number;
+                wrong: number;
+                refused: number;
+              }>;
+            };
+          };
+          support: Record<string, { status: string; reason?: string }>;
+        };
+        error?: string;
+      } | null>;
+      cancelSpeakerCalibration?: () => Promise<{ success: boolean }>;
+      undoSpeakerCalibration?: (id: string) => Promise<{
+        success: boolean;
+        values?: {
+          similarityFloor: number;
+          runnerUpMargin: number;
+          minimumVoicedSeconds: number;
+          overlapToleranceSeconds: number;
+        };
+        status?: string;
+        statuses?: Record<string, string>;
+        error?: string;
+      }>;
       speakerCalibrationSettings?: () => Promise<{
         values: {
           similarityFloor: number;
@@ -3951,6 +4021,7 @@ declare global {
           overlapToleranceSeconds: number;
         };
         status: string;
+        statuses?: Record<string, string>;
         evidence?: unknown;
       }>;
       applySpeakerCalibration?: (
@@ -3970,6 +4041,8 @@ declare global {
           overlapToleranceSeconds: number;
         };
         status?: string;
+        statuses?: Record<string, string>;
+        id?: string;
         error?: string;
       }>;
       meetingAudioSpan?: (

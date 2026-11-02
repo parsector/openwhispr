@@ -102,7 +102,8 @@ contextBridge.exposeInMainWorld("agentJobs", {
 contextBridge.exposeInMainWorld("electronAPI", {
   localMcpState: () => ipcRenderer.invoke("local-mcp-state"),
   localMcpEnable: (enabled) => ipcRenderer.invoke("local-mcp-enable", enabled),
-  localMcpCreateToken: (label, scopes) => ipcRenderer.invoke("local-mcp-create-token", label, scopes),
+  localMcpCreateToken: (label, scopes) =>
+    ipcRenderer.invoke("local-mcp-create-token", label, scopes),
   localMcpRevokeToken: (id) => ipcRenderer.invoke("local-mcp-revoke-token", id),
   setOnboardingWindowMode: (mode) => ipcRenderer.invoke("onboarding-set-window-mode", mode),
   setOnboardingActive: (active) => ipcRenderer.invoke("onboarding-set-active", active),
@@ -282,7 +283,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoLearnedCorrections: (words) => ipcRenderer.invoke("undo-learned-corrections", words),
 
   // Note functions
-  commitmentsList: (includeArchived = false) => ipcRenderer.invoke("commitments-list", includeArchived),
+  commitmentsList: (includeArchived = false) =>
+    ipcRenderer.invoke("commitments-list", includeArchived),
   isDebugEnabled: () => ipcRenderer.invoke("is-debug-enabled"),
   commitmentsDelete: (id) => ipcRenderer.invoke("commitments-delete", id),
   todosToolList: (args) => ipcRenderer.invoke("todos-tool-list", args),
@@ -292,13 +294,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
   commitmentsForNote: (noteId) => ipcRenderer.invoke("commitments-for-note", noteId),
   commitmentsOpenTodos: (filter) => ipcRenderer.invoke("commitments-open-todos", filter),
   commitmentsPendingTodosFilter: () => ipcRenderer.invoke("commitments-pending-todos-filter"),
-  onTodosNavigationPending: registerListener("todos-navigation-pending", (callback) => () => callback()),
+  onTodosNavigationPending: registerListener(
+    "todos-navigation-pending",
+    (callback) => () => callback()
+  ),
   commitmentsCreate: (input) => ipcRenderer.invoke("commitments-create", input),
   commitmentsUpdate: (id, patch) => ipcRenderer.invoke("commitments-update", id, patch),
   commitmentsSetAgentJob: (id, jobId) => ipcRenderer.invoke("commitments-set-agent-job", id, jobId),
   commitmentsSetDue: (id, input) => ipcRenderer.invoke("commitments-set-due", id, input),
   commitmentsProposalsList: (noteId) => ipcRenderer.invoke("commitments-proposals-list", noteId),
-  commitmentsResolveProposal: (id, accept) => ipcRenderer.invoke("commitments-resolve-proposal", id, accept),
+  commitmentsResolveProposal: (id, accept) =>
+    ipcRenderer.invoke("commitments-resolve-proposal", id, accept),
   commitmentsOverdueCount: () => ipcRenderer.invoke("commitments-overdue-count"),
   onCommitmentsUpdated: registerListener("commitments-updated", (callback) => () => callback()),
   listRoutines: () => ipcRenderer.invoke("routines-list"),
@@ -630,16 +636,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   // Speaker name mapping
   getSpeakerMappings: (noteId) => ipcRenderer.invoke("get-speaker-mappings", noteId),
   applySpeakerCorrection: (request) => ipcRenderer.invoke("apply-speaker-correction", request),
-  getLiveSpeakerAnchorState: (noteId, runId) => ipcRenderer.invoke("get-live-speaker-anchor-state", noteId, runId),
+  getLiveSpeakerAnchorState: (noteId, runId) =>
+    ipcRenderer.invoke("get-live-speaker-anchor-state", noteId, runId),
   getSpeakerProfiles: () => ipcRenderer.invoke("get-speaker-profiles"),
   listPeople: () => ipcRenderer.invoke("people-list"),
-  listVoiceEnrollmentCandidates: (profileId) => ipcRenderer.invoke('voice-enrollment-candidates', profileId),
-  listVoiceEnrollmentSamples: (profileId) => ipcRenderer.invoke('voice-enrollment-samples', profileId),
-  removeVoiceEnrollmentSample: (id) => ipcRenderer.invoke('voice-enrollment-remove', id),
-  playVoiceEnrollmentCandidate: (id) => ipcRenderer.invoke('voice-enrollment-play', id),
-  completeVoiceEnrollmentCandidate: (id, token) => ipcRenderer.invoke('voice-enrollment-complete', id, token),
-  decideVoiceEnrollmentCandidate: (id, choice, token) => ipcRenderer.invoke('voice-enrollment-decide', id, choice, token),
-  undoVoiceEnrollmentAction: (id) => ipcRenderer.invoke('voice-enrollment-undo', id),
+  listVoiceEnrollmentCandidates: (profileId) =>
+    ipcRenderer.invoke("voice-enrollment-candidates", profileId),
+  listVoiceEnrollmentSamples: (profileId) =>
+    ipcRenderer.invoke("voice-enrollment-samples", profileId),
+  removeVoiceEnrollmentSample: (id) => ipcRenderer.invoke("voice-enrollment-remove", id),
+  playVoiceEnrollmentCandidate: (id) => ipcRenderer.invoke("voice-enrollment-play", id),
+  completeVoiceEnrollmentCandidate: (id, token) =>
+    ipcRenderer.invoke("voice-enrollment-complete", id, token),
+  decideVoiceEnrollmentCandidate: (id, choice, token) =>
+    ipcRenderer.invoke("voice-enrollment-decide", id, choice, token),
+  undoVoiceEnrollmentAction: (id) => ipcRenderer.invoke("voice-enrollment-undo", id),
   listPeopleActions: () => ipcRenderer.invoke("people-action-history"),
   undoPeopleMapping: (noteId) => ipcRenderer.invoke("people-undo-mapping", noteId),
   onPeopleChanged: registerListener("people-changed", (callback) => () => callback()),
@@ -1071,12 +1082,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
   meetingAudioStatus: (noteId) => ipcRenderer.invoke("meeting-audio-status", noteId),
   meetingAudioUsage: () => ipcRenderer.invoke("meeting-audio-usage"),
   speakerCalibrationSettings: () => ipcRenderer.invoke("speaker-calibration-settings"),
-  applySpeakerCalibration: (values, report) => ipcRenderer.invoke("speaker-calibration-apply", values, report),
+  startSpeakerCalibration: (scope, budget) =>
+    ipcRenderer.invoke("speaker-calibration-start", scope, budget),
+  speakerCalibrationProgress: () => ipcRenderer.invoke("speaker-calibration-progress"),
+  cancelSpeakerCalibration: () => ipcRenderer.invoke("speaker-calibration-cancel"),
+  undoSpeakerCalibration: (id) => ipcRenderer.invoke("speaker-calibration-undo", id),
+  applySpeakerCalibration: (values, report) =>
+    ipcRenderer.invoke("speaker-calibration-apply", values, report),
   meetingAudioSpan: (noteId, track, startSeconds, endSeconds) =>
     ipcRenderer.invoke("meeting-audio-span", noteId, track, startSeconds, endSeconds),
   meetingAudioDelete: (noteId) => ipcRenderer.invoke("meeting-audio-delete", noteId),
   exportMeetingCalibration: (noteId) => ipcRenderer.invoke("export-meeting-calibration", noteId),
-  onMeetingAudioChanged: registerListener("meeting-audio-changed", (callback) => (_event, data) => callback(data)),
+  onMeetingAudioChanged: registerListener(
+    "meeting-audio-changed",
+    (callback) => (_event, data) => callback(data)
+  ),
   meetingAudioSetPolicy: (policy) => ipcRenderer.invoke("meeting-audio-policy", policy),
   meetingAudioSetKeep: (noteId, keep) => ipcRenderer.invoke("meeting-audio-keep", noteId, keep),
   onMeetingTranscriptionSegment: registerListener(
@@ -1629,8 +1649,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   ),
   getMeetingNotificationData: () => ipcRenderer.invoke("get-meeting-notification-data"),
   meetingNotificationReady: () => ipcRenderer.invoke("meeting-notification-ready"),
-  meetingNotificationDismissCommitments: () => ipcRenderer.invoke("meeting-notification-dismiss-commitments"),
-  meetingNotificationOpenPrep: (noteId) => ipcRenderer.invoke("meeting-notification-open-prep", noteId),
+  meetingNotificationDismissCommitments: () =>
+    ipcRenderer.invoke("meeting-notification-dismiss-commitments"),
+  meetingNotificationOpenPrep: (noteId) =>
+    ipcRenderer.invoke("meeting-notification-open-prep", noteId),
   meetingNotificationRespond: (detectionId, action, options) =>
     ipcRenderer.invoke("meeting-notification-respond", detectionId, action, options),
   confirmMeetingNoteNavigation: (navigationId, status) =>
