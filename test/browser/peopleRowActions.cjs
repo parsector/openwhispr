@@ -5,6 +5,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 
+// Vite's native optimizer may start while other test workers are active.
+process.env.RAYON_NUM_THREADS ??= "2";
+
 const repo = path.join(__dirname, "../..");
 const src = path.join(repo, "src");
 const fixtures = path.join(repo, "test/browser/fixtures");
