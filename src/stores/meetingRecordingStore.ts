@@ -948,11 +948,24 @@ export interface StartRecordingArgs {
   autoEndEligible: boolean;
 }
 
+let retryRecordingArgs: StartRecordingArgs | null = null;
+
+export async function retryMeetingRecording(): Promise<void> {
+  const args = retryRecordingArgs;
+  if (!args) return;
+  const policy = usePolicyStore.getState();
+  if (policy.accountId && policy.authGeneration != null) {
+    await policy.fetchPolicy(policy.accountId, policy.authGeneration);
+  }
+  await startRecording(args);
+}
+
 // Resolves false only when workspace policy refuses the recording; every other
 // outcome (including setup failures, which are reported through the store) is
 // "accepted" so callers don't roll back UI they didn't own.
 export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
   if (isRecordingFlag || isStartingFlag) return true;
+  retryRecordingArgs = args;
   const policy = usePolicyStore.getState();
   if (!isTranscriptionContextAllowed(policy, getSettings(), "meeting")) {
     logger.warn("Meeting recording blocked by workspace policy", {}, "meeting");

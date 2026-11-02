@@ -11,6 +11,7 @@ export type PolicyStatus = "idle" | "loading" | "managed" | "unmanaged" | "error
 
 export interface PolicyDecisionSnapshot {
   status: PolicyStatus;
+  managed?: boolean;
   policy: OrgPolicy | null;
   appVersion: string | null;
 }
@@ -419,6 +420,14 @@ export function isTranscriptionContextAllowed(
   settings: SettingsState,
   context: TranscriptionPolicyContext
 ): boolean {
+  // An unavailable lookup cannot turn a personal meeting or upload into an
+  // organization restriction. Dictation keeps its existing route decisions.
+  if (
+    context !== "dictation" &&
+    (state.status === "loading" || state.status === "error") &&
+    state.managed !== true
+  )
+    return true;
   return (
     isAudioFeatureAllowed(state, context) &&
     isTranscriptionSelectionAllowed(state, getTranscriptionSelection(settings, context))
@@ -429,6 +438,8 @@ export function isAudioFeatureAllowed(
   state: PolicyDecisionSnapshot,
   context: TranscriptionPolicyContext
 ): boolean {
+  if ((state.status === "loading" || state.status === "error") && state.managed !== true)
+    return true;
   return managedPolicyDecision(state, (policy) =>
     context === "meeting"
       ? policy.features.meetingRecordingEnabled !== false
