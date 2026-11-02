@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.4] - 2026-11-02
+
+Enrolment now offers the audio you already labelled, unnamed microphones get their own lane in a meeting, and calibration keeps the evidence it recovered.
+
+### Enrolment
+
+- **Rows you corrected by name are offered for enrolment.** Previously a row counted only when an older cluster mapping agreed, so a person with plenty of labelled audio could still see an empty enrolment dialog.
+- **Your current label wins.** Explicit Unknown, or another person's name, overrides the older mapping, so a mislabel cannot be enrolled by mistake.
+- Span quality rules are unchanged: overlap, uncertain spans, spans below three voiced seconds or above eight, unavailable audio and already-reviewed audio stay out, and the empty state now says which reason applied.
+- Naming still creates no voice exemplar. Only full playback followed by approval does, and approving leaves the transcript as it was.
+
+### Meetings
+
+- **Unnamed microphone clusters appear in their own lane** on the note owner's side, labelled "Your microphone", each keeping its own ID and speaker control. A confirmed, corrected or mapped name replaces the label and decides the row's side.
+
+### Calibration
+
+- **Recovered evidence stays with the calibration.** Rows whose speaker decision was corrected previously exported with no machine label; the calibration now recovers that evidence from the retained row audio and keeps it with the sample. This shipped inside the 1.12.3 build and is described here.
+
 ## [1.12.3] - 2026-11-02
 
 The People screen reads as a list of people rather than a wall of fields, and update notes in Settings render as the formatting they were written in.
