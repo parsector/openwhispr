@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.5] - 2026-11-02
+
+A finished meeting now keeps the voice vectors that calibration reads, and says why when it cannot.
+
+### Calibration
+
+- **Speaker vectors are written before the app is told the meeting finished,** and the write is checked against the clusters the result actually names, so a meeting can no longer end with labelled rows and no stored voice evidence.
+- **A failure is named instead of silent.** Each completion records the cluster count, the vectors written and one cause — the voice model was unavailable, extraction failed, no segment was long enough to measure, the audio was already deleted or expired, or the write was rejected — and the same counts appear in the calibration report.
+- A cluster made only of very short turns has its voiced spans joined to produce a vector; genuinely silent clusters stay excluded.
+- Re-running diarisation on a note writes vectors under the same ids the rows carry.
+
 ## [1.12.4] - 2026-11-02
 
 Enrolment now offers the audio you already labelled, unnamed microphones get their own lane in a meeting, and calibration keeps the evidence it recovered.
