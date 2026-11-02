@@ -709,21 +709,26 @@ export default function PeoplePage({
               {t("people.calibrationInstructions")}
             </p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="text-xs">
-                {t("people.calibrationScope")}
-                <Select
-                  value={calibrationScope}
-                  onValueChange={(value) => setCalibrationScope(value as "all" | "range")}
-                >
-                  <SelectTrigger aria-label={t("people.calibrationScope")} className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">{t("people.calibrationAll")}</SelectItem>
-                    <SelectItem value="range">{t("people.calibrationRange")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </label>
+              <fieldset className="text-xs">
+                <legend>{t("people.calibrationScope")}</legend>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {(["all", "range"] as const).map((option) => (
+                    <label
+                      key={option}
+                      className={`${button} flex cursor-pointer items-center gap-2`}
+                    >
+                      <input
+                        type="radio"
+                        name="calibration-scope"
+                        className="accent-primary"
+                        checked={calibrationScope === option}
+                        onChange={() => setCalibrationScope(option)}
+                      />
+                      {t(option === "all" ? "people.calibrationAll" : "people.calibrationRange")}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
               {calibrationScope === "range" && (
                 <div className="flex gap-2">
                   <label className="text-xs">
