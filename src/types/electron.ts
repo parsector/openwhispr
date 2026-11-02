@@ -3970,7 +3970,15 @@ declare global {
             storedRows: number;
             reconstructedRows: number;
             reviewedCandidates: number;
+            consideredRows: number;
+            rowBudget: number;
+            noteBudget: number;
+            selectedNotes: number;
+            truncatedByRowBudget: boolean;
+            placementCounts: { exact: number; approximate: number; unavailable: number };
+            embeddingCounts: { embedded: number; refused: number };
             coverage: string;
+            exclusionCounts: Record<string, number>;
             missingVectorDiagnostics: Array<{ noteId: number; reason: string; message: string }>;
             estimatedRows: number;
             exclusions: Array<{ reason: string }>;
