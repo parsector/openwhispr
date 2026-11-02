@@ -640,15 +640,16 @@ export default function PeoplePage({
     setCandidates([]);
     setEnrollmentSamples([]);
     if (returnFocus)
-      requestAnimationFrame(() =>
-        document
-          .querySelector<HTMLElement>(
-            enrollmentFromMenu.current
-              ? `[data-person-menu="${id}"]`
-              : `[data-enroll-trigger="${id}"]`
-          )
-          ?.focus({ preventScroll: true })
-      );
+      requestAnimationFrame(() => {
+        const trigger = document.querySelector<HTMLElement>(
+          enrollmentFromMenu.current
+            ? `[data-person-menu="${id}"]`
+            : `[data-enroll-trigger="${id}"]`
+        );
+        (trigger || document.querySelector<HTMLElement>(`[data-person-menu="${id}"]`))?.focus({
+          preventScroll: true,
+        });
+      });
   };
   const newestActionIndex = actionHistory.findIndex((item) => !item.unavailableReason);
   const execute = async () => {
