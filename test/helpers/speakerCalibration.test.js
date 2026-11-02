@@ -252,4 +252,6 @@ test("calibration command excludes owner-corrected rows with no machine claim fr
   assert.equal(report.metrics.noMachineClaimRows, 1);
   assert.match(report.methods.currentAccuracy, /machine claims only/);
   assert.match(run.stdout, /1 row excluded.*no machine claim/);
+  assert.deepEqual(report.recommended, {});
+  assert.match(run.stdout, /leave-one-row-out experiment; no production thresholds recommended/);
 });

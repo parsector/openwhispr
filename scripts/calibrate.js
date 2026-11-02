@@ -160,7 +160,8 @@ async function main() {
       voicedDuration: labels.synthetic ? 'fixture values' : '20 ms RMS above 0.01 (uncalibrated energy proxy)',
       overlap: labels.synthetic ? 'fixture values' : 'cross-person transcript interval intersection (approximate)',
       currentAccuracy: 'rightPersonRate is accuracy over machine claims only on non-overlap rows; machineClaimRowsScored is the denominator and noMachineClaimRows counts rows excluded for no machine claim' },
-    ...result };
+    ...result, recommended: {},
+    interpretation: 'Leave-one-row-out owner-label centroids are an experiment, not production current-profile decisions. Voiced and overlap proxies cannot recover the original matched diarization-turn duration or overlap intervals.' };
   const reportPath = path.join(base, 'calibration-report.json');
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });
   console.log(`Calibration dataset: ${report.synthetic ? 'SYNTHETIC FIXTURE — NOT OWNER DATA' : 'owner-reviewed local audio'}`);
@@ -172,10 +173,10 @@ async function main() {
     row.rightPersonRate?.toFixed(3) ?? 'n/a', row.refusalRate?.toFixed(3) ?? 'n/a',
     row.overlapDetectionRate?.toFixed(3) ?? 'n/a', row.wrong].join('  '));
   console.log(`\nCurrent: ${JSON.stringify(result.metrics)}`);
-  console.log(`Recommended: ${JSON.stringify(result.recommended)}`);
+  console.log("This is a leave-one-row-out experiment; no production thresholds recommended.");
   console.log(`Evidence: ${JSON.stringify(result.evidence)}`);
   console.log(`Report: ${reportPath}`);
-  console.log('Apply explicitly in Settings → People. No setting was changed.');
+  console.log('Run Settings → People → Speaker calibration for an in-app evidence report. No setting was changed.');
 }
 
 main().catch(error => { console.error(error.message); process.exitCode = 1; });
