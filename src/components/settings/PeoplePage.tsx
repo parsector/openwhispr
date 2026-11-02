@@ -944,7 +944,7 @@ export default function PeoplePage({
                 </p>
                 <p>{calibrationReport.evidence.coverage}</p>
                 {calibrationReport.evidence.reconstructedRows > 0 &&
-                  calibrationReport.evidence.storedRows === 0 && (
+                  calibrationReport.evidence.exactClusters === 0 && (
                     <p>
                       All calibration vectors were reconstructed from row audio. No stored centroid
                       measurement is available.
