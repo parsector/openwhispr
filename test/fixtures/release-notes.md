@@ -1,4 +1,6 @@
-### What’s new — 1.12.0
+## [1.11.0] - 2026-01-01
+
+### What’s new
 
 - “Alex: ready?” — Café team
 - Quotes: 'single' and "double"; colons: yes.
