@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.2] - 2026-11-02
+
+Recording no longer depends on an organization policy that cannot exist. If you use the app on a personal account — no workspace, no sign-in, or no connection — the organization check stays out of the way, and meeting recording, joining a meeting and audio upload work as they always did.
+
+### Personal accounts
+
+- **A personal account is never treated as a managed one.** "We couldn't ask your organization" is no longer read as "your organization forbids this". Only positive evidence of management can restrict a feature; an unanswered lookup cannot.
+- **The misleading message is gone.** Personal users are no longer told that their organization's settings haven't loaded.
+- **Joining a meeting from the calendar records again,** as does pressing the microphone button, including when you land on the Meet screen first.
+- **Uploads follow the same rule.** A personal account's audio upload is not withheld because a policy lookup failed.
+- **Managed accounts keep their controls.** An organization that has actually disabled meeting recording still refuses, with its own message, and a managed account whose policy cannot load gets an explanation and a Retry instead of a dead end.
+
+### Under the hood
+
+- A managed policy cached from an earlier session no longer outlives the identity that justified it.
+- The reactive audio policy keeps the evidence it had rather than downgrading a known-managed account to unmanaged while a refresh is in flight.
+- Dictation behaviour is unchanged; it was never governed by these controls.
+
 ## [1.12.1] - 2026-11-01
 
 Speaking in a room with your laptop now names people as the meeting runs, the calibration figures no longer count your own labels as the machine's work, and calibration runs inside the app instead of through an exported file.
