@@ -3,6 +3,36 @@ const assert = require('node:assert/strict');
 const readTranscriptDocument = (raw) => { const parsed = JSON.parse(raw); const rows = Array.isArray(parsed) ? parsed : parsed.rows; return { rows, unknownNumberHighWater: Array.isArray(parsed) ? Math.max(0, ...rows.map(r => r.unknownNumberHighWater || r.unknownNumber || 0)) : parsed.unknownNumberHighWater }; };
 const row = (id, run, speaker = 'speaker_0') => ({ id, text: id, source: 'system', speaker, diarizationRunId: run });
 
+test('the microphone lane stays out of saved rows, exports, context and people', async () => {
+  const { serializeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
+  const { parseTranscriptSegments } = await import('../../src/utils/parseTranscriptSegments.ts');
+  const { buildLlmTranscript, buildMeetingContext, collectKnownPeople } = await import('../../src/utils/llmTranscript.ts');
+  const { readableTranscript } = await import('../../src/utils/transcriptEvidence.ts');
+  const { formatJson } = require('../../src/helpers/transcriptFormatter.js');
+  const segments = [
+    { id: 'mic-a', text: 'first voice', source: 'mic', speaker: 'speaker_mic' },
+    { id: 'mic-b', text: 'second voice', source: 'mic', speaker: 'speaker_113' },
+  ];
+  const raw = serializeTranscriptSegments(segments);
+  const restored = parseTranscriptSegments(raw);
+  assert.deepEqual(restored.map((segment) => segment.speaker), ['speaker_mic', 'speaker_113']);
+  assert.ok(restored.every((segment) => !segment.speakerName));
+  const identity = { selfName: 'Casey', selfEmail: null, participants: [] };
+  const translate = (key, opts) => key === 'notes.speaker.unknownNumber'
+    ? `Unknown speaker ${opts.n}` : key === 'notes.speaker.you' ? 'You' : key;
+  const downstream = [
+    raw,
+    formatJson({ title: 'Meeting', created_at: '2026-11-02T00:00:00Z' }, restored, {}),
+    buildLlmTranscript(restored, {}, 'Casey', translate),
+    buildMeetingContext(identity, 'Casey'),
+    readableTranscript(raw).text,
+    JSON.stringify(collectKnownPeople(identity, {}, restored)),
+  ];
+  assert.ok(downstream.every((text) => !text.includes('Your microphone')));
+  assert.deepEqual(collectKnownPeople(identity, {}, restored).map((person) => person.name), ['Casey']);
+  assert.ok(buildLlmTranscript(restored, {}, 'Casey', translate).includes('Unknown speaker'));
+});
+
 test('delete every row, reload, resume, and allocate above note high-water', async () => {
   const { serializeTranscriptSegments } = await import('../../src/utils/transcriptSpeakerState.ts');
   const { parseSeedSegments } = await import('../../src/utils/parseTranscriptSegments.ts');

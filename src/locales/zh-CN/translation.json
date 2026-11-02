@@ -3465,6 +3465,7 @@
       },
       "laterChangeReplaced": "后续更改已覆盖此更改。请先撤销后续更改。",
       "you": "你",
+      "yourMicrophone": "你的麦克风",
       "them": "对方",
       "unknown": "未知发言者",
       "label": "发言者 {{n}}",

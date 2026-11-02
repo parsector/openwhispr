@@ -3818,6 +3818,7 @@
       },
       "laterChangeReplaced": "Eine spätere Änderung hat diese ersetzt. Mache zuerst die spätere Änderung rückgängig.",
       "you": "Du",
+      "yourMicrophone": "Dein Mikrofon",
       "them": "Gegenüber",
       "unknown": "Unbekannter Sprecher",
       "label": "Sprecher {{n}}",

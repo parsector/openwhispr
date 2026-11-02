@@ -70,7 +70,7 @@ test("read-only transcript offers no audio policy controls and explains why", as
 
 test("rows resolve speaker labels through the live mappings", async () => {
   const unmapped = await renderChat({ speakerMappings: {} });
-  assert.ok(unmapped.includes("Unknown speaker 1"), "unmapped cluster shows its numbered label");
+  assert.ok(unmapped.includes("Your microphone"), "unmapped mic shows its channel label");
 
   const renamed = await renderChat({ speakerMappings: { speaker_0: "Alice" } });
   assert.ok(renamed.includes("Alice"), "renaming the cluster renames the rows");
@@ -155,19 +155,47 @@ test("live partials render alongside the settled rows", async () => {
   assert.ok(html.includes("hello from mic"));
 });
 
-test("an in-person meeting draws numbered mic speakers on the other side", async () => {
-  const html = await renderChat({
-    segments: [
-      { id: "p1", text: "first person", source: "mic", timestamp: 1, speaker: "speaker_0" },
-      { id: "p2", text: "second person", source: "mic", timestamp: 2, speaker: "speaker_1" },
-      { id: "p3", text: "not diarized", source: "mic", timestamp: 3 },
-    ],
+test("two unnamed mic clusters show the lane separately and follow their own names", async () => {
+  const segments = [
+    { id: "p1", text: "first mic voice", source: "mic", timestamp: 1, speaker: "speaker_mic" },
+    { id: "p2", text: "second mic voice", source: "mic", timestamp: 2, speaker: "speaker_113" },
+    { id: "p3", text: "remote voice", source: "system", timestamp: 3, speaker: "speaker_0" },
+  ];
+  const unnamed = await renderChat({ segments });
+  assert.equal(unnamed.split(">Your microphone<").length - 1, 2);
+  assert.equal(unnamed.split("bg-primary/90 text-primary-foreground").length - 1, 2);
+  assert.equal(unnamed.split("bg-surface-2 border border-border/70 text-foreground").length - 1, 1);
+
+  const namedYou = await renderChat({ segments, speakerMappings: { speaker_mic: "You" } });
+  assert.equal(namedYou.split(">Your microphone<").length - 1, 1);
+  assert.ok(namedYou.includes(">You<"));
+  assert.equal(namedYou.split("bg-primary/90 text-primary-foreground").length - 1, 2);
+
+  const correctedYou = await renderChat({
+    segments: [{ ...segments[0], diarizationRunId: "run-1", speakerName: "You", speakerLocked: true }],
   });
-  const otherSide = html.split("bg-surface-2 border border-border/70 text-foreground").length - 1;
-  const selfSide = html.split("bg-primary/90 text-primary-foreground").length - 1;
-  assert.equal(otherSide, 2, "both numbered speakers sit on the other side");
-  assert.equal(selfSide, 1, "a mic line without a speaker stays on the user's side");
-  assert.ok(html.includes("Unknown speaker 1") && html.includes("Unknown speaker 2"));
+  assert.ok(correctedYou.includes(">You<"));
+  assert.ok(!correctedYou.includes("Your microphone"));
+  assert.equal(correctedYou.split("bg-primary/90 text-primary-foreground").length - 1, 1);
+
+  const namedColleague = await renderChat({ segments, speakerMappings: { speaker_mic: "Alice" } });
+  assert.equal(namedColleague.split(">Your microphone<").length - 1, 1);
+  assert.ok(namedColleague.includes(">Alice<"));
+  assert.equal(namedColleague.split("bg-primary/90 text-primary-foreground").length - 1, 1);
+  assert.equal(namedColleague.split("bg-surface-2 border border-border/70 text-foreground").length - 1, 2);
+
+  const bothNamed = await renderChat({
+    segments,
+    speakerMappings: { speaker_mic: "Alice", speaker_113: "Bob" },
+  });
+  assert.ok(bothNamed.includes(">Alice<") && bothNamed.includes(">Bob<"));
+  assert.ok(!bothNamed.includes("Your microphone"));
+
+  const recognized = await renderChat({
+    segments: [{ ...segments[0], speakerName: "Alice", speakerStatus: "confirmed" }],
+  });
+  assert.ok(recognized.includes(">Alice<"));
+  assert.ok(!recognized.includes("Your microphone"));
 });
 
 test("a stretch of the user's lines reassigned to someone gets its own colour", async () => {
@@ -343,7 +371,7 @@ test("original unnumbered mic rows show the resolved recorder and preserve named
   const shared = await renderChat({ segments, recorderLabel: "Alice Recorder" });
   assert.ok(shared.includes("Alice Recorder"));
   const own = await renderChat({ segments });
-  assert.ok(own.includes("Unknown speaker 1"), "an unnumbered mic row does not identify the owner");
+  assert.ok(own.includes("Your microphone"), "an unnumbered mic row shows its channel");
   const corrected = await renderChat({
     segments: [{ ...segments[0], speakerName: "Corrected", speakerLocked: true }],
     recorderLabel: "Alice Recorder",

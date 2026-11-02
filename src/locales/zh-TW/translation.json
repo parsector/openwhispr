@@ -3465,6 +3465,7 @@
       },
       "laterChangeReplaced": "後續變更已覆蓋此變更。請先復原後續變更。",
       "you": "你",
+      "yourMicrophone": "你的麥克風",
       "them": "對方",
       "unknown": "未知發言者",
       "label": "發言者 {{n}}",

@@ -19,10 +19,11 @@ test("a remote call keeps the mic on the user's side", async () => {
   assert.equal(isSelfSideSegment({ source: "system", speaker: "speaker_0" }, {}, YOU), false);
 });
 
-test("an in-person meeting puts numbered mic clusters on the other side", async () => {
+test("unnamed microphone clusters share the owner's lane without becoming the owner", async () => {
   const { isSelfSideSegment } = await load();
-  assert.equal(isSelfSideSegment({ source: "mic", speaker: "speaker_0" }, {}, YOU), false);
-  assert.equal(isSelfSideSegment({ source: "mic", speaker: "speaker_1" }, {}, YOU), false);
+  assert.equal(isSelfSideSegment({ source: "mic", speaker: "speaker_mic" }, {}, YOU), true);
+  assert.equal(isSelfSideSegment({ source: "mic", speaker: "speaker_113" }, {}, YOU), true);
+  assert.equal(isSelfSideSegment({ source: "system", speaker: "speaker_113" }, {}, YOU), false);
 });
 
 test("an undiarized mic stays on the user's side", async () => {
@@ -74,7 +75,7 @@ test("a You suggestion sits on the user's side until it is confirmed or dismisse
   );
   assert.equal(
     isSelfSideSegment({ source: "mic", speaker: "speaker_0", suggestedName: "Alice" }, {}, YOU),
-    false
+    true
   );
   // A confirmed or mapped name outranks the suggestion, as it does on the chip.
   assert.equal(

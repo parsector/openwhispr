@@ -3517,6 +3517,7 @@
       },
       "laterChangeReplaced": "Un cambio posterior reemplazó este. Deshaz primero el cambio posterior.",
       "you": "Tú",
+      "yourMicrophone": "Tu micrófono",
       "them": "Ellos",
       "unknown": "Participante desconocido",
       "label": "Participante {{n}}",

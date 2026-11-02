@@ -3393,6 +3393,7 @@
       },
       "laterChangeReplaced": "後の変更によって上書きされています。先に後の変更を元に戻してください。",
       "you": "あなた",
+      "yourMicrophone": "あなたのマイク",
       "them": "相手",
       "unknown": "不明な話者",
       "label": "話者 {{n}}",
