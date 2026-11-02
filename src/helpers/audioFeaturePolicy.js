@@ -11,14 +11,17 @@ function audioFeatureFailure(snapshot, purpose) {
   // Dictation is never restricted by these controls, so an unloaded policy
   // must not refuse it either.
   if (!FEATURE_BY_PURPOSE[purpose]) return null;
-  if (!snapshot?.success || (snapshot.managed && !snapshot.policy)) {
+  if (snapshot?.managed === true && (!snapshot.success || !snapshot.policy)) {
     return {
       success: false,
       code: "POLICY_UNRESOLVABLE",
       error: i18nMain.t("common.policyUnresolved"),
     };
   }
-  if (!snapshot.managed || snapshot.policy?.features?.[FEATURE_BY_PURPOSE[purpose]] !== false) {
+  if (
+    snapshot?.managed !== true ||
+    snapshot.policy?.features?.[FEATURE_BY_PURPOSE[purpose]] !== false
+  ) {
     return null;
   }
   return {
@@ -51,7 +54,7 @@ function createAudioFeaturePolicy({
   let epoch = 0;
   // New work is gated on the current credential's verdict; work already
   // running keeps the one it started under until a newer verdict lands.
-  const failure = (purpose) => audioFeatureFailure(snapshot, purpose);
+  const failure = (purpose) => audioFeatureFailure(snapshot ?? retained, purpose);
   const activeFailure = (purpose) => audioFeatureFailure(snapshot ?? retained, purpose);
 
   function update(next) {
@@ -85,7 +88,7 @@ function createAudioFeaturePolicy({
     const startedIn = epoch;
     try {
       const next = await getPolicy(event, options);
-      if (next?.success && startedIn === epoch) update(next);
+      if ((next?.success || next?.managed === true) && startedIn === epoch) update(next);
     } catch (error) {
       logger?.warn?.("Audio policy lookup failed", { error: error?.message });
     }
@@ -130,7 +133,7 @@ function createAudioFeaturePolicy({
     refreshOnRefusal,
     // Starts made in main (hotkey, tray, calendar) can arrive before the first
     // policy broadcast; fetch it then rather than refuse on a policy that never
-    // loaded. A failed fetch still fails closed without reporting a block.
+    // loaded. A failed fetch only refuses when management was established.
     async resolve(purpose) {
       if (!snapshot?.success) await settle({});
       return failure(purpose);

@@ -391,12 +391,30 @@ export default function App() {
   // Every tray refusal surfaces the pill first, so the message is visible even
   // when the pill was hidden. useTrayQuickActions decides when one is needed.
   const refuse = useCallback(
-    (messageKey) => {
+    (messageKey, retry) => {
       void window.electronAPI?.showDictationPanel?.();
-      toast({ title: t(messageKey), variant: "default" });
+      toast({
+        title: t(messageKey),
+        variant: "default",
+        actions: retry ? [{ label: t("common.retry"), onClick: retry }] : undefined,
+      });
     },
     [toast, t]
   );
+
+  const startMeetingFromPill = useCallback(() => {
+    void window.electronAPI?.startManualMeeting?.().then((result) => {
+      if (
+        result?.code === "POLICY_MEETING_RECORDING_DISABLED" ||
+        result?.code === "POLICY_UNRESOLVABLE"
+      ) {
+        refuse(
+          meetingStartRefusalKey(result.code),
+          result.code === "POLICY_UNRESOLVABLE" ? startMeetingFromPill : undefined
+        );
+      }
+    });
+  }, [refuse]);
 
   const closeCommandMenu = useCallback(() => setIsCommandMenuOpen(false), []);
 
@@ -413,8 +431,13 @@ export default function App() {
   // The meeting hotkey and tray item start in main, which refuses under policy.
   useEffect(
     () =>
-      window.electronAPI?.onMeetingStartRefused?.((code) => refuse(meetingStartRefusalKey(code))),
-    [refuse]
+      window.electronAPI?.onMeetingStartRefused?.((code) =>
+        refuse(
+          meetingStartRefusalKey(code),
+          code === "POLICY_UNRESOLVABLE" ? startMeetingFromPill : undefined
+        )
+      ),
+    [refuse, startMeetingFromPill]
   );
 
   // Auto-hide the floating icon when idle (setting enabled or dictation cycle completed)
@@ -793,14 +816,7 @@ export default function App() {
                 setIsCommandMenuOpen(false);
                 // Main refuses under policy before the start reaches the
                 // engine, so it never sends meeting-start-refused for this.
-                void window.electronAPI?.startManualMeeting?.().then((result) => {
-                  if (
-                    result?.code === "POLICY_MEETING_RECORDING_DISABLED" ||
-                    result?.code === "POLICY_UNRESOLVABLE"
-                  ) {
-                    refuse(meetingStartRefusalKey(result.code));
-                  }
-                });
+                startMeetingFromPill();
               }}
               onHide={() => {
                 setIsCommandMenuOpen(false);

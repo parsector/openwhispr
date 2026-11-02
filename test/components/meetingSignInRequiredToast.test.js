@@ -10,12 +10,13 @@ const { createRendererServer, installBrowserGlobals, installHookDom, installMicC
 // A Cloud note recording whose realtime-token request is refused used to toast
 // the server's bare "Invalid session" / "Not authenticated" (#2427).
 
-async function startWithResult(t, startResult) {
+async function startWithResult(t, startResult, policyState) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
     delete globalThis.__signInToasts;
     delete globalThis.__signInRequests;
+    delete globalThis.__meetingStartCount;
   });
   const noop = () => () => {};
   installBrowserGlobals(t, {
@@ -27,7 +28,10 @@ async function startWithResult(t, startResult) {
           mode: "native",
           strategy: "native",
         }),
-        meetingTranscriptionStart: async () => startResult,
+        meetingTranscriptionStart: async () => {
+          globalThis.__meetingStartCount += 1;
+          return startResult;
+        },
         onMeetingSystemAudioInterrupted: noop,
         onMeetingSystemAudioResumed: noop,
         onMeetingAutoEndRequested: noop,
@@ -38,6 +42,7 @@ async function startWithResult(t, startResult) {
   const container = installHookDom(t);
   globalThis.__signInToasts = [];
   globalThis.__signInRequests = 0;
+  globalThis.__meetingStartCount = 0;
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-meeting-sign-in-toast-",
     mockModules: {
@@ -47,6 +52,10 @@ async function startWithResult(t, startResult) {
   });
   const { default: Mount } = await vite.ssrLoadModule("/components/MeetingRecordingMount.tsx");
   const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  if (policyState) {
+    const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+    usePolicyStore.setState(policyState);
+  }
   const { default: i18n } = await vite.ssrLoadModule("/i18n.ts");
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Mount)));
@@ -84,6 +93,29 @@ test("any other start failure keeps its message and offers no sign-in", async (t
 
   assert.equal(toast.description, "Token request failed: 500");
   assert.equal(toast.actions, undefined);
+});
+
+test("an unresolved managed-policy refusal explains the cause and Retry starts again", async (t) => {
+  const { toast, i18n } = await startWithResult(t, {
+    success: false,
+    code: "POLICY_UNRESOLVABLE",
+    error: "Managed policy could not be verified",
+  });
+
+  assert.equal(toast.description, i18n.t("common.policyUnresolved"));
+  assert.equal(toast.actions[0].label, i18n.t("common.retry"));
+  await React.act(async () => toast.actions[0].onClick());
+  assert.equal(globalThis.__meetingStartCount, 2);
+});
+
+test("an offline personal account reaches meeting recording without an organization refusal", async (t) => {
+  const { toast } = await startWithResult(
+    t,
+    { success: false, error: "Microphone unavailable" },
+    { status: "error", managed: false, policy: null, appVersion: "1.12.1" }
+  );
+  assert.equal(globalThis.__meetingStartCount, 1);
+  assert.equal(toast.description, "Microphone unavailable");
 });
 
 test("a session that expires mid-recording is explained without a Sign in action", async (t) => {

@@ -48,14 +48,20 @@ for (const meeting of [true, false])
     });
   }
 
-test("older policies and guests retain both features; unresolved managed policy fails closed", () => {
+test("older policies, guests, and unknown identities retain both features; known managed policy fails closed", () => {
   for (const purpose of ["meeting", "upload"]) {
     assert.equal(audioFeatureFailure({ success: true, managed: false }, purpose), null);
     assert.equal(
       audioFeatureFailure({ success: true, managed: true, policy: { features: {} } }, purpose),
       null
     );
-    for (const snapshot of [null, { success: false }, { success: true, managed: true }]) {
+    for (const snapshot of [null, { success: false }]) {
+      assert.equal(audioFeatureFailure(snapshot, purpose), null);
+    }
+    for (const snapshot of [
+      { success: false, managed: true },
+      { success: true, managed: true },
+    ]) {
       assert.equal(audioFeatureFailure(snapshot, purpose).code, "POLICY_UNRESOLVABLE");
     }
   }
@@ -153,10 +159,10 @@ test("a main-process start fetches a policy that has not loaded instead of refus
   assert.equal(await guard.resolve("meeting"), null);
   assert.equal(lookups, 1);
 
-  // Offline with nothing cached still fails closed, without reporting a block.
+  // A plain outage with nothing cached says nothing about management.
   next = { success: false };
   guard.invalidate();
-  assert.equal((await guard.resolve("meeting")).code, "POLICY_UNRESOLVABLE");
+  assert.equal(await guard.resolve("meeting"), null);
   assert.deepEqual(blocked, []);
 });
 
@@ -222,7 +228,7 @@ test("a held verdict answers at once while the lookup behind it is still pending
   assert.equal(guard.failure("upload").code, "POLICY_AUDIO_UPLOAD_DISABLED");
 });
 
-test("with no verdict held, a stalled lookup fails closed at the deadline", async () => {
+test("with no managed evidence, a stalled lookup does not block at the deadline", async () => {
   const lookup = deferred();
   let calls = 0;
   const guard = createAudioFeaturePolicy({
@@ -233,9 +239,9 @@ test("with no verdict held, a stalled lookup fails closed at the deadline", asyn
     calls++;
     return { success: true };
   });
-  assert.equal(result.code, "POLICY_UNRESOLVABLE");
-  assert.equal(calls, 0);
-  assert.equal((await guard.resolve("upload")).code, "POLICY_UNRESOLVABLE");
+  assert.deepEqual(result, { success: true });
+  assert.equal(calls, 1);
+  assert.equal(await guard.resolve("upload"), null);
 
   lookup.resolve(policy());
   await new Promise(setImmediate);
@@ -276,7 +282,7 @@ test("a credential change re-resolves, and live capture keeps its verdict meanwh
   changes.length = 0;
 
   guard.invalidate();
-  assert.equal(guard.failure("meeting").code, "POLICY_UNRESOLVABLE");
+  assert.equal(guard.failure("meeting"), null);
   assert.equal(guard.activeFailure("meeting"), null);
   assert.equal(lookups.length, 1);
 
@@ -299,7 +305,7 @@ test("a lookup made before a credential change never lands after it", async () =
   guard.invalidate();
   lookups[0].resolve(policy(true, true, 5));
   await before;
-  assert.equal(guard.failure("meeting").code, "POLICY_UNRESOLVABLE");
+  assert.equal(guard.failure("meeting"), null);
   lookups[1].resolve(policy(false, true, 6));
   await new Promise(setImmediate);
   assert.equal(guard.failure("meeting").code, "POLICY_MEETING_RECORDING_DISABLED");
@@ -343,8 +349,8 @@ test("a token rotation lets a running job finish, while an account change cancel
 
     guard.invalidate();
     if (accountChanged) guard.cancelJobs();
-    // New work waits for the new credential's policy while this job runs on.
-    assert.equal(guard.failure("upload").code, "POLICY_UNRESOLVABLE");
+    // New work asks for the new credential's policy while this job runs on.
+    assert.equal(guard.failure("upload"), null);
     finish.resolve();
     const result = await running;
     if (accountChanged) assert.equal(result.code, "AUDIO_OPERATION_CANCELLED");
@@ -362,7 +368,7 @@ test("an account change also drops the verdict running work started under", () =
   guard.invalidate();
   assert.equal(guard.activeFailure("meeting"), null);
   guard.cancelJobs();
-  assert.equal(guard.activeFailure("meeting").code, "POLICY_UNRESOLVABLE");
+  assert.equal(guard.activeFailure("meeting"), null);
 });
 
 test("listeners hear about a changed meeting verdict, not every refresh", async () => {
@@ -416,7 +422,7 @@ test("a lookup that throws is logged, not raised", async () => {
     },
     logger: { warn: (message, meta) => warnings.push([message, meta]) },
   });
-  assert.equal((await guard.resolve("meeting")).code, "POLICY_UNRESOLVABLE");
+  assert.equal(await guard.resolve("meeting"), null);
   assert.deepEqual(warnings, [["Audio policy lookup failed", { error: "offline" }]]);
 });
 
@@ -442,7 +448,7 @@ test("a credential change always reports the re-resolved meeting verdict", async
 
   guard.invalidate();
   sync();
-  assert.equal(detectorsOn, false);
+  assert.equal(detectorsOn, true);
 
   answer({ success: true, managed: false, authGeneration: 2 });
   await new Promise((resolve) => setImmediate(resolve));

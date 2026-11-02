@@ -6,6 +6,7 @@ import {
   getMicAnalyser,
   persistLiveTranscript,
   primeMeetingWorklet,
+  retryMeetingRecording,
   stopRecording,
   stopRecordingForPolicy,
   useMeetingRecordingStore,
@@ -99,13 +100,18 @@ export default function MeetingRecordingMount(): null {
     const [sentinel, argument] = error.split(":");
     const errorKey = sentinel === "managedConfig" ? argument : MEETING_ERROR_KEYS[sentinel];
     const needsSignIn = sentinel === "signInRequired";
+    const canRetryPolicy = sentinel === "POLICY_UNRESOLVABLE";
     toast({
       title: t("notes.meeting.title"),
       description: errorKey ? t(errorKey, { provider: argument }) : error,
       variant: "destructive",
       duration: needsSignIn || sentinel === "signInExpired" ? 8000 : undefined,
-      actions: needsSignIn ? [{ label: t("common.signIn"), onClick: requestSignIn }] : undefined,
-      actionsAlign: needsSignIn ? "end" : undefined,
+      actions: needsSignIn
+        ? [{ label: t("common.signIn"), onClick: requestSignIn }]
+        : canRetryPolicy
+          ? [{ label: t("common.retry"), onClick: () => void retryMeetingRecording() }]
+          : undefined,
+      actionsAlign: needsSignIn || canRetryPolicy ? "end" : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
   }, [error, errorNonce, toast, t]);

@@ -128,7 +128,6 @@ test("main policy refusals appear in Spanish upload errors", async (t) => {
       { success: true, managed: true, policy: { features: { audioUploadEnabled: false } } },
       esTranslation.notes.upload.disabledByOrg,
     ],
-    [null, esTranslation.common.policyUnresolved],
   ]) {
     const errors = [];
     const states = [];
@@ -177,7 +176,7 @@ test("an upload refused before it starts names the reason the policy gives", asy
       { status: "managed", policy: { features: { audioUploadEnabled: false } } },
       "notes.upload.disabledByOrg",
     ],
-    [{ status: "loading", policy: null }, "common.policyUnresolved"],
+    [{ status: "error", managed: true, policy: null }, "common.policyUnresolved"],
   ]) {
     const errors = [];
     const context = {

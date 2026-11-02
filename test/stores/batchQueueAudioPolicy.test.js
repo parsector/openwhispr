@@ -102,8 +102,7 @@ test("an upload restriction cancels an active batch and discards late results; m
 
 test("a batch stopped by policy shows the page banner's reason for that policy", async (t) => {
   for (const [policy, expected] of [
-    [{ status: "error", policy: null }, en.common.policyUnresolved],
-    [{ status: "loading", policy: null }, en.common.policyUnresolved],
+    [{ status: "error", managed: true, policy: null }, en.common.policyUnresolved],
     [
       {
         status: "managed",
@@ -118,6 +117,14 @@ test("a batch stopped by policy shows the page banner's reason for that policy",
     usePolicyStore.setState(policy);
     assert.equal(items()[0].error, expected, policy.status);
   }
+});
+
+test("an unavailable personal policy does not cancel an active upload batch", async (t) => {
+  const { store, usePolicyStore, run, items } = await setup(t);
+  await run();
+  usePolicyStore.setState({ status: "error", managed: false, policy: null });
+  assert.equal(store.useBatchQueueStore.getState().isProcessing, true);
+  assert.equal(items()[0].error, undefined);
 });
 
 test("a server's policy refusal ends the run and leaves the rest queued", async (t) => {

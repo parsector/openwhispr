@@ -158,7 +158,7 @@ test("CLI files remain uploads even when callers request dictation; policy refus
       },
       "POLICY_AUDIO_UPLOAD_DISABLED",
     ],
-    [{ success: false }, "POLICY_UNRESOLVABLE"],
+    [{ success: false, managed: true }, "POLICY_UNRESOLVABLE"],
   ]) {
     const { bridge, calls } = createBridge(MODELS, snapshot);
     let failure;

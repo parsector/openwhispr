@@ -149,6 +149,9 @@ function createWorkspacePolicyManager({
     const current = snapshots.get(identityKey(identity));
     return {
       success: false,
+      // Only an explicit server refusal (or its persisted marker) proves this
+      // identity is managed. A failed network request cannot establish that.
+      managed: requiresManagedPolicy(identity) || current?.data.managed === true,
       status: "error",
       revision: current?.revision ?? revision,
       accountId: identity.accountId,
