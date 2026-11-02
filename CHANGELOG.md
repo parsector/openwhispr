@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.3] - 2026-11-02
+
+The People screen reads as a list of people rather than a wall of fields, and update notes in Settings render as the formatting they were written in.
+
+### People
+
+- **Each person appears once.** A name stands on its own line with the email muted beside it, and only when it differs from the name. Meetings, notes, segments and last seen share one labelled line, voice state shows as a chip, and the detailed spans live in the row's details.
+- **Actions happen inside the row.** Rename edits in place, and Merge into…, Reset voice and Delete person sit in a keyboard-accessible overflow that keeps the merge preview and the delete confirmation anchored to that row. Escape, an outside click and cancellation restore the row and return focus to it.
+- **Voice enrolment stays reachable** after a person graduates from the candidate list.
+- The screen is translated in all 11 locales, and the People tests now cover the row states at both widths.
+
+### Updates
+
+- **Release notes in Settings → General → Updates render as Markdown,** through the same renderer the rest of the app uses, so headings, bullets and emphasis appear as formatting instead of literal characters.
+- Long notes scroll inside a bounded panel instead of stretching the page, and raw HTML stays inert.
+- The release-note extraction and feed-injection scripts keep the version heading and refuse raw HTML, with tests pinning both directions.
+
 ## [1.12.2] - 2026-11-02
 
 Recording no longer depends on an organization policy that cannot exist. If you use the app on a personal account — no workspace, no sign-in, or no connection — the organization check stays out of the way, and meeting recording, joining a meeting and audio upload work as they always did.
