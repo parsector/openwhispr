@@ -16,15 +16,15 @@ test('People and Review selects use the same shared control as microphone prefer
   assert.match(shared, /<ChevronDown className="[^"]*shrink-0/);
 });
 
-test('People headings use the Settings section header token at every level', () => {
+test('People headings keep Settings headers while row identities have primary weight', () => {
   const people = fs.readFileSync(process.env.PEOPLE_HEADER_SOURCE || path.join(__dirname, '../../src/components/settings/PeoplePage.tsx'), 'utf8');
   const shared = fs.readFileSync(path.join(__dirname, '../../src/components/ui/SettingsSection.tsx'), 'utf8');
   assert.match(shared, /function SectionHeader\([\s\S]*?text-xs font-semibold text-foreground tracking-tight/);
   assert.match(shared, /function SectionHeader\([\s\S]*?className="mb-3"/);
-  assert.match(people, /import \{ SectionHeader, SETTINGS_ROW_TITLE_CLASS \} from "\.\.\/ui\/SettingsSection"/);
+  assert.match(people, /import \{ SectionHeader \} from "\.\.\/ui\/SettingsSection"/);
   assert.match(shared, /SETTINGS_ROW_TITLE_CLASS = "text-xs font-medium text-foreground"/);
-  assert.match(people, /\$\{SETTINGS_ROW_TITLE_CLASS\}/);
+  assert.match(people, /className="min-w-0 truncate text-sm font-semibold text-foreground"/);
   assert.equal((people.match(/<SectionHeader\b/g) || []).length, 7);
   assert.doesNotMatch(people, /<h[1-6]\b/);
-  assert.doesNotMatch(people, /t\("people\.noVoice"\)/);
+  assert.match(people, /t\("people\.noVoice"\)/);
 });

@@ -2,7 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { SectionHeader, SETTINGS_ROW_TITLE_CLASS } from "../ui/SettingsSection";
+import { SectionHeader } from "../ui/SettingsSection";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
+import { MoreHorizontal, Pencil } from "../icons";
 import { matchesPerson } from "../../utils/personSearch";
 
 type Person = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listPeople>>>[number];
@@ -96,6 +103,12 @@ export default function PeoplePage({
   const [selected, setSelected] = useState<Person | null>(null);
   const [kind, setKind] = useState<Kind>("rename");
   const [name, setName] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [draftName, setDraftName] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [renameWorking, setRenameWorking] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const renameInput = useRef<HTMLInputElement>(null);
   const [survivorId, setSurvivorId] = useState(0);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -139,6 +152,9 @@ export default function PeoplePage({
   useEffect(() => {
     if (selected) previewRef.current?.focus();
   }, [selected, kind]);
+  useEffect(() => {
+    if (editingId !== null) renameInput.current?.focus();
+  }, [editingId]);
   useEffect(() => {
     if (enrollingId !== null) enrollmentPanelRef.current?.focus();
   }, [enrollingId]);
@@ -499,13 +515,62 @@ export default function PeoplePage({
       ? t("notes.speaker.historyQuarantined")
       : t(`people.errors.${value}`, { defaultValue: t("people.actionError") });
   const start = (person: Person, action: Kind) => {
-    previewTrigger.current = document.activeElement as HTMLElement;
+    previewTrigger.current = document.querySelector<HTMLElement>(
+      `[data-person-menu="${person.id}"]`
+    );
     setSelected(person);
     setKind(action);
     setName(person.displayName);
     setSurvivorId(0);
     setActionError("");
     setReport(null);
+  };
+  const closeRename = () => {
+    const id = editingId;
+    setEditingId(null);
+    setRenameError("");
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLButtonElement>(`[data-rename-trigger="${id}"]`)?.focus()
+    );
+  };
+  const saveRename = async (person: Person) => {
+    const nextName = draftName.trim();
+    if (!nextName || renameWorking) return;
+    if (nextName === person.displayName) {
+      closeRename();
+      return;
+    }
+    setRenameWorking(true);
+    setRenameError("");
+    try {
+      const request = { type: "rename" as const, profileId: person.id, name: nextName };
+      const checked = await window.electronAPI.previewPersonAction?.(request);
+      if (!checked?.success) throw Error(checked?.error || "persistence_failed");
+      const result = await window.electronAPI.applyPersonAction?.({
+        ...request,
+        expected: {
+          noteCount: checked.noteCount || 0,
+          segmentCount: checked.segmentCount || 0,
+          pinnedCount: checked.pinnedCount || 0,
+          historyCount: checked.historyCount || 0,
+          noteEmbeddingCount: checked.noteEmbeddingCount || 0,
+        },
+      });
+      if (!result?.success || !result.id) throw Error(result?.error || "persistence_failed");
+      setReport({
+        id: result.id,
+        name: person.displayName,
+        type: "rename",
+        count: result.noteCount || 0,
+        segments: result.segmentCount || 0,
+      });
+      setEditingId(null);
+      await refresh();
+    } catch (cause) {
+      setRenameError(String(cause instanceof Error ? cause.message : cause));
+    } finally {
+      setRenameWorking(false);
+    }
   };
   const closePreview = () => {
     setSelected(null);
@@ -661,6 +726,14 @@ export default function PeoplePage({
           { year: "numeric", month: "short", day: "numeric" }
         )
       : t("people.never");
+  const shortDate = (value: string) => {
+    const parsed = new Date(value.includes("T") ? value : `${value.replace(" ", "T")}Z`);
+    return parsed.toLocaleDateString(locale === "en" ? "en-GB" : locale, {
+      day: "numeric",
+      month: "short",
+      ...(parsed.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+    });
+  };
   return (
     <div className="space-y-5 pb-8 text-foreground">
       <SectionHeader title={t("people.title")} description={t("people.subtitle")} />
@@ -685,7 +758,10 @@ export default function PeoplePage({
       {loading && (
         <div role="status" className="space-y-2" aria-label={t("people.loading")}>
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-16 animate-pulse rounded-lg bg-surface-2" />
+            <div
+              key={i}
+              className="h-32 animate-pulse rounded-lg border border-border bg-surface-2/50"
+            />
           ))}
           <p className="text-sm text-muted-foreground">{t("people.loading")}</p>
         </div>
@@ -1123,33 +1199,130 @@ export default function PeoplePage({
               {t("people.noMatches")}
             </p>
           )}
-          <div className="divide-y divide-border rounded-xl border border-border">
+          <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
             {shown.map((p) => (
               <div
                 key={p.id}
-                className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                data-person-row={p.id}
+                className="grid min-h-60 content-center gap-x-5 gap-y-3 px-4 py-4 sm:min-h-44 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"
               >
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-baseline gap-x-2">
-                    <strong
-                      className={`min-w-0 break-words [overflow-wrap:anywhere] ${SETTINGS_ROW_TITLE_CLASS}`}
+                  {editingId === p.id ? (
+                    <form
+                      className="flex min-w-0 flex-wrap items-center gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveRename(p);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") {
+                          event.preventDefault();
+                          closeRename();
+                        }
+                      }}
                     >
-                      {p.displayName}
-                    </strong>
-                    {p.email && (
-                      <span className="min-w-0 break-all text-xs text-muted-foreground" dir="auto">
+                      <input
+                        ref={renameInput}
+                        dir="auto"
+                        aria-label={t("people.newName")}
+                        className={`${field} max-w-xs`}
+                        maxLength={120}
+                        value={draftName}
+                        onChange={(event) => setDraftName(event.target.value)}
+                      />
+                      <button
+                        type="submit"
+                        className={button}
+                        disabled={!draftName.trim() || renameWorking}
+                      >
+                        {renameWorking ? t("people.working") : t("people.saveName")}
+                      </button>
+                      <button type="button" className={button} onClick={closeRename}>
+                        {t("people.cancel")}
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="group/name flex min-w-0 items-center gap-1.5">
+                      <strong
+                        dir="auto"
+                        className="min-w-0 truncate text-sm font-semibold text-foreground"
+                        title={p.displayName || p.email || undefined}
+                      >
+                        {p.displayName || p.email || t("people.noName")}
+                      </strong>
+                      <button
+                        type="button"
+                        data-rename-trigger={p.id}
+                        className="shrink-0 rounded-md p-1 text-muted-foreground opacity-60 hover:bg-surface-2 hover:text-foreground group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`${t("people.actions.rename")} · ${p.displayName || p.email || t("people.noName")}`}
+                        onClick={() => {
+                          setDraftName(p.displayName === p.email ? "" : p.displayName);
+                          setRenameError("");
+                          setEditingId(p.id);
+                        }}
+                      >
+                        <Pencil className="size-3.5" aria-hidden="true" />
+                      </button>
+                    </div>
+                  )}
+                  {p.email &&
+                    p.displayName &&
+                    p.email.trim().toLocaleLowerCase() !==
+                      p.displayName.trim().toLocaleLowerCase() && (
+                      <p
+                        dir="auto"
+                        className="mt-0.5 truncate text-xs text-muted-foreground"
+                        title={p.email}
+                      >
                         {p.email}
-                      </span>
+                      </p>
                     )}
-                  </div>
-                  <p className="mt-1 text-xs tabular-nums text-muted-foreground">
-                    {t("people.meetingCount", { count: p.meetingCount })}
-                    {p.segmentCount > 0 && (
-                      <> · {t("people.usage", { notes: p.noteCount, segments: p.segmentCount })}</>
+                  {p.email &&
+                    (!p.displayName ||
+                      p.displayName.trim().toLocaleLowerCase() ===
+                        p.email.trim().toLocaleLowerCase()) && (
+                      <p className="mt-0.5 text-xs text-muted-foreground">{t("people.noName")}</p>
                     )}
-                    {p.lastSeen && <> · {t("people.lastSeen", { date: date(p.lastSeen) })}</>}
+                  {renameError && editingId === p.id && (
+                    <p role="alert" className="mt-1 text-xs text-destructive">
+                      {actionErrorText(renameError)}
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs tabular-nums text-muted-foreground">
+                    {p.meetingCount
+                      ? t(
+                          p.meetingCount === 1
+                            ? "people.meetingSingular"
+                            : "people.meetingCountCompact",
+                          { count: p.meetingCount }
+                        )
+                      : t("people.noMeetingsYet")}
+                    {" · "}
+                    {t(p.noteCount === 1 ? "people.noteSingular" : "people.noteCountCompact", {
+                      count: p.noteCount,
+                    })}
+                    {" · "}
+                    {t(
+                      p.segmentCount === 1
+                        ? "people.segmentSingular"
+                        : "people.segmentCountCompact",
+                      { count: p.segmentCount }
+                    )}
+                    {p.lastSeen && <> · {t("people.lastSeen", { date: shortDate(p.lastSeen) })}</>}
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
+                  <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${p.voiceProgress.usable ? "bg-success/10 text-foreground" : p.hasVoice || p.voiceProgress.cleanSpans > 0 ? "bg-warning/10 text-foreground" : "bg-surface-2 text-muted-foreground"}`}
+                    >
+                      {p.voiceProgress.usable
+                        ? t("people.voiceGraduated", {
+                            spans: p.voiceProgress.cleanSpans,
+                            meetings: p.voiceProgress.meetings,
+                          })
+                        : p.hasVoice || p.voiceProgress.cleanSpans > 0
+                          ? t("people.voiceProvisional")
+                          : t("people.noVoice")}
+                    </span>
                     {p.duplicates.map((d) => (
                       <span
                         key={d.id}
@@ -1168,52 +1341,92 @@ export default function PeoplePage({
                         {t("people.usedOnce")}
                       </span>
                     )}
-                    {p.legacyVoice && (
-                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">
-                        {t("people.legacyVoice")}
-                      </span>
-                    )}
                   </div>
-                  {(p.hasVoice || p.voiceProgress.cleanSpans > 0) && (
-                    <p className="mt-2 text-xs tabular-nums text-muted-foreground">
-                      {t("people.enrollmentProgress", {
-                        spans: p.voiceProgress.cleanSpans,
-                        meetings: p.voiceProgress.meetings,
-                      })}{" "}
-                      ·{" "}
-                      {t(p.voiceProgress.usable ? "people.voiceUsable" : "people.voiceProvisional")}
-                    </p>
-                  )}
-                  {p.voiceProgress.conflict && (
-                    <p role="alert" className="mt-2 text-xs text-foreground">
-                      {t("people.voiceConflict")}
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {(["rename", "merge", "delete"] as Kind[]).map((action) => (
-                    <button
-                      key={action}
-                      type="button"
-                      className={button}
-                      onClick={() => start(p, action)}
-                    >
-                      {t(`people.actions.${action}`)}
-                    </button>
-                  ))}
                   <button
                     type="button"
-                    className={button}
-                    onClick={() => void openEnrollment(p.id)}
+                    className="mt-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-expanded={expandedId === p.id}
+                    aria-controls={`person-detail-${p.id}`}
+                    onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
                   >
-                    {t("people.enrollVoice")}
+                    {t(expandedId === p.id ? "people.hideDetails" : "people.showDetails")}
                   </button>
-                  {p.hasVoice && (
-                    <button type="button" className={button} onClick={() => start(p, "reset")}>
-                      {t("people.actions.reset")}
+                </div>
+                <div className="flex items-center justify-end gap-2 sm:self-center">
+                  {!p.voiceProgress.usable && (
+                    <button
+                      type="button"
+                      className={button}
+                      onClick={() => void openEnrollment(p.id)}
+                    >
+                      {p.hasVoice || p.voiceProgress.cleanSpans > 0
+                        ? t("people.reviewSpans")
+                        : t("people.enrollVoice")}
                     </button>
                   )}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        data-person-menu={p.id}
+                        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`${t("people.moreActions")} · ${p.displayName || p.email || t("people.noName")}`}
+                      >
+                        <MoreHorizontal className="size-5" aria-hidden="true" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => start(p, "merge")}>
+                        {t("people.actions.merge")}
+                      </DropdownMenuItem>
+                      {p.hasVoice && (
+                        <DropdownMenuItem onSelect={() => start(p, "reset")}>
+                          {t("people.actions.reset")}
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        className="mt-1 border-t border-border pt-2 text-destructive focus:text-destructive"
+                        onSelect={() => start(p, "delete")}
+                      >
+                        {t("people.actions.delete")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
+                {expandedId === p.id && (
+                  <div
+                    id={`person-detail-${p.id}`}
+                    className="col-span-full rounded-lg bg-surface-2/50 p-3 text-xs text-muted-foreground"
+                  >
+                    <p>
+                      {p.hasVoice || p.voiceProgress.cleanSpans > 0 ? (
+                        <>
+                          {t("people.enrollmentProgress", {
+                            spans: p.voiceProgress.cleanSpans,
+                            meetings: p.voiceProgress.meetings,
+                          })}{" "}
+                          ·{" "}
+                          {t(
+                            p.voiceProgress.usable
+                              ? "people.voiceUsable"
+                              : "people.voiceProvisional"
+                          )}
+                        </>
+                      ) : (
+                        t("people.noVoice")
+                      )}
+                    </p>
+                    {p.legacyVoice && <p className="mt-1">{t("people.legacyVoice")}</p>}
+                    {p.voiceProgress.conflict && (
+                      <p role="alert" className="mt-1 text-foreground">
+                        {t("people.voiceConflict")}
+                      </p>
+                    )}
+                    {p.lastHeard && (
+                      <p className="mt-1">{t("people.lastHeard", { date: date(p.lastHeard) })}</p>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
