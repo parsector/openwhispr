@@ -373,9 +373,13 @@ async function runJob(
   job.progress.elapsedMs = Date.now() - started;
   job.state = "complete";
 }
-async function reportStillCurrent(report, database, audioStore) {
+async function reportStillCurrent(
+  report,
+  database,
+  audioStore,
+  model = require("./speakerEmbeddings")
+) {
   if (!report?.evidence?.revisions || !report?.fingerprints) return false;
-  const model = require("./speakerEmbeddings");
   if (!model.isAvailable()) return false;
   const modelHash = createHash("sha256");
   for await (const chunk of require("node:fs").createReadStream(model.getModelPath()))

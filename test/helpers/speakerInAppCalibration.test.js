@@ -90,6 +90,16 @@ test("applying a supported report records an ordered action and undo restores st
       db.prepare("SELECT kind FROM speaker_global_actions WHERE id = ?").get(applied.id).kind,
       "calibration"
     );
+    const snapshot = JSON.parse(
+      db.prepare("SELECT snapshot FROM speaker_calibration_actions WHERE id = ?").get(applied.id)
+        .snapshot
+    );
+    assert.deepEqual(snapshot.previous.values, before.values);
+    assert.deepEqual(snapshot.next.statuses, applied.statuses);
+    assert.equal(snapshot.reportId, report.id);
+    assert.deepEqual(snapshot.revisions, report.evidence.revisions);
+    assert.deepEqual(snapshot.fingerprints, report.fingerprints);
+    assert.deepEqual(snapshot.exclusions, report.evidence.exclusions);
     const history = require("../../src/helpers/speakerGlobalHistory");
     history.add(db, { id: "later-owner-correction", kind: "correction", noteId: 1 });
     assert.equal(action.undo({ db }, applied.id).error, "later_change");
@@ -123,7 +133,7 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
   const fs = require("node:fs");
   const os = require("node:os");
   const path = require("node:path");
-  const { runJob } = require("../../src/helpers/speakerInAppCalibration");
+  const { runJob, reportStillCurrent } = require("../../src/helpers/speakerInAppCalibration");
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-calibration-job-"));
   const modelPath = path.join(dir, "model.onnx");
   fs.writeFileSync(modelPath, "fixture model");
@@ -148,6 +158,7 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
   wav.writeUInt32LE(24000, 24);
   const database = {
     db: { prepare: () => ({ all: () => [note] }) },
+    getNote: () => note,
     getNoteSpeakerEmbeddings: () => [
       { speaker_id: 1, embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
     ],
@@ -182,6 +193,10 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
     assert.equal(job.progress.reembeddedRows, 1);
     assert.equal(job.progress.bytesRead, 1234);
     assert.equal(job.report.analyses.estimated.rows, 1);
+    assert.equal(await reportStillCurrent(job.report, database, audioStore, model), true);
+    note.transcript = JSON.stringify([{ ...row, text: "edited after calibration" }]);
+    assert.equal(await reportStillCurrent(job.report, database, audioStore, model), false);
+    note.transcript = JSON.stringify([row]);
     const cancelled = {
       cancelled: false,
       state: "running",
