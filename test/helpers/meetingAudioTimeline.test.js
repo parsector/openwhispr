@@ -71,8 +71,10 @@ function harness({ native = true, local = false } = {}) {
     meetingAecEnabled: true,
     flushPendingMeetingMicChunks() {},
     meetingLiveSpeakerActive: true,
-    meetingLiveSpeakerStartedAt: null,
-    liveSpeakerIdentifier: { feedAudio: (buffer) => live.push(buffer) },
+    meetingLiveSpeakerStartedAt: { mic: null, system: null },
+    liveSpeakerIdentifier: { feedAudio: (buffer, cohort) => {
+      if (cohort === 'system') live.push(buffer);
+    } },
     meetingNoteId: null,
     meetingDiarizationBuffers: pcm,
     meetingMicDiarizationBuffers: [],
@@ -267,7 +269,7 @@ for (const provider of ["deepgram", "corti"]) {
     assert.deepEqual(mic.timestamps, [6000]);
     assert.deepEqual(system.timestamps, [6000]);
     assert.equal(run.context.meetingDiarizationStartedAt, 6000);
-    assert.equal(run.context.meetingLiveSpeakerStartedAt, 6000);
+    assert.equal(run.context.meetingLiveSpeakerStartedAt.system, 6000);
   });
 }
 

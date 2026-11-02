@@ -41,6 +41,9 @@ function harness() {
     meetingPendingMicChunks: [],
     meetingAecEnabled: false,
     meetingLocalMode: false,
+    meetingLiveSpeakerActive: true,
+    meetingLiveSpeakerStartedAt: { mic: null, system: null },
+    liveSpeakerIdentifier: { feedAudio: (_buffer, cohort) => events.push(["live", cohort]) },
     meetingNoteId: null,
     meetingSystemAudioHandover: { acceptRendererChunk: () => "send" },
     _audioFeaturePolicy: { activeFailure: () => null },
@@ -76,16 +79,18 @@ test("buffered startup mic audio anchors the in-person timeline at its capture t
   const capturedAt = Date.now() - 5000;
   send(capturedAt);
   assert.equal(context.meetingMicDiarizationStartedAt, capturedAt);
+  assert.equal(context.meetingLiveSpeakerStartedAt.mic, capturedAt);
   // Analysed under its capture time and released at once: its reference would
   // have arrived long ago.
   assert.deepEqual(events, [
+    ["live", "mic"],
     ["analyze", capturedAt],
     ["dispatch", "mic", capturedAt],
   ]);
 
   events.length = 0;
   send(undefined);
-  assert.deepEqual(events, [], "live audio still waits for its system reference");
+  assert.deepEqual(events, [["live", "mic"]], "transcription still waits for its system reference");
 });
 
 test("a renderer's capture time is clamped to the connect window", () => {

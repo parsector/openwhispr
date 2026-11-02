@@ -113,6 +113,27 @@ function emitSystemFinal(state, text) {
 const segmentsOf = (store) => store.useMeetingRecordingStore.getState().segments;
 const segmentWithText = (store, text) => segmentsOf(store).find((s) => s.text === text);
 
+test("a mic-only live event names mic rows provisionally and leaves system rows alone", async (t) => {
+  const { api, state } = createElectronAPI();
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const now = Date.now();
+  state.segmentCallback({ text: "room voice", source: "mic", type: "final", timestamp: now });
+  state.segmentCallback({ text: "system voice", source: "system", type: "final", timestamp: now });
+  assert.equal(segmentWithText(store, "room voice").speakerName, undefined);
+  state.identifiedCallback({ cohort: "mic", speakerId: "speaker_2", displayName: "Alex",
+    startTime: now - 100, endTime: now + 100 });
+  assert.equal(segmentWithText(store, "room voice").speakerName, "Alex");
+  assert.equal(segmentWithText(store, "room voice").speakerStatus, "provisional");
+  assert.equal(segmentWithText(store, "system voice").speakerName, undefined);
+  store.mergeCommittedSpeakerRows([{ ...segmentWithText(store, "room voice"),
+    speakerName: undefined, speakerLocked: true, speakerLockSource: "user" }]);
+  state.identifiedCallback({ cohort: "mic", speakerId: "speaker_2", displayName: "Alex",
+    startTime: now - 100, endTime: now + 200 });
+  assert.equal(segmentWithText(store, "room voice").speakerName, undefined);
+  await store.stopRecording();
+});
+
 test("newer abstention withdraws an automatic name on a delayed final while an owner lock survives", async (t) => {
   const { api, state } = createElectronAPI();
   const store = await loadStore(t, api);

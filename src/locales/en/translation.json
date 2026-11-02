@@ -3975,6 +3975,7 @@
       "label": "Speaker {{n}}",
       "identifyingSpeakers": "Identifying speakers...",
       "liveAccuracyHint": "Still identifying speakers. Labeling accuracy will improve once the call ends.",
+      "noApprovedVoices": "Voices stay unnamed until one is enrolled and approved.",
       "speakersIdentified": "Speakers identified",
       "typeNamePlaceholder": "Type a name",
       "nameOrEmailPlaceholder": "Type a name or email",

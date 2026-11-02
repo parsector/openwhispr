@@ -7593,7 +7593,7 @@ class DatabaseManager {
         ? `SELECT * FROM speaker_profiles WHERE ${includeProvisional ? "" : "voice_usable = 1 AND"}
           sample_count > 0 AND length(embedding) = 2048 AND
           EXISTS (SELECT 1 FROM voice_exemplars WHERE profile_id = speaker_profiles.id)`
-        : `SELECT id, display_name, email, sample_count, created_at, updated_at
+        : `SELECT id, display_name, email, sample_count, voice_usable, created_at, updated_at
            FROM speaker_profiles`;
       return this.db.prepare(query).all();
     } catch (error) {

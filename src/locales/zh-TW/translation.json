@@ -3470,6 +3470,7 @@
       "label": "發言者 {{n}}",
       "identifyingSpeakers": "正在辨識發言者...",
       "liveAccuracyHint": "仍在辨識發言者。通話結束後，標籤準確度會提升。",
+      "noApprovedVoices": "在登錄並核准至少一個聲音之前，語音不會顯示姓名。",
       "speakersIdentified": "已辨識發言者",
       "typeNamePlaceholder": "輸入姓名",
       "knownSpeakers": "已知發言者",

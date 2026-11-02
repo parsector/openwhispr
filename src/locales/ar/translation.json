@@ -2853,6 +2853,7 @@
       "label": "المتحدث {{n}}",
       "identifyingSpeakers": "جاري التعرف على المتحدثين...",
       "liveAccuracyHint": "لا يزال التعرف على المتحدثين جاريًا. ستتحسن دقة التسمية بمجرد انتهاء المكالمة.",
+      "noApprovedVoices": "ستبقى الأصوات بلا أسماء حتى تُسجَّل إحداها وتُعتمد.",
       "speakersIdentified": "تم التعرف على المتحدثين",
       "typeNamePlaceholder": "اكتب اسمًا",
       "nameOrEmailPlaceholder": "اكتب اسمًا أو بريدًا إلكترونيًا",

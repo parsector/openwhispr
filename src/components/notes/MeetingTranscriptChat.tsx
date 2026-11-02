@@ -151,6 +151,7 @@ interface SpeakerProfileLite {
   id?: number;
   display_name: string;
   email: string | null;
+  voice_usable?: number;
 }
 
 interface SpeakerPickerProps {
@@ -1839,6 +1840,13 @@ export function MeetingTranscriptChat({
           </div>
         </div>
       )}
+      {isRecording &&
+        sessionDiarizationEnabled &&
+        speakerProfiles?.every((profile) => !profile.voice_usable) && (
+          <p className={cn("px-7 pb-2 text-xs text-muted-foreground", contentClassName)}>
+            {t("notes.speaker.noApprovedVoices")}
+          </p>
+        )}
       <div
         ref={scrollRef}
         onScroll={handleScroll}

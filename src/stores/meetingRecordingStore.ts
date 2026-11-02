@@ -118,6 +118,7 @@ export interface TranscriptSegment {
 export const SIDE_PANEL_BREAKPOINT_PX = 1024;
 
 interface SpeakerIdentification {
+  cohort: "mic" | "system";
   speakerId: string;
   displayName?: string | null;
   suggestedName?: string | null;
@@ -199,7 +200,8 @@ const isSegmentWithinIdentificationWindow = (
   segment: TranscriptSegment,
   identification: SpeakerIdentification
 ) => {
-  if (segment.source !== "system" || segment.timestamp == null) return false;
+  if (segment.source !== (identification.cohort || "system") || segment.timestamp == null)
+    return false;
   return (
     segment.timestamp >= identification.startTime && segment.timestamp <= identification.endTime
   );
@@ -696,9 +698,10 @@ function applySpeakerIdentification(
   identification: SpeakerIdentification
 ): TranscriptSegment {
   if (
-    segment.source !== "system" ||
+    segment.source !== (identification.cohort || "system") ||
     !isSegmentWithinIdentificationWindow(segment, identification) ||
     segment.speakerLocked ||
+    segment.speakerLockSource === "user" ||
     ["too_short", "overlapping_speech"].includes(segment.uncertainty?.reason || "")
   ) {
     return segment;
@@ -712,11 +715,12 @@ function applySpeakerIdentification(
       ? undefined
       : identification.suggestedName || undefined,
     speakerIsPlaceholder: !!identification.uncertainty || !identification.displayName,
-    speakerStatus: identification.uncertainty
-      ? "provisional"
-      : identification.displayName
-        ? "confirmed"
-        : "suggested",
+    speakerStatus:
+      segment.source === "mic" || identification.uncertainty
+        ? "provisional"
+        : identification.displayName
+          ? "confirmed"
+          : "suggested",
     uncertainty: identification.uncertainty,
     speakerAssessmentAvailable: true,
   });
@@ -1471,17 +1475,20 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         reserveSpeakerIndex(data.speakerId);
         const superseded = speakerIdentifications.some(
           (item) =>
-            item.endTime > data.endTime ||
-            (item.endTime === data.endTime && !!item.uncertainty && !data.uncertainty)
+            (item.cohort || "system") === (data.cohort || "system") &&
+            (item.endTime > data.endTime ||
+              (item.endTime === data.endTime && !!item.uncertainty && !data.uncertainty))
         );
         if (!superseded) {
-          setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
-          rememberSystemSpeaker(
-            data.speakerId,
-            data.displayName ?? null,
-            !data.displayName,
-            data.endTime
-          );
+          if (data.cohort !== "mic") {
+            setSystemPartialSpeakerIdentity(data.speakerId, data.displayName ?? null);
+            rememberSystemSpeaker(
+              data.speakerId,
+              data.displayName ?? null,
+              !data.displayName,
+              data.endTime
+            );
+          }
         }
         speakerIdentifications = [
           ...speakerIdentifications.filter(
@@ -1609,6 +1616,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       let micPipelinePromise: Promise<void> | null = null;
       if (startResult.oneOnOneAttendee && seed.length === 0) {
         const synthetic: SpeakerIdentification = {
+          cohort: "system",
           // Main's live identifier mints the session's first cluster at the base too.
           speakerId: `speaker_${sessionSpeakerIndexBase}`,
           displayName: startResult.oneOnOneAttendee.displayName,

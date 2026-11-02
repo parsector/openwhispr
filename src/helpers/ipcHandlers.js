@@ -174,6 +174,7 @@ const {
   buildMergedCandidates,
 } = require("./transcriptText");
 const {
+  applyProvisionalSpeaker,
   applyConfirmedSpeaker,
   applySuggestedSpeaker,
   canAutoRelabelSpeaker,
@@ -9608,7 +9609,7 @@ class IPCHandlers {
     let meetingRetractedMicSegments = [];
     let meetingLiveSpeakerActive = false;
     let meetingLiveSpeakerState = null;
-    let meetingLiveSpeakerStartedAt = null;
+    let meetingLiveSpeakerStartedAt = { mic: null, system: null };
     let meetingReclusterTimer = null;
 
     let meetingLocalMode = false;
@@ -9890,25 +9891,21 @@ class IPCHandlers {
       }
 
       meetingLiveSpeakerState = null;
-      // Anchored on the first system chunk instead, in sendMeetingAudio.
-      meetingLiveSpeakerStartedAt = null;
+      // Each track has its own sample clock, anchored on its first captured chunk.
+      meetingLiveSpeakerStartedAt = { mic: null, system: null };
       const started = await liveSpeakerIdentifier
         .start(
           (identification) => {
-            if (!win || win.isDestroyed() || meetingLiveSpeakerStartedAt == null) {
+            const cohort = identification.cohort;
+            const capturedAt = meetingLiveSpeakerStartedAt[cohort];
+            if (!win || win.isDestroyed() || capturedAt == null) {
               return;
             }
 
             const displayName = identification.displayName;
 
-            const startTime = Math.max(
-              meetingLiveSpeakerStartedAt,
-              meetingLiveSpeakerStartedAt + identification.startTime * 1000
-            );
-            const endTime = Math.max(
-              startTime,
-              meetingLiveSpeakerStartedAt + identification.endTime * 1000
-            );
+            const startTime = Math.max(capturedAt, capturedAt + identification.startTime * 1000);
+            const endTime = Math.max(startTime, capturedAt + identification.endTime * 1000);
             const enrichedIdentification = {
               ...identification,
               displayName,
@@ -9921,7 +9918,7 @@ class IPCHandlers {
 
             for (const seg of meetingDiarizationSegments) {
               if (
-                seg.source === "system" &&
+                seg.source === cohort &&
                 seg.timestamp != null &&
                 seg.timestamp >= startTime &&
                 seg.timestamp <= endTime &&
@@ -9936,7 +9933,8 @@ class IPCHandlers {
                   suggestedName: meetingOneOnOneAttendee?.displayName,
                   uncertainty: identification.uncertainty,
                 };
-                if (displayName) applyConfirmedSpeaker(seg, patch);
+                if (cohort === "mic") applyProvisionalSpeaker(seg, patch);
+                else if (displayName) applyConfirmedSpeaker(seg, patch);
                 else applySuggestedSpeaker(seg, patch);
               }
             }
@@ -9994,7 +9992,7 @@ class IPCHandlers {
           win.webContents.send("meeting-speakers-merged", merges);
         }, 30_000);
       } else {
-        meetingLiveSpeakerStartedAt = null;
+        meetingLiveSpeakerStartedAt = { mic: null, system: null };
       }
 
       return started;
@@ -10236,7 +10234,7 @@ class IPCHandlers {
       }
       void stopLiveSpeakerIdentification();
       meetingLiveSpeakerState = null;
-      meetingLiveSpeakerStartedAt = null;
+      meetingLiveSpeakerStartedAt = { mic: null, system: null };
       meetingOneOnOneAttendee = null;
       meetingNoteId = null;
       meetingSpeakerIndexBase = 0;
@@ -10392,7 +10390,7 @@ class IPCHandlers {
       this._meetingSystemStreaming = null;
       meetingSendCounts = { mic: 0, system: 0 };
       meetingMicStatsLogCount = 0;
-      meetingLiveSpeakerStartedAt = null;
+      meetingLiveSpeakerStartedAt = { mic: null, system: null };
       meetingPendingMicChunks = [];
       meetingSystemChunkReceivedAt = null;
       resetPendingMicFinals();
@@ -11002,8 +11000,8 @@ class IPCHandlers {
           // when capture is already running (the macOS tap); the Windows
           // loopback helper can take seconds to hand over its first buffer, and
           // a stale anchor shifts every label earlier by that gap.
-          meetingLiveSpeakerStartedAt ??= chunkCapturedAt;
-          void liveSpeakerIdentifier.feedAudio(outboundBuffer);
+          meetingLiveSpeakerStartedAt.system ??= chunkCapturedAt;
+          void liveSpeakerIdentifier.feedAudio(outboundBuffer, "system");
         }
 
         if (!meetingDiarizationBuffers.length) {
@@ -11030,6 +11028,10 @@ class IPCHandlers {
       }
 
       if (source === "mic") {
+        if (meetingLiveSpeakerActive) {
+          meetingLiveSpeakerStartedAt.mic ??= capturedAt ?? Date.now();
+          void liveSpeakerIdentifier.feedAudio(outboundBuffer, "mic");
+        }
         // Until the session proves to be a call (audible system audio), keep a
         // raw mic capture so an in-person recording can be diarized. Written
         // pre-AEC/pre-gate so the timeline stays continuous, like the system
@@ -14808,6 +14810,7 @@ class IPCHandlers {
     const noteMappings = new Map();
 
     const liveEntries = Object.entries(liveSpeakerState)
+      .filter(([, data]) => !data?.cohort || data.cohort === "system")
       .map(([speakerId, data]) => ({
         speakerId,
         displayName: data?.displayName || null,

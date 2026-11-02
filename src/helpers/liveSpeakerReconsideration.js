@@ -23,6 +23,7 @@ const snapshot = (row) =>
   Object.fromEntries(FIELDS.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
 
 function eligibilityState(identifier, speakerId, rows) {
+  const cohort = identifier.transientCohorts.get(speakerId) || "system";
   if (!rows.length) return "insufficient-evidence";
   if (identifier.dismissedReconsiderations?.has(speakerId)) return "owner-rejected";
   if (rows.some((row) => row.speakerLockSource === "user" && !row.speakerName))
@@ -35,7 +36,7 @@ function eligibilityState(identifier, speakerId, rows) {
     return "uncertain-overlap";
   if (
     rows.some(
-      (row) => row.source !== "system" || row.uncertainty?.reason === "possible_mixed_speakers"
+      (row) => row.source !== cohort || row.uncertainty?.reason === "possible_mixed_speakers"
     )
   )
     return "mixed-audio";
@@ -72,9 +73,13 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
       skipped = [];
     let changed = false;
     for (const [speakerId] of identifier.transientEmbeddings) {
-      if ((identifier.transientCohorts.get(speakerId) || "system") !== "system") continue;
+      const cohort = identifier.transientCohorts.get(speakerId) || "system";
       const cluster = rows.filter(
-        (row) => !row.deleted && row.diarizationRunId === runId && row.speaker === speakerId
+        (row) =>
+          !row.deleted &&
+          row.diarizationRunId === runId &&
+          row.speaker === speakerId &&
+          row.source === cohort
       );
       const state = eligibilityState(identifier, speakerId, cluster);
       identifier.setEligibilityState(speakerId, state);
@@ -104,7 +109,7 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
         const previous = snapshot(row);
         row.speakerName = profile.display_name;
         row.speakerIsPlaceholder = false;
-        row.speakerStatus = "confirmed";
+        row.speakerStatus = cohort === "mic" ? "provisional" : "confirmed";
         row.suggestedName = undefined;
         row.suggestedProfileId = profile.id;
         row.uncertainty = undefined;
