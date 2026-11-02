@@ -24,7 +24,9 @@ test('People headings keep Settings headers while row identities have primary we
   assert.match(people, /import \{ SectionHeader \} from "\.\.\/ui\/SettingsSection"/);
   assert.match(shared, /SETTINGS_ROW_TITLE_CLASS = "text-xs font-medium text-foreground"/);
   assert.match(people, /className="min-w-0 truncate text-sm font-semibold text-foreground"/);
-  assert.equal((people.match(/<SectionHeader\b/g) || []).length, 7);
+  assert.equal((people.match(/<SectionHeader\b/g) || []).length, 5);
+  assert.match(people, /<EmptyStateCard[\s\S]*?title=\{t\("people\.emptyTitle"\)\}/);
+  assert.match(people, /<AlertTitle id=\{`person-action-title-\$\{p\.id\}`\}/);
   assert.doesNotMatch(people, /<h[1-6]\b/);
   assert.match(people, /t\("people\.noVoice"\)/);
 });

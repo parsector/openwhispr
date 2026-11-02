@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FocusScope } from "@radix-ui/react-focus-scope";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
@@ -9,7 +10,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { MoreHorizontal, Pencil } from "../icons";
+import { MoreHorizontal, Pencil, Users } from "../icons";
+import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
+import { Badge } from "../ui/badge";
+import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import EmptyStateCard from "../ui/EmptyStateCard";
+import { Skeleton } from "../ui/skeleton";
+import { useToast } from "../ui/useToast";
 import { matchesPerson } from "../../utils/personSearch";
 
 type Person = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listPeople>>>[number];
@@ -62,6 +71,7 @@ export default function PeoplePage({
   onOpenNote?: (noteId: number, rowId: string) => void;
 }) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const locale = useUiLocale();
   const [tab, setTab] = useState<"people" | "review">("people");
   const [people, setPeople] = useState<Person[]>([]);
@@ -109,18 +119,13 @@ export default function PeoplePage({
   const [renameWorking, setRenameWorking] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const renameInput = useRef<HTMLInputElement>(null);
+  const actionCancel = useRef<HTMLButtonElement>(null);
+  const survivorTrigger = useRef<HTMLButtonElement>(null);
   const [survivorId, setSurvivorId] = useState(0);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [working, setWorking] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [report, setReport] = useState<{
-    id: string;
-    name: string;
-    type: Kind;
-    count: number;
-    segments: number;
-  } | null>(null);
   const [clearPreview, setClearPreview] = useState<{
     success: boolean;
     personCount: number;
@@ -144,23 +149,22 @@ export default function PeoplePage({
   const enrollmentPlayer = useRef<HTMLAudioElement | null>(null);
   const enrollmentUrl = useRef<string | null>(null);
   const enrollmentRequest = useRef(0);
-  const previewRef = useRef<HTMLDivElement>(null);
   const enrollmentPanelRef = useRef<HTMLElement>(null);
-  const reportRef = useRef<HTMLDivElement>(null);
-  const previewTrigger = useRef<HTMLElement | null>(null);
   const enrollmentTrigger = useRef<HTMLElement | null>(null);
   useEffect(() => {
-    if (selected) previewRef.current?.focus();
+    if (!selected) return;
+    const target = kind === "merge" ? survivorTrigger.current : actionCancel.current;
+    target?.focus({ preventScroll: true });
   }, [selected, kind]);
   useEffect(() => {
-    if (editingId !== null) renameInput.current?.focus();
+    if (editingId !== null) {
+      renameInput.current?.focus({ preventScroll: true });
+      renameInput.current?.select();
+    }
   }, [editingId]);
   useEffect(() => {
     if (enrollingId !== null) enrollmentPanelRef.current?.focus();
   }, [enrollingId]);
-  useEffect(() => {
-    if (report) reportRef.current?.focus();
-  }, [report]);
   useEffect(
     () => () => {
       enrollmentPlayer.current?.pause();
@@ -250,6 +254,8 @@ export default function PeoplePage({
     await refresh();
   };
   const openEnrollment = async (profileId: number, fromMenu = false) => {
+    setSelected(null);
+    setEditingId(null);
     enrollmentTrigger.current = fromMenu
       ? document.querySelector<HTMLElement>(`[data-person-menu="${profileId}"]`)
       : (document.activeElement as HTMLElement);
@@ -517,23 +523,24 @@ export default function PeoplePage({
       ? t("notes.speaker.historyQuarantined")
       : t(`people.errors.${value}`, { defaultValue: t("people.actionError") });
   const start = (person: Person, action: Kind) => {
-    previewTrigger.current = document.querySelector<HTMLElement>(
-      `[data-person-menu="${person.id}"]`
-    );
+    setEditingId(null);
+    if (enrollingId !== null) closeEnrollment(false);
     setSelected(person);
     setKind(action);
     setName(person.displayName);
     setSurvivorId(0);
     setActionError("");
-    setReport(null);
   };
-  const closeRename = () => {
+  const closeRename = (returnFocus = true) => {
     const id = editingId;
     setEditingId(null);
     setRenameError("");
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLButtonElement>(`[data-rename-trigger="${id}"]`)?.focus()
-    );
+    if (returnFocus)
+      requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLButtonElement>(`[data-rename-trigger="${id}"]`)
+          ?.focus({ preventScroll: true })
+      );
   };
   const saveRename = async (person: Person) => {
     const nextName = draftName.trim();
@@ -559,33 +566,47 @@ export default function PeoplePage({
         },
       });
       if (!result?.success || !result.id) throw Error(result?.error || "persistence_failed");
-      setReport({
-        id: result.id,
-        name: person.displayName,
-        type: "rename",
-        count: result.noteCount || 0,
-        segments: result.segmentCount || 0,
+      toast({
+        title: t("people.done", {
+          action: t("people.actions.rename"),
+          name: person.displayName,
+          notes: result.noteCount || 0,
+          segments: result.segmentCount || 0,
+        }),
+        actions: [{ label: t("people.undo"), onClick: () => undo(result.id!) }],
       });
       setEditingId(null);
       await refresh();
+      requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLButtonElement>(`[data-rename-trigger="${person.id}"]`)
+          ?.focus({ preventScroll: true })
+      );
     } catch (cause) {
       setRenameError(String(cause instanceof Error ? cause.message : cause));
     } finally {
       setRenameWorking(false);
     }
   };
-  const closePreview = () => {
+  const closePreview = (returnFocus = true) => {
+    const id = selected?.id;
     setSelected(null);
-    requestAnimationFrame(() => previewTrigger.current?.focus());
+    if (returnFocus)
+      requestAnimationFrame(() =>
+        document
+          .querySelector<HTMLElement>(`[data-person-menu="${id}"]`)
+          ?.focus({ preventScroll: true })
+      );
   };
-  const closeEnrollment = () => {
+  const closeEnrollment = (returnFocus = true) => {
     enrollmentRequest.current++;
     enrollmentPlayer.current?.pause();
     setEnrollingId(null);
     setListened(null);
     setCandidates([]);
     setEnrollmentSamples([]);
-    requestAnimationFrame(() => enrollmentTrigger.current?.focus());
+    if (returnFocus)
+      requestAnimationFrame(() => enrollmentTrigger.current?.focus({ preventScroll: true }));
   };
   const newestActionIndex = actionHistory.findIndex((item) => !item.unavailableReason);
   const execute = async () => {
@@ -605,12 +626,19 @@ export default function PeoplePage({
       });
       if (!result?.success || (kind !== "delete" && !result.id))
         throw Error(result?.error || "persistence_failed");
-      setReport({
-        id: result.id || "",
-        name: selected!.displayName,
-        type: kind,
-        count: result.noteCount || 0,
-        segments: result.segmentCount || 0,
+      toast({
+        title:
+          kind === "reset"
+            ? t("people.doneReset", { name: selected!.displayName })
+            : t("people.done", {
+                action: t(`people.actions.${kind}`),
+                name: selected!.displayName,
+                notes: result.noteCount || 0,
+                segments: result.segmentCount || 0,
+              }),
+        ...(kind !== "delete" && result.id
+          ? { actions: [{ label: t("people.undo"), onClick: () => undo(result.id!) }] }
+          : {}),
       });
       setSelected(null);
       await refresh();
@@ -620,14 +648,14 @@ export default function PeoplePage({
       setWorking(false);
     }
   };
-  const undo = async () => {
-    if (!report || working) return;
+  const undo = async (id: string) => {
+    if (!id || working) return;
     setWorking(true);
     setActionError("");
     try {
-      const result = await window.electronAPI.undoPersonAction?.(report.id);
+      const result = await window.electronAPI.undoPersonAction?.(id);
       if (!result?.success) throw Error(result?.error || "persistence_failed");
-      setReport(null);
+      toast({ title: t("people.undo") });
       await refresh();
     } catch (cause) {
       setActionError(String(cause instanceof Error ? cause.message : cause));
@@ -712,7 +740,6 @@ export default function PeoplePage({
         if (current) setCalibration(current);
         setCalibrationUndoId(null);
       }
-      setReport(null);
       setClearReport(null);
       await refresh();
     } catch (cause) {
@@ -760,10 +787,7 @@ export default function PeoplePage({
       {loading && (
         <div role="status" className="space-y-2" aria-label={t("people.loading")}>
           {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="h-32 animate-pulse rounded-lg border border-border bg-surface-2/50"
-            />
+            <Skeleton key={i} className="h-32 rounded-lg" />
           ))}
           <p className="text-sm text-muted-foreground">{t("people.loading")}</p>
         </div>
@@ -1165,16 +1189,15 @@ export default function PeoplePage({
                 )}
               </div>
             )}
-            {actionError && !selected && !report && (
+            {actionError && !selected && (
               <p role="alert" className="mt-2 text-sm text-destructive">
                 {actionErrorText(actionError)}
               </p>
             )}
           </div>
           <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-            <input
+            <Input
               dir="auto"
-              className={field}
               aria-label={t("people.search")}
               placeholder={t("people.search")}
               value={query}
@@ -1191,10 +1214,12 @@ export default function PeoplePage({
             </Select>
           </div>
           {people.length === 0 && (
-            <div className="rounded-xl border border-border bg-surface-2/30 p-7">
-              <SectionHeader title={t("people.emptyTitle")} />
-              <p className="max-w-prose text-xs text-muted-foreground">{t("people.emptyBody")}</p>
-            </div>
+            <EmptyStateCard
+              icon={Users}
+              title={t("people.emptyTitle")}
+              description={t("people.emptyBody")}
+              headingLevel={2}
+            />
           )}
           {people.length > 0 && shown.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
@@ -1208,355 +1233,551 @@ export default function PeoplePage({
                 data-person-row={p.id}
                 className="grid min-h-60 content-center gap-x-5 gap-y-3 px-4 py-4 sm:min-h-44 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"
               >
-                <div className="min-w-0">
-                  {editingId === p.id ? (
-                    <form
-                      className="flex min-w-0 flex-wrap items-center gap-2"
-                      onSubmit={(event) => {
-                        event.preventDefault();
-                        void saveRename(p);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === "Escape") {
-                          event.preventDefault();
-                          closeRename();
-                        }
-                      }}
+                {selected?.id === p.id ? (
+                  <div className="col-span-full min-w-0">
+                    <strong
+                      dir="auto"
+                      className="block truncate text-sm font-semibold text-foreground"
                     >
-                      <input
-                        ref={renameInput}
-                        dir="auto"
-                        aria-label={t("people.newName")}
-                        className={`${field} max-w-xs`}
-                        maxLength={120}
-                        value={draftName}
-                        onChange={(event) => setDraftName(event.target.value)}
-                      />
-                      <button
-                        type="submit"
-                        className={button}
-                        disabled={!draftName.trim() || renameWorking}
-                      >
-                        {renameWorking ? t("people.working") : t("people.saveName")}
-                      </button>
-                      <button type="button" className={button} onClick={closeRename}>
-                        {t("people.cancel")}
-                      </button>
-                    </form>
-                  ) : (
-                    <div className="group/name flex min-w-0 items-center gap-1.5">
-                      <strong
-                        dir="auto"
-                        className="min-w-0 truncate text-sm font-semibold text-foreground"
-                        title={p.displayName || p.email || undefined}
-                      >
-                        {p.displayName || p.email || t("people.noName")}
-                      </strong>
-                      <button
-                        type="button"
-                        data-rename-trigger={p.id}
-                        className="shrink-0 rounded-md p-1 text-muted-foreground opacity-60 hover:bg-surface-2 hover:text-foreground group-hover/name:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={`${t("people.actions.rename")} · ${p.displayName || p.email || t("people.noName")}`}
-                        onClick={() => {
-                          setDraftName(p.displayName === p.email ? "" : p.displayName);
-                          setRenameError("");
-                          setEditingId(p.id);
+                      {p.displayName || p.email || t("people.noName")}
+                    </strong>
+                    <FocusScope
+                      trapped
+                      loop
+                      onMountAutoFocus={(event) => event.preventDefault()}
+                      onUnmountAutoFocus={(event) => event.preventDefault()}
+                    >
+                      <div
+                        className="mt-3"
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            closePreview();
+                          }
                         }}
                       >
-                        <Pencil className="size-3.5" aria-hidden="true" />
-                      </button>
-                    </div>
-                  )}
-                  {p.email &&
-                    p.displayName &&
-                    p.email.trim().toLocaleLowerCase() !==
-                      p.displayName.trim().toLocaleLowerCase() && (
-                      <p
-                        dir="auto"
-                        className="mt-0.5 truncate text-xs text-muted-foreground"
-                        title={p.email}
-                      >
-                        {p.email}
-                      </p>
-                    )}
-                  {p.email &&
-                    (!p.displayName ||
-                      p.displayName.trim().toLocaleLowerCase() ===
-                        p.email.trim().toLocaleLowerCase()) && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">{t("people.noName")}</p>
-                    )}
-                  {renameError && editingId === p.id && (
-                    <p role="alert" className="mt-1 text-xs text-destructive">
-                      {actionErrorText(renameError)}
-                    </p>
-                  )}
-                  <p className="mt-2 text-xs tabular-nums text-muted-foreground">
-                    {p.meetingCount
-                      ? t(
-                          p.meetingCount === 1
-                            ? "people.meetingSingular"
-                            : "people.meetingCountCompact",
-                          { count: p.meetingCount }
-                        )
-                      : t("people.noMeetingsYet")}
-                    {" · "}
-                    {t(p.noteCount === 1 ? "people.noteSingular" : "people.noteCountCompact", {
-                      count: p.noteCount,
-                    })}
-                    {" · "}
-                    {t(
-                      p.segmentCount === 1
-                        ? "people.segmentSingular"
-                        : "people.segmentCountCompact",
-                      { count: p.segmentCount }
-                    )}
-                    {p.lastSeen && <> · {t("people.lastSeen", { date: shortDate(p.lastSeen) })}</>}
-                  </p>
-                  <div className="mt-4 flex flex-wrap items-center gap-1.5">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${p.voiceProgress.usable ? "bg-success/10 text-foreground" : p.hasVoice || p.voiceProgress.cleanSpans > 0 ? "bg-warning/10 text-foreground" : "bg-surface-2 text-muted-foreground"}`}
-                    >
-                      {p.voiceProgress.usable
-                        ? t("people.voiceGraduated", {
-                            spans: p.voiceProgress.cleanSpans,
-                            meetings: p.voiceProgress.meetings,
-                          })
-                        : p.hasVoice || p.voiceProgress.cleanSpans > 0
-                          ? t("people.voiceProvisional")
-                          : t("people.noVoice")}
-                    </span>
-                    {p.duplicates.map((d) => (
-                      <span
-                        key={d.id}
-                        className="rounded-full bg-warning/10 px-2 py-0.5 text-[11px] text-foreground"
-                      >
-                        {t("people.duplicate", { name: d.name })}
-                      </span>
-                    ))}
-                    {p.hasVoice && p.needsReapproval && (
-                      <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[11px] text-foreground">
-                        {t("meetingAudio.reapproval")}
-                      </span>
-                    )}
-                    {p.segmentCount > 0 && p.usedOnce && (
-                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[11px]">
-                        {t("people.usedOnce")}
-                      </span>
-                    )}
+                        <Alert
+                          role="alertdialog"
+                          aria-modal="true"
+                          aria-labelledby={`person-action-title-${p.id}`}
+                          aria-describedby={`person-action-description-${p.id}`}
+                          variant={
+                            kind === "delete" || kind === "reset" ? "destructive" : "default"
+                          }
+                        >
+                          <AlertTitle id={`person-action-title-${p.id}`}>
+                            {t(`people.actions.${kind}`)} ·{" "}
+                            {p.displayName || p.email || t("people.noName")}
+                          </AlertTitle>
+                          <AlertDescription id={`person-action-description-${p.id}`}>
+                            {kind === "merge" && (
+                              <div className="mt-3 max-w-sm">
+                                <Label id={`people-survivor-label-${p.id}`}>
+                                  {t("people.survivor")}
+                                </Label>
+                                <Select
+                                  value={survivorId ? String(survivorId) : "__choose__"}
+                                  onValueChange={(value) =>
+                                    setSurvivorId(value === "__choose__" ? 0 : Number(value))
+                                  }
+                                >
+                                  <SelectTrigger
+                                    ref={survivorTrigger}
+                                    aria-labelledby={`people-survivor-label-${p.id}`}
+                                    className="mt-1"
+                                  >
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__choose__">
+                                      {t("people.choosePerson")}
+                                    </SelectItem>
+                                    {people
+                                      .filter((person) => person.id !== p.id)
+                                      .map((person) => (
+                                        <SelectItem key={person.id} value={String(person.id)}>
+                                          {person.displayName}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                            {previewLoading && (
+                              <p role="status" className="mt-3">
+                                {t("people.loadingPreview")}
+                              </p>
+                            )}
+                            {preview?.success && (
+                              <p className="mt-3">
+                                {kind === "delete" ? (
+                                  <>
+                                    {t("people.deletePreview", {
+                                      notes: preview.noteCount,
+                                      segments: preview.segmentCount,
+                                      history: preview.historyCount,
+                                    })}
+                                    {p.meetingCount > 0 && p.segmentCount === 0 && !p.hasVoice && (
+                                      <> {t("people.attendeeDeleteReappears")}</>
+                                    )}
+                                  </>
+                                ) : kind === "reset" ? (
+                                  t("people.resetPreview", {
+                                    samples: preview.voiceSamples,
+                                    notes: preview.noteCount,
+                                    segments: preview.segmentCount,
+                                  })
+                                ) : (
+                                  t("people.previewCounts", {
+                                    notes: preview.noteCount,
+                                    segments: preview.segmentCount,
+                                    pinned: preview.pinnedCount,
+                                  })
+                                )}{" "}
+                                {["delete", "reset"].includes(kind) &&
+                                  t("people.noteVoiceEvidence", {
+                                    count: preview.noteEmbeddingCount || 0,
+                                  })}{" "}
+                                {t(`people.scope.${kind}`)}
+                              </p>
+                            )}
+                            {preview && !preview.success && (
+                              <p role="alert" className="mt-3 text-destructive">
+                                {actionErrorText(preview.error || "persistence_failed")}
+                              </p>
+                            )}
+                            {actionError && (
+                              <p role="alert" className="mt-3 text-destructive">
+                                {actionErrorText(actionError)}
+                              </p>
+                            )}
+                            <div className="mt-4 flex flex-wrap gap-2">
+                              <Button
+                                ref={actionCancel}
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                onClick={() => closePreview()}
+                              >
+                                {t("people.cancel")}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={
+                                  kind === "delete" || kind === "reset" ? "destructive" : "default"
+                                }
+                                disabled={!preview?.success || working}
+                                onClick={() => void execute()}
+                              >
+                                {working ? t("people.working") : t(`people.actions.${kind}`)}
+                              </Button>
+                            </div>
+                          </AlertDescription>
+                        </Alert>
+                      </div>
+                    </FocusScope>
                   </div>
-                  <button
-                    type="button"
-                    className="mt-2 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-expanded={expandedId === p.id}
-                    aria-controls={`person-detail-${p.id}`}
-                    onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
-                  >
-                    {t(expandedId === p.id ? "people.hideDetails" : "people.showDetails")}
-                  </button>
-                </div>
-                <div className="flex items-center justify-end gap-2 sm:self-center">
-                  {!p.voiceProgress.usable && (
-                    <button
-                      type="button"
-                      className={button}
-                      onClick={() => void openEnrollment(p.id)}
-                    >
-                      {p.hasVoice || p.voiceProgress.cleanSpans > 0
-                        ? t("people.reviewSpans")
-                        : t("people.enrollVoice")}
-                    </button>
-                  )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        data-person-menu={p.id}
-                        className="flex size-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        aria-label={`${t("people.moreActions")} · ${p.displayName || p.email || t("people.noName")}`}
-                      >
-                        <MoreHorizontal className="size-5" aria-hidden="true" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {p.voiceProgress.usable && (
-                        <DropdownMenuItem onSelect={() => void openEnrollment(p.id, true)}>
-                          {t("people.enrollVoice")}
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem onSelect={() => start(p, "merge")}>
-                        {t("people.actions.merge")}
-                      </DropdownMenuItem>
-                      {p.hasVoice && (
-                        <DropdownMenuItem onSelect={() => start(p, "reset")}>
-                          {t("people.actions.reset")}
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        className="mt-1 border-t border-border pt-2 text-destructive focus:text-destructive"
-                        onSelect={() => start(p, "delete")}
-                      >
-                        {t("people.actions.delete")}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-                {expandedId === p.id && (
-                  <div
-                    id={`person-detail-${p.id}`}
-                    className="col-span-full rounded-lg bg-surface-2/50 p-3 text-xs text-muted-foreground"
-                  >
-                    <p>
-                      {p.hasVoice || p.voiceProgress.cleanSpans > 0 ? (
-                        <>
-                          {t("people.enrollmentProgress", {
-                            spans: p.voiceProgress.cleanSpans,
-                            meetings: p.voiceProgress.meetings,
-                          })}{" "}
-                          ·{" "}
-                          {t(
-                            p.voiceProgress.usable
-                              ? "people.voiceUsable"
-                              : "people.voiceProvisional"
-                          )}
-                        </>
+                ) : (
+                  <>
+                    <div className="min-w-0">
+                      {editingId === p.id ? (
+                        <FocusScope
+                          trapped
+                          loop
+                          onMountAutoFocus={(event) => event.preventDefault()}
+                          onUnmountAutoFocus={(event) => event.preventDefault()}
+                        >
+                          <form
+                            role="alertdialog"
+                            aria-modal="true"
+                            aria-labelledby={`person-rename-title-${p.id}`}
+                            className="flex min-w-0 flex-wrap items-center gap-2"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void saveRename(p);
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape") {
+                                event.preventDefault();
+                                closeRename();
+                              }
+                            }}
+                          >
+                            <span id={`person-rename-title-${p.id}`} className="sr-only">
+                              {t("people.actions.rename")} ·{" "}
+                              {p.displayName || p.email || t("people.noName")}
+                            </span>
+                            <Input
+                              ref={renameInput}
+                              dir="auto"
+                              aria-label={t("people.newName")}
+                              className="max-w-xs"
+                              maxLength={120}
+                              value={draftName}
+                              onChange={(event) => setDraftName(event.target.value)}
+                            />
+                            <Button
+                              type="submit"
+                              size="sm"
+                              disabled={!draftName.trim() || renameWorking}
+                            >
+                              {renameWorking ? t("people.working") : t("people.saveName")}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => closeRename()}
+                            >
+                              {t("people.cancel")}
+                            </Button>
+                          </form>
+                        </FocusScope>
                       ) : (
-                        t("people.noVoice")
+                        <div className="group/name flex min-w-0 items-center gap-1.5">
+                          <strong
+                            dir="auto"
+                            className="min-w-0 truncate text-sm font-semibold text-foreground"
+                            title={p.displayName || p.email || undefined}
+                          >
+                            {p.displayName || p.email || t("people.noName")}
+                          </strong>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            data-rename-trigger={p.id}
+                            className="size-7 text-muted-foreground opacity-60 group-hover/name:opacity-100 focus-visible:opacity-100"
+                            aria-label={`${t("people.actions.rename")} · ${p.displayName || p.email || t("people.noName")}`}
+                            onClick={() => {
+                              setSelected(null);
+                              if (enrollingId !== null) closeEnrollment(false);
+                              setDraftName(p.displayName === p.email ? "" : p.displayName);
+                              setRenameError("");
+                              setEditingId(p.id);
+                            }}
+                          >
+                            <Pencil className="size-3.5" aria-hidden="true" />
+                          </Button>
+                        </div>
                       )}
+                      {p.email &&
+                        p.displayName &&
+                        p.email.trim().toLocaleLowerCase() !==
+                          p.displayName.trim().toLocaleLowerCase() && (
+                          <p
+                            dir="auto"
+                            className="mt-0.5 truncate text-xs text-muted-foreground"
+                            title={p.email}
+                          >
+                            {p.email}
+                          </p>
+                        )}
+                      {p.email &&
+                        (!p.displayName ||
+                          p.displayName.trim().toLocaleLowerCase() ===
+                            p.email.trim().toLocaleLowerCase()) && (
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {t("people.noName")}
+                          </p>
+                        )}
+                      {renameError && editingId === p.id && (
+                        <p role="alert" className="mt-1 text-xs text-destructive">
+                          {actionErrorText(renameError)}
+                        </p>
+                      )}
+                      <p className="mt-2 text-xs tabular-nums text-muted-foreground">
+                        {p.meetingCount
+                          ? t(
+                              p.meetingCount === 1
+                                ? "people.meetingSingular"
+                                : "people.meetingCountCompact",
+                              { count: p.meetingCount }
+                            )
+                          : t("people.noMeetingsYet")}
+                        {" · "}
+                        {t(p.noteCount === 1 ? "people.noteSingular" : "people.noteCountCompact", {
+                          count: p.noteCount,
+                        })}
+                        {" · "}
+                        {t(
+                          p.segmentCount === 1
+                            ? "people.segmentSingular"
+                            : "people.segmentCountCompact",
+                          { count: p.segmentCount }
+                        )}
+                        {p.lastSeen && (
+                          <> · {t("people.lastSeen", { date: shortDate(p.lastSeen) })}</>
+                        )}
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                        <Badge
+                          variant={
+                            p.voiceProgress.usable
+                              ? "success"
+                              : p.hasVoice || p.voiceProgress.cleanSpans > 0
+                                ? "warning"
+                                : "outline"
+                          }
+                          className="text-[11px]"
+                        >
+                          {p.voiceProgress.usable
+                            ? t("people.voiceGraduated", {
+                                spans: p.voiceProgress.cleanSpans,
+                                meetings: p.voiceProgress.meetings,
+                              })
+                            : p.hasVoice || p.voiceProgress.cleanSpans > 0
+                              ? t("people.voiceProvisional")
+                              : t("people.noVoice")}
+                        </Badge>
+                        {p.duplicates.map((d) => (
+                          <Badge key={d.id} variant="warning" className="text-[11px]">
+                            {t("people.duplicate", { name: d.name })}
+                          </Badge>
+                        ))}
+                        {p.hasVoice && p.needsReapproval && (
+                          <Badge variant="warning" className="text-[11px]">
+                            {t("meetingAudio.reapproval")}
+                          </Badge>
+                        )}
+                        {p.segmentCount > 0 && p.usedOnce && (
+                          <Badge variant="outline" className="text-[11px]">
+                            {t("people.usedOnce")}
+                          </Badge>
+                        )}
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="link"
+                        className="mt-1 h-auto px-0 text-xs text-muted-foreground"
+                        aria-expanded={expandedId === p.id}
+                        aria-controls={`person-detail-${p.id}`}
+                        onClick={() => setExpandedId(expandedId === p.id ? null : p.id)}
+                      >
+                        {t(expandedId === p.id ? "people.hideDetails" : "people.showDetails")}
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-end gap-2 sm:self-center">
+                      {!p.voiceProgress.usable && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline-flat"
+                          onClick={() => void openEnrollment(p.id)}
+                        >
+                          {p.hasVoice || p.voiceProgress.cleanSpans > 0
+                            ? t("people.reviewSpans")
+                            : t("people.enrollVoice")}
+                        </Button>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            data-person-menu={p.id}
+                            className="size-9 text-muted-foreground"
+                            aria-label={`${t("people.moreActions")} · ${p.displayName || p.email || t("people.noName")}`}
+                          >
+                            <MoreHorizontal className="size-5" aria-hidden="true" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {p.voiceProgress.usable && (
+                            <DropdownMenuItem onSelect={() => void openEnrollment(p.id, true)}>
+                              {t("people.enrollVoice")}
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem onSelect={() => start(p, "merge")}>
+                            {t("people.actions.merge")}
+                          </DropdownMenuItem>
+                          {p.hasVoice && (
+                            <DropdownMenuItem onSelect={() => start(p, "reset")}>
+                              {t("people.actions.reset")}
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            className="mt-1 border-t border-border pt-2 text-destructive focus:text-destructive"
+                            onSelect={() => start(p, "delete")}
+                          >
+                            {t("people.actions.delete")}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    {expandedId === p.id && (
+                      <div
+                        id={`person-detail-${p.id}`}
+                        className="col-span-full rounded-lg bg-surface-2/50 p-3 text-xs text-muted-foreground"
+                      >
+                        <p>
+                          {p.hasVoice || p.voiceProgress.cleanSpans > 0 ? (
+                            <>
+                              {t("people.enrollmentProgress", {
+                                spans: p.voiceProgress.cleanSpans,
+                                meetings: p.voiceProgress.meetings,
+                              })}{" "}
+                              ·{" "}
+                              {t(
+                                p.voiceProgress.usable
+                                  ? "people.voiceUsable"
+                                  : "people.voiceProvisional"
+                              )}
+                            </>
+                          ) : (
+                            t("people.noVoice")
+                          )}
+                        </p>
+                        {p.legacyVoice && <p className="mt-1">{t("people.legacyVoice")}</p>}
+                        {p.voiceProgress.conflict && (
+                          <p role="alert" className="mt-1 text-foreground">
+                            {t("people.voiceConflict")}
+                          </p>
+                        )}
+                        {p.lastHeard && (
+                          <p className="mt-1">
+                            {t("people.lastHeard", { date: date(p.lastHeard) })}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+                {enrollingId === p.id && (
+                  <section
+                    ref={enrollmentPanelRef}
+                    tabIndex={-1}
+                    className="col-span-full rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t("people.enrollVoice")}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <SectionHeader
+                        title={`${t("people.enrollVoice")} · ${people.find((p) => p.id === enrollingId)?.displayName || ""}`}
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => closeEnrollment()}
+                      >
+                        {t("people.cancel")}
+                      </Button>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {t("people.enrollmentIntro")}
                     </p>
-                    {p.legacyVoice && <p className="mt-1">{t("people.legacyVoice")}</p>}
-                    {p.voiceProgress.conflict && (
-                      <p role="alert" className="mt-1 text-foreground">
-                        {t("people.voiceConflict")}
+                    {enrollmentError && (
+                      <p role="alert" className="mt-3 text-sm text-destructive">
+                        {t(`people.enrollmentErrors.${enrollmentError}`, {
+                          defaultValue: t("people.actionError"),
+                        })}
                       </p>
                     )}
-                    {p.lastHeard && (
-                      <p className="mt-1">{t("people.lastHeard", { date: date(p.lastHeard) })}</p>
+                    {enrollmentLoading && (
+                      <p role="status" className="mt-3 text-sm text-muted-foreground">
+                        {t("people.loading")}
+                      </p>
                     )}
-                  </div>
+                    {!enrollmentLoading && candidates.length === 0 && (
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        {t("people.noEnrollmentCandidates")}
+                      </p>
+                    )}
+                    <div className="mt-3 divide-y divide-border rounded-lg border border-border">
+                      {candidates.map((candidate) => (
+                        <div
+                          key={candidate.id}
+                          className="flex flex-wrap items-center justify-between gap-3 p-3"
+                        >
+                          <div>
+                            <p className="text-sm font-medium">{candidate.noteTitle}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {date(candidate.meetingDate)} ·{" "}
+                              {t("people.enrollmentDuration", {
+                                seconds: new Intl.NumberFormat(locale, {
+                                  maximumFractionDigits: 1,
+                                }).format(candidate.durationSeconds),
+                              })}{" "}
+                              · {t("people.neverCorrected")}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              className={button}
+                              disabled={listeningId !== null || working}
+                              onClick={() => void playCandidate(candidate)}
+                            >
+                              {listeningId === candidate.id
+                                ? t("people.playing")
+                                : t("people.listen")}
+                            </button>
+                            <button
+                              type="button"
+                              className={button}
+                              disabled={working || listened?.id !== candidate.id}
+                              onClick={() => void decideCandidate(candidate, "approve")}
+                            >
+                              {t("people.approveSample")}
+                            </button>
+                            <button
+                              type="button"
+                              className={button}
+                              disabled={working || listened?.id !== candidate.id}
+                              onClick={() => void decideCandidate(candidate, "reject")}
+                            >
+                              {t("people.rejectSample")}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {enrollmentSamples.length > 0 && (
+                      <div className="mt-4">
+                        <SectionHeader title={t("people.approvedSamples")} />
+                        <div className="divide-y divide-border rounded-lg border border-border">
+                          {enrollmentSamples.map((sample) => (
+                            <div
+                              key={sample.id}
+                              className={`flex flex-wrap items-center justify-between gap-3 p-3 ${sample.odd ? "bg-warning/10" : ""}`}
+                            >
+                              <span className="text-sm">
+                                {sample.noteTitle} · {date(sample.meetingDate)}
+                                {sample.odd && <> · {t("people.oddSample")}</>}
+                              </span>
+                              <div className="flex gap-2">
+                                {sample.odd && (
+                                  <button
+                                    type="button"
+                                    className={button}
+                                    disabled={!onOpenNote}
+                                    onClick={() => onOpenNote?.(sample.noteId, sample.rowIds[0])}
+                                  >
+                                    {t("people.splitSample")}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className={button}
+                                  disabled={working}
+                                  onClick={() => void removeEnrollmentSample(sample)}
+                                >
+                                  {t("people.removeSample")}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </section>
                 )}
               </div>
             ))}
           </div>
-          {enrollingId !== null && (
-            <section
-              ref={enrollmentPanelRef}
-              tabIndex={-1}
-              className="rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={t("people.enrollVoice")}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <SectionHeader
-                  title={`${t("people.enrollVoice")} · ${people.find((p) => p.id === enrollingId)?.displayName || ""}`}
-                />
-                <button type="button" className={button} onClick={closeEnrollment}>
-                  {t("people.cancel")}
-                </button>
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">{t("people.enrollmentIntro")}</p>
-              {enrollmentError && (
-                <p role="alert" className="mt-3 text-sm text-destructive">
-                  {t(`people.enrollmentErrors.${enrollmentError}`, {
-                    defaultValue: t("people.actionError"),
-                  })}
-                </p>
-              )}
-              {enrollmentLoading && (
-                <p role="status" className="mt-3 text-sm text-muted-foreground">
-                  {t("people.loading")}
-                </p>
-              )}
-              {!enrollmentLoading && candidates.length === 0 && (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  {t("people.noEnrollmentCandidates")}
-                </p>
-              )}
-              <div className="mt-3 divide-y divide-border rounded-lg border border-border">
-                {candidates.map((candidate) => (
-                  <div
-                    key={candidate.id}
-                    className="flex flex-wrap items-center justify-between gap-3 p-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">{candidate.noteTitle}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {date(candidate.meetingDate)} ·{" "}
-                        {t("people.enrollmentDuration", {
-                          seconds: new Intl.NumberFormat(locale, {
-                            maximumFractionDigits: 1,
-                          }).format(candidate.durationSeconds),
-                        })}{" "}
-                        · {t("people.neverCorrected")}
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className={button}
-                        disabled={listeningId !== null || working}
-                        onClick={() => void playCandidate(candidate)}
-                      >
-                        {listeningId === candidate.id ? t("people.playing") : t("people.listen")}
-                      </button>
-                      <button
-                        type="button"
-                        className={button}
-                        disabled={working || listened?.id !== candidate.id}
-                        onClick={() => void decideCandidate(candidate, "approve")}
-                      >
-                        {t("people.approveSample")}
-                      </button>
-                      <button
-                        type="button"
-                        className={button}
-                        disabled={working || listened?.id !== candidate.id}
-                        onClick={() => void decideCandidate(candidate, "reject")}
-                      >
-                        {t("people.rejectSample")}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {enrollmentSamples.length > 0 && (
-                <div className="mt-4">
-                  <SectionHeader title={t("people.approvedSamples")} />
-                  <div className="divide-y divide-border rounded-lg border border-border">
-                    {enrollmentSamples.map((sample) => (
-                      <div
-                        key={sample.id}
-                        className={`flex flex-wrap items-center justify-between gap-3 p-3 ${sample.odd ? "bg-warning/10" : ""}`}
-                      >
-                        <span className="text-sm">
-                          {sample.noteTitle} · {date(sample.meetingDate)}
-                          {sample.odd && <> · {t("people.oddSample")}</>}
-                        </span>
-                        <div className="flex gap-2">
-                          {sample.odd && (
-                            <button
-                              type="button"
-                              className={button}
-                              disabled={!onOpenNote}
-                              onClick={() => onOpenNote?.(sample.noteId, sample.rowIds[0])}
-                            >
-                              {t("people.splitSample")}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className={button}
-                            disabled={working}
-                            onClick={() => void removeEnrollmentSample(sample)}
-                          >
-                            {t("people.removeSample")}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </section>
-          )}
         </div>
       )}
       {!loading && !error && tab === "review" && (
@@ -1653,151 +1874,6 @@ export default function PeoplePage({
             <button type="button" className={button} onClick={() => setLimit(limit + 100)}>
               {t("people.showMore")}
             </button>
-          )}
-        </div>
-      )}
-      {selected && (
-        <div
-          ref={previewRef}
-          tabIndex={-1}
-          className="rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          role="region"
-          aria-label={t("people.previewTitle")}
-        >
-          <SectionHeader title={`${t("people.previewTitle")} · ${t(`people.actions.${kind}`)}`} />
-          <p className="text-xs text-muted-foreground">{selected.displayName}</p>
-          {kind === "rename" && (
-            <label className="mt-4 block text-sm">
-              {t("people.newName")}
-              <input
-                dir="auto"
-                className={`${field} mt-1`}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={120}
-              />
-            </label>
-          )}
-          {kind === "merge" && (
-            <div className="mt-4 text-sm">
-              <label id="people-survivor-label">{t("people.survivor")}</label>
-              <Select
-                value={survivorId ? String(survivorId) : "__choose__"}
-                onValueChange={(value) => setSurvivorId(value === "__choose__" ? 0 : Number(value))}
-              >
-                <SelectTrigger aria-labelledby="people-survivor-label" className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__choose__">{t("people.choosePerson")}</SelectItem>
-                  {people
-                    .filter((p) => p.id !== selected.id)
-                    .map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>
-                        {p.displayName}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-          {previewLoading && (
-            <p role="status" className="mt-4 text-sm">
-              {t("people.loadingPreview")}
-            </p>
-          )}
-          {preview?.success && (
-            <p className="mt-4 text-sm">
-              {kind === "delete" ? (
-                <>
-                  {t("people.deletePreview", {
-                    notes: preview.noteCount,
-                    segments: preview.segmentCount,
-                    history: preview.historyCount,
-                  })}
-                  {selected.meetingCount > 0 &&
-                    selected.segmentCount === 0 &&
-                    !selected.hasVoice && <> {t("people.attendeeDeleteReappears")}</>}
-                </>
-              ) : kind === "reset" ? (
-                t("people.resetPreview", {
-                  samples: preview.voiceSamples,
-                  notes: preview.noteCount,
-                  segments: preview.segmentCount,
-                })
-              ) : (
-                t("people.previewCounts", {
-                  notes: preview.noteCount,
-                  segments: preview.segmentCount,
-                  pinned: preview.pinnedCount,
-                })
-              )}{" "}
-              {["delete", "reset"].includes(kind) &&
-                t("people.noteVoiceEvidence", { count: preview.noteEmbeddingCount || 0 })}{" "}
-              {t(`people.scope.${kind}`)}
-            </p>
-          )}
-          {preview && !preview.success && (
-            <p role="alert" className="mt-4 text-sm text-destructive">
-              {t(`people.errors.${preview.error}`, { defaultValue: t("people.actionError") })}
-            </p>
-          )}
-          {actionError && (
-            <p role="alert" className="mt-4 text-sm text-destructive">
-              {actionErrorText(actionError)}
-            </p>
-          )}
-          <div className="mt-4 flex gap-2">
-            <button type="button" className={button} onClick={closePreview}>
-              {t("people.cancel")}
-            </button>
-            <button
-              type="button"
-              className={`${button} bg-primary text-primary-foreground hover:bg-primary/90`}
-              disabled={!preview?.success || working}
-              onClick={() => void execute()}
-            >
-              {working ? t("people.working") : t(`people.actions.${kind}`)}
-            </button>
-          </div>
-        </div>
-      )}
-      {report && (
-        <div
-          ref={reportRef}
-          tabIndex={-1}
-          role="status"
-          className="rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <p className="text-sm font-medium">
-            {report.type === "reset"
-              ? t("people.doneReset", { name: report.name })
-              : t("people.done", {
-                  action: t(`people.actions.${report.type}`),
-                  name: report.name,
-                  notes: report.count,
-                  segments: report.segments,
-                })}
-          </p>
-          {report.type !== "delete" &&
-            (actionHistory.find((item) => !item.unavailableReason)?.id === report.id ? (
-              <button
-                type="button"
-                className={`${button} mt-3`}
-                disabled={working}
-                onClick={() => void undo()}
-              >
-                {t("people.undo")}
-              </button>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">
-                {t("people.errors.later_change")}
-              </p>
-            ))}
-          {actionError && (
-            <p role="alert" className="mt-2 text-sm text-destructive">
-              {actionErrorText(actionError)}
-            </p>
           )}
         </div>
       )}
