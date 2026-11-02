@@ -18,9 +18,18 @@ test("meeting finalize schedules extraction after returning from the IPC listene
 test("note scoped lookup and Todos navigation use narrow IPC channels", () => {
   const source = fs.readFileSync(path.join(__dirname, "../../src/helpers/ipcHandlers.js"), "utf8");
   const preload = fs.readFileSync(path.join(__dirname, "../../preload.js"), "utf8");
-  assert.match(source, /ipcMain\.handle\("commitments-for-note"[\s\S]*?commitments\(\)\.forNote\(noteId\)/);
-  assert.match(source, /ipcMain\.handle\("commitments-open-todos"[\s\S]*?sendToControlPanel\("todos-navigation-pending"\)/);
+  assert.match(
+    source,
+    /ipcMain\.handle\("commitments-for-note"[\s\S]*?commitments\(\)\.forNote\(noteId\)/
+  );
+  assert.match(
+    source,
+    /ipcMain\.handle\("commitments-open-todos"[\s\S]*?sendToControlPanel\("todos-navigation-pending"\)/
+  );
   assert.match(source, /ipcMain\.handle\("commitments-pending-todos-filter"/);
   assert.match(preload, /commitmentsForNote:.*"commitments-for-note"/);
-  assert.match(preload, /onTodosNavigationPending:.*"todos-navigation-pending"/);
+  assert.match(
+    preload,
+    /onTodosNavigationPending:\s*registerListener\(\s*"todos-navigation-pending"/
+  );
 });
