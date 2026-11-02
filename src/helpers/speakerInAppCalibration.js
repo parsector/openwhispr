@@ -116,20 +116,35 @@ function buildReport({
     claims >= 10 &&
     /^[a-f0-9]{64}$/.test(modelFingerprint || "") &&
     /^[a-f0-9]{64}$/.test(profileFingerprint) &&
-    Object.keys(audioFingerprints).length > 0 &&
+    Object.keys(audioFingerprints).length === notes.size &&
     Object.values(audioFingerprints).every((hash) => /^[a-f0-9]{64}$/.test(hash));
+  const missing = [];
+  if (synthetic) missing.push("Synthetic fixture cannot calibrate settings");
+  if (rows.length < 30 || notes.size < 3 || people.size < 2)
+    missing.push("Need 30 reviewed rows across three notes and two people");
+  if (claims < 10) missing.push("Need ten recorded machine claims");
+  if (profiles.length < 2) missing.push("Need two current voice profiles");
+  if (exact.rows < 12) missing.push("Need twelve consistent stored clusters");
+  if (Object.keys(audioFingerprints).length !== notes.size)
+    missing.push("Need retained-audio fingerprints for every included note");
+  if (!/^[a-f0-9]{64}$/.test(modelFingerprint || ""))
+    missing.push("Speaker model fingerprint unavailable");
+  const exactStatus = gate && exact.rows >= 12 ? "calibrated" : "uncalibrated";
+  const exactReason = exactStatus === "calibrated" ? undefined : missing.join("; ");
   const support = {
     similarityFloor: {
-      status: gate && exact.rows >= 12 ? "calibrated" : "uncalibrated",
+      status: exactStatus,
       method: "exact",
       rows: exact.rows,
       machineClaims: claims,
+      ...(exactReason ? { reason: exactReason } : {}),
     },
     runnerUpMargin: {
-      status: gate && exact.rows >= 12 ? "calibrated" : "uncalibrated",
+      status: exactStatus,
       method: "exact",
       rows: exact.rows,
       machineClaims: claims,
+      ...(exactReason ? { reason: exactReason } : {}),
     },
     minimumVoicedSeconds: {
       status: "uncalibrated",
@@ -177,7 +192,7 @@ function buildReport({
       estimated: {
         label: "Estimate: live decisions from re-embedded reviewed rows",
         reason:
-          "Retained audio is 32 kb/s Opus. Original live speech windows were not saved; these are new row-window embeddings, not a live replay.",
+          "Retained audio is 32 kb/s Opus. Original live speech windows were not saved; these are new row-window embeddings, not a live replay. A live query can differ from its running centroid by up to 2 in cosine.",
         ...estimated,
       },
     },
@@ -262,11 +277,17 @@ function pcm16FromWav(wav) {
     result[i] = wav.readInt16LE(data + 8 + Math.floor((i * sampleRate) / 16000) * 2) / 32768;
   return result;
 }
-async function runJob(job, database, audioStore, scope, budget) {
+async function runJob(
+  job,
+  database,
+  audioStore,
+  scope,
+  budget,
+  model = require("./speakerEmbeddings")
+) {
   const started = Date.now();
   const { rows, exclusions } = collectRows(database, audioStore, scope, budget);
   job.progress.totalRows = rows.length;
-  const model = require("./speakerEmbeddings");
   let modelFingerprint = null;
   if (model.isAvailable()) {
     const hash = createHash("sha256");
@@ -306,16 +327,27 @@ async function runJob(job, database, audioStore, scope, budget) {
       );
       if (span.wav) {
         job.progress.bytesRead += span.bytesRead || span.wav.length;
-        if (!audioHashes.has(row.noteId)) audioHashes.set(row.noteId, createHash("sha256"));
-        audioHashes.get(row.noteId).update(span.wav);
-        row.liveVector = Array.from(
-          (await model.extractEmbeddingFromSamples(pcm16FromWav(span.wav))) || []
-        );
-        if (row.liveVector.length) job.progress.reembeddedRows++;
+        if (span.partial)
+          exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason: "audio_partial" });
+        else {
+          if (!audioHashes.has(row.noteId)) audioHashes.set(row.noteId, createHash("sha256"));
+          audioHashes.get(row.noteId).update(span.wav);
+          row.liveVector = Array.from(
+            (await model.extractEmbeddingFromSamples(pcm16FromWav(span.wav))) || []
+          );
+          if (row.liveVector.length) job.progress.reembeddedRows++;
+          else
+            exclusions.push({
+              noteId: row.noteId,
+              rowId: row.rowId,
+              reason: "embedding_unavailable",
+            });
+        }
       } else
         exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason: `audio_${span.state}` });
     }
     job.progress.processedRows++;
+    job.progress.elapsedMs = Date.now() - started;
     await new Promise((resolve) => setImmediate(resolve));
   }
   if (job.cancelled) {

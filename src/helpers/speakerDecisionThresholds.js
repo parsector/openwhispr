@@ -42,7 +42,8 @@ function validStoredEvidence(evidence) {
     evidence.exclusions.every((item) => typeof item.reason === "string" && item.reason) &&
     /^[a-f0-9]{64}$/i.test(evidence.fingerprints?.model || "") &&
     /^[a-f0-9]{64}$/i.test(evidence.fingerprints?.profiles || "") &&
-    Object.values(evidence.fingerprints?.audio || {}).some((hash) => /^[a-f0-9]{64}$/i.test(hash))
+    Object.keys(evidence.fingerprints?.audio || {}).length === evidence.notes &&
+    Object.values(evidence.fingerprints?.audio || {}).every((hash) => /^[a-f0-9]{64}$/i.test(hash))
   );
 }
 function configure(destination) {
@@ -113,7 +114,8 @@ function apply(values, report = null) {
     report.evidence.exclusions.every((item) => typeof item.reason === "string" && item.reason) &&
     /^[a-f0-9]{64}$/i.test(report.fingerprints?.model || "") &&
     /^[a-f0-9]{64}$/i.test(report.fingerprints?.profiles || "") &&
-    Object.values(report.fingerprints?.audio || {}).some((hash) => /^[a-f0-9]{64}$/i.test(hash)) &&
+    Object.keys(report.fingerprints?.audio || {}).length === report.evidence.notes &&
+    Object.values(report.fingerprints?.audio || {}).every((hash) => /^[a-f0-9]{64}$/i.test(hash)) &&
     report.analyses?.exact?.label === "Measured against your profiles as they are today";
   const statuses = Object.fromEntries(
     Object.keys(LIMITS).map((key) => [

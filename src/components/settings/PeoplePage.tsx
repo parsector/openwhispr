@@ -754,7 +754,7 @@ export default function PeoplePage({
                   min="1"
                   max="1000"
                   value={calibrationNotes}
-                  onChange={(event) => setCalibrationNotes(Number(event.target.value))}
+                  onChange={(event) => setCalibrationNotes(Math.max(1, Number(event.target.value)))}
                 />
               </label>
               <label className="text-xs">
@@ -765,7 +765,7 @@ export default function PeoplePage({
                   min="1"
                   max="10000"
                   value={calibrationRows}
-                  onChange={(event) => setCalibrationRows(Number(event.target.value))}
+                  onChange={(event) => setCalibrationRows(Math.max(1, Number(event.target.value)))}
                 />
               </label>
             </div>
@@ -798,7 +798,9 @@ export default function PeoplePage({
                 {calibrationJob.state}: {calibrationJob.progress.processedRows}/
                 {calibrationJob.progress.totalRows} {t("people.calibrationRows")};{" "}
                 {calibrationJob.progress.reembeddedRows} {t("people.calibrationReembedded")};{" "}
-                {calibrationJob.progress.bytesRead} {t("people.calibrationBytes")}
+                {calibrationJob.progress.bytesRead} {t("people.calibrationBytes")};{" "}
+                {Math.round(calibrationJob.progress.elapsedMs / 1000)}{" "}
+                {t("people.calibrationSeconds")}
               </p>
             )}
             {calibration && (

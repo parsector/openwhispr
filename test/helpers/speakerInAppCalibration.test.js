@@ -118,3 +118,92 @@ test("a plausible hash and positive row count alone cannot calibrate a parameter
   );
   assert.equal(thresholds.current().statuses.similarityFloor, "uncalibrated");
 });
+
+test("background job counts retained bytes and re-embedded reviewed rows", async () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { runJob } = require("../../src/helpers/speakerInAppCalibration");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-calibration-job-"));
+  const modelPath = path.join(dir, "model.onnx");
+  fs.writeFileSync(modelPath, "fixture model");
+  const row = {
+    id: "reviewed-row",
+    text: "hello",
+    source: "system",
+    speaker: 1,
+    speakerName: "Ada",
+    speakerLockSource: "user",
+    audioSpan: { trackId: "system", recordingId: 1, startSample: 0, endSample: 48000 },
+  };
+  const note = {
+    id: 1,
+    transcript: JSON.stringify([row]),
+    speaker_action_log: null,
+    created_at: "2026-10-01",
+  };
+  const wav = Buffer.alloc(44 + 48000 * 2);
+  wav.write("data", 36);
+  wav.writeUInt32LE(48000 * 2, 40);
+  wav.writeUInt32LE(24000, 24);
+  const database = {
+    db: { prepare: () => ({ all: () => [note] }) },
+    getNoteSpeakerEmbeddings: () => [
+      { speaker_id: 1, embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
+    ],
+    getSpeakerProfiles: () => [
+      { id: 1, display_name: "Ada", embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
+      { id: 2, display_name: "Ben", embedding: Buffer.from(new Float32Array([0, 1]).buffer) },
+    ],
+  };
+  const audioStore = {
+    status: () => ({
+      state: "complete",
+      bytes: 100,
+      recordingId: 1,
+      tracks: { system: { chunks: [{ startSample: 0, sampleCount: 48000 }] } },
+    }),
+    span: () => ({ wav, bytesRead: 1234 }),
+  };
+  const model = {
+    isAvailable: () => true,
+    getModelPath: () => modelPath,
+    extractEmbeddingFromSamples: async () => new Float32Array([1, 0]),
+  };
+  const job = {
+    cancelled: false,
+    state: "running",
+    progress: { totalRows: 0, processedRows: 0, reembeddedRows: 0, bytesRead: 0, elapsedMs: 0 },
+  };
+  try {
+    await runJob(job, database, audioStore, { kind: "all" }, { notes: 1, rows: 1 }, model);
+    assert.equal(job.state, "complete");
+    assert.equal(job.progress.processedRows, 1);
+    assert.equal(job.progress.reembeddedRows, 1);
+    assert.equal(job.progress.bytesRead, 1234);
+    assert.equal(job.report.analyses.estimated.rows, 1);
+    const cancelled = {
+      cancelled: false,
+      state: "running",
+      progress: { totalRows: 0, processedRows: 0, reembeddedRows: 0, bytesRead: 0, elapsedMs: 0 },
+    };
+    await runJob(
+      cancelled,
+      database,
+      audioStore,
+      { kind: "all" },
+      { notes: 1, rows: 1 },
+      {
+        ...model,
+        extractEmbeddingFromSamples: async () => {
+          cancelled.cancelled = true;
+          return new Float32Array([1, 0]);
+        },
+      }
+    );
+    assert.equal(cancelled.state, "cancelled");
+    assert.equal(cancelled.report, undefined);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

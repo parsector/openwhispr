@@ -5,7 +5,7 @@ Choose **All finished notes** or a date range, set the note and reviewed-row bud
 The report keeps two analyses apart:
 
 - **Measured against your profiles as they are today:** the final pass similarity floor and runner-up margin sweep reuses stored cluster centroids and compares them with the current profile embeddings. The stored centroid comparison is reproducible, but it does not replay the profiles or other conditions from the original decision.
-- **Estimate:** reviewed transcript row spans are decoded from retained 32 kb/s Opus audio and re-embedded with the local speaker model. These row-window embeddings are not the live speech windows, which were not persisted. A live query may differ substantially from its running centroid. The table estimates live threshold behavior only; it is not a live replay.
+- **Estimate:** reviewed transcript row spans are decoded from retained 32 kb/s Opus audio and re-embedded with the local speaker model. These row-window embeddings are not the live speech windows, which were not persisted. A live query may differ from its running centroid by up to 2 in cosine. The table estimates live threshold behavior only; it is not a live replay.
 
 A report needs at least 30 reviewed rows across three notes and two people, ten machine claims, twelve stored clusters, a method and identity, exact scope, row revisions, exclusions, and audio/model/profile fingerprints before a threshold can be marked calibrated. Support is checked separately for every threshold. Reports are tied to the current row revisions, recordings and profile embeddings; changes require a new run. The fixed automatic-naming floor of 0.60 is shown before similarity floor calibration; after calibration the automatic naming path uses the applied value.
 
