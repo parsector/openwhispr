@@ -372,9 +372,7 @@ async function runJob(
       exclusions.push({
         noteId: row.noteId,
         rowId: row.rowId,
-        reason: !row.audioAvailable
-          ? `audio_${row.audioState}`
-          : "audio_or_exact_span_unavailable",
+        reason: !row.audioAvailable ? `audio_${row.audioState}` : "audio_or_exact_span_unavailable",
       });
     } else if (!modelFingerprint) {
       exclusions.push({
