@@ -32,6 +32,83 @@ test("stored centroid sweep measures the final pass against current profiles and
   assert.equal(report.recommended.minimumVoicedSeconds, undefined);
   assert.equal(report.recommended.overlapToleranceSeconds, undefined);
 });
+test("a failed completion is visible with its count and exact cause in calibration", () => {
+  const { collectRows } = require("../../src/helpers/speakerInAppCalibration");
+  const note = {
+    id: 62,
+    transcript: JSON.stringify([
+      {
+        id: "reviewed",
+        speaker: "speaker_7",
+        speakerName: "Ada",
+        speakerLockSource: "user",
+        source: "system",
+        audioSpan: { trackId: "system", recordingId: 1, startSample: 0, endSample: 48000 },
+      },
+    ]),
+    speaker_action_log: null,
+    created_at: "2026-11-02",
+  };
+  const collected = collectRows(
+    {
+      db: { prepare: () => ({ all: () => [note] }) },
+      getNoteSpeakerEmbeddings: () => [],
+      getNoteSpeakerCompletion: () => ({
+        hadSpeakerEmbeddings: false,
+        clusters: 1,
+        vectorsWritten: 0,
+        cause: "embedding_extraction_failed",
+      }),
+    },
+    { status: () => ({ state: "expired", tracks: {} }) },
+    { kind: "all" },
+    { notes: 1, rows: 10 }
+  );
+  assert.deepEqual(collected.noteCentroidCompletions, [
+    { noteId: 62, clusters: 1, vectorsWritten: 0, cause: "embedding_extraction_failed" },
+  ]);
+  assert.equal(collected.missingVectorDiagnostics[0].reason, "embedding_extraction_failed");
+  assert.match(collected.missingVectorDiagnostics[0].message, /0 of 1 cluster vectors written/);
+});
+test("a verified completion supplies stored centroid evidence to calibration", () => {
+  const { collectRows } = require("../../src/helpers/speakerInAppCalibration");
+  const note = {
+    id: 63,
+    transcript: JSON.stringify([
+      {
+        id: "reviewed",
+        speaker: "speaker_7",
+        speakerName: "Ada",
+        speakerLockSource: "user",
+        source: "system",
+        audioSpan: { trackId: "system", recordingId: 1, startSample: 0, endSample: 48000 },
+      },
+    ]),
+    speaker_action_log: null,
+    created_at: "2026-11-02",
+  };
+  const collected = collectRows(
+    {
+      db: { prepare: () => ({ all: () => [note] }) },
+      getNoteSpeakerEmbeddings: () => [
+        { speaker_id: "speaker_7", embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
+      ],
+      getNoteSpeakerCompletion: () => ({
+        hadSpeakerEmbeddings: true,
+        clusters: 1,
+        vectorsWritten: 1,
+        cause: null,
+      }),
+    },
+    { status: () => ({ state: "complete", tracks: {} }) },
+    { kind: "all" },
+    { notes: 1, rows: 10 }
+  );
+  assert.equal(collected.rows[0].vectorSource, "stored-centroid-current-profiles");
+  assert.deepEqual(collected.noteCentroidCompletions, [
+    { noteId: 63, clusters: 1, vectorsWritten: 1 },
+  ]);
+});
 test("live row comparison is explicitly estimated and never uses a centroid as a live query", () => {
   const report = buildReport({
     rows: rows.map((row) => ({ ...row, liveVector: row.vector })),

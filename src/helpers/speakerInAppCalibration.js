@@ -77,6 +77,7 @@ function buildReport({
   bytesRead = 0,
   reviewedCount = rows.length,
   missingVectorDiagnostics = [],
+  noteCentroidCompletions = [],
   noteEmbeddingFingerprints = {},
   generatedAt = new Date().toISOString(),
   synthetic = false,
@@ -205,6 +206,7 @@ function buildReport({
       reviewedCandidates: reviewedCount,
       coverage: `${reconstructedRows.length} of ${reviewedCount} reviewed rows reconstructed`,
       missingVectorDiagnostics,
+      noteCentroidCompletions,
       estimatedRows: estimated.rows,
       bytesRead,
       revisions,
@@ -247,7 +249,8 @@ function collectRows(database, audioStore, scope, budget) {
     .all(...(scope.kind === "range" ? [scope.from, scope.to] : []), budget.notes);
   const rows = [],
     exclusions = [],
-    missingVectorDiagnostics = [];
+    missingVectorDiagnostics = [],
+    noteCentroidCompletions = [];
   const noteEmbeddingFingerprints = {};
   let reviewedCount = 0;
   for (const note of chosen) {
@@ -259,6 +262,13 @@ function collectRows(database, audioStore, scope, budget) {
       noteEmbeddings.map((item) => [String(item.speaker_id), vectorOf(item.embedding)])
     );
     const completion = database.getNoteSpeakerCompletion?.(note.id);
+    if (completion)
+      noteCentroidCompletions.push({
+        noteId: note.id,
+        clusters: completion.clusters ?? 0,
+        vectorsWritten: completion.vectorsWritten ?? 0,
+        ...(completion.cause ? { cause: completion.cause } : {}),
+      });
     const reviewedIds = new Set(
       readSpeakerActionLog(note)
         .actions.filter((a) => a.event?.actor !== "machine")
@@ -284,13 +294,15 @@ function collectRows(database, audioStore, scope, budget) {
       reviewedCount++;
       const vector = vectors.get(String(row.speaker));
       if (!vector) {
-        const reason = vectors.size
-          ? "speaker_id_vs_speaker_key_mismatch"
-          : !completion
-            ? "no_completion_event"
-            : !completion.hadSpeakerEmbeddings
-              ? "completion_without_speakerEmbeddings"
-              : "completion_embeddings_not_saved";
+        const reason =
+          completion?.cause ||
+          (vectors.size
+            ? "speaker_id_vs_speaker_key_mismatch"
+            : !completion
+              ? "no_completion_event"
+              : !completion.hadSpeakerEmbeddings
+                ? "completion_without_speakerEmbeddings"
+                : "completion_embeddings_not_saved");
         if (
           !missingVectorDiagnostics.some(
             (item) => item.noteId === note.id && item.reason === reason
@@ -307,7 +319,7 @@ function collectRows(database, audioStore, scope, budget) {
           missingVectorDiagnostics.push({
             noteId: note.id,
             reason,
-            message: `Note ${note.id}: ${explanations[reason]}; reviewed rows need reconstructed audio.`,
+            message: `Note ${note.id}: ${explanations[reason] || reason}; ${completion?.vectorsWritten ?? 0} of ${completion?.clusters ?? 0} cluster vectors written; reviewed rows need reconstructed audio.`,
           });
         }
       }
@@ -335,7 +347,14 @@ function collectRows(database, audioStore, scope, budget) {
       noteEmbeddingFingerprints[note.id] = noteEmbeddingsFingerprint(noteEmbeddings);
     if (rows.length >= budget.rows) break;
   }
-  return { rows, exclusions, reviewedCount, missingVectorDiagnostics, noteEmbeddingFingerprints };
+  return {
+    rows,
+    exclusions,
+    reviewedCount,
+    missingVectorDiagnostics,
+    noteCentroidCompletions,
+    noteEmbeddingFingerprints,
+  };
 }
 function pcm16FromWav(wav) {
   const data = wav.indexOf(Buffer.from("data"));
@@ -356,8 +375,14 @@ async function runJob(
   model = require("./speakerEmbeddings")
 ) {
   const started = Date.now();
-  const { rows, exclusions, reviewedCount, missingVectorDiagnostics, noteEmbeddingFingerprints } =
-    collectRows(database, audioStore, scope, budget);
+  const {
+    rows,
+    exclusions,
+    reviewedCount,
+    missingVectorDiagnostics,
+    noteCentroidCompletions,
+    noteEmbeddingFingerprints,
+  } = collectRows(database, audioStore, scope, budget);
   job.progress.totalRows = rows.length;
   let modelFingerprint = null;
   if (model.isAvailable()) {
@@ -447,6 +472,7 @@ async function runJob(
     bytesRead: job.progress.bytesRead,
     reviewedCount,
     missingVectorDiagnostics,
+    noteCentroidCompletions,
     noteEmbeddingFingerprints,
   });
   job.progress.elapsedMs = Date.now() - started;

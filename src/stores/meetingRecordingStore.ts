@@ -2382,10 +2382,6 @@ if (typeof window !== "undefined") {
       }
       publish(enriched);
       finalize(targetNoteId, true);
-
-      if (data.speakerEmbeddings) {
-        await window.electronAPI?.saveNoteSpeakerEmbeddings?.(targetNoteId, data.speakerEmbeddings);
-      }
     }).catch((error) => {
       if (completionNoteId != null && !finalized) finalize(completionNoteId, false);
       logger.error(

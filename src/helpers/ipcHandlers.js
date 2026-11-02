@@ -14719,17 +14719,61 @@ class IPCHandlers {
     });
 
     ipcMain.handle("save-note-speaker-embeddings", async (_event, noteId, embeddingsObj) => {
-      if (["deleted", "expired", "evicted"].includes(this.meetingAudioStore.status(noteId).state)) {
-        return { success: false, error: "Recording audio was removed" };
-      }
-      const buffers = {};
-      for (const [speakerId, arr] of Object.entries(embeddingsObj)) {
-        buffers[speakerId] = Buffer.from(new Float32Array(arr).buffer);
-      }
-      this.databaseManager.saveNoteSpeakerEmbeddings(noteId, buffers);
-      this._tryAutoLabelOneOnOne(noteId);
-      return { success: true };
+      const ids = Object.keys(embeddingsObj || {});
+      const evidence = ids.length
+        ? await this._persistMeetingSpeakerCentroids(noteId, ids, embeddingsObj)
+        : { clusters: 0, vectorsWritten: 0, cause: "embedding_extraction_failed" };
+      this.databaseManager.saveNoteSpeakerCompletion(noteId, evidence);
+      return evidence.cause
+        ? { success: false, error: evidence.cause }
+        : { success: true, vectorsWritten: evidence.vectorsWritten };
     });
+  }
+
+  async _persistMeetingSpeakerCentroids(noteId, clusterIds, embeddingsMap, extractionCause = null) {
+    const clusters = clusterIds.length;
+    const evidence = { clusters, vectorsWritten: 0, cause: null };
+    if (noteId == null || !clusters) return evidence;
+    const state = this.meetingAudioStore?.status(noteId)?.state;
+    if (["deleted", "expired", "evicted"].includes(state)) {
+      evidence.cause = `audio_state:${state}`;
+      return evidence;
+    }
+    const entries = Object.entries(embeddingsMap || {}).filter(([id]) => clusterIds.includes(id));
+    if (!entries.length) {
+      evidence.cause = extractionCause || "embedding_extraction_failed";
+      return evidence;
+    }
+    const buffers = Object.fromEntries(
+      entries.map(([id, values]) => [id, Buffer.from(new Float32Array(values).buffer)])
+    );
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const result = this.databaseManager.saveNoteSpeakerEmbeddings(noteId, buffers);
+        if (!result?.success) {
+          if (result?.error === "Note not found") {
+            evidence.cause = `write_rejected:${result.error}`;
+            break;
+          }
+          throw new Error(result?.error || "unknown_write_failure");
+        }
+        const saved = new Set(
+          this.databaseManager.getNoteSpeakerEmbeddings(noteId).map((row) => String(row.speaker_id))
+        );
+        evidence.vectorsWritten = entries.filter(([id]) => saved.has(id)).length;
+        evidence.cause =
+          evidence.vectorsWritten < clusters
+            ? extractionCause ||
+              (evidence.vectorsWritten < entries.length
+                ? "write_rejected:row_count_mismatch"
+                : "embedding_extraction_failed")
+            : null;
+        break;
+      } catch (error) {
+        evidence.cause = `write_rejected:${error.message}`;
+      }
+    }
+    return evidence;
   }
 
   _retroactiveMapping(profile) {
@@ -15103,25 +15147,34 @@ class IPCHandlers {
       ...retractedSegments,
       ...transcriptSegments.filter((_, index) => isEchoDuplicate(index)),
     ].map(({ text, source, timestamp }) => ({ text, source, timestamp }));
-    const send = (payload) => {
-      if (win && !win.isDestroyed()) {
-        if (noteId != null) {
-          try {
-            this.databaseManager?.saveNoteSpeakerCompletion?.(
-              noteId,
-              Boolean(payload.speakerEmbeddings && Object.keys(payload.speakerEmbeddings).length)
-            );
-          } catch (error) {
-            debugLogger.warn("Could not record speaker completion evidence", {
-              noteId,
-              error: error.message,
-            });
-          }
+    const send = (payload, evidence = { clusters: 0, vectorsWritten: 0, cause: null }) => {
+      debugLogger.info(
+        "Meeting speaker centroid completion",
+        JSON.stringify({
+          noteId,
+          clusters: evidence.clusters,
+          vectorsWritten: evidence.vectorsWritten,
+          ...(evidence.cause ? { cause: evidence.cause } : {}),
+          ...(evidence.spanCases ? { spanCases: evidence.spanCases } : {}),
+        }),
+        "speaker"
+      );
+      if (noteId != null) {
+        try {
+          this.databaseManager?.saveNoteSpeakerCompletion?.(noteId, evidence);
+        } catch (error) {
+          debugLogger.warn("Could not record speaker completion evidence", {
+            noteId,
+            error: error.message,
+          });
         }
+      }
+      if (win && !win.isDestroyed()) {
         win.webContents.send("meeting-diarization-complete", {
           sessionId,
           noteId,
           ...payload,
+          centroidPersistence: evidence,
           removedSegments,
         });
       }
@@ -15376,31 +15429,49 @@ class IPCHandlers {
           });
         }
 
-        let speakerEmbeddingsMap = null;
+        let speakerEmbeddingsMap = {};
+        let extractionCause = null;
+        let spanCases = null;
         const speakerEmb = require("./speakerEmbeddings");
         try {
-          if (speakerEmb.isAvailable() && tmpWav) {
-            const speakerIds = [...new Set(diarizationSegments.map((s) => s.speaker))];
-            speakerEmbeddingsMap = {};
-
-            for (const spk of speakerIds) {
-              const segs = diarizationSegments.filter((s) => s.speaker === spk);
-              const sorted = segs.sort((a, b) => b.end - b.start - (a.end - a.start)).slice(0, 3);
-              const embeddings = [];
-              for (const seg of sorted) {
-                if (seg.end - seg.start < 1.5) continue;
-                const emb = await speakerEmb.extractEmbedding(tmpWav, seg.start, seg.end);
-                if (emb) embeddings.push(emb);
-              }
-              if (embeddings.length > 0) {
-                const centroid = speakerEmb.computeCentroid(embeddings);
-                const mappedId = speakerRenumber.get(spk) || spk;
-                speakerEmbeddingsMap[mappedId] = Array.from(centroid);
-              }
+          if (!speakerEmb.isAvailable()) extractionCause = "model_unavailable";
+          else if (!tmpWav) extractionCause = "no_eligible_segments";
+          else {
+            const diagnostics = {};
+            const centroids = await speakerEmb.extractClusterCentroids(
+              tmpWav,
+              diarizationSegments,
+              { diagnostics }
+            );
+            if (Object.keys(diagnostics).length)
+              spanCases = Object.fromEntries(
+                Object.entries(diagnostics).map(([id, reason]) => [
+                  speakerRenumber.get(id) || id,
+                  reason,
+                ])
+              );
+            speakerEmbeddingsMap = Object.fromEntries(
+              [...centroids].map(([id, vector]) => [
+                speakerRenumber.get(id) || id,
+                Array.from(vector),
+              ])
+            );
+            const missing = [...speakerRenumber.keys()].filter((id) => !centroids.has(id));
+            if (missing.length) {
+              extractionCause = missing.every((id) =>
+                ["no_eligible_segments", "silent_cluster"].includes(diagnostics[id])
+              )
+                ? "no_eligible_segments"
+                : "embedding_extraction_failed";
             }
           }
         } catch (err) {
-          debugLogger.debug("Speaker embedding extraction skipped", { error: err.message });
+          extractionCause = "embedding_extraction_failed";
+          debugLogger.warn(
+            "Speaker embedding extraction failed",
+            { noteId, error: err.message },
+            "speaker"
+          );
         }
 
         this._reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments);
@@ -15575,13 +15646,21 @@ class IPCHandlers {
             seg.speakerAssessmentAvailable = true;
           }
         }
-        const audioRemoved =
-          noteId != null &&
-          ["deleted", "expired", "evicted"].includes(this.meetingAudioStore?.status(noteId).state);
-        send({
-          segments: enrichedSegments,
-          speakerEmbeddings: audioRemoved ? null : speakerEmbeddingsMap,
-        });
+        const clusterIds = [...speakerRenumber.values()];
+        const evidence = await this._persistMeetingSpeakerCentroids(
+          noteId,
+          clusterIds,
+          speakerEmbeddingsMap,
+          extractionCause
+        );
+        if (spanCases) evidence.spanCases = spanCases;
+        send(
+          {
+            segments: enrichedSegments,
+            speakerEmbeddings: speakerEmbeddingsMap,
+          },
+          evidence
+        );
       } catch (err) {
         debugLogger.warn("Background diarization failed", { error: err.message });
         this._diarizationSpeakerReservations.delete(sessionId);
