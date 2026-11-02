@@ -322,8 +322,8 @@ async function runJob(
       const span = audioStore.span(
         row.noteId,
         row.track,
-        row.start,
-        Math.min(row.end, row.start + 8)
+        Math.max(row.start, row.end - 8),
+        row.end
       );
       if (span.wav) {
         job.progress.bytesRead += span.bytesRead || span.wav.length;
