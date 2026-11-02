@@ -1320,9 +1320,24 @@ class DatabaseManager {
         CREATE TABLE IF NOT EXISTS note_speaker_completion (
           note_id INTEGER PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
           had_speaker_embeddings INTEGER NOT NULL,
+          cluster_count INTEGER NOT NULL DEFAULT 0,
+          vectors_written INTEGER NOT NULL DEFAULT 0,
+          failure_reason TEXT,
           completed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      for (const [column, type] of [
+        ["cluster_count", "INTEGER NOT NULL DEFAULT 0"],
+        ["vectors_written", "INTEGER NOT NULL DEFAULT 0"],
+        ["failure_reason", "TEXT"],
+      ]) {
+        if (
+          !this.db
+            .pragma("table_info(note_speaker_completion)")
+            .some((item) => item.name === column)
+        )
+          this.db.exec(`ALTER TABLE note_speaker_completion ADD COLUMN ${column} ${type}`);
+      }
 
       // Local voice evidence has explicit recording provenance. The cache in
       // speaker_profiles is invalidated whenever its source audio is removed.
@@ -7909,19 +7924,28 @@ class DatabaseManager {
     }
   }
 
-  saveNoteSpeakerCompletion(noteId, hadSpeakerEmbeddings) {
+  saveNoteSpeakerCompletion(noteId, { clusters = 0, vectorsWritten = 0, cause = null } = {}) {
     this.db
       .prepare(
-        "INSERT OR REPLACE INTO note_speaker_completion (note_id, had_speaker_embeddings) VALUES (?, ?)"
+        "INSERT OR REPLACE INTO note_speaker_completion (note_id, had_speaker_embeddings, cluster_count, vectors_written, failure_reason) VALUES (?, ?, ?, ?, ?)"
       )
-      .run(noteId, hadSpeakerEmbeddings ? 1 : 0);
+      .run(noteId, vectorsWritten > 0 ? 1 : 0, clusters, vectorsWritten, cause);
   }
 
   getNoteSpeakerCompletion(noteId) {
     const row = this.db
-      .prepare("SELECT had_speaker_embeddings FROM note_speaker_completion WHERE note_id = ?")
+      .prepare(
+        "SELECT had_speaker_embeddings, cluster_count, vectors_written, failure_reason FROM note_speaker_completion WHERE note_id = ?"
+      )
       .get(noteId);
-    return row ? { hadSpeakerEmbeddings: Boolean(row.had_speaker_embeddings) } : null;
+    return row
+      ? {
+          hadSpeakerEmbeddings: Boolean(row.had_speaker_embeddings),
+          clusters: row.cluster_count,
+          vectorsWritten: row.vectors_written,
+          cause: row.failure_reason,
+        }
+      : null;
   }
 
   getPendingNotes(spaceKind = null) {

@@ -149,10 +149,9 @@ class SpeakerEmbeddings {
   // One voice per diarized cluster, from its longest segments. Reads only the
   // audio each embedding uses: an upload's WAV runs about 115 MB an hour. A
   // cluster whose extraction fails goes without a voice; the others keep theirs.
-  async extractClusterCentroids(wavPath, segments, { signal = null } = {}) {
+  async extractClusterCentroids(wavPath, segments, { signal = null, diagnostics = null } = {}) {
     const bySpeaker = new Map();
     for (const segment of segments) {
-      if (segment.end - segment.start < MIN_SEGMENT_SECONDS) continue;
       if (!bySpeaker.has(segment.speaker)) bySpeaker.set(segment.speaker, []);
       bySpeaker.get(segment.speaker).push(segment);
     }
@@ -168,7 +167,10 @@ class SpeakerEmbeddings {
       const header = this._parseWavHeader(read(0, WAV_HEADER_READ_BYTES));
       for (const [speaker, speakerSegments] of bySpeaker) {
         if (signal?.aborted) break;
-        const longest = speakerSegments
+        const eligible = speakerSegments.filter(
+          (segment) => segment.end - segment.start >= MIN_SEGMENT_SECONDS
+        );
+        const longest = eligible
           .sort((a, b) => b.end - b.start - (a.end - a.start))
           .slice(0, CENTROID_SEGMENTS_PER_CLUSTER);
         try {
@@ -180,13 +182,74 @@ class SpeakerEmbeddings {
               segment.end
             );
             const pcm = read(byteOffset, numSamples * BYTES_PER_SAMPLE);
-            const embedding = await this._extractEmbeddingFromSamples(
-              this._decodePcm16(pcm, 0, numSamples)
-            );
+            const samples = this._decodePcm16(pcm, 0, numSamples);
+            if (
+              Math.sqrt(
+                samples.reduce((sum, sample) => sum + sample * sample, 0) / samples.length
+              ) <= 0.001
+            ) {
+              if (diagnostics) diagnostics[speaker] = "silent_cluster";
+              continue;
+            }
+            const embedding = await this._extractEmbeddingFromSamples(samples);
             if (embedding) embeddings.push(embedding);
           }
+          if (!eligible.length) {
+            const pieces = [];
+            let total = 0;
+            const shortSegments = [...speakerSegments]
+              .filter((segment) => segment.end > segment.start)
+              .sort((a, b) => a.start - b.start);
+            if (
+              shortSegments.reduce((sum, segment) => sum + segment.end - segment.start, 0) <
+              MIN_SEGMENT_SECONDS
+            ) {
+              if (diagnostics) diagnostics[speaker] = "no_eligible_segments";
+              continue;
+            }
+            for (const segment of shortSegments) {
+              if (!(segment.end > segment.start)) continue;
+              const { byteOffset, numSamples } = this._embeddingWindow(
+                header,
+                segment.start,
+                segment.end
+              );
+              const pcm = this._decodePcm16(
+                read(byteOffset, numSamples * BYTES_PER_SAMPLE),
+                0,
+                numSamples
+              );
+              pieces.push(pcm);
+              total += pcm.length;
+              if (total >= MAX_EMBEDDING_SAMPLES) break;
+            }
+            if (total >= MIN_SEGMENT_SAMPLES) {
+              const joined = new Float32Array(Math.min(total, MAX_EMBEDDING_SAMPLES));
+              let offset = 0;
+              for (const piece of pieces) {
+                const take = Math.min(piece.length, joined.length - offset);
+                joined.set(piece.subarray(0, take), offset);
+                offset += take;
+                if (offset === joined.length) break;
+              }
+              const rms = Math.sqrt(
+                joined.reduce((sum, sample) => sum + sample * sample, 0) / joined.length
+              );
+              if (rms > 0.001) {
+                const embedding = await this._extractEmbeddingFromSamples(joined);
+                if (embedding) embeddings.push(embedding);
+                if (diagnostics)
+                  diagnostics[speaker] = embedding
+                    ? "concatenated_short_spans"
+                    : "embedding_extraction_failed";
+              } else if (diagnostics) diagnostics[speaker] = "silent_cluster";
+            } else if (diagnostics) diagnostics[speaker] = "no_eligible_segments";
+          }
           if (embeddings.length > 0) centroids.set(speaker, this.computeCentroid(embeddings));
+          else if (diagnostics && !diagnostics[speaker])
+            diagnostics[speaker] = "embedding_extraction_failed";
         } catch (error) {
+          if (diagnostics) diagnostics[speaker] = "embedding_extraction_failed";
           debugLogger.warn("speaker-embeddings cluster voice unavailable", {
             speaker,
             error: error.message,

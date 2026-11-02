@@ -4198,6 +4198,12 @@ declare global {
             speakerLockSource?: "user" | "diarization" | "suggestion";
           }>;
           speakerEmbeddings?: Record<string, number[]> | null;
+          centroidPersistence?: {
+            clusters: number;
+            vectorsWritten: number;
+            cause: string | null;
+            spanCases?: Record<string, string>;
+          };
           removedSegments?: RemovedTranscriptSegment[];
         }) => void
       ) => () => void;

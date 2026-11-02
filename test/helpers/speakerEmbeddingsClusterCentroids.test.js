@@ -87,6 +87,39 @@ test("each cluster's voice comes from its three longest segments of 1.5 s or mor
   assert.ok(Math.abs(centroids.get("speaker_b")[0] - 0.5) < 1e-4);
 });
 
+test("short voiced turns are concatenated into one cluster vector", async () => {
+  const centroids = await speakerEmbeddings.extractClusterCentroids(wavPath, [
+    { start: 0, end: 0.4, speaker: "short" },
+    { start: 1, end: 1.4, speaker: "short" },
+    { start: 2, end: 2.4, speaker: "short" },
+    { start: 3, end: 3.4, speaker: "short" },
+  ]);
+  assert.ok(centroids.has("short"));
+  assert.equal(extracted.length, 1);
+  assert.ok(extracted[0].length >= SAMPLE_RATE * 1.5);
+});
+
+test("concatenated silent turns do not become a speaker vector", async () => {
+  const silentWav = writeWav([0]);
+  try {
+    const diagnostics = {};
+    const centroids = await speakerEmbeddings.extractClusterCentroids(
+      silentWav,
+      [
+        { start: 0, end: 0.4, speaker: "silent" },
+        { start: 1, end: 1.4, speaker: "silent" },
+        { start: 2, end: 2.4, speaker: "silent" },
+        { start: 3, end: 3.4, speaker: "silent" },
+      ],
+      { diagnostics }
+    );
+    assert.equal(centroids.has("silent"), false);
+    assert.equal(diagnostics.silent, "silent_cluster");
+  } finally {
+    fs.rmSync(path.dirname(silentWav), { recursive: true, force: true });
+  }
+});
+
 test("only the audio each voice uses is read, never the whole WAV", async () => {
   const originalReadFile = fs.readFileSync;
   const originalRead = fs.readSync;

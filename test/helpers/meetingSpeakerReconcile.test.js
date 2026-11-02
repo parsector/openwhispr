@@ -107,9 +107,13 @@ test("offline system diarization cannot inherit a mic cohort name", () => {
   const { calls, databaseManager } = createMappingRecorder([]);
   const fakeThis = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
   const rows = [{ source: "system", speaker: "speaker_0" }];
-  const result = fakeThis._reconcileLiveSpeakerState({
-    speaker_3: { cohort: "mic", displayName: "Alex", profileId: 5, noteId: NOTE_ID, embedding },
-  }, { speaker_0: embedding }, rows);
+  const result = fakeThis._reconcileLiveSpeakerState(
+    {
+      speaker_3: { cohort: "mic", displayName: "Alex", profileId: 5, noteId: NOTE_ID, embedding },
+    },
+    { speaker_0: embedding },
+    rows
+  );
   assert.deepEqual([...result], []);
   assert.equal(rows[0].speakerName, undefined);
   assert.deepEqual(calls.set, []);
@@ -208,9 +212,23 @@ test("a shrinking roster leaves the speaker cap untouched", () => {
 
 test("attendee suggestion and live reconciliation preserve a user-locked Unknown row", async () => {
   const { IPCHandlers } = loadHandlers();
-  const row = { id: "row-1", source: "system", speaker: "speaker_0", speakerStatus: "locked",
-    speakerLocked: true, speakerLockSource: "user", speakerName: undefined, speakerIsPlaceholder: true };
-  const note = { participants: JSON.stringify([{ email: "owner@example.com" }, { email: "alice@example.com", displayName: "Alice" }]), transcript: JSON.stringify([row]) };
+  const row = {
+    id: "row-1",
+    source: "system",
+    speaker: "speaker_0",
+    speakerStatus: "locked",
+    speakerLocked: true,
+    speakerLockSource: "user",
+    speakerName: undefined,
+    speakerIsPlaceholder: true,
+  };
+  const note = {
+    participants: JSON.stringify([
+      { email: "owner@example.com" },
+      { email: "alice@example.com", displayName: "Alice" },
+    ]),
+    transcript: JSON.stringify([row]),
+  };
   const writes = [];
   const db = {
     getNote: () => note,
@@ -227,13 +245,16 @@ test("attendee suggestion and live reconciliation preserve a user-locked Unknown
   assert.equal(writes.length, 0);
   // The live callback uses this same main-process writer for its identification.
   require("../../src/helpers/speakerAssignmentPolicy").applyConfirmedSpeaker(row, {
-    speaker: "speaker_0", speakerName: "Alice", speakerIsPlaceholder: false,
+    speaker: "speaker_0",
+    speakerName: "Alice",
+    speakerIsPlaceholder: false,
   });
   assert.equal(row.speakerName, undefined);
   assert.equal(row.speakerStatus, "locked");
   handlers._reconcileLiveSpeakerState(
     { speaker_0: { displayName: "Alice", profileId: 5, noteId: NOTE_ID, embedding } },
-    { speaker_0: embedding }, [row]
+    { speaker_0: embedding },
+    [row]
   );
   assert.equal(row.speakerName, undefined);
   assert.equal(writes.length, 0);
@@ -242,15 +263,29 @@ test("attendee suggestion and live reconciliation preserve a user-locked Unknown
 test("one-on-one roster attaches a suggestion without confirming or mapping the voice", async () => {
   const { IPCHandlers } = loadHandlers();
   const row = { id: "row-2", source: "system", speaker: "speaker_0", speakerStatus: "provisional" };
-  const note = { participants: JSON.stringify([{ email: "owner@example.com" },
-    { email: "alice@example.com", displayName: "Alice" }]), transcript: JSON.stringify([row]) };
+  const note = {
+    participants: JSON.stringify([
+      { email: "owner@example.com" },
+      { email: "alice@example.com", displayName: "Alice" },
+    ]),
+    transcript: JSON.stringify([row]),
+  };
   const calls = [];
-  const db = { getNote: () => note, getGoogleAccounts: () => [{ email: "owner@example.com" }],
-    getNoteSpeakerEmbeddings: () => [{ speaker_id: "speaker_0" }], getSpeakerMappings: () => [],
-    setSpeakerMapping: (...args) => calls.push(args), updateNote: (_id, patch) => Object.assign(note, patch) };
-  Object.assign(Object.create(IPCHandlers.prototype), { databaseManager: db })._tryAutoLabelOneOnOne(NOTE_ID);
+  const db = {
+    getNote: () => note,
+    getGoogleAccounts: () => [{ email: "owner@example.com" }],
+    getNoteSpeakerEmbeddings: () => [{ speaker_id: "speaker_0" }],
+    getSpeakerMappings: () => [],
+    setSpeakerMapping: (...args) => calls.push(args),
+    updateNote: (_id, patch) => Object.assign(note, patch),
+  };
+  Object.assign(Object.create(IPCHandlers.prototype), {
+    databaseManager: db,
+  })._tryAutoLabelOneOnOne(NOTE_ID);
   await new Promise((resolve) => setImmediate(resolve));
-  const [updated] = require("../../src/helpers/transcriptDocument").readTranscriptDocument(note.transcript).rows;
+  const [updated] = require("../../src/helpers/transcriptDocument").readTranscriptDocument(
+    note.transcript
+  ).rows;
   assert.equal(updated.suggestedName, "Alice");
   assert.equal(updated.speakerName, undefined);
   assert.equal(updated.speakerStatus, "suggested");
@@ -260,34 +295,49 @@ test("one-on-one roster attaches a suggestion without confirming or mapping the 
 test("attaching an email offers a suggestion without claiming an unranked voice", async () => {
   const { IPCHandlers } = loadHandlers();
   const vector = Buffer.from(new Float32Array([1, 0, 0, 0]).buffer);
-  const note = { transcript: JSON.stringify([{ id: 'voice', text: 'hello', source: 'system',
-    speaker: 'speaker_0' }]) };
+  const note = {
+    transcript: JSON.stringify([
+      { id: "voice", text: "hello", source: "system", speaker: "speaker_0" },
+    ]),
+  };
   const db = {
     getNotesWithUnmappedSpeakers: () => [NOTE_ID],
-    getNoteSpeakerEmbeddings: () => [{ speaker_id: 'speaker_0', embedding: vector }],
+    getNoteSpeakerEmbeddings: () => [{ speaker_id: "speaker_0", embedding: vector }],
     getSpeakerMappings: () => [],
-    getSpeakerProfiles: () => [{ id: 8, display_name: 'Better candidate', embedding: vector }],
+    getSpeakerProfiles: () => [{ id: 8, display_name: "Better candidate", embedding: vector }],
     getNote: () => note,
     updateNote: (_id, patch) => Object.assign(note, patch),
   };
-  Object.assign(Object.create(IPCHandlers.prototype), { databaseManager: db })
-    ._retroactiveMapping({ id: 7, display_name: 'Alex', embedding: vector });
+  Object.assign(Object.create(IPCHandlers.prototype), { databaseManager: db })._retroactiveMapping({
+    id: 7,
+    display_name: "Alex",
+    embedding: vector,
+  });
   await new Promise((resolve) => setImmediate(resolve));
-  const [saved] = require('../../src/helpers/transcriptDocument').readTranscriptDocument(note.transcript).rows;
+  const [saved] = require("../../src/helpers/transcriptDocument").readTranscriptDocument(
+    note.transcript
+  ).rows;
   assert.equal(saved.speakerName, undefined);
-  assert.equal(saved.suggestedName, 'Alex');
-  assert.equal(saved.speakerStatus, 'suggested');
+  assert.equal(saved.suggestedName, "Alex");
+  assert.equal(saved.speakerStatus, "suggested");
 });
 
 test("live reconciliation cannot restore a name to a short provisional row", () => {
   const { IPCHandlers } = loadHandlers();
-  const row = { id: "short-row", speaker: "speaker_0", speakerName: undefined,
-    speakerStatus: "provisional", speakerIsPlaceholder: true, uncertainty: { reason: "too_short" } };
+  const row = {
+    id: "short-row",
+    speaker: "speaker_0",
+    speakerName: undefined,
+    speakerStatus: "provisional",
+    speakerIsPlaceholder: true,
+    uncertainty: { reason: "too_short" },
+  };
   const { calls, databaseManager } = createMappingRecorder([]);
   const handlers = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
   handlers._reconcileLiveSpeakerState(
     { speaker_0: { displayName: "Alice", profileId: 5, noteId: NOTE_ID, embedding } },
-    { speaker_0: embedding }, [row]
+    { speaker_0: embedding },
+    [row]
   );
   assert.equal(row.speakerName, undefined);
   assert.equal(row.speakerStatus, "provisional");
@@ -296,16 +346,27 @@ test("live reconciliation cannot restore a name to a short provisional row", () 
 
 test("a stop-time name wins over the live label on the same row", () => {
   const { IPCHandlers } = loadHandlers();
-  const row = { id: "same-row", speaker: "speaker_0", speakerName: "Sam", speakerStatus: "confirmed" };
+  const row = {
+    id: "same-row",
+    speaker: "speaker_0",
+    speakerName: "Sam",
+    speakerStatus: "confirmed",
+  };
   const { databaseManager } = createMappingRecorder([]);
   const handlers = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
   handlers._reconcileLiveSpeakerState(
     { speaker_0: { displayName: "Alex", profileId: 5, noteId: NOTE_ID, embedding } },
-    { speaker_0: embedding }, [row]
+    { speaker_0: embedding },
+    [row]
   );
   assert.equal(row.speakerName, "Sam");
-  assert.deepEqual(require("../../src/helpers/speakerUncertainty").changedAfterFinalReason("Alex", row.speakerName),
-    { reason: "changed_after_final" });
+  assert.deepEqual(
+    require("../../src/helpers/speakerUncertainty").changedAfterFinalReason(
+      "Alex",
+      row.speakerName
+    ),
+    { reason: "changed_after_final" }
+  );
 });
 
 function makeExpectationResolver() {
@@ -346,11 +407,7 @@ test("speaker expectation reports cap as other-speaker count in every system-mod
     { numSpeakers: -1, cap: null },
     "observed live ids do not constrain final diarization"
   );
-  assert.deepEqual(
-    resolve({}),
-    { numSpeakers: -1, cap: null },
-    "an unknown count stays unknown"
-  );
+  assert.deepEqual(resolve({}), { numSpeakers: -1, cap: null }, "an unknown count stays unknown");
 });
 
 // Mic mode (in-person session): the user is one of the diarized voices, so the
@@ -421,8 +478,15 @@ test("a stopped session's diarization reserves its speaker ids until its result 
   const DiarizationManager = loadDiarizationManager();
   const speakerEmbeddings = require("../../src/helpers/speakerEmbeddings");
   t.mock.method(speakerEmbeddings, "isAvailable", () => true);
-  t.mock.method(speakerEmbeddings, "extractEmbedding", async () => new Float32Array([1, 0]));
-  t.mock.method(speakerEmbeddings, "computeCentroid", (embeddings) => embeddings[0]);
+  t.mock.method(
+    speakerEmbeddings,
+    "extractClusterCentroids",
+    async () =>
+      new Map([
+        ["speaker_00", new Float32Array([1, 0])],
+        ["speaker_01", new Float32Array([0, 1])],
+      ])
+  );
 
   let releaseDiarization;
   const diarizationGate = new Promise((resolve) => {
@@ -442,9 +506,14 @@ test("a stopped session's diarization reserves its speaker ids until its result 
   });
 
   const sent = [];
+  const stored = [];
+  let completionAtSend;
   const win = {
     isDestroyed: () => false,
-    webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
+    webContents: {
+      send: (channel, payload) =>
+        sent.push({ channel, payload, storedAtSend: [...stored], completionAtSend }),
+    },
   };
   const handlers = Object.assign(Object.create(IPCHandlers.prototype), {
     _diarizationSpeakerReservations: new Map(),
@@ -455,7 +524,14 @@ test("a stopped session's diarization reserves its speaker ids until its result 
       getNote: () => ({ expected_speaker_count: 4 }),
       getSpeakerProfiles: () => [],
       getSpeakerMappings: () => [],
-      getNoteSpeakerEmbeddings: () => [],
+      getNoteSpeakerEmbeddings: () => stored,
+      saveNoteSpeakerEmbeddings: (_noteId, embeddings) => {
+        stored.push(...Object.keys(embeddings).map((speaker_id) => ({ speaker_id })));
+        return { success: true };
+      },
+      saveNoteSpeakerCompletion: (_noteId, evidence) => {
+        completionAtSend = evidence;
+      },
     },
   });
 
@@ -490,6 +566,109 @@ test("a stopped session's diarization reserves its speaker ids until its result 
     ["speaker_2", "speaker_3"]
   );
   assert.deepEqual(Object.keys(payload.speakerEmbeddings).sort(), ["speaker_2", "speaker_3"]);
+  assert.deepEqual(stored.map((item) => item.speaker_id).sort(), ["speaker_2", "speaker_3"]);
+  assert.deepEqual(sent[0].storedAtSend.map((item) => item.speaker_id).sort(), [
+    "speaker_2",
+    "speaker_3",
+  ]);
+  assert.equal(sent[0].completionAtSend.vectorsWritten, 2);
+  assert.deepEqual(payload.centroidPersistence, sent[0].completionAtSend);
   // Landed: narrowed to the two ids the result actually names.
   assert.equal(handlers._resolveMeetingSpeakerIndexBase(NOTE_ID, 0), 4);
+});
+
+test("completion persistence reports empty extraction, expired audio, and rejected writes", async () => {
+  const { IPCHandlers } = loadHandlers();
+  let state = "complete";
+  let attempts = 0;
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), {
+    meetingAudioStore: { status: () => ({ state }) },
+    databaseManager: {
+      saveNoteSpeakerEmbeddings: () => {
+        attempts++;
+        return { success: false, error: "database_busy" };
+      },
+      getNoteSpeakerEmbeddings: () => [],
+    },
+  });
+  assert.deepEqual(
+    await handlers._persistMeetingSpeakerCentroids(
+      42,
+      ["speaker_7"],
+      {},
+      "embedding_extraction_failed"
+    ),
+    {
+      clusters: 1,
+      vectorsWritten: 0,
+      cause: "embedding_extraction_failed",
+    }
+  );
+  state = "expired";
+  assert.deepEqual(
+    await handlers._persistMeetingSpeakerCentroids(42, ["speaker_7"], { speaker_7: [1, 0] }),
+    {
+      clusters: 1,
+      vectorsWritten: 0,
+      cause: "audio_state:expired",
+    }
+  );
+  state = "complete";
+  assert.deepEqual(
+    await handlers._persistMeetingSpeakerCentroids(42, ["speaker_7"], { speaker_7: [1, 0] }),
+    {
+      clusters: 1,
+      vectorsWritten: 0,
+      cause: "write_rejected:database_busy",
+    }
+  );
+  assert.equal(attempts, 2);
+});
+
+test("empty centroid extraction is recorded before a completed diarisation is announced", async (t) => {
+  const { IPCHandlers } = loadHandlers();
+  const DiarizationManager = loadDiarizationManager();
+  const speakerEmbeddings = require("../../src/helpers/speakerEmbeddings");
+  t.mock.method(speakerEmbeddings, "isAvailable", () => true);
+  t.mock.method(speakerEmbeddings, "extractClusterCentroids", async () => new Map());
+  const diarizationManager = new DiarizationManager();
+  Object.assign(diarizationManager, {
+    isAvailable: () => true,
+    convertRawPcmToWav: async () => "/nonexistent/ow-empty-centroid.wav",
+    diarize: async () => [{ start: 0, end: 4, speaker: "speaker_00" }],
+  });
+  let completion;
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), {
+    _diarizationSpeakerReservations: new Map(),
+    speakerDiarizationEnabled: true,
+    diarizationManager,
+    meetingAudioStore: { status: () => ({ state: "complete", recordingId: 1 }) },
+    databaseManager: {
+      getNote: () => ({ expected_speaker_count: 1 }),
+      getSpeakerProfiles: () => [],
+      getSpeakerMappings: () => [],
+      getNoteSpeakerEmbeddings: () => [],
+      saveNoteSpeakerCompletion: (_noteId, value) => {
+        completion = value;
+      },
+    },
+  });
+  const payload = await new Promise((resolve) => {
+    handlers._startOrSkipDiarization(
+      "empty-centroid",
+      "/nonexistent/ow-empty-centroid.pcm",
+      0,
+      [{ id: "row", source: "system", timestamp: 1, text: "hello" }],
+      { isDestroyed: () => false, webContents: { send: (_channel, value) => resolve(value) } },
+      null,
+      null,
+      NOTE_ID,
+      "system",
+      0
+    );
+  });
+  assert.equal(payload.segments.length, 1);
+  assert.equal(completion.cause, "embedding_extraction_failed");
+  assert.deepEqual(payload.centroidPersistence, completion);
+  assert.equal(completion.vectorsWritten, 0);
 });
