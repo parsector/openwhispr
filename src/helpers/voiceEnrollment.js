@@ -235,6 +235,12 @@ function candidateReport(database, store, profileId) {
       const exclude = (reason) => {
         reasons[reason]++;
       };
+      // Reconsideration and split events can change a machine attribution.
+      // Only an explicit owner label lifts the old changed-row exclusion.
+      if (changed.has(row.id) && row.speakerLockSource !== "user") {
+        exclude("uncertain");
+        continue;
+      }
       if (
         row.uncertainty ||
         row.overlap ||
