@@ -14493,7 +14493,7 @@ class IPCHandlers {
       require("./peopleActions").listPeople(this.databaseManager)
     );
     ipcMain.handle("voice-enrollment-candidates", (_event, profileId) =>
-      require("./voiceEnrollment").listCandidates(
+      require("./voiceEnrollment").candidateReport(
         this.databaseManager,
         this.meetingAudioStore,
         profileId

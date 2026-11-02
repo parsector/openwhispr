@@ -68,20 +68,113 @@ test('fresh identity stays unenrolled; approval needs playback; rejection is dur
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
 });
 
-test('first naming is eligible for review but a later correction is not', t => {
+test("a row corrected to this person is offered, while Unknown and another person are not", (t) => {
   const f = fixture(t);
-  const { noteId } = f.note('first-name');
+  const { noteId } = f.note("first-name", 3);
   const doc = JSON.parse(f.db.getNote(noteId).transcript);
-  Object.assign(doc.rows[0], { speakerName: undefined, suggestedProfileId: undefined,
-    speakerLockSource: undefined, speakerIsPlaceholder: true });
+  for (const row of doc.rows)
+    Object.assign(row, {
+      speakerName: undefined,
+      suggestedProfileId: undefined,
+      speakerLockSource: undefined,
+      speakerIsPlaceholder: true,
+    });
   f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
-  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
-  assert.equal(applySpeakerCorrection(f.db, null, { type: 'apply', noteId, id: 'initial',
-    scope: 'row', rowIds: ['first-name-0'], name: 'Alex', profileId: f.person.id }).success, true);
-  assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 1);
-  assert.equal(applySpeakerCorrection(f.db, null, { type: 'apply', noteId, id: 'later',
-    scope: 'row', rowIds: ['first-name-0'], name: 'Sam' }).success, true);
-  assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  assert.equal(
+    applySpeakerCorrection(f.db, null, {
+      type: "apply",
+      noteId,
+      id: "initial",
+      scope: "row",
+      rowIds: ["first-name-0"],
+      name: "Alex",
+      profileId: f.person.id,
+    }).success,
+    true
+  );
+  assert.equal(
+    applySpeakerCorrection(f.db, null, {
+      type: "apply",
+      noteId,
+      id: "unknown",
+      scope: "row",
+      rowIds: ["first-name-1"],
+      name: "",
+    }).success,
+    true
+  );
+  assert.equal(
+    applySpeakerCorrection(f.db, null, {
+      type: "apply",
+      noteId,
+      id: "other",
+      scope: "row",
+      rowIds: ["first-name-2"],
+      name: "Sam",
+    }).success,
+    true
+  );
+  assert.equal(f.db.setSpeakerMapping(noteId, "speaker_0", f.person.id, "Alex").success, true);
+  assert.deepEqual(
+    enrollment.listCandidates(f.db, f.audio, f.person.id).map((c) => c.rowIds[0]),
+    ["first-name-0"]
+  );
+  assert.equal(
+    applySpeakerCorrection(f.db, null, {
+      type: "apply",
+      noteId,
+      id: "later",
+      scope: "row",
+      rowIds: ["first-name-0"],
+      name: "Alex",
+      profileId: f.person.id,
+    }).success,
+    true
+  );
+  assert.deepEqual(
+    enrollment.listCandidates(f.db, f.audio, f.person.id).map((c) => c.rowIds[0]),
+    ["first-name-0"]
+  );
+  assert.equal(f.db.db.prepare("SELECT COUNT(*) n FROM voice_exemplars").get().n, 0);
+});
+
+test("empty enrolment reports short, expired, and two-person rows separately", (t) => {
+  const f = fixture(t);
+  const short = f.note("short", 3);
+  const expired = f.note("expired", 2);
+  const overlap = f.note("overlap");
+  for (const { noteId, change } of [
+    {
+      noteId: short.noteId,
+      change: (row) => {
+        row.audioSpan.endSample = row.audioSpan.startSample + 2 * 24000;
+      },
+    },
+    {
+      noteId: overlap.noteId,
+      change: (row) => {
+        row.overlap = true;
+      },
+    },
+  ]) {
+    const doc = JSON.parse(f.db.getNote(noteId).transcript);
+    doc.rows.forEach(change);
+    f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  }
+  f.audio.status = (id) =>
+    id === expired.noteId ? { state: "expired", bytes: 0 } : { state: "complete" };
+  const report = enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.deepEqual(report.candidates, []);
+  assert.deepEqual(report.reasons, {
+    short: 3,
+    long: 0,
+    audio: 2,
+    overlap: 0,
+    uncertain: 1,
+    reviewed: 0,
+    limit: 0,
+  });
 });
 
 test('approval requires server-observed playback completion for the same candidate revision', async t => {
@@ -130,11 +223,20 @@ test('elapsed time and a forged completion cannot replace audible playback in th
   assert.equal((await enrollment.decide(f.db, store, f.extractor, candidate.id, 'reject', second.token, sender)).success, true);
 });
 
-test('two meetings and three clean spans graduate; a correction demotes', async t => {
+test('three approved corrected spans across two recordings graduate without naming rows; a later correction demotes', async t => {
   const f = fixture(t);
   f.note('one', 2); f.note('two');
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  for (const suffix of ['one', 'two']) {
+    const noteId = f.db.db.prepare('SELECT id FROM notes WHERE title = ?').get(`Meeting ${suffix}`).id;
+    const rowIds = suffix === 'one' ? ['one-0', 'one-1'] : ['two-0'];
+    assert.equal(applySpeakerCorrection(f.db, null, { type: 'apply', noteId, id: `label-${suffix}`,
+      scope: 'row', rowIds, name: 'Alex', profileId: f.person.id }).success, true);
+  }
+  const transcriptsBeforeApproval = f.db.db.prepare("SELECT id, transcript FROM notes WHERE title IN ('Meeting one', 'Meeting two') ORDER BY id").all();
   const candidates = enrollment.listCandidates(f.db, f.audio, f.person.id);
   assert.equal(candidates.length, 3);
+  assert.ok(candidates.every(candidate => candidate.everCorrected));
   for (const candidate of candidates) {
     const { token } = enrollment.play(f.db, f.audio, candidate.id);
     f.completeReview(candidate.id, token);
@@ -142,7 +244,7 @@ test('two meetings and three clean spans graduate; a correction demotes', async 
   }
   assert.equal(enrollment.progress(f.db, f.person.id).usable, true);
   assert.equal(f.db.getSpeakerProfiles(true).length, 1);
-  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  assert.deepEqual(f.db.db.prepare("SELECT id, transcript FROM notes WHERE title IN ('Meeting one', 'Meeting two') ORDER BY id").all(), transcriptsBeforeApproval);
   const note = f.db.db.prepare("SELECT id FROM notes WHERE title = 'Meeting one'").get().id;
   assert.equal(applySpeakerCorrection(f.db, null, { type: 'apply', noteId: note, id: 'fix-one',
     scope: 'row', rowIds: ['one-0'], name: 'Bob' }).success, true);

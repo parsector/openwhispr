@@ -509,6 +509,29 @@ class MeetingAudioStore {
     return result;
   }
 
+  // Cheap listing check: validate the retained chunk coverage without decoding
+  // every candidate in a long meeting. Playback rechecks and decodes the span.
+  spanAvailable(noteId, track, startSample, endSample) {
+    const manifest = this._manifest(noteId);
+    if (!manifest || !["complete", "incomplete"].includes(manifest.status)) return false;
+    const state = manifest.tracks?.[track];
+    if (!state || endSample > state.sampleCount || startSample < 0) return false;
+    let cursor = startSample;
+    for (const chunk of state.chunks || []) {
+      const chunkEnd = chunk.startSample + chunk.sampleCount;
+      if (chunkEnd <= cursor || chunk.startSample >= endSample) continue;
+      if (chunk.startSample > cursor) return false;
+      try {
+        if (!fs.existsSync(this._chunkFile(noteId, chunk.file))) return false;
+      } catch {
+        return false;
+      }
+      cursor = Math.min(endSample, chunkEnd);
+      if (cursor === endSample) return true;
+    }
+    return false;
+  }
+
   span(noteId, track, startSeconds, endSeconds) {
     this._noteId(noteId);
     if (

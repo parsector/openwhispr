@@ -71,7 +71,30 @@ const rows = Array.from({ length: 20 }, (_, i) => ({
       rows.find((row) => row.id === request.profileId)!.displayName = request.name;
     return { success: true, id: "proof-action-1", noteCount: 10, segmentCount: 895 };
   },
-  listVoiceEnrollmentCandidates: async () => [],
+  listVoiceEnrollmentCandidates: async (profileId: number) => ({
+    candidates:
+      profileId === 1
+        ? [
+            {
+              id: "proof-span",
+              profileId,
+              noteId: 42,
+              noteTitle: "October planning meeting",
+              meetingDate: "2026-10-30 12:00:00",
+              rowIds: ["row-1"],
+              track: "mic",
+              startSample: 0,
+              endSample: 96000,
+              durationSeconds: 4,
+              everCorrected: true,
+            },
+          ]
+        : [],
+    reasons:
+      profileId === 1
+        ? { short: 0, long: 0, audio: 0, overlap: 0, uncertain: 0, reviewed: 0, limit: 0 }
+        : { short: 3, long: 0, audio: 2, overlap: 0, uncertain: 1, reviewed: 0, limit: 0 },
+  }),
   listVoiceEnrollmentSamples: async () => [],
 };
 createRoot(document.getElementById("root")!).render(

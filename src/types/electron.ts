@@ -4213,8 +4213,8 @@ declare global {
           duplicates: Array<{ id: number; name: string }>;
         }>
       >;
-      listVoiceEnrollmentCandidates?: (profileId: number) => Promise<
-        Array<{
+      listVoiceEnrollmentCandidates?: (profileId: number) => Promise<{
+        candidates: Array<{
           id: string;
           profileId: number;
           noteId: number;
@@ -4226,8 +4226,17 @@ declare global {
           endSample: number;
           durationSeconds: number;
           everCorrected: boolean;
-        }>
-      >;
+        }>;
+        reasons: {
+          short: number;
+          long: number;
+          audio: number;
+          overlap: number;
+          uncertain: number;
+          reviewed: number;
+          limit: number;
+        };
+      }>;
       listVoiceEnrollmentSamples?: (profileId: number) => Promise<
         Array<{
           id: string;
