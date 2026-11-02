@@ -3818,6 +3818,7 @@
       },
       "laterChangeReplaced": "Une modification ultérieure a remplacé celle-ci. Annulez d’abord la modification ultérieure.",
       "you": "Vous",
+      "yourMicrophone": "Votre microphone",
       "them": "Eux",
       "unknown": "Intervenant inconnu",
       "label": "Intervenant {{n}}",

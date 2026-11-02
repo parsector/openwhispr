@@ -386,11 +386,8 @@ export const isYouSpeakerName = (name: string, youLabel: string): boolean => {
   return normalized === "you" || normalized === youLabel.toLowerCase();
 };
 
-// Which side of the transcript a bubble sits on follows the name its chip shows,
-// so a stretch the user reassigned moves with its new name. An in-person meeting
-// is diarized on the mic without knowing which voice is the note taker, so its
-// numbered clusters, the user's own included, sit with the other speakers until
-// one is named "You". Mic channel alone never establishes ownership.
+// A name decides the side when one exists. An unnamed microphone cluster uses
+// the note owner's visual lane, without identifying its speaker as the owner.
 export const isSelfSideSegment = (
   segment: TranscriptSegment,
   speakerMappings: Record<string, string> | undefined,
@@ -403,14 +400,6 @@ export const isSelfSideSegment = (
     const autoNamedRemote = segment.source === "system" && !isTranscriptSpeakerLocked(segment);
     return !autoNamedRemote && isYouSpeakerName(name, youLabel);
   }
-  if (
-    segment.source === "mic" &&
-    segment.suggestedName &&
-    isYouSpeakerName(segment.suggestedName, youLabel)
-  ) {
-    return true;
-  }
   if (segment.speaker === "you") return !isTranscriptSpeakerLocked(segment);
-  if (segment.speaker) return false;
   return segment.source === "mic";
 };

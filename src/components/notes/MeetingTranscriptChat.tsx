@@ -586,6 +586,12 @@ function SpeakerLabel({
     shownName ||
     storedName ||
     (segment.source === "mic" &&
+    speakerId !== "you" &&
+    !segment.recorderName &&
+    (speakerId || recorderLabel === t("notes.speaker.you"))
+      ? t("notes.speaker.yourMicrophone")
+      : undefined) ||
+    (segment.source === "mic" &&
     !speakerId &&
     (segment.recorderName || recorderLabel !== t("notes.speaker.you"))
       ? recorderLabel
@@ -820,7 +826,11 @@ export function SelectionBar({
 }) {
   const [open, setOpen] = useState(false);
   const offerSelf = selectedSegments.some(
-    (segment) => !isSelfSideSegment(segment, speakerMappings, t("notes.speaker.you"))
+    (segment) =>
+      !isSelfSideSegment(segment, speakerMappings, t("notes.speaker.you")) ||
+      (segment.source === "mic" &&
+        segment.speaker !== "you" &&
+        !resolveSegmentSpeakerName(segment, speakerMappings))
   );
   return (
     <div
@@ -954,10 +964,14 @@ const SegmentRow = memo(function SegmentRow({
     !!segment.speaker || !!segment.speakerName || !!segment.source || !!segment.speakerLocked;
   const isOriginallyYou = segment.speaker === "you";
   const isSystemSpeaker = hasSpeaker && !selfSide;
-  // Mic location alone cannot identify the owner. A remote voice is never
-  // offered as the owner; mic clusters can be assigned explicitly.
+  // Mic location alone cannot identify the owner; the picker can still offer
+  // an explicit self assignment for an unnamed cluster.
   const self =
-    segment.source === "system" ? "exclude" : !selfSide && !isOriginallyYou ? "offer" : undefined;
+    segment.source === "system"
+      ? "exclude"
+      : !isOriginallyYou && (!activeName || !selfSide)
+        ? "offer"
+        : undefined;
   const selectable = !!onToggleSelect;
 
   // The user's own voice profile isn't a contact.
@@ -1010,9 +1024,14 @@ const SegmentRow = memo(function SegmentRow({
     </div>
   ) : segment.source === "mic" ? (
     <span className="text-[11px] font-medium mb-0.5 px-1.5" dir="auto">
-      {activeName && !isYouSpeakerName(activeName, t("notes.speaker.you"))
-        ? activeName
-        : segment.recorderName || recorderLabel}
+      {!activeName
+        ? segment.recorderName ||
+          (recorderLabel !== t("notes.speaker.you")
+            ? recorderLabel
+            : t("notes.speaker.yourMicrophone"))
+        : !isYouSpeakerName(activeName, t("notes.speaker.you"))
+          ? activeName
+          : segment.recorderName || recorderLabel}
     </span>
   ) : null;
 

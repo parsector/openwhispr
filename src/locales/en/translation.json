@@ -3970,6 +3970,7 @@
       },
       "laterChangeReplaced": "A later change replaced this. Undo that change first.",
       "you": "You",
+      "yourMicrophone": "Your microphone",
       "them": "Them",
       "unknown": "Unknown Speaker",
       "label": "Speaker {{n}}",
