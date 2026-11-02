@@ -172,6 +172,7 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
     speaker_action_log: null,
     created_at: "2026-10-01",
   };
+  let noteEmbeddings = [{ speaker_id: 1, embedding: Buffer.from(new Float32Array([1, 0]).buffer) }];
   const wav = Buffer.alloc(44 + 48000 * 2);
   wav.write("data", 36);
   wav.writeUInt32LE(48000 * 2, 40);
@@ -179,9 +180,7 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
   const database = {
     db: { prepare: () => ({ all: () => [note] }) },
     getNote: () => note,
-    getNoteSpeakerEmbeddings: () => [
-      { speaker_id: 1, embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
-    ],
+    getNoteSpeakerEmbeddings: () => noteEmbeddings,
     getSpeakerProfiles: () => [
       { id: 1, display_name: "Ada", embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
       { id: 2, display_name: "Ben", embedding: Buffer.from(new Float32Array([0, 1]).buffer) },
@@ -215,6 +214,9 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
     assert.equal(job.report.analyses.estimated.rows, 1);
     assert.equal(job.report.support.similarityFloor.method, "stored-centroid-current-profiles");
     assert.equal(await reportStillCurrent(job.report, database, audioStore, model), true);
+    noteEmbeddings = [];
+    assert.equal(await reportStillCurrent(job.report, database, audioStore, model), false);
+    noteEmbeddings = [{ speaker_id: 1, embedding: Buffer.from(new Float32Array([1, 0]).buffer) }];
     note.transcript = JSON.stringify([{ ...row, text: "edited after calibration" }]);
     assert.equal(await reportStillCurrent(job.report, database, audioStore, model), false);
     note.transcript = JSON.stringify([row]);

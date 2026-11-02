@@ -4,6 +4,14 @@ const { readSpeakerActionLog } = require("./speakerActionLog");
 const { buildCalibrationLabels } = require("./speakerCalibrationExport");
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
+const noteEmbeddingsFingerprint = (items) =>
+  sha(
+    JSON.stringify(
+      items
+        .map((item) => [String(item.speaker_id), sha(item.embedding)])
+        .sort(([a], [b]) => a.localeCompare(b))
+    )
+  );
 const vectorOf = (blob) =>
   Array.from(new Float32Array(blob.buffer, blob.byteOffset, blob.byteLength / 4));
 const candidates = {
@@ -69,6 +77,7 @@ function buildReport({
   bytesRead = 0,
   reviewedCount = rows.length,
   missingVectorDiagnostics = [],
+  noteEmbeddingFingerprints = {},
   generatedAt = new Date().toISOString(),
   synthetic = false,
 }) {
@@ -207,6 +216,7 @@ function buildReport({
       audio: audioFingerprints,
       recordings,
       audioManifests,
+      noteEmbeddings: noteEmbeddingFingerprints,
     },
     analyses: {
       exact: { label: "Measured against your profiles as they are today", ...exact },
@@ -238,15 +248,15 @@ function collectRows(database, audioStore, scope, budget) {
   const rows = [],
     exclusions = [],
     missingVectorDiagnostics = [];
+  const noteEmbeddingFingerprints = {};
   let reviewedCount = 0;
   for (const note of chosen) {
     const status = audioStore.status(note.id);
     if (status.state === "recording") continue;
     const labels = buildCalibrationLabels(note, {}, status).rows;
+    const noteEmbeddings = database.getNoteSpeakerEmbeddings(note.id);
     const vectors = new Map(
-      database
-        .getNoteSpeakerEmbeddings(note.id)
-        .map((item) => [String(item.speaker_id), vectorOf(item.embedding)])
+      noteEmbeddings.map((item) => [String(item.speaker_id), vectorOf(item.embedding)])
     );
     const completion = database.getNoteSpeakerCompletion?.(note.id);
     const reviewedIds = new Set(
@@ -260,6 +270,7 @@ function collectRows(database, audioStore, scope, budget) {
     const transcriptRows = new Map(
       readTranscriptDocument(note.transcript).rows.map((row) => [row.id, row])
     );
+    const rowsBeforeNote = rows.length;
     for (const label of labels) {
       if (rows.length >= budget.rows) break;
       const row = transcriptRows.get(label.rowId);
@@ -320,9 +331,11 @@ function collectRows(database, audioStore, scope, budget) {
         audioState: status.state,
       });
     }
+    if (rows.length > rowsBeforeNote)
+      noteEmbeddingFingerprints[note.id] = noteEmbeddingsFingerprint(noteEmbeddings);
     if (rows.length >= budget.rows) break;
   }
-  return { rows, exclusions, reviewedCount, missingVectorDiagnostics };
+  return { rows, exclusions, reviewedCount, missingVectorDiagnostics, noteEmbeddingFingerprints };
 }
 function pcm16FromWav(wav) {
   const data = wav.indexOf(Buffer.from("data"));
@@ -343,12 +356,8 @@ async function runJob(
   model = require("./speakerEmbeddings")
 ) {
   const started = Date.now();
-  const { rows, exclusions, reviewedCount, missingVectorDiagnostics } = collectRows(
-    database,
-    audioStore,
-    scope,
-    budget
-  );
+  const { rows, exclusions, reviewedCount, missingVectorDiagnostics, noteEmbeddingFingerprints } =
+    collectRows(database, audioStore, scope, budget);
   job.progress.totalRows = rows.length;
   let modelFingerprint = null;
   if (model.isAvailable()) {
@@ -438,6 +447,7 @@ async function runJob(
     bytesRead: job.progress.bytesRead,
     reviewedCount,
     missingVectorDiagnostics,
+    noteEmbeddingFingerprints,
   });
   job.progress.elapsedMs = Date.now() - started;
   job.state = "complete";
@@ -464,6 +474,12 @@ async function reportStillCurrent(
     report.fingerprints.profiles
   )
     return false;
+  for (const [noteId, fingerprint] of Object.entries(report.fingerprints.noteEmbeddings || {})) {
+    if (
+      noteEmbeddingsFingerprint(database.getNoteSpeakerEmbeddings(Number(noteId))) !== fingerprint
+    )
+      return false;
+  }
   const notes = new Map();
   for (const { noteId, rowId, revision } of report.evidence.revisions) {
     if (!notes.has(noteId)) {
