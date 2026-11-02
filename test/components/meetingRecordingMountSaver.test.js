@@ -276,7 +276,7 @@ test("a policy this window can't resolve mid-meeting stops the recording and say
   await start();
   const before = toasts.length;
 
-  await setPolicy({ status: "error", policy: null });
+  await setPolicy({ status: "error", managed: true, policy: null });
   await settle(store);
 
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
@@ -284,6 +284,18 @@ test("a policy this window can't resolve mid-meeting stops the recording and say
     toasts.slice(before).map((toast) => toast.description),
     ["Recording stopped because your organization's settings couldn't be checked."]
   );
+});
+
+test("a personal recording continues when its policy lookup fails", async (t) => {
+  const { start, store, toasts, setPolicy } = await setup(t);
+  await start();
+  const before = toasts.length;
+
+  await setPolicy({ status: "error", managed: false, policy: null });
+  await settle(store);
+
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
+  assert.deepEqual(toasts.slice(before), []);
 });
 
 test("main's refusal and this window's policy stop explain the same recording once", async (t) => {
@@ -327,7 +339,7 @@ test("a policy flip while the user's own Stop is finishing adds no policy toast"
   const before = toasts.length;
 
   const userStop = store.stopRecording();
-  await setPolicy({ status: "error", policy: null });
+  await setPolicy({ status: "error", managed: true, policy: null });
   reply.resolve();
   await React.act(() => userStop);
   await settle(store);
@@ -357,7 +369,7 @@ test("a policy flip that cancels a start still in progress says why", async (t) 
     "the start is under way"
   );
 
-  await setPolicy({ status: "error", policy: null });
+  await setPolicy({ status: "error", managed: true, policy: null });
   reply.resolve();
   await React.act(() => starting);
   await settle(store);

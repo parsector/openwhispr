@@ -18,9 +18,13 @@ import type { PolicyScope } from "../types/policy";
 /** The minimal reactive snapshot consumed by the pure policy rules. */
 export function usePolicySnapshot(): PolicyDecisionSnapshot {
   const status = usePolicyStore((state) => state.status);
+  const managed = usePolicyStore((state) => state.managed);
   const policy = usePolicyStore((state) => state.policy);
   const appVersion = usePolicyStore((state) => state.appVersion);
-  return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
+  return useMemo(
+    () => ({ status, managed, policy, appVersion }),
+    [status, managed, policy, appVersion]
+  );
 }
 
 /** Reactive to both stores — updates when the policy or the relevant settings change. */
@@ -32,7 +36,12 @@ export function useTranscriptionContextAllowed(context: TranscriptionPolicyConte
     )
   );
   return (
-    isAudioFeatureAllowed(snapshot, context) && isTranscriptionSelectionAllowed(snapshot, selection)
+    isAudioFeatureAllowed(snapshot, context) &&
+    (context !== "dictation" &&
+    (snapshot.status === "loading" || snapshot.status === "error") &&
+    snapshot.managed !== true
+      ? true
+      : isTranscriptionSelectionAllowed(snapshot, selection))
   );
 }
 
