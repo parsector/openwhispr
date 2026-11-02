@@ -438,7 +438,11 @@ export function isAudioFeatureAllowed(
   state: PolicyDecisionSnapshot,
   context: TranscriptionPolicyContext
 ): boolean {
-  if ((state.status === "loading" || state.status === "error") && state.managed !== true)
+  if (
+    context !== "dictation" &&
+    (state.status === "loading" || state.status === "error") &&
+    state.managed !== true
+  )
     return true;
   return managedPolicyDecision(state, (policy) =>
     context === "meeting"
