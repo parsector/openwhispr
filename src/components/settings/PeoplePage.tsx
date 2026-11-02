@@ -734,6 +734,7 @@ export default function PeoplePage({
                   <label className="text-xs">
                     {t("people.calibrationFrom")}
                     <input
+                      dir="ltr"
                       className={field}
                       type="date"
                       value={calibrationFrom}
@@ -743,6 +744,7 @@ export default function PeoplePage({
                   <label className="text-xs">
                     {t("people.calibrationTo")}
                     <input
+                      dir="ltr"
                       className={field}
                       type="date"
                       value={calibrationTo}
@@ -754,6 +756,7 @@ export default function PeoplePage({
               <label className="text-xs">
                 {t("people.calibrationNoteBudget")}
                 <input
+                  dir="ltr"
                   className={field}
                   type="number"
                   min="1"
@@ -765,6 +768,7 @@ export default function PeoplePage({
               <label className="text-xs">
                 {t("people.calibrationRowBudget")}
                 <input
+                  dir="ltr"
                   className={field}
                   type="number"
                   min="1"
