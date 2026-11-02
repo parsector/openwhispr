@@ -188,10 +188,9 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
       toast({
         title: t(meetingStartRefusalKey(result.code)),
         variant: "default",
-        actions:
-          result.code === "POLICY_UNRESOLVABLE"
-            ? [{ label: t("common.retry"), onClick: () => void startNotes() }]
-            : undefined,
+        ...(result.code === "POLICY_UNRESOLVABLE" && {
+          actions: [{ label: t("common.retry"), onClick: () => void startNotes() }],
+        }),
       });
     }
   };

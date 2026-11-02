@@ -197,7 +197,7 @@ test("the shared upload zone blocks restricted inputs and resumes when policy al
 
   for (const policy of [
     { status: "managed", policy: { features: { audioUploadEnabled: false } } },
-    { status: "loading", policy: null },
+    { status: "error", managed: true, policy: null },
   ]) {
     await React.act(async () => usePolicyStore.setState(policy));
     assert.equal(zone().getAttribute("aria-disabled"), "true");
@@ -219,6 +219,15 @@ test("the shared upload zone blocks restricted inputs and resumes when policy al
     assert.doesNotMatch(container.textContent, /blocked\.mp3/);
     assert.doesNotMatch(zone().textContent, /notes\.upload\.dropToUpload/);
   }
+
+  await React.act(async () =>
+    usePolicyStore.setState({ status: "loading", managed: false, policy: null })
+  );
+  assert.equal(zone().getAttribute("aria-disabled"), null);
+  assert.equal(
+    findElement(container, (node) => node.getAttribute("role") === "status"),
+    null
+  );
 
   await React.act(async () => usePolicyStore.setState({ status: "unmanaged", policy: null }));
   assert.equal(zone().getAttribute("aria-disabled"), null);
