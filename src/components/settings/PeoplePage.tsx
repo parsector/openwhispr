@@ -249,8 +249,10 @@ export default function PeoplePage({
     setCalibrationUndoId(null);
     await refresh();
   };
-  const openEnrollment = async (profileId: number) => {
-    enrollmentTrigger.current = document.activeElement as HTMLElement;
+  const openEnrollment = async (profileId: number, fromMenu = false) => {
+    enrollmentTrigger.current = fromMenu
+      ? document.querySelector<HTMLElement>(`[data-person-menu="${profileId}"]`)
+      : (document.activeElement as HTMLElement);
     const request = ++enrollmentRequest.current;
     enrollmentPlayer.current?.pause();
     setEnrollingId(profileId);
@@ -1376,6 +1378,11 @@ export default function PeoplePage({
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      {p.voiceProgress.usable && (
+                        <DropdownMenuItem onSelect={() => void openEnrollment(p.id, true)}>
+                          {t("people.enrollVoice")}
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onSelect={() => start(p, "merge")}>
                         {t("people.actions.merge")}
                       </DropdownMenuItem>
