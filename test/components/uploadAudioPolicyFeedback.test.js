@@ -117,15 +117,24 @@ test("upload policy feedback names the disabled feature independently of recordi
         );
       }
     }
-    for (const status of ["loading", "error"]) {
-      await React.act(async () => usePolicyStore.setState({ status, policy: null }));
-      assert.ok(
-        statusMessages(tree).includes(
-          "Your organization's settings haven't loaded yet. Try again in a moment."
-        )
-      );
-      assert.ok(!statusMessages(tree).includes("Audio upload is disabled by your organization."));
-    }
+    await React.act(async () =>
+      usePolicyStore.setState({ status: "loading", managed: false, policy: null })
+    );
+    assert.deepEqual(statusMessages(tree), []);
+    assert.deepEqual(uploadInputs(tree).disabled, [false, false]);
+
+    await React.act(async () =>
+      usePolicyStore.setState({ status: "error", managed: true, policy: null })
+    );
+    assert.ok(
+      statusMessages(tree).includes(
+        "Your organization's recording policy could not be verified. Retry."
+      )
+    );
+    assert.deepEqual(uploadInputs(tree).disabled, [true, true]);
+    assert.ok(
+      findProps(tree, (props) => props.children === "Retry" && typeof props.onClick === "function")
+    );
     await React.act(async () => usePolicyStore.setState({ status: "unmanaged", policy: null }));
     assert.deepEqual(statusMessages(tree), []);
   } finally {

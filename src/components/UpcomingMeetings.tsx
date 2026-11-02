@@ -185,7 +185,13 @@ function EventRow({ event, isNow }: { event: CalendarEvent; isNow: boolean }) {
     const result = await window.electronAPI?.joinCalendarMeeting?.(event.id);
     // Only an org-policy refusal carries a code; the meeting link still opened.
     if (result?.success === false && result.code) {
-      toast({ title: t(meetingStartRefusalKey(result.code)), variant: "default" });
+      toast({
+        title: t(meetingStartRefusalKey(result.code)),
+        variant: "default",
+        ...(result.code === "POLICY_UNRESOLVABLE" && {
+          actions: [{ label: t("common.retry"), onClick: () => void startNotes() }],
+        }),
+      });
     }
   };
 

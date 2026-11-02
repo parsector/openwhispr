@@ -271,7 +271,7 @@ test("activation storage failure cannot prevent clearing the local bearer", asyn
   }
 });
 
-test("signed-out transitions restore guest meeting detection without granting a replacement bearer guest permissions", async (t) => {
+test("signed-out transitions restore meeting detection, including an unverified replacement bearer", async (t) => {
   const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
   const originalManager = fakeThis.windowManager;
   const originalEngine = fakeThis.meetingDetectionEngine;
@@ -314,9 +314,9 @@ test("signed-out transitions restore guest meeting detection without granting a 
 
   tokenState = { token: "replacement-bearer", generation: 41 };
   handleAuthTokenChange(tokenState);
-  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
   await setScope(null, 41);
-  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+  assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
 
   tokenState = { token: null, generation: 42 };
   databaseManager.activeAccountId = "departing-account";
@@ -439,11 +439,8 @@ test("a token rotation keeps the account's running jobs and meeting; another acc
     await setScope(nextAccount, 61);
     // The same account's live meeting keeps transcribing until the new verdict
     // arrives; nothing keeps the previous account's verdict.
-    assert.equal(
-      fakeThis._audioFeaturePolicy.activeFailure("meeting")?.code ?? null,
-      accountChanged ? "POLICY_UNRESOLVABLE" : null
-    );
-    assert.equal(fakeThis._audioFeaturePolicy.failure("meeting").code, "POLICY_UNRESOLVABLE");
+    assert.equal(fakeThis._audioFeaturePolicy.activeFailure("meeting")?.code ?? null, null);
+    assert.equal(fakeThis._audioFeaturePolicy.failure("meeting"), null);
     finish.resolve();
 
     assert.deepEqual(stops, accountChanged ? ["accountChanged"] : []);

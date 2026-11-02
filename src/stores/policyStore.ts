@@ -140,7 +140,7 @@ function applyPolicyFailure(result: PolicyIpcSnapshot): boolean {
   if (current.status === "managed") return true;
   usePolicyStore.setState({
     status: "error",
-    managed: false,
+    managed: true,
     policy: null,
   });
   return true;
@@ -253,7 +253,7 @@ export const usePolicyStore = create<PolicyState>()((set, get) => {
             set({
               accountId,
               status: "error",
-              managed: false,
+              managed: failureCode === "POLICY_UNRESOLVABLE",
               policy: null,
               appVersion,
             });

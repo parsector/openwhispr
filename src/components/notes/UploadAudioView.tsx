@@ -1029,6 +1029,19 @@ export default function UploadAudioView({ onNoteCreated, onOpenSettings }: Uploa
               className="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-warning"
             />
             {t(uploadRestrictionKey(policyState))}
+            {policyState.status === "error" && policyState.managed === true && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  const current = usePolicyStore.getState();
+                  if (current.accountId && current.authGeneration != null)
+                    void current.fetchPolicy(current.accountId, current.authGeneration);
+                }}
+              >
+                {t("common.retry")}
+              </Button>
+            )}
           </p>
         )}
         {state === "idle" && providerReady === false && (

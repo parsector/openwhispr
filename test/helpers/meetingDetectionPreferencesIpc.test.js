@@ -191,6 +191,33 @@ test("a refused notification Join still opens the meeting and refuses only the r
   assert.deepEqual(calls, [["open"]]);
 });
 
+test("a personal notification Join starts notes when policy lookup is unavailable", async () => {
+  const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
+  target._audioFeaturePolicy = createAudioFeaturePolicy({
+    getPolicy: async () => ({ success: false, code: "POLICY_UNAVAILABLE", error: "offline" }),
+  });
+  const owner = { prompt: { detectionId: "calendar:personal" } };
+  const calls = [];
+  target.windowManager.captureMeetingNotificationOwner = () => owner;
+  target.meetingDetectionEngine = {
+    setPreferences: (prefs) => applied.push(prefs),
+    openNotificationJoinUrl: (joined) => calls.push(["open", joined]),
+    handleNotificationResponse: (_id, action) => {
+      calls.push([action]);
+      return { success: true, value: null };
+    },
+  };
+
+  const result = await handlers.get("meeting-notification-respond")(
+    { sender: {} },
+    "calendar:personal",
+    "join",
+    {}
+  );
+  assert.deepEqual(result, { success: true, value: null });
+  assert.deepEqual(calls, [["open", owner], ["join"]]);
+});
+
 test("a refused calendar Join reports the refusal to the panel that asked", async () => {
   const refusal = { success: false, code: "POLICY_MEETING_RECORDING_DISABLED", error: "off" };
   let next = refusal;

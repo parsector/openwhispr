@@ -1124,3 +1124,11 @@ test("audio controls independently gate every mode while leaving dictation avail
     }
   }
 });
+
+test("personal audio recovery leaves dictation's unresolved-policy decision unchanged", async () => {
+  const { isAudioFeatureAllowed } = await load();
+  const state = { status: "error", managed: false, policy: null, appVersion: null };
+  assert.equal(isAudioFeatureAllowed(state, "meeting"), true);
+  assert.equal(isAudioFeatureAllowed(state, "upload"), true);
+  assert.equal(isAudioFeatureAllowed(state, "dictation"), false);
+});
