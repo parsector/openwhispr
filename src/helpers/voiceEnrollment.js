@@ -42,12 +42,8 @@ function cosine(a, b) {
   return dot;
 }
 function rowsFor(db, noteId) {
-  const note = db
-    .prepare("SELECT transcript, speaker_action_log, speaker_label_undo FROM notes WHERE id = ?")
-    .get(noteId);
-  return note
-    ? { rows: readTranscriptDocument(note.transcript).rows, changed: changedRows(note) }
-    : { rows: [], changed: new Set() };
+  const note = db.prepare("SELECT transcript FROM notes WHERE id = ?").get(noteId);
+  return note ? readTranscriptDocument(note.transcript).rows : [];
 }
 function changedRows(note) {
   const ids = new Set();
@@ -62,8 +58,9 @@ function changedRows(note) {
   return ids;
 }
 function attributed(db, noteId, row, profileId) {
+  // A user's explicit label takes precedence over older cluster mappings.
+  if (row.speakerLockSource === "user") return row.suggestedProfileId === profileId;
   if (row.suggestedProfileId === profileId) return true;
-  if (row.speakerLockSource === "user" && row.suggestedProfileId == null) return false;
   if (
     row.diarizationRunId &&
     db
@@ -82,19 +79,13 @@ function attributed(db, noteId, row, profileId) {
     .get(noteId, row.speaker, profileId);
 }
 function clean(db, sample) {
-  const { rows, changed } = rowsFor(db, sample.note_id);
+  const rows = rowsFor(db, sample.note_id);
   const ids = JSON.parse(sample.row_ids || "[]");
   return (
     ids.length > 0 &&
     ids.every((id) => {
       const row = rows.find((item) => item.id === id);
-      return (
-        row &&
-        !row.deleted &&
-        !changed.has(id) &&
-        !Number(row.correctionRevision) &&
-        attributed(db, sample.note_id, row, sample.profile_id)
-      );
+      return row && !row.deleted && attributed(db, sample.note_id, row, sample.profile_id);
     })
   );
 }
@@ -115,8 +106,8 @@ function state(db, profileId) {
       vectors.some((right, j) => j > i && (!right || cosine(left, right) < MIN_OWN_SIMILARITY))
   );
   const meetings = new Set(good.map((sample) => sample.note_id)).size;
-  // Graduation rule: three uncorrected, internally consistent approved spans
-  // from at least two recordings. A correction to any contributing row demotes.
+  // Graduation requires three approved, internally consistent spans from two
+  // recordings. A later correction to any contributing row removes its sample.
   const requiresReview = !!db
     .prepare("SELECT voice_needs_reapproval FROM speaker_profiles WHERE id = ?")
     .get(profileId)?.voice_needs_reapproval;
@@ -219,10 +210,16 @@ function candidateId(profileId, noteId, rowId, span) {
     )
     .digest("hex");
 }
-function listCandidates(database, store, profileId) {
+function candidateReport(database, store, profileId) {
   const db = database.db;
-  if (!db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(profileId)) return [];
-  if (samples(db, profileId).length >= MAX_SAMPLES) return [];
+  const reasons = { short: 0, long: 0, audio: 0, overlap: 0, uncertain: 0, reviewed: 0, limit: 0 };
+  if (!db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(profileId))
+    return { candidates: [], reasons };
+  const approved = samples(db, profileId).length;
+  if (approved >= MAX_SAMPLES) {
+    reasons.limit = approved;
+    return { candidates: [], reasons };
+  }
   const offered = [];
   for (const note of db
     .prepare(
@@ -230,25 +227,39 @@ function listCandidates(database, store, profileId) {
     )
     .all()) {
     const audioState = store.status(note.id);
-    if (!["complete", "incomplete"].includes(audioState.state) || audioState.bytes === 0) continue;
     const rows = readTranscriptDocument(note.transcript).rows;
     const changed = changedRows(note);
     for (const row of rows) {
       const span = row.audioSpan;
+      if (row.deleted || !attributed(db, note.id, row, profileId)) continue;
+      const exclude = (reason) => {
+        reasons[reason]++;
+      };
+      // Reconsideration and split events can change a machine attribution.
+      // Only an explicit owner label lifts the old changed-row exclusion.
+      if (changed.has(row.id) && row.speakerLockSource !== "user") {
+        exclude("uncertain");
+        continue;
+      }
       if (
-        row.deleted ||
-        changed.has(row.id) ||
-        Number(row.correctionRevision) ||
         row.uncertainty ||
         row.overlap ||
         row.speakerStatus === "provisional" ||
-        row.speakerStatus === "suggested" ||
-        !attributed(db, note.id, row, profileId) ||
+        row.speakerStatus === "suggested"
+      ) {
+        exclude("uncertain");
+        continue;
+      }
+      if (
+        !["complete", "incomplete"].includes(audioState.state) ||
+        audioState.bytes === 0 ||
         !span ||
         span.recordingId !== (audioState.recordingId ?? note.id) ||
         !["mic", "system"].includes(span.trackId)
-      )
+      ) {
+        exclude("audio");
         continue;
+      }
       const overlapsOtherVoice = rows.some(
         (other) =>
           other !== row &&
@@ -258,12 +269,33 @@ function listCandidates(database, store, profileId) {
           other.audioSpan?.startSample < span.endSample &&
           other.audioSpan?.endSample > span.startSample
       );
-      if (overlapsOtherVoice) continue;
+      if (overlapsOtherVoice) {
+        exclude("overlap");
+        continue;
+      }
       // Exclude the first and last 250 ms around a transcript boundary.
       const startSample = span.startSample + RATE / 4;
       const endSample = span.endSample - RATE / 4;
       const duration = (endSample - startSample) / RATE;
-      if (duration < 3 || duration > 8) continue;
+      if (duration < 3) {
+        exclude("short");
+        continue;
+      }
+      if (duration > 8) {
+        exclude("long");
+        continue;
+      }
+      // Retention may leave a note present while its actual span is gone.
+      const available = store.spanAvailable
+        ? store.spanAvailable(note.id, span.trackId, startSample, endSample)
+        : (() => {
+            const audio = store.span(note.id, span.trackId, startSample / RATE, endSample / RATE);
+            return audio.state === "available" && !audio.partial;
+          })();
+      if (!available) {
+        exclude("audio");
+        continue;
+      }
       const trimmed = { ...span, startSample, endSample };
       const id = candidateId(profileId, note.id, row.id, trimmed);
       const overlapsApproved = db
@@ -273,7 +305,10 @@ function listCandidates(database, store, profileId) {
           AND start_sample < ? AND end_sample > ?`
         )
         .get(profileId, note.id, span.trackId, endSample, startSample);
-      if (overlapsApproved) continue;
+      if (overlapsApproved) {
+        exclude("reviewed");
+        continue;
+      }
       const spanKey = [profileId, note.id, span.trackId, startSample, endSample];
       if (
         db
@@ -288,8 +323,10 @@ function listCandidates(database, store, profileId) {
         AND track = ? AND start_sample = ? AND end_sample = ?`
           )
           .get(...spanKey)
-      )
+      ) {
+        exclude("reviewed");
         continue;
+      }
       offered.push({
         id,
         profileId,
@@ -316,11 +353,14 @@ function listCandidates(database, store, profileId) {
             ])
           )
           .digest("hex"),
-        everCorrected: false,
+        everCorrected: changed.has(row.id) || !!Number(row.correctionRevision),
       });
     }
   }
-  return offered;
+  return { candidates: offered, reasons };
+}
+function listCandidates(database, store, profileId) {
+  return candidateReport(database, store, profileId).candidates;
 }
 function locate(database, store, id) {
   const db = database.db;
@@ -892,6 +932,7 @@ function removeNoteEvidence(db, noteId) {
 }
 module.exports = {
   listCandidates,
+  candidateReport,
   listSamples,
   play,
   complete,

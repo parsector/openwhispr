@@ -159,5 +159,67 @@ test(
     assert.match(await voice.getByRole("alertdialog").textContent(), /2 samples/);
     await page.keyboard.press("Escape");
     assert.equal(await voice.locator('[role="alertdialog"]').count(), 0);
+
+    const enrolRow = page.locator('[data-person-row="2"]');
+    const enrolTrigger = enrolRow.getByRole("button", { name: "Enrol voice" });
+    const enrolOriginal = await enrolRow.textContent();
+    await enrolTrigger.click();
+    const enrolDialog = enrolRow.getByRole("dialog", { name: /Enrol voice/ });
+    await enrolDialog.waitFor();
+    assert.equal(await page.getByRole("dialog", { name: /Enrol voice/ }).count(), 1);
+    assert.equal(await enrolRow.locator("[data-enroll-trigger]").count(), 0);
+    assert.equal(
+      await enrolDialog
+        .getByRole("button", { name: "Cancel" })
+        .evaluate((element) => document.activeElement === element),
+      true
+    );
+    assert.match(await enrolDialog.textContent(), /Alexndra Rivera/);
+    assert.match(await enrolDialog.textContent(), /Clean spans: 0 \/ 3 · recordings: 0 \/ 2/);
+    assert.match(await enrolDialog.textContent(), /Shorter than 3 s: 3/);
+    assert.match(await enrolDialog.textContent(), /Audio expired, missing, or evicted: 2/);
+    assert.match(await enrolDialog.textContent(), /Marked as two people or uncertain: 1/);
+    await enrolDialog.getByRole("button", { name: "Cancel" }).click();
+    assert.equal(await enrolRow.textContent(), enrolOriginal);
+    assert.equal(
+      await enrolTrigger.evaluate((element) => document.activeElement === element),
+      true
+    );
+    await enrolTrigger.click();
+    await enrolRow.getByRole("dialog", { name: /Enrol voice/ }).waitFor();
+    await page.keyboard.press("Escape");
+    assert.equal(await enrolRow.textContent(), enrolOriginal);
+    assert.equal(
+      await enrolTrigger.evaluate((element) => document.activeElement === element),
+      true
+    );
+
+    if (process.env.PEOPLE_SCREENSHOT_DIR) {
+      const screenshots = process.env.PEOPLE_SCREENSHOT_DIR;
+      fs.mkdirSync(screenshots, { recursive: true });
+      for (const width of [1440, 412]) {
+        await page.setViewportSize({ width, height: 900 });
+        for (const theme of ["light", "dark"]) {
+          await page.evaluate(
+            (dark) => document.documentElement.classList.toggle("dark", dark),
+            theme === "dark"
+          );
+          const offerRow = page.locator('[data-person-row="1"]');
+          await offerRow.getByRole("button", { name: "Enrol voice" }).click();
+          await offerRow.getByRole("dialog", { name: /Enrol voice/ }).waitFor();
+          assert.match(await offerRow.textContent(), /Labelled by you/);
+          await offerRow.scrollIntoViewIfNeeded();
+          await page.screenshot({ path: path.join(screenshots, `${width}-${theme}-open.png`) });
+          await offerRow.getByRole("button", { name: "Cancel" }).click();
+          await enrolTrigger.click();
+          await enrolRow.getByRole("dialog", { name: /Enrol voice/ }).waitFor();
+          await enrolRow.scrollIntoViewIfNeeded();
+          await page.screenshot({ path: path.join(screenshots, `${width}-${theme}-empty.png`) });
+          await enrolRow.getByRole("button", { name: "Cancel" }).click();
+          await enrolRow.scrollIntoViewIfNeeded();
+          await page.screenshot({ path: path.join(screenshots, `${width}-${theme}-cancel.png`) });
+        }
+      }
+    }
   }
 );

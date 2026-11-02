@@ -16,6 +16,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
+import { Progress } from "../ui/progress";
 import EmptyStateCard from "../ui/EmptyStateCard";
 import { Skeleton } from "../ui/skeleton";
 import { useToast } from "../ui/useToast";
@@ -40,7 +41,10 @@ type HistoryAction = Awaited<
 >[number];
 type EnrollmentCandidate = Awaited<
   ReturnType<NonNullable<typeof window.electronAPI.listVoiceEnrollmentCandidates>>
->[number];
+>["candidates"][number];
+type EnrollmentReasons = Awaited<
+  ReturnType<NonNullable<typeof window.electronAPI.listVoiceEnrollmentCandidates>>
+>["reasons"];
 type EnrollmentSample = Awaited<
   ReturnType<NonNullable<typeof window.electronAPI.listVoiceEnrollmentSamples>>
 >[number];
@@ -141,6 +145,15 @@ export default function PeoplePage({
   } | null>(null);
   const [enrollingId, setEnrollingId] = useState<number | null>(null);
   const [candidates, setCandidates] = useState<EnrollmentCandidate[]>([]);
+  const [enrollmentReasons, setEnrollmentReasons] = useState<EnrollmentReasons>({
+    short: 0,
+    long: 0,
+    audio: 0,
+    overlap: 0,
+    uncertain: 0,
+    reviewed: 0,
+    limit: 0,
+  });
   const [enrollmentSamples, setEnrollmentSamples] = useState<EnrollmentSample[]>([]);
   const [enrollmentLoading, setEnrollmentLoading] = useState(false);
   const [listeningId, setListeningId] = useState<string | null>(null);
@@ -149,8 +162,8 @@ export default function PeoplePage({
   const enrollmentPlayer = useRef<HTMLAudioElement | null>(null);
   const enrollmentUrl = useRef<string | null>(null);
   const enrollmentRequest = useRef(0);
-  const enrollmentPanelRef = useRef<HTMLElement>(null);
-  const enrollmentTrigger = useRef<HTMLElement | null>(null);
+  const enrollmentCancelRef = useRef<HTMLButtonElement>(null);
+  const enrollmentFromMenu = useRef(false);
   useEffect(() => {
     if (!selected) return;
     const target = kind === "merge" ? survivorTrigger.current : actionCancel.current;
@@ -163,7 +176,7 @@ export default function PeoplePage({
     }
   }, [editingId]);
   useEffect(() => {
-    if (enrollingId !== null) enrollmentPanelRef.current?.focus();
+    if (enrollingId !== null) enrollmentCancelRef.current?.focus({ preventScroll: true });
   }, [enrollingId]);
   useEffect(
     () => () => {
@@ -256,9 +269,7 @@ export default function PeoplePage({
   const openEnrollment = async (profileId: number, fromMenu = false) => {
     setSelected(null);
     setEditingId(null);
-    enrollmentTrigger.current = fromMenu
-      ? document.querySelector<HTMLElement>(`[data-person-menu="${profileId}"]`)
-      : (document.activeElement as HTMLElement);
+    enrollmentFromMenu.current = fromMenu;
     const request = ++enrollmentRequest.current;
     enrollmentPlayer.current?.pause();
     setEnrollingId(profileId);
@@ -274,7 +285,18 @@ export default function PeoplePage({
         window.electronAPI.listVoiceEnrollmentSamples?.(profileId),
       ]);
       if (request !== enrollmentRequest.current) return;
-      setCandidates(offers || []);
+      setCandidates(offers?.candidates || []);
+      setEnrollmentReasons(
+        offers?.reasons || {
+          short: 0,
+          long: 0,
+          audio: 0,
+          overlap: 0,
+          uncertain: 0,
+          reviewed: 0,
+          limit: 0,
+        }
+      );
       setEnrollmentSamples(samples || []);
     } catch {
       if (request === enrollmentRequest.current) setEnrollmentError("unavailable");
@@ -353,7 +375,18 @@ export default function PeoplePage({
         window.electronAPI.listVoiceEnrollmentSamples?.(candidate.profileId),
       ]);
       if (request !== enrollmentRequest.current) return;
-      setCandidates(offers || []);
+      setCandidates(offers?.candidates || []);
+      setEnrollmentReasons(
+        offers?.reasons || {
+          short: 0,
+          long: 0,
+          audio: 0,
+          overlap: 0,
+          uncertain: 0,
+          reviewed: 0,
+          limit: 0,
+        }
+      );
       setEnrollmentSamples(samples || []);
       await refresh();
     } catch (cause) {
@@ -599,6 +632,7 @@ export default function PeoplePage({
       );
   };
   const closeEnrollment = (returnFocus = true) => {
+    const id = enrollingId;
     enrollmentRequest.current++;
     enrollmentPlayer.current?.pause();
     setEnrollingId(null);
@@ -606,7 +640,16 @@ export default function PeoplePage({
     setCandidates([]);
     setEnrollmentSamples([]);
     if (returnFocus)
-      requestAnimationFrame(() => enrollmentTrigger.current?.focus({ preventScroll: true }));
+      requestAnimationFrame(() => {
+        const trigger = document.querySelector<HTMLElement>(
+          enrollmentFromMenu.current
+            ? `[data-person-menu="${id}"]`
+            : `[data-enroll-trigger="${id}"]`
+        );
+        (trigger || document.querySelector<HTMLElement>(`[data-person-menu="${id}"]`))?.focus({
+          preventScroll: true,
+        });
+      });
   };
   const newestActionIndex = actionHistory.findIndex((item) => !item.unavailableReason);
   const execute = async () => {
@@ -1392,6 +1435,197 @@ export default function PeoplePage({
                       </div>
                     </FocusScope>
                   </div>
+                ) : enrollingId === p.id ? (
+                  <div className="col-span-full min-w-0">
+                    <strong
+                      dir="auto"
+                      className="block truncate text-sm font-semibold text-foreground"
+                    >
+                      {p.displayName || p.email || t("people.noName")}
+                    </strong>
+                    <FocusScope
+                      trapped
+                      loop
+                      onMountAutoFocus={(event) => event.preventDefault()}
+                      onUnmountAutoFocus={(event) => event.preventDefault()}
+                    >
+                      <section
+                        tabIndex={-1}
+                        className="mt-3 rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={`${t("people.enrollVoice")} · ${p.displayName || p.email || t("people.noName")}`}
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            event.preventDefault();
+                            closeEnrollment();
+                          }
+                        }}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <SectionHeader
+                            title={`${t("people.enrollVoice")} · ${people.find((p) => p.id === enrollingId)?.displayName || ""}`}
+                          />
+                          <Button
+                            ref={enrollmentCancelRef}
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => closeEnrollment()}
+                          >
+                            {t("people.cancel")}
+                          </Button>
+                        </div>
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {t("people.enrollmentIntro")}
+                        </p>
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <Badge variant={p.voiceProgress.usable ? "success" : "outline"}>
+                            {t("people.enrollmentProgress", {
+                              spans: p.voiceProgress.cleanSpans,
+                              meetings: p.voiceProgress.meetings,
+                            })}
+                          </Badge>
+                          {p.voiceProgress.usable && (
+                            <Badge variant="success">{t("people.voiceUsable")}</Badge>
+                          )}
+                        </div>
+                        <Progress
+                          className="mt-2 max-w-sm"
+                          value={Math.min(100, (p.voiceProgress.cleanSpans / 3) * 100)}
+                          aria-label={t("people.enrollmentProgress", {
+                            spans: p.voiceProgress.cleanSpans,
+                            meetings: p.voiceProgress.meetings,
+                          })}
+                        />
+                        {enrollmentError && (
+                          <p role="alert" className="mt-3 text-sm text-destructive">
+                            {t(`people.enrollmentErrors.${enrollmentError}`, {
+                              defaultValue: t("people.actionError"),
+                            })}
+                          </p>
+                        )}
+                        {enrollmentLoading && (
+                          <p role="status" className="mt-3 text-sm text-muted-foreground">
+                            {t("people.loading")}
+                          </p>
+                        )}
+                        {!enrollmentLoading && candidates.length === 0 && (
+                          <Alert className="mt-3">
+                            <AlertTitle>{t("people.noEnrollmentCandidates")}</AlertTitle>
+                            <AlertDescription>
+                              {Object.entries(enrollmentReasons).some(([, count]) => count > 0) ? (
+                                <ul className="mt-2 list-inside list-disc space-y-1">
+                                  {Object.entries(enrollmentReasons)
+                                    .filter(([, count]) => count > 0)
+                                    .map(([reason, count]) => (
+                                      <li key={reason}>
+                                        {t(`people.enrollmentReasons.${reason}`, { count })}
+                                      </li>
+                                    ))}
+                                </ul>
+                              ) : (
+                                <p className="mt-2">{t("people.noLabelledEnrollmentRows")}</p>
+                              )}
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                        <div className="mt-3 divide-y divide-border rounded-lg border border-border">
+                          {candidates.map((candidate) => (
+                            <div
+                              key={candidate.id}
+                              className="flex flex-wrap items-center justify-between gap-3 p-3"
+                            >
+                              <div>
+                                <p className="text-sm font-medium">{candidate.noteTitle}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {date(candidate.meetingDate)} ·{" "}
+                                  {t("people.enrollmentDuration", {
+                                    seconds: new Intl.NumberFormat(locale, {
+                                      maximumFractionDigits: 1,
+                                    }).format(candidate.durationSeconds),
+                                  })}{" "}
+                                  {candidate.everCorrected && <> · {t("people.ownerCorrected")}</>}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={listeningId !== null || working}
+                                  onClick={() => void playCandidate(candidate)}
+                                >
+                                  {listeningId === candidate.id
+                                    ? t("people.playing")
+                                    : t("people.listen")}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  disabled={working || listened?.id !== candidate.id}
+                                  onClick={() => void decideCandidate(candidate, "approve")}
+                                >
+                                  {t("people.approveSample")}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={working || listened?.id !== candidate.id}
+                                  onClick={() => void decideCandidate(candidate, "reject")}
+                                >
+                                  {t("people.rejectSample")}
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {enrollmentSamples.length > 0 && (
+                          <div className="mt-4">
+                            <SectionHeader title={t("people.approvedSamples")} />
+                            <div className="divide-y divide-border rounded-lg border border-border">
+                              {enrollmentSamples.map((sample) => (
+                                <div
+                                  key={sample.id}
+                                  className={`flex flex-wrap items-center justify-between gap-3 p-3 ${sample.odd ? "bg-warning/10" : ""}`}
+                                >
+                                  <span className="text-sm">
+                                    {sample.noteTitle} · {date(sample.meetingDate)}
+                                    {sample.odd && <> · {t("people.oddSample")}</>}
+                                  </span>
+                                  <div className="flex gap-2">
+                                    {sample.odd && (
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={!onOpenNote}
+                                        onClick={() =>
+                                          onOpenNote?.(sample.noteId, sample.rowIds[0])
+                                        }
+                                      >
+                                        {t("people.splitSample")}
+                                      </Button>
+                                    )}
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      variant="secondary"
+                                      disabled={working}
+                                      onClick={() => void removeEnrollmentSample(sample)}
+                                    >
+                                      {t("people.removeSample")}
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </section>
+                    </FocusScope>
+                  </div>
                 ) : (
                   <>
                     <div className="min-w-0">
@@ -1579,6 +1813,7 @@ export default function PeoplePage({
                           type="button"
                           size="sm"
                           variant="outline-flat"
+                          data-enroll-trigger={p.id}
                           onClick={() => void openEnrollment(p.id)}
                         >
                           {p.hasVoice || p.voiceProgress.cleanSpans > 0
@@ -1659,135 +1894,6 @@ export default function PeoplePage({
                       </div>
                     )}
                   </>
-                )}
-                {enrollingId === p.id && (
-                  <section
-                    ref={enrollmentPanelRef}
-                    tabIndex={-1}
-                    className="col-span-full rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={t("people.enrollVoice")}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <SectionHeader
-                        title={`${t("people.enrollVoice")} · ${people.find((p) => p.id === enrollingId)?.displayName || ""}`}
-                      />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => closeEnrollment()}
-                      >
-                        {t("people.cancel")}
-                      </Button>
-                    </div>
-                    <p className="mt-2 text-sm text-muted-foreground">
-                      {t("people.enrollmentIntro")}
-                    </p>
-                    {enrollmentError && (
-                      <p role="alert" className="mt-3 text-sm text-destructive">
-                        {t(`people.enrollmentErrors.${enrollmentError}`, {
-                          defaultValue: t("people.actionError"),
-                        })}
-                      </p>
-                    )}
-                    {enrollmentLoading && (
-                      <p role="status" className="mt-3 text-sm text-muted-foreground">
-                        {t("people.loading")}
-                      </p>
-                    )}
-                    {!enrollmentLoading && candidates.length === 0 && (
-                      <p className="mt-3 text-sm text-muted-foreground">
-                        {t("people.noEnrollmentCandidates")}
-                      </p>
-                    )}
-                    <div className="mt-3 divide-y divide-border rounded-lg border border-border">
-                      {candidates.map((candidate) => (
-                        <div
-                          key={candidate.id}
-                          className="flex flex-wrap items-center justify-between gap-3 p-3"
-                        >
-                          <div>
-                            <p className="text-sm font-medium">{candidate.noteTitle}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {date(candidate.meetingDate)} ·{" "}
-                              {t("people.enrollmentDuration", {
-                                seconds: new Intl.NumberFormat(locale, {
-                                  maximumFractionDigits: 1,
-                                }).format(candidate.durationSeconds),
-                              })}{" "}
-                              · {t("people.neverCorrected")}
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button
-                              type="button"
-                              className={button}
-                              disabled={listeningId !== null || working}
-                              onClick={() => void playCandidate(candidate)}
-                            >
-                              {listeningId === candidate.id
-                                ? t("people.playing")
-                                : t("people.listen")}
-                            </button>
-                            <button
-                              type="button"
-                              className={button}
-                              disabled={working || listened?.id !== candidate.id}
-                              onClick={() => void decideCandidate(candidate, "approve")}
-                            >
-                              {t("people.approveSample")}
-                            </button>
-                            <button
-                              type="button"
-                              className={button}
-                              disabled={working || listened?.id !== candidate.id}
-                              onClick={() => void decideCandidate(candidate, "reject")}
-                            >
-                              {t("people.rejectSample")}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {enrollmentSamples.length > 0 && (
-                      <div className="mt-4">
-                        <SectionHeader title={t("people.approvedSamples")} />
-                        <div className="divide-y divide-border rounded-lg border border-border">
-                          {enrollmentSamples.map((sample) => (
-                            <div
-                              key={sample.id}
-                              className={`flex flex-wrap items-center justify-between gap-3 p-3 ${sample.odd ? "bg-warning/10" : ""}`}
-                            >
-                              <span className="text-sm">
-                                {sample.noteTitle} · {date(sample.meetingDate)}
-                                {sample.odd && <> · {t("people.oddSample")}</>}
-                              </span>
-                              <div className="flex gap-2">
-                                {sample.odd && (
-                                  <button
-                                    type="button"
-                                    className={button}
-                                    disabled={!onOpenNote}
-                                    onClick={() => onOpenNote?.(sample.noteId, sample.rowIds[0])}
-                                  >
-                                    {t("people.splitSample")}
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  className={button}
-                                  disabled={working}
-                                  onClick={() => void removeEnrollmentSample(sample)}
-                                >
-                                  {t("people.removeSample")}
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </section>
                 )}
               </div>
             ))}
