@@ -27,9 +27,9 @@ function ranked(vector, profiles) {
     .sort((a, b) => b.score - a.score);
 }
 function sweep(rows, profiles, key) {
-  const examples = rows.filter(
-    (row) => Array.isArray(row[key]) && row[key].length && row.truePerson
-  );
+  const examples = rows
+    .filter((row) => Array.isArray(row[key]) && row[key].length && row.truePerson)
+    .map((row) => ({ truePerson: row.truePerson, ranked: ranked(row[key], profiles) }));
   const table = [];
   for (const floor of candidates.similarityFloor)
     for (const margin of candidates.runnerUpMargin) {
@@ -37,7 +37,7 @@ function sweep(rows, profiles, key) {
         wrong = 0,
         refused = 0;
       for (const row of examples) {
-        const [best, next] = ranked(row[key], profiles);
+        const [best, next] = row.ranked;
         if (!best || best.score <= floor || best.score - (next?.score || 0) < margin) refused++;
         else if (best.name === row.truePerson) right++;
         else wrong++;
