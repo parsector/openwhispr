@@ -77,6 +77,7 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
   "src/components/settings/EnterpriseAudioSettings.tsx": ["ltr"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
+  "src/components/settings/PeoplePage.tsx": ["auto", "auto"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceSection.tsx": ["auto"],
   // A skill's name and the skills search accept text in any script.
@@ -142,8 +143,14 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
   // Search and new speaker names may use any writing system.
-  // Scope radios inherit direction; dates and numeric budgets are LTR; names accept any script.
-  "src/components/settings/PeoplePage.tsx": ["inherit", "ltr", "ltr", "ltr", "ltr", "auto", "auto"],
+  // Scope radios inherit direction; dates and numeric budgets are LTR; names and emails accept any script.
+  "src/components/settings/PeoplePage.tsx": [
+    "inherit",
+    "ltr",
+    "ltr",
+    "ltr",
+    "ltr",
+  ],
   "src/components/todos/TodoMentionInput.tsx": ["auto"],
   "src/components/todos/TodoPersonPicker.tsx": ["auto"],
   "src/components/todos/TodoRow.tsx": ["auto", "ltr"],

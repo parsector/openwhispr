@@ -1,0 +1,4 @@
+# In-row action moments
+- Delete: The person's name stays visible; the row replaces its details with a warning, counts, Cancel, and destructive Delete person. Focus lands on Cancel and Tab stays in the question. Escape or Cancel restores the exact resting row and focuses ⋯.
+- Merge: The person's name stays visible; the row shows the Settings selector for the survivor, the linked-data preview, Cancel, and Merge. Focus lands on the selector; Escape or Cancel restores the row and focuses ⋯. After Merge, the source row disappears and the survivor updates.
+- Rename: The name becomes the Settings input in its own row, with Save and Cancel. Focus selects the current name; Enter saves, Escape or Cancel restores the resting row and focuses the pencil. After Save, the new name occupies the same place.
