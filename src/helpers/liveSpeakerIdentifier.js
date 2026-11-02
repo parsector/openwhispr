@@ -50,12 +50,12 @@ const SILENCE_WINDOWS_TO_END = 24;
 const matchFloor = () => speakerThresholds.current().values.similarityFloor;
 const matchMargin = () => speakerThresholds.current().values.runnerUpMargin;
 const anchorFloor = () =>
-  speakerThresholds.current().status === "calibrated" ? matchFloor() : 0.6;
+  speakerThresholds.current().statuses?.similarityFloor === "calibrated" ? matchFloor() : 0.6;
 const anchorMargin = () =>
-  speakerThresholds.current().status === "calibrated" ? matchMargin() : 0.08;
+  speakerThresholds.current().statuses?.runnerUpMargin === "calibrated" ? matchMargin() : 0.08;
 const anchorMinSamples = () =>
   SAMPLE_RATE *
-  (speakerThresholds.current().status === "calibrated"
+  (speakerThresholds.current().statuses?.minimumVoicedSeconds === "calibrated"
     ? speakerThresholds.current().values.minimumVoicedSeconds
     : 3);
 const ANCHOR_MIN_CONSISTENCY = 0.8;

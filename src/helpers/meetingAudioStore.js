@@ -548,6 +548,7 @@ class MeetingAudioStore {
     if (cursor < end) return { state: "gap" };
     const parts = [];
     let covered = 0;
+    let bytesRead = 0;
     let lastEnd = null;
     for (const chunk of state.chunks) {
       const chunkEnd = chunk.startSample + chunk.sampleCount;
@@ -555,9 +556,9 @@ class MeetingAudioStore {
       let decoded;
       let plaintext;
       try {
-        plaintext = this.encryption.decryptBytes(
-          fs.readFileSync(this._chunkFile(noteId, chunk.file))
-        );
+        const encrypted = fs.readFileSync(this._chunkFile(noteId, chunk.file));
+        bytesRead += encrypted.length;
+        plaintext = this.encryption.decryptBytes(encrypted);
       } catch {
         return { state: "key_unavailable" };
       }
@@ -579,6 +580,7 @@ class MeetingAudioStore {
     return {
       state: "available",
       wav: wav(pcm),
+      bytesRead,
       durationSeconds: pcm.length / (RATE * 2),
       partial: end < requestedEnd || covered < requestedEnd - start,
       codec: "audio/wav",
