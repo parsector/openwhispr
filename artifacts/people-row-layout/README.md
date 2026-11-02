@@ -12,3 +12,5 @@ The first row measured **176 px at 1440 px** and **240 px at 412 px** in both th
 | 412 dark        | [list](412-dark-list.png)   | [expanded](412-dark-expanded.png)   | [menu](412-dark-menu.png)   | [delete](412-dark-delete.png)   | [merge](412-dark-merge.png)   | [rename](412-dark-rename.png)   | [restored](412-dark-restored.png)   |
 
 [Machine-readable measurements](metrics.json). The prior branch's light baseline captures are retained as [1440 px](1440-light-before.png) and [412 px](412-light-before.png).
+
+The separate interaction proof is `node --test test/browser/peopleRowActions.cjs`. It mounts the committed 20-person fixture, checks the row descendant, preview fields, Tab loop, Escape, Cancel restoration, focus, scroll, merge selection, one-open-row rule, rename by Enter, and reset voice.
