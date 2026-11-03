@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.6] - 2026-11-02
+
+Calibration now uses the audio your transcript already plays, instead of asking for a stored span that was never written.
+
+### Calibration
+
+- **A row that plays can be measured.** Calibration resolves each row's audio the same way the transcript player does — recording timebase, track and retained chunks — so a note whose rows play normally is no longer excluded wholesale.
+- Whether playback can place a row exactly and whether its audio can be measured are reported separately: reconstructed rows stay clearly marked as an estimate, and only a stored cluster vector counts as exact.
+- **A capped run says so.** The report now reads "considered 400 of 576 reviewed rows" and names the row budget, instead of listing exclusions as if they were the whole set.
+- Genuine refusals remain: audio missing, deleted or expired, spans shorter than the minimum voiced seconds, and spans outside the recording.
+
 ## [1.12.5] - 2026-11-02
 
 A finished meeting now keeps the voice vectors that calibration reads, and says why when it cannot.
