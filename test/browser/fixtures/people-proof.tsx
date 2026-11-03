@@ -45,6 +45,11 @@ const rows = Array.from({ length: 20 }, (_, i) => ({
     conflict: false,
   },
 }));
+const peopleChanged = new Set<() => void>();
+(window as any).peopleProof = {
+  refresh: () => peopleChanged.forEach((notify) => notify()),
+  rows,
+};
 (window as any).electronAPI = {
   listPeople: async () => rows.map((row) => ({ ...row })),
   listPeopleActions: async () => {
@@ -62,19 +67,51 @@ const rows = Array.from({ length: 20 }, (_, i) => ({
         ]
       : [];
   },
-  listPeopleReview: async () => [
-    {
-      noteId: 42,
-      rowId: "row-1",
-      noteTitle: "October planning meeting",
-      reason: "unassessed",
-      candidates: null,
-      profileId: 1,
-      text: "We should review this speaker label.",
-      speakerName: "Alexandra Rivera",
-    },
-  ],
-  onPeopleChanged: () => () => {},
+  listPeopleReview: async () =>
+    location.search.includes("reliability")
+      ? Array.from({ length: 130 }, (_, index) => ({
+          noteId: 42,
+          rowId: `row-${index + 1}`,
+          noteTitle: "October planning meeting",
+          reason: "unassessed",
+          candidates: null,
+          profileId: 1,
+          text: `Review speaker label ${index + 1}.`,
+          speakerName: "Alexandra Rivera",
+        }))
+      : [
+          {
+            noteId: 42,
+            rowId: "row-1",
+            noteTitle: "October planning meeting",
+            reason: "unassessed",
+            candidates: null,
+            profileId: 1,
+            text: "We should review this speaker label.",
+            speakerName: "Alexandra Rivera",
+          },
+        ],
+  onPeopleChanged: (notify: () => void) => {
+    peopleChanged.add(notify);
+    return () => peopleChanged.delete(notify);
+  },
+  previewClearVoiceData: async () => ({
+    success: true,
+    personCount: 20,
+    embeddingCount: 2,
+    mappingCount: 3,
+    noteEmbeddingCount: 4,
+    sampleCount: 5,
+    candidateCount: 6,
+  }),
+  clearVoiceData: async () => ({
+    success: true,
+    id: "clear-1",
+    personCount: 20,
+    embeddingCount: 2,
+    mappingCount: 3,
+  }),
+  undoClearVoiceData: async () => ({ success: true }),
   speakerCalibrationSettings: async () => {
     if (location.search.includes("calibration-fail")) throw Error("unavailable");
     return {
@@ -126,33 +163,58 @@ const rows = Array.from({ length: 20 }, (_, i) => ({
         ? { short: 0, long: 0, audio: 0, overlap: 0, uncertain: 0, reviewed: 0, limit: 0 }
         : { short: 3, long: 0, audio: 2, overlap: 0, uncertain: 1, reviewed: 0, limit: 0 },
   }),
-  listVoiceEnrollmentSamples: async () => [],
+  listVoiceEnrollmentSamples: async (profileId: number) =>
+    location.search.includes("reliability") && profileId === 1
+      ? [
+          {
+            id: "sample-1",
+            profileId,
+            noteId: 42,
+            noteTitle: "October planning meeting",
+            meetingDate: "2026-10-30 12:00:00",
+            rowIds: ["row-1"],
+            odd: true,
+          },
+        ]
+      : [],
 };
-const peoplePage = (
-  <PeoplePage
-    onOpenNote={(noteId, rowId) => {
-      document.body.dataset.openedNote = String(noteId);
-      document.body.dataset.openedRow = rowId;
-    }}
-  />
-);
+function ProofPage() {
+  const [note, setNote] = React.useState<number | null>(null);
+  const peoplePage = (
+    <PeoplePage
+      onOpenNote={(noteId, rowId) => {
+        document.body.dataset.openedNote = String(noteId);
+        document.body.dataset.openedRow = rowId;
+        if (location.search.includes("reliability")) setNote(noteId);
+      }}
+    />
+  );
+  if (note !== null)
+    return (
+      <main>
+        <h1>Transcript {note}</h1>
+        <button onClick={() => setNote(null)}>Return to review</button>
+      </main>
+    );
+  return location.search.includes("proof-rich") ? (
+    <SidebarModal
+      open
+      onOpenChange={() => {}}
+      title="Settings"
+      sidebarItems={[{ id: "people", label: "People", icon: Users }]}
+      activeSection="people"
+      onSectionChange={() => {}}
+    >
+      {peoplePage}
+    </SidebarModal>
+  ) : (
+    <main className="mx-auto max-w-[1016px] px-4 pt-7">{peoplePage}</main>
+  );
+}
 createRoot(document.getElementById("root")!).render(
   <I18nextProvider i18n={i18n}>
     <ToastProvider>
-      {location.search.includes("proof-rich") ? (
-        <SidebarModal
-          open
-          onOpenChange={() => {}}
-          title="Settings"
-          sidebarItems={[{ id: "people", label: "People", icon: Users }]}
-          activeSection="people"
-          onSectionChange={() => {}}
-        >
-          {peoplePage}
-        </SidebarModal>
-      ) : (
-        <main className="mx-auto max-w-[1016px] px-4 pt-7">{peoplePage}</main>
-      )}
+      <ProofPage />
     </ToastProvider>
   </I18nextProvider>
 );

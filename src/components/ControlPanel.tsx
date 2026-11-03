@@ -133,6 +133,11 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const history = useTranscriptions();
   const [isLoading, setIsLoading] = useState(true);
   const [showSettings, setShowSettings] = useState(!!initialSettingsSection);
+  const [peopleTranscriptReturn, setPeopleTranscriptReturn] = useState<{
+    rowId: string;
+    review: boolean;
+    noteTitle: string | null;
+  } | null>(null);
   const [showPostMigration, setShowPostMigration] = useState(false);
   const [settingsSection, setSettingsSection] = useState<string | undefined>(
     initialSettingsSection
@@ -1030,6 +1035,30 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onDone={dismissPostMigrationPermanently}
       />
 
+      {peopleTranscriptReturn && !showSettings && (
+        <div
+          role="status"
+          className="fixed bottom-4 end-4 z-40 flex max-w-[calc(100vw-2rem)] flex-wrap items-center gap-3 rounded-xl border border-border bg-background p-3 text-sm shadow-lg"
+        >
+          <span>
+            {peopleTranscriptReturn.noteTitle && <>{peopleTranscriptReturn.noteTitle} · </>}
+            {t("people.transcriptDestination", { rowId: peopleTranscriptReturn.rowId })}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setSettingsSection("people");
+              setSettingsRequest((value) => value + 1);
+              setShowSettings(true);
+              setPeopleTranscriptReturn(null);
+            }}
+          >
+            {t(peopleTranscriptReturn.review ? "people.returnToReview" : "people.returnToPeople")}
+          </Button>
+        </div>
+      )}
+
       {showSettings && (
         <Suspense fallback={null}>
           <SettingsModal
@@ -1042,6 +1071,15 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
             }}
             initialSection={settingsSection}
             onOpenNote={(id, rowId) => {
+              const review = !!window.sessionStorage.getItem("peopleReviewReturn");
+              if (review || window.sessionStorage.getItem("peopleEnrollmentReturn")) {
+                setPeopleTranscriptReturn({
+                  rowId,
+                  review,
+                  noteTitle: window.sessionStorage.getItem("peopleReturnNoteTitle"),
+                });
+                window.sessionStorage.removeItem("peopleReturnNoteTitle");
+              }
               window.sessionStorage.setItem(
                 "peopleReviewTarget",
                 JSON.stringify({ noteId: id, rowId })

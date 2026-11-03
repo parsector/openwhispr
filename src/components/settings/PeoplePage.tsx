@@ -66,6 +66,24 @@ const calibrationFields: Array<keyof CalibrationValues> = [
   "minimumVoicedSeconds",
   "overlapToleranceSeconds",
 ];
+const reviewReturnKey = "peopleReviewReturn";
+const peopleReturnKey = "peopleListReturn";
+type ReviewReturn = { reason: string; personFilter: string; limit: number; scrollTop: number };
+type PeopleReturn = { query: string; sort: "usage" | "heard"; windowY: number; hostY: number };
+const savedPeopleReturn = (): PeopleReturn | null => {
+  try {
+    return JSON.parse(window.sessionStorage.getItem(peopleReturnKey) || "null");
+  } catch {
+    return null;
+  }
+};
+const savedReviewReturn = (): ReviewReturn | null => {
+  try {
+    return JSON.parse(window.sessionStorage.getItem(reviewReturnKey) || "null");
+  } catch {
+    return null;
+  }
+};
 
 export default function PeoplePage({
   onOpenNote,
@@ -76,7 +94,10 @@ export default function PeoplePage({
   const { toast } = useToast();
   const locale = useUiLocale();
   const [view, setView] = useState<"people" | "history" | "voice">("people");
-  const [reviewOpen, setReviewOpen] = useState(false);
+  const reviewReturn = useRef(savedReviewReturn());
+  const peopleReturn = useRef(savedPeopleReturn());
+  const reviewScroll = useRef<HTMLDivElement>(null);
+  const [reviewOpen, setReviewOpen] = useState(!!reviewReturn.current);
   const rootRef = useRef<HTMLDivElement>(null);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
   const historyTrigger = useRef<HTMLButtonElement>(null);
@@ -135,15 +156,17 @@ export default function PeoplePage({
   const [calibrationUndoId, setCalibrationUndoId] = useState<string | null>(null);
   const [review, setReview] = useState<Review[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewLoaded, setReviewLoaded] = useState(false);
   const [reviewError, setReviewError] = useState(false);
   const [reviewReload, setReviewReload] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
-  const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<"usage" | "heard">("usage");
-  const [reason, setReason] = useState("");
-  const [personFilter, setPersonFilter] = useState("");
-  const [limit, setLimit] = useState(100);
+  const [query, setQuery] = useState(peopleReturn.current?.query || "");
+  const [sort, setSort] = useState<"usage" | "heard">(peopleReturn.current?.sort || "usage");
+  const [reason, setReason] = useState(reviewReturn.current?.reason || "");
+  const [personFilter, setPersonFilter] = useState(reviewReturn.current?.personFilter || "");
+  const [limit, setLimit] = useState(reviewReturn.current?.limit || 100);
   const [selected, setSelected] = useState<Person | null>(null);
   const [kind, setKind] = useState<Kind>("rename");
   const [name, setName] = useState("");
@@ -166,7 +189,13 @@ export default function PeoplePage({
     embeddingCount: number;
     mappingCount: number;
     noteEmbeddingCount: number;
+    sampleCount: number;
+    candidateCount: number;
   } | null>(null);
+  const [clearPreviewLoading, setClearPreviewLoading] = useState(false);
+  const [clearConfirmation, setClearConfirmation] = useState("");
+  const clearTrigger = useRef<HTMLButtonElement>(null);
+  const clearInput = useRef<HTMLInputElement>(null);
   const [clearReport, setClearReport] = useState<{
     id: string;
     personCount: number;
@@ -195,6 +224,47 @@ export default function PeoplePage({
   const enrollmentRequest = useRef(0);
   const enrollmentCancelRef = useRef<HTMLButtonElement>(null);
   const enrollmentFromMenu = useRef(false);
+  const savePeopleReturn = () => {
+    const host = rootRef.current?.closest(".overflow-y-auto");
+    window.sessionStorage.setItem(
+      peopleReturnKey,
+      JSON.stringify({
+        query,
+        sort,
+        windowY: window.scrollY,
+        hostY: host?.scrollTop || 0,
+      } satisfies PeopleReturn)
+    );
+  };
+  useEffect(() => {
+    if (loading || !peopleReturn.current) return;
+    const saved = peopleReturn.current;
+    const frame = requestAnimationFrame(() => {
+      window.scrollTo(0, saved.windowY);
+      const host = rootRef.current?.closest(".overflow-y-auto");
+      if (host) host.scrollTop = saved.hostY;
+      peopleReturn.current = null;
+      window.sessionStorage.removeItem(peopleReturnKey);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [loading]);
+  useEffect(() => {
+    if (
+      !reviewOpen ||
+      loading ||
+      reviewLoading ||
+      reviewError ||
+      !reviewLoaded ||
+      !reviewReturn.current
+    )
+      return;
+    const saved = reviewReturn.current;
+    const frame = requestAnimationFrame(() => {
+      if (reviewScroll.current) reviewScroll.current.scrollTop = saved.scrollTop;
+      reviewReturn.current = null;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [reviewOpen, loading, reviewLoading, reviewError, reviewLoaded]);
   useEffect(() => {
     if (!selected) return;
     const target = kind === "merge" ? survivorTrigger.current : actionCancel.current;
@@ -304,45 +374,56 @@ export default function PeoplePage({
     setCalibrationUndoId(null);
     await refresh();
   };
-  const openEnrollment = async (profileId: number, fromMenu = false) => {
-    setSelected(null);
-    setEditingId(null);
-    enrollmentFromMenu.current = fromMenu;
-    const request = ++enrollmentRequest.current;
-    enrollmentPlayer.current?.pause();
-    setEnrollingId(profileId);
-    setListened(null);
-    setListeningId(null);
-    setEnrollmentError("");
-    setCandidates([]);
-    setEnrollmentSamples([]);
-    setEnrollmentLoading(true);
-    try {
-      const [offers, samples] = await Promise.all([
-        window.electronAPI.listVoiceEnrollmentCandidates?.(profileId),
-        window.electronAPI.listVoiceEnrollmentSamples?.(profileId),
-      ]);
-      if (request !== enrollmentRequest.current) return;
-      setCandidates(offers?.candidates || []);
-      setEnrollmentReasons(
-        offers?.reasons || {
-          short: 0,
-          long: 0,
-          audio: 0,
-          overlap: 0,
-          uncertain: 0,
-          reviewed: 0,
-          limit: 0,
-          resolution: 0,
-        }
-      );
-      setEnrollmentSamples(samples || []);
-    } catch {
-      if (request === enrollmentRequest.current) setEnrollmentError("unavailable");
-    } finally {
-      if (request === enrollmentRequest.current) setEnrollmentLoading(false);
+  const openEnrollment = useCallback(
+    async (profileId: number, fromMenu = false) => {
+      if (working || renameWorking) return;
+      setSelected(null);
+      setEditingId(null);
+      enrollmentFromMenu.current = fromMenu;
+      const request = ++enrollmentRequest.current;
+      enrollmentPlayer.current?.pause();
+      setEnrollingId(profileId);
+      setListened(null);
+      setListeningId(null);
+      setEnrollmentError("");
+      setCandidates([]);
+      setEnrollmentSamples([]);
+      setEnrollmentLoading(true);
+      try {
+        const [offers, samples] = await Promise.all([
+          window.electronAPI.listVoiceEnrollmentCandidates?.(profileId),
+          window.electronAPI.listVoiceEnrollmentSamples?.(profileId),
+        ]);
+        if (request !== enrollmentRequest.current) return;
+        setCandidates(offers?.candidates || []);
+        setEnrollmentReasons(
+          offers?.reasons || {
+            short: 0,
+            long: 0,
+            audio: 0,
+            overlap: 0,
+            uncertain: 0,
+            reviewed: 0,
+            limit: 0,
+            resolution: 0,
+          }
+        );
+        setEnrollmentSamples(samples || []);
+      } catch {
+        if (request === enrollmentRequest.current) setEnrollmentError("unavailable");
+      } finally {
+        if (request === enrollmentRequest.current) setEnrollmentLoading(false);
+      }
+    },
+    [working, renameWorking]
+  );
+  useEffect(() => {
+    const id = Number(window.sessionStorage.getItem("peopleEnrollmentReturn"));
+    if (id > 0) {
+      window.sessionStorage.removeItem("peopleEnrollmentReturn");
+      void openEnrollment(id);
     }
-  };
+  }, [openEnrollment]);
   const playCandidate = async (candidate: EnrollmentCandidate) => {
     if (candidate.profileId !== enrollingId) return;
     const request = enrollmentRequest.current;
@@ -469,7 +550,8 @@ export default function PeoplePage({
     }
   }, []);
   const refresh = useCallback(async () => {
-    const historyRefresh = refreshHistory();
+    void refreshHistory();
+    setRefreshing(true);
     setError(false);
     try {
       if (!window.electronAPI.listPeople) throw Error("unavailable");
@@ -478,8 +560,8 @@ export default function PeoplePage({
       setError(true);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-    await historyRefresh;
   }, [refreshHistory]);
   useEffect(() => {
     void refresh();
@@ -495,11 +577,13 @@ export default function PeoplePage({
     if (!reviewOpen || loading || error) return;
     let alive = true;
     setReviewLoading(true);
+    setReviewLoaded(false);
     setReviewError(false);
     const load = window.electronAPI.listPeopleReview;
     if (!load) {
       setReviewError(true);
       setReviewLoading(false);
+      setReviewLoaded(true);
       return;
     }
     void load(personFilter ? Number(personFilter) : null)
@@ -510,7 +594,10 @@ export default function PeoplePage({
         if (alive) setReviewError(true);
       })
       .finally(() => {
-        if (alive) setReviewLoading(false);
+        if (alive) {
+          setReviewLoading(false);
+          setReviewLoaded(true);
+        }
       });
     return () => {
       alive = false;
@@ -604,6 +691,7 @@ export default function PeoplePage({
       ? t("notes.speaker.historyQuarantined")
       : t(`people.errors.${value}`, { defaultValue: t("people.actionError") });
   const start = (person: Person, action: Kind) => {
+    if (working || renameWorking) return;
     setEditingId(null);
     if (enrollingId !== null) closeEnrollment(false);
     setSelected(person);
@@ -702,6 +790,13 @@ export default function PeoplePage({
   const newestActionIndex = actionHistory.findIndex((item) => !item.unavailableReason);
   const execute = async () => {
     if (!request || !preview?.success || working) return;
+    const currentIndex = shown.findIndex((person) => person.id === request.profileId);
+    const focusId =
+      kind === "merge"
+        ? survivorId
+        : kind === "delete"
+          ? shown[currentIndex + 1]?.id || shown[currentIndex - 1]?.id
+          : request.profileId;
     setWorking(true);
     setActionError("");
     try {
@@ -733,6 +828,13 @@ export default function PeoplePage({
       });
       setSelected(null);
       await refresh();
+      requestAnimationFrame(() => {
+        const target =
+          focusId && document.querySelector<HTMLElement>(`[data-person-row="${focusId}"]`);
+        (target || document.querySelector<HTMLElement>("[data-people-list-header]"))?.focus({
+          preventScroll: true,
+        });
+      });
     } catch (cause) {
       setActionError(String(cause instanceof Error ? cause.message : cause));
     } finally {
@@ -757,16 +859,20 @@ export default function PeoplePage({
   const previewClear = async () => {
     setActionError("");
     setClearPreview(null);
+    setClearConfirmation("");
+    setClearPreviewLoading(true);
     try {
       const result = await window.electronAPI.previewClearVoiceData?.();
       if (!result?.success) throw Error("persistence_failed");
       setClearPreview(result);
     } catch {
       setActionError("persistence_failed");
+    } finally {
+      setClearPreviewLoading(false);
     }
   };
   const applyClear = async () => {
-    if (!clearPreview || working) return;
+    if (!clearPreview || working || clearConfirmation !== t("people.clearVoice")) return;
     setWorking(true);
     setActionError("");
     try {
@@ -779,6 +885,7 @@ export default function PeoplePage({
         mappingCount: result.mappingCount || 0,
       });
       setClearPreview(null);
+      setClearConfirmation("");
       await refresh();
     } catch (cause) {
       setActionError(String(cause instanceof Error ? cause.message : cause));
@@ -855,9 +962,17 @@ export default function PeoplePage({
     });
   };
   return (
-    <div ref={rootRef} className="space-y-5 pb-8 text-foreground">
+    <div
+      ref={rootRef}
+      data-capturing={working || renameWorking ? "" : undefined}
+      className="space-y-5 pb-8 text-foreground"
+    >
       <div className={view === "people" ? "space-y-4" : "hidden"}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
+        <div
+          data-people-list-header
+          tabIndex={-1}
+          className="flex flex-wrap items-start justify-between gap-3 rounded-md outline-none focus:ring-2 focus:ring-ring"
+        >
           <SectionHeader title={t("people.title")} description={t("people.subtitle")} />
           <div className="flex flex-wrap gap-2">
             <Button ref={historyTrigger} variant="outline" onClick={() => openPage("history")}>
@@ -871,6 +986,11 @@ export default function PeoplePage({
             </Button>
           </div>
         </div>
+        {refreshing && !loading && (
+          <p role="status" className="text-xs text-muted-foreground">
+            {t("people.loading")}
+          </p>
+        )}
         {loading && (
           <div role="status" className="space-y-2" aria-label={t("people.loading")}>
             {[0, 1, 2].map((i) => (
@@ -925,7 +1045,8 @@ export default function PeoplePage({
                 <div
                   key={p.id}
                   data-person-row={p.id}
-                  className="grid min-h-60 content-center gap-x-5 gap-y-3 px-4 py-4 sm:min-h-44 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"
+                  tabIndex={-1}
+                  className="grid min-h-60 content-center gap-x-5 gap-y-3 px-4 py-4 outline-none focus:ring-2 focus:ring-inset focus:ring-ring sm:min-h-44 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5"
                 >
                   {selected?.id === p.id ? (
                     <div className="col-span-full min-w-0">
@@ -936,8 +1057,8 @@ export default function PeoplePage({
                         {p.displayName || p.email || t("people.noName")}
                       </strong>
                       <FocusScope
-                        trapped
-                        loop
+                        trapped={false}
+                        loop={false}
                         onMountAutoFocus={(event) => event.preventDefault()}
                         onUnmountAutoFocus={(event) => event.preventDefault()}
                       >
@@ -946,13 +1067,12 @@ export default function PeoplePage({
                           onKeyDown={(event) => {
                             if (event.key === "Escape") {
                               event.preventDefault();
-                              closePreview();
+                              if (!working) closePreview();
                             }
                           }}
                         >
                           <Alert
                             role="alertdialog"
-                            aria-modal="true"
                             aria-labelledby={`person-action-title-${p.id}`}
                             aria-describedby={`person-action-description-${p.id}`}
                             variant={
@@ -970,6 +1090,7 @@ export default function PeoplePage({
                                     {t("people.survivor")}
                                   </Label>
                                   <Select
+                                    disabled={working}
                                     value={survivorId ? String(survivorId) : "__choose__"}
                                     onValueChange={(value) =>
                                       setSurvivorId(value === "__choose__" ? 0 : Number(value))
@@ -1051,6 +1172,7 @@ export default function PeoplePage({
                                   type="button"
                                   size="sm"
                                   variant="secondary"
+                                  disabled={working}
                                   onClick={() => closePreview()}
                                 >
                                   {t("people.cancel")}
@@ -1069,6 +1191,11 @@ export default function PeoplePage({
                                   {working ? t("people.working") : t(`people.actions.${kind}`)}
                                 </Button>
                               </div>
+                              {working && (
+                                <p role="status" className="mt-2">
+                                  {t("people.waitForSave")}
+                                </p>
+                              )}
                             </AlertDescription>
                           </Alert>
                         </div>
@@ -1083,8 +1210,8 @@ export default function PeoplePage({
                         {p.displayName || p.email || t("people.noName")}
                       </strong>
                       <FocusScope
-                        trapped
-                        loop
+                        trapped={false}
+                        loop={false}
                         onMountAutoFocus={(event) => event.preventDefault()}
                         onUnmountAutoFocus={(event) => event.preventDefault()}
                       >
@@ -1092,12 +1219,11 @@ export default function PeoplePage({
                           tabIndex={-1}
                           className="mt-3 rounded-xl border border-border bg-surface-2/40 p-5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           role="dialog"
-                          aria-modal="true"
                           aria-label={`${t("people.enrollVoice")} · ${p.displayName || p.email || t("people.noName")}`}
                           onKeyDown={(event) => {
                             if (event.key === "Escape") {
                               event.preventDefault();
-                              closeEnrollment();
+                              if (!working) closeEnrollment();
                             }
                           }}
                         >
@@ -1110,6 +1236,7 @@ export default function PeoplePage({
                               type="button"
                               size="sm"
                               variant="secondary"
+                              disabled={working}
                               onClick={() => closeEnrollment()}
                             >
                               {t("people.cancel")}
@@ -1142,6 +1269,11 @@ export default function PeoplePage({
                               {t(`people.enrollmentErrors.${enrollmentError}`, {
                                 defaultValue: t("people.actionError"),
                               })}
+                            </p>
+                          )}
+                          {working && (
+                            <p role="status" className="mt-2 text-sm">
+                              {t("people.waitForSave")}
                             </p>
                           )}
                           {enrollmentLoading && (
@@ -1243,10 +1375,19 @@ export default function PeoplePage({
                                           type="button"
                                           size="sm"
                                           variant="secondary"
-                                          disabled={!onOpenNote}
-                                          onClick={() =>
-                                            onOpenNote?.(sample.noteId, sample.rowIds[0])
-                                          }
+                                          disabled={working || !onOpenNote}
+                                          onClick={() => {
+                                            savePeopleReturn();
+                                            window.sessionStorage.setItem(
+                                              "peopleReturnNoteTitle",
+                                              sample.noteTitle
+                                            );
+                                            window.sessionStorage.setItem(
+                                              "peopleEnrollmentReturn",
+                                              String(p.id)
+                                            );
+                                            onOpenNote?.(sample.noteId, sample.rowIds[0]);
+                                          }}
                                         >
                                           {t("people.splitSample")}
                                         </Button>
@@ -1274,14 +1415,13 @@ export default function PeoplePage({
                       <div className="min-w-0">
                         {editingId === p.id ? (
                           <FocusScope
-                            trapped
-                            loop
+                            trapped={false}
+                            loop={false}
                             onMountAutoFocus={(event) => event.preventDefault()}
                             onUnmountAutoFocus={(event) => event.preventDefault()}
                           >
                             <form
                               role="alertdialog"
-                              aria-modal="true"
                               aria-labelledby={`person-rename-title-${p.id}`}
                               className="flex min-w-0 flex-wrap items-center gap-2"
                               onSubmit={(event) => {
@@ -1291,7 +1431,7 @@ export default function PeoplePage({
                               onKeyDown={(event) => {
                                 if (event.key === "Escape") {
                                   event.preventDefault();
-                                  closeRename();
+                                  if (!renameWorking) closeRename();
                                 }
                               }}
                             >
@@ -1302,6 +1442,7 @@ export default function PeoplePage({
                               <Input
                                 ref={renameInput}
                                 dir="auto"
+                                disabled={renameWorking}
                                 aria-label={t("people.newName")}
                                 className="max-w-xs"
                                 maxLength={120}
@@ -1319,10 +1460,16 @@ export default function PeoplePage({
                                 type="button"
                                 size="sm"
                                 variant="secondary"
+                                disabled={renameWorking}
                                 onClick={() => closeRename()}
                               >
                                 {t("people.cancel")}
                               </Button>
+                              {renameWorking && (
+                                <span role="status" className="text-xs text-muted-foreground">
+                                  {t("people.waitForSave")}
+                                </span>
+                              )}
                             </form>
                           </FocusScope>
                         ) : (
@@ -1339,6 +1486,7 @@ export default function PeoplePage({
                               size="icon"
                               variant="ghost"
                               data-rename-trigger={p.id}
+                              disabled={working || renameWorking}
                               className="size-7 text-muted-foreground opacity-60 group-hover/name:opacity-100 focus-visible:opacity-100"
                               aria-label={`${t("people.actions.rename")} · ${p.displayName || p.email || t("people.noName")}`}
                               onClick={() => {
@@ -1460,6 +1608,7 @@ export default function PeoplePage({
                             size="sm"
                             variant="outline-flat"
                             data-enroll-trigger={p.id}
+                            disabled={working || renameWorking}
                             onClick={() => void openEnrollment(p.id)}
                           >
                             {p.hasVoice || p.voiceProgress.cleanSpans > 0
@@ -1474,6 +1623,7 @@ export default function PeoplePage({
                               size="icon"
                               variant="ghost"
                               data-person-menu={p.id}
+                              disabled={working || renameWorking}
                               className="size-9 text-muted-foreground"
                               aria-label={`${t("people.moreActions")} · ${p.displayName || p.email || t("people.noName")}`}
                             >
@@ -1936,32 +2086,19 @@ export default function PeoplePage({
           >
             <SectionHeader title={t("people.voiceData")} />
             <div>
-              <Button type="button" variant="outline" onClick={() => void previewClear()}>
+              <Button
+                ref={clearTrigger}
+                type="button"
+                variant="destructive"
+                disabled={clearPreviewLoading || working}
+                onClick={() => void previewClear()}
+              >
                 {t("people.clearVoice")}
               </Button>
-              {clearPreview && (
-                <div role="region" aria-label={t("people.clearVoice")} className="mt-3 text-sm">
-                  <p>
-                    {t("people.clearPreview", {
-                      people: clearPreview.personCount,
-                      embeddings: clearPreview.embeddingCount + clearPreview.noteEmbeddingCount,
-                      mappings: clearPreview.mappingCount,
-                    })}
-                  </p>
-                  <div className="mt-3 flex gap-2">
-                    <Button type="button" variant="outline" onClick={() => setClearPreview(null)}>
-                      {t("people.cancel")}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={working}
-                      onClick={() => void applyClear()}
-                    >
-                      {working ? t("people.working") : t("people.clearVoice")}
-                    </Button>
-                  </div>
-                </div>
+              {clearPreviewLoading && (
+                <p role="status" className="mt-2 text-xs text-muted-foreground">
+                  {t("people.loadingPreview")}
+                </p>
               )}
               {clearReport && (
                 <div role="status" className="mt-3 text-sm">
@@ -1972,7 +2109,10 @@ export default function PeoplePage({
                       mappings: clearReport.mappingCount,
                     })}
                   </p>
-                  {actionHistory.find((item) => !item.unavailableReason)?.id === clearReport.id ? (
+                  {historyLoading ||
+                  historyError ||
+                  actionHistory.length === 0 ||
+                  actionHistory.find((item) => !item.unavailableReason)?.id === clearReport.id ? (
                     <Button
                       type="button"
                       variant="outline"
@@ -1996,7 +2136,92 @@ export default function PeoplePage({
           </section>
         </div>
       )}
-      <Dialog open={reviewOpen} onOpenChange={setReviewOpen}>
+      <Dialog
+        open={!!clearPreview}
+        onOpenChange={(open) => {
+          if (!open && !working) {
+            setClearPreview(null);
+            setClearConfirmation("");
+          }
+        }}
+      >
+        <DialogContent
+          closeDisabled={working}
+          aria-describedby="people-clear-description"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            clearInput.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            clearTrigger.current?.focus({ preventScroll: true });
+          }}
+          onEscapeKeyDown={(event) => {
+            if (working) event.preventDefault();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{t("people.clearVoice")}</DialogTitle>
+          </DialogHeader>
+          {clearPreview && (
+            <div id="people-clear-description" className="space-y-2 text-sm">
+              <ul className="list-inside list-disc space-y-1">
+                <li>{t("people.clearVectors", { count: clearPreview.embeddingCount })}</li>
+                <li>{t("people.clearNoteVectors", { count: clearPreview.noteEmbeddingCount })}</li>
+                <li>{t("people.clearSamples", { count: clearPreview.sampleCount })}</li>
+                <li>{t("people.clearCandidates", { count: clearPreview.candidateCount })}</li>
+                <li>{t("people.clearMappings", { count: clearPreview.mappingCount })}</li>
+                <li>{t("people.clearKept", { count: clearPreview.personCount })}</li>
+              </ul>
+            </div>
+          )}
+          <Label htmlFor="people-clear-confirm">
+            {t("people.clearTypePrompt", { phrase: t("people.clearVoice") })}
+          </Label>
+          <Input
+            id="people-clear-confirm"
+            ref={clearInput}
+            dir="auto"
+            value={clearConfirmation}
+            onChange={(event) => setClearConfirmation(event.target.value)}
+            disabled={working}
+            autoComplete="off"
+          />
+          {working && (
+            <p role="status" className="text-sm text-muted-foreground">
+              {t("people.waitForSave")}
+            </p>
+          )}
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={working}
+              onClick={() => {
+                setClearPreview(null);
+                setClearConfirmation("");
+              }}
+            >
+              {t("people.cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={working || clearConfirmation !== t("people.clearVoice")}
+              onClick={() => void applyClear()}
+            >
+              {working ? t("people.working") : t("people.clearVoice")}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={reviewOpen}
+        onOpenChange={(open) => {
+          setReviewOpen(open);
+          if (!open) window.sessionStorage.removeItem(reviewReturnKey);
+        }}
+      >
         <DialogContent
           onCloseAutoFocus={(event) => {
             event.preventDefault();
@@ -2008,7 +2233,10 @@ export default function PeoplePage({
           <DialogHeader>
             <DialogTitle>{t("people.tabs.review")}</DialogTitle>
           </DialogHeader>
-          <div className="min-h-0 space-y-4 overflow-y-auto pe-1">
+          <div
+            ref={reviewScroll}
+            className="max-h-[min(65vh,620px)] min-h-0 space-y-4 overflow-y-auto pe-1"
+          >
             {reviewLoading && (
               <p role="status" className="text-sm text-muted-foreground">
                 {t("people.loading")}
@@ -2091,6 +2319,17 @@ export default function PeoplePage({
                     variant="outline"
                     disabled={!onOpenNote}
                     onClick={() => {
+                      savePeopleReturn();
+                      window.sessionStorage.setItem("peopleReturnNoteTitle", r.noteTitle);
+                      window.sessionStorage.setItem(
+                        reviewReturnKey,
+                        JSON.stringify({
+                          reason,
+                          personFilter,
+                          limit,
+                          scrollTop: reviewScroll.current?.scrollTop || 0,
+                        } satisfies ReviewReturn)
+                      );
                       setReviewOpen(false);
                       toast({ title: t("hooks.audioRecording.errorActions.viewTranscript") });
                       onOpenNote?.(r.noteId, r.rowId);

@@ -106,6 +106,8 @@ test(
 
     const screenshots = path.join(repo, "artifacts/people-structure");
     fs.mkdirSync(screenshots, { recursive: true });
+    await page.evaluate(() => sessionStorage.removeItem("peopleReviewReturn"));
+    await page.evaluate(() => sessionStorage.removeItem("peopleListReturn"));
     await page.goto(
       `http://127.0.0.1:${server.httpServer.address().port}/people-structure.browser.html?proof-rich`
     );

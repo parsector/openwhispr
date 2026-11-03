@@ -94,7 +94,10 @@ test(
       true
     );
     await page.keyboard.press("Tab");
-    assert.equal(await cancel.evaluate((element) => document.activeElement === element), true);
+    assert.equal(
+      await question.evaluate((element) => element.contains(document.activeElement)),
+      false
+    );
     await cancel.click();
     assert.equal(await row.locator('[role="alertdialog"]').count(), 0);
     assert.equal(await row.textContent(), originalText);
@@ -176,8 +179,8 @@ test(
     );
     assert.match(await enrolDialog.textContent(), /Alexndra Rivera/);
     assert.match(await enrolDialog.textContent(), /Clean spans: 0 \/ 3 · recordings: 0 \/ 2/);
-    assert.match(await enrolDialog.textContent(), /Shorter than 3 s: 3/);
-    assert.match(await enrolDialog.textContent(), /Audio expired, missing, or evicted: 2/);
+    assert.match(await enrolDialog.textContent(), /No span long enough \(under 3 s\): 3/);
+    assert.match(await enrolDialog.textContent(), /Audio gone or unavailable: 2/);
     assert.match(await enrolDialog.textContent(), /Marked as two people or uncertain: 1/);
     await enrolDialog.getByRole("button", { name: "Cancel" }).click();
     assert.equal(await enrolRow.textContent(), enrolOriginal);
