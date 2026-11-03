@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.7] - 2026-11-03
+
+The People area now behaves like one place: your work stays where you left it, the erase action asks properly, and enrolment can finally see the audio you labelled.
+
+### People
+
+- **Review no longer takes you away.** Opening a row from Review keeps the queue where it was and brings you back to it; closing returns to People with your search, sort and scroll intact.
+- **A background refresh no longer wipes the screen.** Rows stay visible while the list reloads, an open rename or enrolment stays open, and focus does not jump.
+- **One failing surface no longer hides the others.** A history or calibration error stays inside its own page and leaves People usable.
+- **Clear all voice data asks properly.** The confirmation names what is erased and what is kept, requires an explicit typed confirmation, shows pending state, and keeps Undo beside the result.
+- **Nothing is half-modal.** Row actions either make the rest of the page inert or stop claiming to be dialogs.
+- **After a merge or delete, focus lands on the surviving person** instead of nowhere, and Cancel cannot silently do nothing while a save is in flight.
+
+### Voice
+
+- **Enrolment reads the same audio the player does.** Enrol voice now resolves each row's span exactly as the transcript player and calibration do, so a meeting whose rows play normally offers the spans you labelled instead of reporting that nothing can be enrolled.
+- The empty state reports why per reason — too short, overlapping, audio gone, already used — instead of a single sentence.
+
 ## [1.12.6] - 2026-11-02
 
 Calibration now uses the audio your transcript already plays, instead of asking for a stored span that was never written.
