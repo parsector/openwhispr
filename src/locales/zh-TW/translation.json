@@ -5756,6 +5756,9 @@
     "archiveLabel": "已封存"
   },
   "people": {
+    "historyPage": "歷史",
+    "voiceSettings": "語音設定",
+    "voiceData": "語音資料",
     "approvedSamples": "已核准的樣本",
     "oddSample": "檢查此樣本",
     "splitSample": "在逐字稿中拆分",

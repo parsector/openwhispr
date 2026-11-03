@@ -5756,6 +5756,9 @@
     "archiveLabel": "アーカイブ済み"
   },
   "people": {
+    "historyPage": "履歴",
+    "voiceSettings": "音声設定",
+    "voiceData": "音声データ",
     "approvedSamples": "承認済みサンプル",
     "oddSample": "このサンプルを確認",
     "splitSample": "文字起こしで分割",

@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import i18n from "./i18n";
 import PeoplePage from "./components/settings/PeoplePage";
+import SidebarModal from "./components/ui/SidebarModal";
+import { Users } from "./components/icons";
 import { ToastProvider } from "./components/ui/Toast";
 import "./index.css";
 
@@ -45,17 +47,46 @@ const rows = Array.from({ length: 20 }, (_, i) => ({
 }));
 (window as any).electronAPI = {
   listPeople: async () => rows.map((row) => ({ ...row })),
-  listPeopleActions: async () => [],
-  onPeopleChanged: () => () => {},
-  speakerCalibrationSettings: async () => ({
-    values: {
-      similarityFloor: 0.6,
-      runnerUpMargin: 0.08,
-      minimumVoicedSeconds: 3,
-      overlapToleranceSeconds: 0.15,
+  listPeopleActions: async () => {
+    if (location.search.includes("history-fail")) throw Error("unavailable");
+    return location.search.includes("proof-rich")
+      ? [
+          {
+            id: "action-1",
+            kind: "rename",
+            label: "Alexandra Rivera",
+            noteId: null,
+            noteInTrash: false,
+            unavailableReason: null,
+          },
+        ]
+      : [];
+  },
+  listPeopleReview: async () => [
+    {
+      noteId: 42,
+      rowId: "row-1",
+      noteTitle: "October planning meeting",
+      reason: "unassessed",
+      candidates: null,
+      profileId: 1,
+      text: "We should review this speaker label.",
+      speakerName: "Alexandra Rivera",
     },
-    status: "uncalibrated",
-  }),
+  ],
+  onPeopleChanged: () => () => {},
+  speakerCalibrationSettings: async () => {
+    if (location.search.includes("calibration-fail")) throw Error("unavailable");
+    return {
+      values: {
+        similarityFloor: 0.6,
+        runnerUpMargin: 0.08,
+        minimumVoicedSeconds: 3,
+        overlapToleranceSeconds: 0.15,
+      },
+      status: "uncalibrated",
+    };
+  },
   speakerCalibrationProgress: async () => null,
   previewPersonAction: async () => ({
     success: true,
@@ -97,12 +128,31 @@ const rows = Array.from({ length: 20 }, (_, i) => ({
   }),
   listVoiceEnrollmentSamples: async () => [],
 };
+const peoplePage = (
+  <PeoplePage
+    onOpenNote={(noteId, rowId) => {
+      document.body.dataset.openedNote = String(noteId);
+      document.body.dataset.openedRow = rowId;
+    }}
+  />
+);
 createRoot(document.getElementById("root")!).render(
   <I18nextProvider i18n={i18n}>
     <ToastProvider>
-      <main className="mx-auto max-w-[1016px] px-4 pt-7">
-        <PeoplePage />
-      </main>
+      {location.search.includes("proof-rich") ? (
+        <SidebarModal
+          open
+          onOpenChange={() => {}}
+          title="Settings"
+          sidebarItems={[{ id: "people", label: "People", icon: Users }]}
+          activeSection="people"
+          onSectionChange={() => {}}
+        >
+          {peoplePage}
+        </SidebarModal>
+      ) : (
+        <main className="mx-auto max-w-[1016px] px-4 pt-7">{peoplePage}</main>
+      )}
     </ToastProvider>
   </I18nextProvider>
 );

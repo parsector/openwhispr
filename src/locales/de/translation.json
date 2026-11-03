@@ -5756,6 +5756,9 @@
     "archiveLabel": "Archiviert"
   },
   "people": {
+    "historyPage": "Verlauf",
+    "voiceSettings": "Stimmeinstellungen",
+    "voiceData": "Sprachdaten",
     "approvedSamples": "Bestätigte Aufnahmen",
     "oddSample": "Diese Aufnahme prüfen",
     "splitSample": "Im Transkript trennen",
