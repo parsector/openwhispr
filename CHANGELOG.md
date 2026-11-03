@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.9] - 2026-11-03
+
+Todo extraction now reads the notes the app actually writes.
+
+### Todos
+
+- **Action items from new meetings become todos again.** Meetings are stored in a versioned transcript format that extraction did not read, so meetings recorded since the feature shipped produced no todos even when the summary listed action items. One parser now accepts both formats, and a skipped note is logged with its id and shape instead of failing silently.
+- **Any existing meeting can become todos on demand.** The note row menu gains "Extract todos from this note", hidden for notes without a transcript. There is no bulk backfill.
+
 ## [1.12.8] - 2026-11-03
 
 Upstream caught up, and the People header now looks like the rest of the app.
