@@ -300,8 +300,8 @@ function candidateReport(database, store, profileId) {
         continue;
       }
       // Exclude the first and last 250 ms around a transcript boundary.
-      const startSample = Math.round((resolved.from + 0.25) * RATE);
-      const endSample = Math.round((resolved.to - 0.25) * RATE);
+      const startSample = Math.round((Math.max(resolved.from, resolved.start) + 0.25) * RATE);
+      const endSample = Math.round((Math.min(resolved.to, resolved.end) - 0.25) * RATE);
       const duration = (endSample - startSample) / RATE;
       if (duration < 3) {
         exclude("short");

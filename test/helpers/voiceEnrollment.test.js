@@ -42,7 +42,8 @@ test('a retained legacy row without a persisted span is offered for review', asy
   const label = buildCalibrationLabels({ id: noteId, transcript: JSON.stringify(doc) }, {}, status).rows[0];
   assert.deepEqual([label.from, label.to, label.unavailableReason], [range.from, range.to, null]);
   assert.deepEqual([report.candidates[0].startSample, report.candidates[0].endSample],
-    [Math.round((range.from + .25) * 24000), Math.round((range.to - .25) * 24000)]);
+    [Math.round((Math.max(range.from, label.start) + .25) * 24000),
+      Math.round((Math.min(range.to, label.end) - .25) * 24000)]);
 
   doc.rows[0].audioSpan = { recordingId: 'old-recording', trackId: 'mic',
     startSample: 24000, endSample: 24000 * 5 };
@@ -127,6 +128,18 @@ test('fresh identity stays unenrolled; approval needs playback; rejection is dur
   f.completeReview(candidate.id, played.token);
   assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'reject', played.token)).success, true);
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
+});
+
+test('a rejected exact span from before shared resolution is not offered again', (t) => {
+  const f = fixture(t);
+  const { noteId } = f.note('previously-rejected');
+  f.db.db.prepare(`INSERT INTO voice_enrollment_candidates
+    (id, profile_id, note_id, track, start_sample, end_sample)
+    VALUES (?, ?, ?, ?, ?, ?)`)
+    .run('old-rejection', f.person.id, noteId, 'mic', 6000, 90000);
+  const report = enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.equal(report.candidates.length, 0);
+  assert.equal(report.reasons.reviewed, 1);
 });
 
 test("a row corrected to this person is offered, while Unknown and another person are not", (t) => {
