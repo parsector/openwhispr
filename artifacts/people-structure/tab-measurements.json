@@ -1,0 +1,74 @@
+[
+  {
+    "width": 1440,
+    "theme": "light",
+    "people": {
+      "tabHeight": 24,
+      "iconLabelGap": "4px",
+      "selectedBackground": "oklab(0.595318 -0.0191367 -0.179901 / 0.1)",
+      "selectedBorder": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.595318 -0.0191367 -0.179901 / 0.3) 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+      "descriptionToTabs": 12
+    },
+    "speechToText": {
+      "tabHeight": 24,
+      "iconLabelGap": "4px",
+      "selectedBackground": "oklab(0.595318 -0.0191367 -0.179901 / 0.1)",
+      "selectedBorder": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.595318 -0.0191367 -0.179901 / 0.3) 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+      "descriptionToTabs": 12
+    }
+  },
+  {
+    "width": 1440,
+    "theme": "dark",
+    "people": {
+      "tabHeight": 24,
+      "iconLabelGap": "4px",
+      "selectedBackground": "oklab(0.65 -0.0347296 -0.196962 / 0.15)",
+      "selectedBorder": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.65 -0.0347296 -0.196962 / 0.25) 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+      "descriptionToTabs": 12
+    },
+    "speechToText": {
+      "tabHeight": 24,
+      "iconLabelGap": "4px",
+      "selectedBackground": "oklab(0.65 -0.0347296 -0.196962 / 0.15)",
+      "selectedBorder": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.65 -0.0347296 -0.196962 / 0.25) 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+      "descriptionToTabs": 12
+    }
+  },
+  {
+    "width": 412,
+    "theme": "light",
+    "people": {
+      "tabHeight": 24,
+      "iconLabelGap": "4px",
+      "selectedBackground": "oklab(0.595318 -0.0191367 -0.179901 / 0.1)",
+      "selectedBorder": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.595318 -0.0191367 -0.179901 / 0.3) 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+      "descriptionToTabs": 12
+    },
+    "speechToText": {
+      "tabHeight": 24,
+      "iconLabelGap": "4px",
+      "selectedBackground": "oklab(0.595318 -0.0191367 -0.179901 / 0.1)",
+      "selectedBorder": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.595318 -0.0191367 -0.179901 / 0.3) 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+      "descriptionToTabs": 12
+    }
+  },
+  {
+    "width": 412,
+    "theme": "dark",
+    "people": {
+      "tabHeight": 24,
+      "iconLabelGap": "4px",
+      "selectedBackground": "oklab(0.65 -0.0347296 -0.196962 / 0.15)",
+      "selectedBorder": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.65 -0.0347296 -0.196962 / 0.25) 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+      "descriptionToTabs": 12
+    },
+    "speechToText": {
+      "tabHeight": 24,
+      "iconLabelGap": "4px",
+      "selectedBackground": "oklab(0.65 -0.0347296 -0.196962 / 0.15)",
+      "selectedBorder": "rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, oklab(0.65 -0.0347296 -0.196962 / 0.25) 0px 0px 0px 1px, rgba(0, 0, 0, 0) 0px 0px 0px 0px",
+      "descriptionToTabs": 12
+    }
+  }
+]
