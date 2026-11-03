@@ -5775,13 +5775,14 @@
     "noLabelledEnrollmentRows": "No rows are currently labelled as this person with usable audio.",
     "ownerCorrected": "Labelled by you",
     "enrollmentReasons": {
-      "short": "Shorter than 3 s: {{count}}",
+      "short": "No span long enough (under 3 s): {{count}}",
       "long": "Longer than 8 s: {{count}}",
-      "audio": "Audio expired, missing, or evicted: {{count}}",
-      "overlap": "Overlaps another speaker: {{count}}",
+      "audio": "Audio gone or unavailable: {{count}}",
+      "overlap": "Overlap with another voice: {{count}}",
       "uncertain": "Marked as two people or uncertain: {{count}}",
       "reviewed": "Already reviewed or overlaps approved audio: {{count}}",
-      "limit": "Approved sample limit reached: {{count}} of 20"
+      "limit": "Approved sample limit reached: {{count}} of 20",
+      "resolution": "Span could not be resolved; check transcript playback: {{count}}"
     },
     "neverCorrected": "Never corrected",
     "listen": "Listen",
