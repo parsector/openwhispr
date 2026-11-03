@@ -4312,11 +4312,11 @@ declare global {
       removeVoiceEnrollmentSample?: (id: string) => Promise<{ success: boolean; error?: string }>;
       playVoiceEnrollmentCandidate?: (
         id: string
-      ) => Promise<{ state: string; wav?: string; token?: string }>;
+      ) => Promise<{ state: string; wav?: string; token?: string; expiresAt?: number }>;
       completeVoiceEnrollmentCandidate?: (
         id: string,
         token: string
-      ) => Promise<{ success: boolean; error?: string }>;
+      ) => Promise<{ success: boolean; error?: string; expiresAt?: number }>;
       decideVoiceEnrollmentCandidate?: (
         id: string,
         choice: "approve" | "reject",
@@ -4326,6 +4326,7 @@ declare global {
         error?: string;
         removedCandidateId?: string;
         timingId?: string;
+        refreshFailed?: boolean;
         offers?: Awaited<
           ReturnType<NonNullable<Window["electronAPI"]["listVoiceEnrollmentCandidates"]>>
         >;

@@ -6002,6 +6002,23 @@
     "enrollmentDuration": "{{seconds}} Sekunden",
     "noLabelledEnrollmentRows": "Derzeit sind keine Zeilen mit nutzbarem Audio dieser Person zugeordnet.",
     "ownerCorrected": "Von dir zugeordnet",
+    "listeningTimeLeft": "Hörbestätigung läuft in {{minutes}}:{{seconds}} ab.",
+    "enrollmentErrors": {
+      "poor_audio": "Dieses Audio eignet sich nicht als Stimmprobe. Wählen Sie einen anderen Abschnitt.",
+      "echo_audio": "Dieses Audio enthält ein Echo der anderen Spur. Wählen Sie einen anderen Abschnitt.",
+      "candidate_unavailable": "Dieser Kandidat wurde geändert oder bereits geprüft. Aktualisieren Sie die Liste.",
+      "playback_required": "Die Hörbestätigung ist abgelaufen oder wurde ersetzt. Hören Sie erneut zu.",
+      "span_mismatch": "Dieser Abschnitt passt nicht mehr zur Aufnahme. Wählen Sie einen anderen Abschnitt.",
+      "person_or_meeting_changed": "Die Person oder Besprechung wurde geändert. Aktualisieren Sie die Liste.",
+      "audio_unavailable": "Dieses Audio ist nicht mehr verfügbar. Wählen Sie einen anderen Abschnitt.",
+      "persistence_failed": "Das Schreiben in die lokale Datenbank ist fehlgeschlagen. Ihre Hörbestätigung gilt noch; versuchen Sie das Speichern erneut.",
+      "database_busy": "Die lokale Datenbank ist beschäftigt. Ihre Hörbestätigung gilt noch; versuchen Sie das Speichern erneut.",
+      "constraint_failed": "Die lokale Datenbank hat das Speichern abgelehnt. Ihre Hörbestätigung gilt noch; versuchen Sie das Speichern erneut.",
+      "already_approved": "Diese Probe wurde bereits genehmigt. Aktualisieren Sie die Liste.",
+      "refresh_failed": "Die Entscheidung wurde gespeichert, aber eine anschließende Aktualisierung ist fehlgeschlagen. Öffnen Sie die Liste erneut.",
+      "ipc_failed": "Es konnte nicht bestätigt werden, ob die Genehmigung gespeichert wurde. Aktualisieren Sie vor einem erneuten Versuch die Liste.",
+      "unavailable": "Die Stimmregistrierung ist derzeit nicht verfügbar. Öffnen Sie das Fenster erneut."
+    },
     "enrollmentReasons": {
       "short": "Kürzer als 3 s: {{count}}",
       "long": "Länger als 8 s: {{count}}",

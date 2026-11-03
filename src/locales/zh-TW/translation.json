@@ -6002,6 +6002,23 @@
     "enrollmentDuration": "{{seconds}} 秒",
     "noLabelledEnrollmentRows": "目前沒有標記為此人且音訊可用的列。",
     "ownerCorrected": "由你標記",
+    "listeningTimeLeft": "聆聽確認將在 {{minutes}}:{{seconds}} 後過期。",
+    "enrollmentErrors": {
+      "poor_audio": "這段音訊不適合作為聲音樣本。請選擇其他片段。",
+      "echo_audio": "這段音訊包含另一音軌的回音。請選擇其他片段。",
+      "candidate_unavailable": "此候選項已變更或已審核。請重新整理清單。",
+      "playback_required": "聆聽確認已過期或被新的播放取代。請重新聆聽。",
+      "span_mismatch": "此片段已不再對應原錄音。請選擇其他片段。",
+      "person_or_meeting_changed": "人物或會議已變更。請重新整理清單。",
+      "audio_unavailable": "這段音訊已無法使用。請選擇其他片段。",
+      "persistence_failed": "寫入本機資料庫失敗。聆聽確認仍然有效；請再次儲存。",
+      "database_busy": "本機資料庫忙碌中。聆聽確認仍然有效；請再次儲存。",
+      "constraint_failed": "本機資料庫拒絕儲存。聆聽確認仍然有效；請再次儲存。",
+      "already_approved": "此樣本已經核准。請重新整理清單。",
+      "refresh_failed": "決定已儲存，但後續重新整理失敗。請重新開啟清單以查看最新樣本。",
+      "ipc_failed": "無法確認核准是否已儲存。重試前請重新整理清單。",
+      "unavailable": "目前無法使用聲音註冊。請重新開啟面板。"
+    },
     "enrollmentReasons": {
       "short": "短於 3 秒：{{count}}",
       "long": "長於 8 秒：{{count}}",

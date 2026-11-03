@@ -6020,6 +6020,23 @@
     "enrollmentDuration": "{{seconds}} secondi",
     "noLabelledEnrollmentRows": "Nessuna riga attribuita a questa persona ha audio utilizzabile.",
     "ownerCorrected": "Assegnato da te",
+    "listeningTimeLeft": "La conferma di ascolto scade tra {{minutes}}:{{seconds}}.",
+    "enrollmentErrors": {
+      "poor_audio": "Questo audio non è adatto come campione vocale. Scegli un altro segmento.",
+      "echo_audio": "Questo audio contiene un’eco dell’altra traccia. Scegli un altro segmento.",
+      "candidate_unavailable": "Questo candidato è cambiato o è già stato esaminato. Aggiorna l’elenco.",
+      "playback_required": "La conferma di ascolto è scaduta o è stata sostituita. Ascolta di nuovo.",
+      "span_mismatch": "Questo segmento non corrisponde più alla registrazione. Scegli un altro segmento.",
+      "person_or_meeting_changed": "La persona o la riunione è cambiata. Aggiorna l’elenco.",
+      "audio_unavailable": "Questo audio non è più disponibile. Scegli un altro segmento.",
+      "persistence_failed": "La scrittura nel database locale non è riuscita. La conferma di ascolto è ancora valida; prova a salvare di nuovo.",
+      "database_busy": "Il database locale è occupato. La conferma di ascolto è ancora valida; prova a salvare di nuovo.",
+      "constraint_failed": "Il database locale ha rifiutato il salvataggio. La conferma di ascolto è ancora valida; prova a salvare di nuovo.",
+      "already_approved": "Questo campione è già stato approvato. Aggiorna l’elenco.",
+      "refresh_failed": "La decisione è stata salvata, ma un aggiornamento successivo non è riuscito. Riapri l’elenco per vedere i campioni recenti.",
+      "ipc_failed": "Impossibile confermare se l’approvazione è stata salvata. Aggiorna l’elenco prima di riprovare.",
+      "unavailable": "La registrazione vocale non è disponibile ora. Riapri il pannello."
+    },
     "enrollmentReasons": {
       "short": "Meno di 3 s: {{count}}",
       "long": "Più di 8 s: {{count}}",

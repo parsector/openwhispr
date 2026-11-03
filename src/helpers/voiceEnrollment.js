@@ -4,6 +4,7 @@ const { randomUUID, createHash } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
 const history = require("./speakerGlobalHistory");
+const debugLogger = require("./debugLogger");
 const { resolveMeetingAudioSpan } = require("./meetingAudioSpan.mjs");
 const enrollmentTiming = require("./voiceEnrollmentTiming");
 
@@ -684,6 +685,9 @@ function play(database, store, id, sender = null) {
   const session = {
     token,
     revision: candidate.revision,
+    noteId: candidate.noteId,
+    profileId: candidate.profileId,
+    rowIds: candidate.rowIds,
     durationMs,
     completeAfter: now + durationMs,
     expires: now + 10 * 60 * 1000,
@@ -704,7 +708,7 @@ function play(database, store, id, sender = null) {
     sender.on("audio-state-changed", session.audioListener);
   }
   played.set(id, session);
-  return { state: "available", wav: audio.wav, token, candidate };
+  return { state: "available", wav: audio.wav, token, candidate, expiresAt: session.expires };
 }
 function complete(database, store, id, token, sender = null) {
   const session = played.get(id);
@@ -731,7 +735,44 @@ function complete(database, store, id, token, sender = null) {
   }
   session.completed = true;
   stopObserving(session);
-  return { success: true };
+  return { success: true, expiresAt: session.expires };
+}
+function missingCandidateReason(database, store, id, playback) {
+  const db = database.db;
+  if (db.prepare("SELECT 1 FROM voice_exemplars WHERE id = ?").get(id)) return "already_approved";
+  if (
+    !db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(playback.profileId) ||
+    !db.prepare("SELECT 1 FROM notes WHERE id = ? AND deleted_at IS NULL").get(playback.noteId)
+  )
+    return "person_or_meeting_changed";
+  const rows = rowsFor(db, playback.noteId);
+  const recordingId = store.status(playback.noteId).recordingId ?? playback.noteId;
+  if (
+    playback.rowIds.some((rowId) => {
+      const row = rows.find((item) => item.id === rowId);
+      return row?.audioSpan?.recordingId && row.audioSpan.recordingId !== recordingId;
+    })
+  )
+    return "span_mismatch";
+  return "candidate_unavailable";
+}
+function decisionFailure(code, id, playback, statement) {
+  debugLogger.warn(
+    "Voice enrollment decision failed",
+    JSON.stringify({
+      code,
+      noteId: playback?.noteId ?? null,
+      personId: playback?.profileId ?? null,
+      candidateId: id,
+      statement,
+    }),
+    "voice-enrollment"
+  );
+  return { success: false, error: code };
+}
+function playbackContext(id) {
+  const session = played.get(id);
+  return { noteId: session?.noteId ?? null, personId: session?.profileId ?? null };
 }
 async function embed(wav, extractor) {
   if (wav.subarray(0, 4).toString() !== "RIFF") return null;
@@ -830,11 +871,15 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
     playback.expires < (store.now || Date.now)() ||
     playback.sender !== sender
   )
-    return { success: false, error: "playback_required" };
+    return decisionFailure("playback_required", id, playback, "validate completed playback");
   const candidate = locate(database, store, id);
-  forgetPlayback(id);
   if (!candidate || candidate.revision !== playback.revision)
-    return { success: false, error: "candidate_unavailable" };
+    return decisionFailure(
+      candidate ? "candidate_unavailable" : missingCandidateReason(database, store, id, playback),
+      id,
+      playback,
+      "recheck candidate and recording"
+    );
   const audio = store.span(
     candidate.noteId,
     candidate.track,
@@ -842,7 +887,7 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
     candidate.endSample / RATE
   );
   if (audio.state !== "available" || audio.partial)
-    return { success: false, error: "audio_unavailable" };
+    return decisionFailure("audio_unavailable", id, playback, "read candidate audio span");
   if (choice === "approve") {
     if (
       isEchoSpan(
@@ -855,71 +900,107 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
         audio.wav
       )
     )
-      return { success: false, error: "echo_audio" };
+      return decisionFailure("echo_audio", id, playback, "check other audio track for echo");
   }
   const embedding =
     choice === "approve"
       ? await enrollmentTiming.measureAsync("embed_ms", () => embed(audio.wav, extractor))
       : null;
-  if (choice === "approve" && !embedding) return { success: false, error: "poor_audio" };
-  const result = database.db.transaction(() => {
-    if (!focusedOffer(database, store, id))
-      return { success: false, error: "candidate_unavailable" };
-    const db = database.db;
-    const actionId = randomUUID();
-    if (choice === "approve") {
-      db.prepare(
-        `INSERT INTO voice_exemplars (id, profile_id, note_id, track, start_sample, end_sample,
+  if (choice === "approve" && !embedding)
+    return decisionFailure("poor_audio", id, playback, "check audio suitability");
+  let statement = "BEGIN voice enrollment decision";
+  try {
+    const result = database.db.transaction(() => {
+      if (!focusedOffer(database, store, id))
+        return { success: false, error: "candidate_unavailable" };
+      const db = database.db;
+      const actionId = randomUUID();
+      if (choice === "approve") {
+        statement = "INSERT INTO voice_exemplars";
+        db.prepare(
+          `INSERT INTO voice_exemplars (id, profile_id, note_id, track, start_sample, end_sample,
         embedding, approved_at, row_ids, meeting_date) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`
-      ).run(
-        id,
-        candidate.profileId,
-        candidate.noteId,
-        candidate.track,
-        candidate.startSample,
-        candidate.endSample,
-        packed(embedding),
-        JSON.stringify(candidate.rowIds),
-        candidate.meetingDate
-      );
-      db.prepare("UPDATE speaker_profiles SET voice_needs_reapproval = 0 WHERE id = ?").run(
-        candidate.profileId
-      );
-      rebuild(db, candidate.profileId);
-    } else {
-      db.prepare(
-        `INSERT INTO voice_enrollment_candidates (id, profile_id, note_id, track, start_sample,
+        ).run(
+          id,
+          candidate.profileId,
+          candidate.noteId,
+          candidate.track,
+          candidate.startSample,
+          candidate.endSample,
+          packed(embedding),
+          JSON.stringify(candidate.rowIds),
+          candidate.meetingDate
+        );
+        statement = "UPDATE speaker_profiles SET voice_needs_reapproval = 0 WHERE id = ?";
+        db.prepare("UPDATE speaker_profiles SET voice_needs_reapproval = 0 WHERE id = ?").run(
+          candidate.profileId
+        );
+        statement = "rebuild speaker profile";
+        rebuild(db, candidate.profileId);
+      } else {
+        statement = "INSERT INTO voice_enrollment_candidates";
+        db.prepare(
+          `INSERT INTO voice_enrollment_candidates (id, profile_id, note_id, track, start_sample,
         end_sample, row_ids, meeting_date, rejected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-      ).run(
-        id,
-        candidate.profileId,
-        candidate.noteId,
-        candidate.track,
-        candidate.startSample,
-        candidate.endSample,
-        JSON.stringify(candidate.rowIds),
-        candidate.meetingDate
-      );
-    }
-    db.prepare(
-      "INSERT INTO voice_enrollment_actions (id, candidate_id, profile_id, note_id, choice) VALUES (?, ?, ?, ?, ?)"
-    ).run(actionId, id, candidate.profileId, candidate.noteId, choice);
-    history.add(db, {
-      id: actionId,
-      kind: "enrollment",
-      profileId: candidate.profileId,
-      noteId: candidate.noteId,
-      label: `${choice}: ${candidate.rowIds.join(", ")}`,
-    });
-    return {
-      success: true,
-      id: actionId,
-      removedCandidateId: id,
-      progress: progress(database, candidate.profileId),
-    };
-  })();
-  if (result.success) result.offers = candidateReport(database, store, candidate.profileId);
-  return result;
+        ).run(
+          id,
+          candidate.profileId,
+          candidate.noteId,
+          candidate.track,
+          candidate.startSample,
+          candidate.endSample,
+          JSON.stringify(candidate.rowIds),
+          candidate.meetingDate
+        );
+      }
+      statement = "INSERT INTO voice_enrollment_actions";
+      db.prepare(
+        "INSERT INTO voice_enrollment_actions (id, candidate_id, profile_id, note_id, choice) VALUES (?, ?, ?, ?, ?)"
+      ).run(actionId, id, candidate.profileId, candidate.noteId, choice);
+      statement = "INSERT INTO speaker_global_actions";
+      history.add(db, {
+        id: actionId,
+        kind: "enrollment",
+        profileId: candidate.profileId,
+        noteId: candidate.noteId,
+        label: `${choice}: ${candidate.rowIds.join(", ")}`,
+      });
+      statement = "SELECT voice enrollment progress";
+      return {
+        success: true,
+        id: actionId,
+        removedCandidateId: id,
+        noteId: candidate.noteId,
+        personId: candidate.profileId,
+        progress: progress(database, candidate.profileId),
+      };
+    })();
+    if (result.success) {
+      forgetPlayback(id);
+      result.offers = candidateReport(database, store, candidate.profileId);
+    } else decisionFailure(result.error, id, playback, "recheck candidate inside transaction");
+    return result;
+  } catch (cause) {
+    const sqliteCode = cause?.code || "";
+    const error =
+      sqliteCode.startsWith("SQLITE_BUSY") || sqliteCode.startsWith("SQLITE_LOCKED")
+        ? "database_busy"
+        : sqliteCode.startsWith("SQLITE_CONSTRAINT") && sqliteCode !== "SQLITE_CONSTRAINT_TRIGGER"
+          ? "constraint_failed"
+          : "persistence_failed";
+    debugLogger.warn(
+      "Voice enrollment decision failed",
+      JSON.stringify({
+        code: error,
+        noteId: candidate.noteId,
+        personId: candidate.profileId,
+        candidateId: id,
+        statement,
+      }),
+      "voice-enrollment"
+    );
+    return { success: false, error };
+  }
 }
 function undo(database, id) {
   return database.db.transaction(() => {
@@ -1267,6 +1348,7 @@ module.exports = {
   play,
   complete,
   decide,
+  playbackContext,
   progress,
   rebuild,
   undo,

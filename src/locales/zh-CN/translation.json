@@ -6002,6 +6002,23 @@
     "enrollmentDuration": "{{seconds}} 秒",
     "noLabelledEnrollmentRows": "目前没有标记为此人且音频可用的行。",
     "ownerCorrected": "由你标记",
+    "listeningTimeLeft": "收听确认将在 {{minutes}}:{{seconds}} 后过期。",
+    "enrollmentErrors": {
+      "poor_audio": "这段音频不适合作为声音样本。请选择其他片段。",
+      "echo_audio": "这段音频包含另一音轨的回声。请选择其他片段。",
+      "candidate_unavailable": "此候选项已更改或已审核。请刷新列表。",
+      "playback_required": "收听确认已过期或被新的播放替换。请重新收听。",
+      "span_mismatch": "此片段已不再对应原录音。请选择其他片段。",
+      "person_or_meeting_changed": "人物或会议已更改。请刷新列表。",
+      "audio_unavailable": "这段音频已不可用。请选择其他片段。",
+      "persistence_failed": "写入本地数据库失败。收听确认仍然有效；请再次保存。",
+      "database_busy": "本地数据库正忙。收听确认仍然有效；请再次保存。",
+      "constraint_failed": "本地数据库拒绝保存。收听确认仍然有效；请再次保存。",
+      "already_approved": "此样本已经获批。请刷新列表。",
+      "refresh_failed": "决定已保存，但后续刷新失败。请重新打开列表以查看最新样本。",
+      "ipc_failed": "无法确认批准是否已保存。重试前请刷新列表。",
+      "unavailable": "目前无法使用声音注册。请重新打开面板。"
+    },
     "enrollmentReasons": {
       "short": "短于 3 秒：{{count}}",
       "long": "长于 8 秒：{{count}}",
