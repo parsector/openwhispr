@@ -3360,7 +3360,12 @@
       "searchFolders": "Cerca cartelle...",
       "noResults": "Nessuna cartella trovata",
       "newFolder": "Nuova cartella",
-      "showInFileManager": "Mostra in {{manager}}"
+      "showInFileManager": "Mostra in {{manager}}",
+      "noTranscriptRows": "No transcript rows found",
+      "extractTodosComplete": "Todo extraction complete",
+      "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
+      "extractTodosFailed": "Could not extract todos",
+      "extractTodosFromNote": "Extract todos from this note"
     },
     "actions": {
       "allActions": "Tutte le azioni",

@@ -3412,7 +3412,12 @@
       "searchFolders": "Buscar carpetas...",
       "noResults": "No se encontraron carpetas",
       "newFolder": "Nueva carpeta",
-      "showInFileManager": "Mostrar en {{manager}}"
+      "showInFileManager": "Mostrar en {{manager}}",
+      "noTranscriptRows": "No transcript rows found",
+      "extractTodosComplete": "Todo extraction complete",
+      "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
+      "extractTodosFailed": "Could not extract todos",
+      "extractTodosFromNote": "Extract todos from this note"
     },
     "actions": {
       "allActions": "Todas las acciones",

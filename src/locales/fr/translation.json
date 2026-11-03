@@ -3847,7 +3847,12 @@
       "searchFolders": "Rechercher des dossiers...",
       "noResults": "Aucun dossier trouvé",
       "newFolder": "Nouveau dossier",
-      "showInFileManager": "Afficher dans {{manager}}"
+      "showInFileManager": "Afficher dans {{manager}}",
+      "noTranscriptRows": "No transcript rows found",
+      "extractTodosComplete": "Todo extraction complete",
+      "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
+      "extractTodosFailed": "Could not extract todos",
+      "extractTodosFromNote": "Extract todos from this note"
     },
     "actions": {
       "done": "Terminé",

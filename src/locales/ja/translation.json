@@ -3132,7 +3132,12 @@
       "searchFolders": "フォルダを検索...",
       "noResults": "フォルダが見つかりません",
       "newFolder": "新しいフォルダ",
-      "showInFileManager": "{{manager}}で表示"
+      "showInFileManager": "{{manager}}で表示",
+      "noTranscriptRows": "No transcript rows found",
+      "extractTodosComplete": "Todo extraction complete",
+      "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
+      "extractTodosFailed": "Could not extract todos",
+      "extractTodosFromNote": "Extract todos from this note"
     },
     "actions": {
       "allActions": "すべてのアクション",
