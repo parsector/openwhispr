@@ -239,3 +239,43 @@ test("extractor persists exactly one todo from a version 2 meeting", async (t) =
   );
   assert.equal(db.db.prepare("SELECT count(*) AS n FROM commitments").get().n, 1);
 });
+
+test("one-note re-extraction loads only the requested existing note", async (t) => {
+  const db = setup(t);
+  const text = "I will send Alex the revised deck tomorrow.";
+  const existing = {
+    ...note,
+    transcript: JSON.stringify({
+      version: 2,
+      rows: [{ id: "row-1", text, speaker: "you", source: "mic" }],
+    }),
+  };
+  const requested = [];
+  db.getNote = (id) => {
+    requested.push(id);
+    return id === existing.id ? existing : null;
+  };
+  const infer = async () =>
+    JSON.stringify({
+      items: [
+        {
+          text: "send Alex the revised deck",
+          quote: text,
+          segment_index: 0,
+          person: "Alex",
+          direction: "owe",
+          kind: "new",
+        },
+      ],
+    });
+  const { extractForNote } = require("../../src/helpers/commitments/extract");
+  const options = { database: db, model: { mode: "local", model: "mock" }, infer };
+  assert.deepEqual(await extractForNote(existing.id, options), {
+    created: 1,
+    proposals: 0,
+    skipped: false,
+  });
+  assert.deepEqual(requested, [existing.id]);
+  assert.deepEqual(await extractForNote(999, options), { created: 0, proposals: 0, skipped: true });
+  assert.equal(db.db.prepare("SELECT count(*) AS n FROM commitments").get().n, 1);
+});

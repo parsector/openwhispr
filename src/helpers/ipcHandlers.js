@@ -1257,6 +1257,16 @@ class IPCHandlers {
     ipcMain.handle("commitments-for-note", (_event, noteId) =>
       Number.isSafeInteger(noteId) ? commitments().forNote(noteId) : []
     );
+    ipcMain.handle("commitments-reextract-note", async (_event, noteId) => {
+      const { extractForNote } = require("./commitments/extract");
+      const result = await extractForNote(noteId, {
+        database: this.databaseManager,
+        model: this._routineModelChoice,
+        infer: (options) => infer({ ...options, toolsAvailable: false }),
+      });
+      if (!result.skipped) broadcastToWindows("commitments-updated");
+      return result;
+    });
     ipcMain.handle("commitments-open-todos", async (_event, filter) => {
       if (
         !filter ||

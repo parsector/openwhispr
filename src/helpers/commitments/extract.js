@@ -227,8 +227,17 @@ async function extractCommitments({ note, database, model, infer }) {
   return apply();
 }
 
+async function extractForNote(noteId, { database, model, infer }) {
+  if (!Number.isSafeInteger(noteId) || noteId <= 0)
+    return { created: 0, proposals: 0, skipped: true };
+  const note = database.getNote(noteId);
+  if (!note || note.deleted_at) return { created: 0, proposals: 0, skipped: true };
+  return extractCommitments({ note, database, model, infer });
+}
+
 module.exports = {
   extractCommitments,
+  extractForNote,
   parseSegments,
   windows,
   parseResponse,
