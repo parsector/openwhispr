@@ -45,6 +45,17 @@ test('permanent note deletion retires its correction and a trashed note says so'
   assert.equal(listPeopleActions(f.db).some(a => a.id === 'correction-delete'), false);
   assert.equal(undoPersonAction(f.db, older.id).success, true);
 });
+test('a local note with mapping history stays in trash until its mapping is undone', t => {
+  const f = fixture(t); if (!f) return;
+  const note = f.note('mapped', [{ id: 'a', speaker: 'speaker_0' }], []);
+  assert.equal(f.db.setSpeakerMapping(note, 'speaker_0', null, 'Alex').success, true);
+  const action = listPeopleActions(f.db)[0];
+  assert.equal(f.db.deleteNote(note).success, true);
+  assert.equal(listPeopleActions(f.db).find(a => a.id === action.id).noteInTrash, 1);
+  assert.equal(f.db.undoSpeakerMapping(note).success, true);
+  assert.equal(f.db.getNote(note).deleted_at, null);
+  assert.equal(f.db.getSpeakerMappings(note).length, 0);
+});
 test('local folder deletion retires note corrections and exposes older undo', t => {
   const f = fixture(t); if (!f) return;
   const alex = f.person('Alex', 1);

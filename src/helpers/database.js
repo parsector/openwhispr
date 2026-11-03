@@ -5872,15 +5872,20 @@ class DatabaseManager {
       const accountScope = this._accountScopeCondition("notes");
       const note = this.db
         .prepare(
-          `SELECT cloud_id, cloud_create_attempted FROM notes
-           WHERE id = ? AND deleted_at IS NULL AND ${accountScope.sql}`
+          `SELECT cloud_id, cloud_create_attempted, transcript, speaker_action_log, speaker_label_undo
+           FROM notes WHERE id = ? AND deleted_at IS NULL AND ${accountScope.sql}`
         )
         .get(id, ...accountScope.params);
-      // No create request has carried this note, so the server cannot hold it:
-      // it leaves the device now, with its chats and speaker rows. Any other
-      // note stays a tombstone until its cloud delete lands or a late create
-      // receipt links it.
-      if (note && !note.cloud_id && !note.cloud_create_attempted) return this.hardDeleteNote(id);
+      // A local note with speaker actions must stay in trash so its correction
+      // can still be undone. A note with no such history has no server row or
+      // speaker undo to retain, so it can be removed immediately.
+      if (
+        note &&
+        !note.cloud_id &&
+        !note.cloud_create_attempted &&
+        !require("./speakerActionLog").readSpeakerActionLog(note).actions.length
+      )
+        return this.hardDeleteNote(id);
       const stmt = this.db.prepare(
         `UPDATE notes
          SET deleted_at = datetime('now'), sync_status = 'pending', updated_at = datetime('now')

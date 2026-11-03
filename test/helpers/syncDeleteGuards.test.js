@@ -300,7 +300,13 @@ test("deleting a never-synced note removes it with its chats, speaker names and 
     "Confidential zebracorn plan",
     "meeting"
   ).note;
-  db.setSpeakerMapping(note.id, "speaker_0", null, "Alice");
+  // Seed speaker data without recording an undoable mapping action. A note
+  // with action history stays in trash so that history can still be undone.
+  db.db
+    .prepare(
+      "INSERT INTO speaker_mappings (note_id, speaker_id, profile_id, display_name) VALUES (?, ?, ?, ?)"
+    )
+    .run(note.id, "speaker_0", null, "Alice");
   db.saveNoteSpeakerEmbeddings(note.id, {
     speaker_0: Buffer.from(new Float32Array([0.1, 0.2]).buffer),
   });
