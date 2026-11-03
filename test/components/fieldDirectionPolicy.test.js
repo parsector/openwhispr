@@ -80,7 +80,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   // Search and rename accept any script; dates and numeric calibration budgets stay LTR.
   "src/components/settings/PeoplePage.tsx": ["auto", "auto", "ltr", "ltr", "ltr", "ltr", "auto"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
-  "src/components/settings/WorkspaceSection.tsx": ["auto"],
+  "src/components/settings/WorkspaceGeneralSection.tsx": ["auto"],
+  "src/components/settings/WorkspaceMembersTab.tsx": ["auto"],
   // A skill's name and the skills search accept text in any script.
   "src/components/skills/CreateSkillScreen.tsx": ["auto"],
   "src/components/skills/SkillSearchInput.tsx": ["auto"],
@@ -146,6 +147,7 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   // The scope radio inherits direction; technical fields use the shared Input.
   "src/components/settings/PeoplePage.tsx": ["inherit"],
   "src/components/todos/TodoMentionInput.tsx": ["auto"],
+  "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
   "src/components/todos/TodoPersonPicker.tsx": ["auto"],
   "src/components/todos/TodoRow.tsx": ["auto", "ltr"],
   "src/components/todos/TodosView.tsx": ["ltr", "ltr"],

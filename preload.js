@@ -1353,6 +1353,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
   takeCloudSpeakerLabels: (noteId, undo = false) =>
     ipcRenderer.invoke("db-take-cloud-speaker-labels", noteId, undo),
+  markNoteCreatesAttempted: (clientNoteIds) =>
+    ipcRenderer.invoke("db-mark-note-creates-attempted", clientNoteIds),
   acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",
@@ -1434,6 +1436,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
   acknowledgeConversationCreate: (id, snapshot, cloudId) =>
     ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
+  markConversationCreateAttempted: (id) =>
+    ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
   markConversationSynced: (id, cloudId) =>
     ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId),
   hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),

@@ -86,6 +86,9 @@ export default function ConversationList({
         id: number;
         title: string;
         last_message?: string;
+        note_id?: number | null;
+        note_title?: string | null;
+        note_deleted_at?: string | null;
         created_at: string;
         updated_at: string;
         archived_at?: string;
@@ -96,6 +99,10 @@ export default function ConversationList({
         created_at: c.created_at,
         updated_at: c.updated_at,
         is_archived: !!c.archived_at,
+        sourceNote:
+          c.note_id != null && c.note_title != null
+            ? { title: c.note_title, deleted: Boolean(c.note_deleted_at) }
+            : undefined,
       });
       setConversations([...(active ?? []).map(toPreview), ...(archived ?? []).map(toPreview)]);
       // The Archived toggle hides once nothing is archived; leave that view with it.
@@ -122,9 +129,16 @@ export default function ConversationList({
   }, [loadConversations, refreshKey]);
 
   useEffect(() => {
-    return window.electronAPI?.onAgentJobMessageAdded?.(() => {
-      void loadConversations();
-    });
+    const refresh = () => void loadConversations();
+    const disposers = [
+      window.electronAPI?.onAgentJobMessageAdded?.(refresh),
+      window.electronAPI?.onNoteUpdated?.(refresh),
+      window.electronAPI?.onNoteSynced?.(refresh),
+      window.electronAPI?.onNoteDeleted?.(refresh),
+      window.electronAPI?.onSpacePurged?.(refresh),
+      window.electronAPI?.onFolderDeleted?.(refresh),
+    ];
+    return () => disposers.forEach((dispose) => dispose?.());
   }, [loadConversations]);
 
   const filtered = useMemo(() => {

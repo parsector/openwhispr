@@ -25,6 +25,10 @@ The People area now behaves like one place: your work stays where you left it, t
 - **Enrolment reads the same audio the player does.** Enrol voice now resolves each row's span exactly as the transcript player and calibration do, so a meeting whose rows play normally offers the spans you labelled instead of reporting that nothing can be enrolled.
 - The empty state reports why per reason — too short, overlapping, audio gone, already used — instead of a single sentence.
 
+### Models
+
+- A saved Tinfoil GLM-5.3 Flash selection now moves to GLM-5.3, including when the device is offline. Flash is no longer offered in the model list.
+
 ## [1.12.6] - 2026-11-02
 
 Calibration now uses the audio your transcript already plays, instead of asking for a stored span that was never written.

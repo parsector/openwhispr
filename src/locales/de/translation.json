@@ -1222,7 +1222,8 @@
     },
     "welcomeSubtitle": "Die Kraft Ihrer Stimme. Zu Ihren Bedingungen.",
     "welcomeTitle": "Willkommen bei OpenWhispr",
-    "sessionExpired": "Sitzung abgelaufen"
+    "sessionExpired": "Sitzung abgelaufen",
+    "unconfirmedSession": "Deine Anmeldung konnte nicht bestätigt werden, daher wurde nichts geändert. Versuche es erneut, sobald OpenWhispr seine Server erreicht."
   },
   "calendar": {
     "title": "Google Kalender",
@@ -1621,7 +1622,8 @@
       "account": "Konto",
       "app": "App",
       "aiModels": "KI-Modelle",
-      "system": "System"
+      "system": "System",
+      "workspace": "Workspace"
     },
     "sections": {
       "account": {
@@ -1663,6 +1665,18 @@
       "plansBilling": {
         "description": "Tarife, Nutzung & Abrechnung",
         "label": "Tarife & Abrechnung"
+      },
+      "workspaceGeneral": {
+        "label": "Allgemein",
+        "description": "Name und Symbol des Workspace"
+      },
+      "workspacePeople": {
+        "label": "Personen",
+        "description": "Mitglieder und Teams"
+      },
+      "workspaceDeveloper": {
+        "label": "Entwickler",
+        "description": "API-Schlüssel des Workspace"
       }
     },
     "title": "Einstellungen"
@@ -1685,7 +1699,8 @@
         "general": "Allgemein",
         "members": "Mitglieder",
         "teams": "Gruppen",
-        "developer": "Entwickler"
+        "developer": "Entwickler",
+        "invitations": "Einladungen"
       },
       "role": {
         "owner": "Inhaber",
@@ -1710,7 +1725,16 @@
           "title": "{{name}} verlassen?",
           "description": "Sie verlieren sofort den Zugriff. Ein Administrator kann Sie erneut einladen."
         },
-        "left": "Sie haben {{name}} verlassen"
+        "left": "Sie haben {{name}} verlassen",
+        "title": "Allgemein",
+        "subtitleManage": "Verwalten Sie Name, Icons und mehr für Ihren Workspace",
+        "subtitleView": "Name und Icon Ihres Workspace.",
+        "nameHint": "Der Workspace-Name darf bis zu 65 Zeichen lang sein",
+        "iconLabel": "Workspace-Icon",
+        "iconHint": "Dieses Icon erscheint in Ihrer Seitenleiste und in Benachrichtigungen.",
+        "roleLabel": "Ihre Rolle",
+        "ownerTitle": "Workspace-Inhaber",
+        "ownerDescription": "Übertragen Sie die Inhaberschaft an ein anderes Workspace-Mitglied."
       },
       "members": {
         "title": "Mitglieder",
@@ -1866,6 +1890,60 @@
           "canceled": "Gekündigt",
           "incomplete": "Unvollständig",
           "unpaid": "Unbezahlt"
+        }
+      },
+      "people": {
+        "title": "Personen",
+        "description": "Verwalten Sie die Personen in Ihrem Workspace und ihre Rollen.",
+        "subtitleView": "Die Personen in Ihrem Workspace und ihre Rollen.",
+        "add": "Hinzufügen",
+        "addLabel": "Personen einladen",
+        "columns": {
+          "name": "Name",
+          "team": "Gruppe",
+          "role": "Workspace-Rolle",
+          "email": "E-Mail",
+          "status": "Status",
+          "actions": "Aktionen"
+        },
+        "you": "Sie",
+        "teamsNone": "Keine",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Mitglieder werden geladen…",
+          "body": "Die Mitglieder Ihres Workspace werden hier angezeigt."
+        },
+        "failed": {
+          "title": "Mitglieder konnten nicht geladen werden",
+          "body": "Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+        },
+        "search": {
+          "placeholder": "Mitglieder suchen",
+          "clear": "Suche löschen",
+          "noResultsTitle": "Kein Mitglied entspricht „{{query}}“",
+          "noResultsBody": "Prüfen Sie die Schreibweise oder suchen Sie nach der E-Mail-Adresse."
+        },
+        "roleMenuLabel": "Rolle von {{name}} ändern",
+        "roleDescription": {
+          "member": "Kann Notizen ansehen und bearbeiten.",
+          "admin": "Verwaltet Mitglieder, Einladungen, Gruppen und Einstellungen."
+        },
+        "roleFailed": "Die Rolle von {{name}} konnte nicht geändert werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "roleNotAllowed": "Sie haben keine Berechtigung mehr, Rollen in {{workspace}} zu ändern.",
+        "invitations": {
+          "loading": "Einladungen werden geladen…",
+          "failedTitle": "Einladungen konnten nicht geladen werden",
+          "emptyTitle": "Keine Einladungen",
+          "emptyBody": "Neue Einladungen erscheinen hier, bis sie angenommen werden.",
+          "pending_one": "Ausstehend · Läuft in {{count}} Tag ab",
+          "pending_other": "Ausstehend · Läuft in {{count}} Tagen ab",
+          "expired": "Abgelaufen",
+          "resend": "Einladung erneut senden",
+          "cancel": "Einladung zurückziehen",
+          "resendFailed": "Die Einladung an {{email}} konnte nicht erneut gesendet werden. Ziehen Sie sie zurück und laden Sie die Person erneut ein.",
+          "resendNotAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} erneut zu senden.",
+          "noLongerPending": "Die Einladung an {{email}} ist nicht mehr offen",
+          "refreshFailed": "Einladungen konnten nicht aktualisiert werden. Die Liste ist möglicherweise veraltet."
         }
       }
     },
@@ -2099,6 +2177,10 @@
       "planUnavailable": {
         "title": "Tarif nicht verfügbar",
         "description": "Ihr Tarif konnte gerade nicht geladen werden. Ihr Zugriff bleibt unverändert."
+      },
+      "offlineAccount": {
+        "title": "Stand deiner letzten Anmeldung",
+        "description": "Synchronisierung und Kontoänderungen sind pausiert, bis OpenWhispr seine Server erreicht."
       }
     },
     "agentConfig": {
@@ -3086,7 +3168,39 @@
         "admin": "Verwaltet Mitglieder",
         "member": "Nutzt den Workspace"
       },
-      "seatCost": "Bei Annahme wird deinem Tarif ein Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}."
+      "seatCost": "Bei Annahme wird deinem Tarif ein Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "emailHint": "Trennen Sie E-Mail-Adressen durch Kommas. Alle erhalten dieselbe Rolle.",
+      "removeRecipient": "{{email}} entfernen",
+      "suggestions": "Vorschläge",
+      "seatCostMany_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "seatCostMany_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
+      "seatCostManyUnpriced_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt.",
+      "seatCostManyUnpriced_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt.",
+      "submit_one": "{{count}} Einladung senden",
+      "submit_other": "{{count}} Einladungen senden",
+      "sentTitle_one": "{{count}} Einladung gesendet",
+      "sentTitle_other": "{{count}} Einladungen gesendet",
+      "sentOne": "{{email}} wurde zu {{workspace}} eingeladen",
+      "sentMany_one": "{{count}} Person wurde zu {{workspace}} eingeladen",
+      "sentMany_other": "{{count}} Personen wurden zu {{workspace}} eingeladen",
+      "noEmail_one": "{{count}} Einladung wurde erstellt, aber ihre E-Mail konnte nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+      "noEmail_other": "{{count}} Einladungen wurden erstellt, aber ihre E-Mails konnten nicht zugestellt werden. Senden Sie sie unter Einladungen erneut.",
+      "someFailed_one": "{{count}} Adresse konnte nicht eingeladen werden. Korrigieren oder entfernen Sie sie, um es erneut zu versuchen.",
+      "someFailed_other": "{{count}} Adressen konnten nicht eingeladen werden. Korrigieren oder entfernen Sie sie, um es erneut zu versuchen.",
+      "tooMany": "Sie können bis zu 20 Personen auf einmal einladen.",
+      "done": "Fertig",
+      "errors": {
+        "invalid": "{{email}} ist keine gültige E-Mail-Adresse",
+        "alreadyMember": "{{email}} ist bereits Mitglied",
+        "alreadyInvited": "{{email}} hat bereits eine ausstehende Einladung. Senden Sie sie unter Einladungen erneut.",
+        "seatLimit": "Dieser Workspace hat sein Platzlimit erreicht.",
+        "directoryRequired": "Weisen Sie {{email}} zuerst in Ihrem Identitätsanbieter zu.",
+        "notAllowed": "Sie können keine Personen mehr zu {{workspace}} einladen.",
+        "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen zu {{workspace}} einzuladen.",
+        "sessionExpired": "{{email}} konnte nicht eingeladen werden: Ihre Anmeldung ist abgelaufen oder hat sich geändert. Melden Sie sich erneut an und versuchen Sie es noch einmal.",
+        "requestFailed": "{{email}} konnte nicht eingeladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+        "refused": "{{email}} konnte nicht eingeladen werden: {{reason}}"
+      }
     },
     "join": {
       "title": "Team beitreten",
@@ -3120,6 +3234,85 @@
       "errorTitle": "Einladung konnte nicht angenommen werden",
       "sentTo": "Einladung gesendet an {{email}}",
       "wrongAccount": "Diese Einladung wurde an {{email}} gesendet. Sie sind als {{current}} angemeldet."
+    },
+    "exit": {
+      "leave": {
+        "title": "{{name}} verlassen?",
+        "body": "Sie verlieren den Zugriff auf diesen Workspace, seine Teams und seine Teamspaces. Ein Workspace-Admin kann Sie wieder einladen.",
+        "failed": "{{name}} konnte nicht verlassen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+      },
+      "left": {
+        "title": "Sie haben {{name}} verlassen"
+      },
+      "chooseAnother": "Wählen Sie einen anderen Workspace, um fortzufahren.",
+      "chooseWorkspace": "Workspace auswählen",
+      "delete": {
+        "title": "{{name}} löschen?",
+        "body": "Dadurch werden der Workspace, seine Notizen, Dateien, Teams und Teamspaces für alle dauerhaft gelöscht. Das kann nicht rückgängig gemacht werden."
+      },
+      "deleting": {
+        "title": "{{name}} wird gelöscht…",
+        "body": "Lassen Sie dieses Fenster geöffnet, während der Workspace gelöscht wird."
+      },
+      "deleteFailed": {
+        "title": "Workspace konnte nicht gelöscht werden",
+        "body": "{{name}} ist weiterhin verfügbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+      },
+      "deleted": {
+        "title": "{{name}} wurde gelöscht"
+      },
+      "tryAgain": "Erneut versuchen"
+    },
+    "removeMember": {
+      "title": "{{name}} aus {{workspace}} entfernen?",
+      "body": "Die Person verliert den Zugriff auf alle Teamspaces und Teams in diesem Workspace. Sie können sie jederzeit erneut einladen.",
+      "confirm": "Entfernen",
+      "removing": "Wird entfernt…",
+      "failed": "{{name}} konnte nicht entfernt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "notAllowed": "Sie haben keine Berechtigung mehr, Personen aus {{workspace}} zu entfernen.",
+      "alreadyRemoved": "{{name}} wurde bereits entfernt"
+    },
+    "cancelInvitation": {
+      "title": "Einladung für {{email}} zurückziehen?",
+      "body": "Die Person kann mit dieser Einladung nicht beitreten. Aktuelle Mitglieder behalten ihren Zugriff.",
+      "keep": "Einladung behalten",
+      "canceling": "Wird zurückgezogen…",
+      "done": "Einladung zurückgezogen",
+      "failed": "Die Einladung konnte nicht zurückgezogen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "notAllowed": "Sie haben keine Berechtigung mehr, Einladungen in {{workspace}} zurückzuziehen."
+    },
+    "ssoRequired": "Melden Sie sich mit dem Single Sign-On (SSO) Ihres Unternehmens an, um Personen in {{workspace}} zu verwalten.",
+    "transfer": {
+      "title": "Neuen Inhaber wählen",
+      "body": "Wählen Sie ein bestehendes Mitglied des Workspace. Nach der Übertragung werden Sie Administrator.",
+      "newOwner": "Neuer Inhaber",
+      "placeholder": "Mitglied des Workspace wählen",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "Inhaberschaft an {{name}} übertragen?",
+      "confirmBody": "{{name}} wird Inhaber von {{workspace}}. Sie werden Administrator.",
+      "submit": "Inhaberschaft übertragen",
+      "transferringTitle": "Inhaberschaft wird übertragen…",
+      "transferringBody": "Lassen Sie dieses Fenster geöffnet. Die Inhaberschaft ändert sich, sobald die Übertragung abgeschlossen ist.",
+      "transferring": "Wird übertragen…",
+      "failed": "Die Inhaberschaft konnte nicht übertragen werden. Sie sind weiterhin Inhaber. Versuchen Sie es erneut.",
+      "noCandidates": "Laden Sie jemanden in {{workspace}} ein, bevor Sie die Inhaberschaft übertragen.",
+      "done": "Inhaberschaft des Workspace an {{name}} übertragen. Sie sind jetzt Administrator."
+    },
+    "intro": {
+      "workspace": {
+        "title": "Ihr Workspace ist Ihre Basis",
+        "body": "Alle in Ihrem Unternehmen arbeiten hier. Ihre privaten Notizen bleiben privat, bis Sie sie teilen."
+      },
+      "teamspaces": {
+        "title": "Notizen in Teamspaces teilen",
+        "body": "Erstellen Sie in einem Workspace einen Teamspace für ein Projekt oder Thema, etwa Kundengespräche. Alle, die Sie hinzufügen, können seine Notizen lesen und bearbeiten."
+      },
+      "teams": {
+        "title": "Ein ganzes Team auf einmal hinzufügen",
+        "body": "Fassen Sie Personen in einem Team zusammen, etwa Vertrieb, und fügen Sie das Team dann in einem Schritt zu jedem Teamspace hinzu."
+      },
+      "getStarted": "Los geht's",
+      "progress": "Schritt {{current}} von {{total}}"
     }
   },
   "chat": {
@@ -3149,6 +3342,13 @@
       "todos": "Liste meine letzten Aufgaben auf",
       "meeting": "Bereite mich auf mein nächstes Meeting vor",
       "sharedNotes": "Hebe meine geteilten Notizen hervor"
+    },
+    "sourceNote": {
+      "from": "Aus der Notiz",
+      "open": "Notiz öffnen",
+      "deleted": "Diese Notiz wurde gelöscht",
+      "deletedShort": "Gelöscht",
+      "askAbout": "Frag etwas zu {{title}}..."
     }
   },
   "referral": {
@@ -3331,7 +3531,9 @@
         "viaGroup": "über {{group}}",
         "managedByGroup": "Über {{group}} hinzugefügt. Entferne die Person dort.",
         "roleFromGroup": "Admin über {{group}}. Ändere es dort.",
-        "invited": "Einladung an {{email}} gesendet"
+        "invited": "Einladung an {{email}} gesendet",
+        "invitedMany_one": "Einladung an {{count}} Person gesendet",
+        "invitedMany_other": "Einladungen an {{count}} Personen gesendet"
       },
       "invitedTo_one": "Sie treten {{count}} Team-Bereich bei",
       "invitedTo_other": "Sie treten {{count}} Team-Bereichen bei",
@@ -3470,7 +3672,8 @@
         "taskList": "Checkliste",
         "blockquote": "Zitat",
         "table": "Tabelle einfügen"
-      }
+      },
+      "generateWithTemplate": "Mit {{template}} erstellen"
     },
     "participants": {
       "attendee": "Teilnehmer",
@@ -3771,7 +3974,12 @@
       "replaceEditedTitle": "Bearbeitete Zusammenfassung ersetzen?",
       "replaceEditedDescription": "Ihre Änderungen an dieser KI-Zusammenfassung werden ersetzt.",
       "replaceEditedConfirm": "Zusammenfassung ersetzen",
-      "replaceEditedCancel": "Abbrechen"
+      "replaceEditedCancel": "Abbrechen",
+      "defaultLabel": "Standardvorlage für Zusammenfassungen",
+      "defaultHint": "Diese Vorlage für die Zusammenfassungsschaltfläche nach einem Meeting verwenden.",
+      "defaultBadge": "Standard",
+      "saveBeforeDefault": "Speichere diese Vorlage, um sie als Standard festzulegen.",
+      "defaultSaveFailed": "Die Standardvorlage konnte nicht aktualisiert werden. Versuche es erneut."
     },
     "onboarding": {
       "llm": {

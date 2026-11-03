@@ -99,6 +99,7 @@ import { syncService } from "../services/SyncService.js";
 import logger from "../utils/logger";
 import AcceptInvitationModal from "./AcceptInvitationModal";
 import JoinYourTeamModal from "./JoinYourTeamModal";
+import { useModalGate } from "../stores/modalGateStore";
 import { useInvitationNotesEntry } from "../hooks/useInvitationNotesEntry";
 import {
   consumePendingInvitationToken,
@@ -139,6 +140,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     noteTitle: string | null;
   } | null>(null);
   const [showPostMigration, setShowPostMigration] = useState(false);
+  const [postMigrationChecked, setPostMigrationChecked] = useState(platform !== "darwin");
+  useModalGate("postMigrationPending", !postMigrationChecked);
   const [settingsSection, setSettingsSection] = useState<string | undefined>(
     initialSettingsSection
   );
@@ -153,6 +156,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const [showSearch, setShowSearch] = useState(false);
   const showDiscarded = useShowDiscarded();
   const [activeView, setActiveView] = useState<ControlPanelView>("home");
+  useModalGate("invitation", invitationToken !== null);
+  const [notesHandOff, setNotesHandOff] = useState(false);
+  const finishNotesHandOff = useCallback(() => setNotesHandOff(false), []);
+  useModalGate("notesHandOff", notesHandOff && activeView === "personal-notes");
   useEffect(() => {
     const drain = () => {
       void window.electronAPI.commitmentsPendingTodosFilter().then((filter) => {
@@ -359,9 +366,16 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
 
   useEffect(() => {
     if (platform !== "darwin") return;
-    window.electronAPI?.getPostMigrationState?.().then((state) => {
-      if (state?.justMigrated) setShowPostMigration(true);
-    });
+    const check = window.electronAPI?.getPostMigrationState?.();
+    if (!check) {
+      setPostMigrationChecked(true);
+      return;
+    }
+    check
+      .then((state) => {
+        if (state?.justMigrated) setShowPostMigration(true);
+      })
+      .finally(() => setPostMigrationChecked(true));
   }, []);
 
   const dismissPostMigrationPermanently = useCallback(async () => {
@@ -1112,6 +1126,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         onClose={() => setInvitationToken(null)}
         onAccepted={(entry) => {
           setInvitationNotesEntry(entry);
+          setNotesHandOff(true);
           setActiveView("personal-notes");
         }}
       />
@@ -1121,7 +1136,10 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         domain={user?.email?.split("@")[1] ?? null}
         onDismiss={dismissJoinable}
         onRequested={markRequested}
-        onJoined={() => setActiveView("personal-notes")}
+        onJoined={() => {
+          setNotesHandOff(true);
+          setActiveView("personal-notes");
+        }}
       />
 
       {/* Always mounted so the palette chunk is warm and Radix can play its exit animation. */}
@@ -1166,6 +1184,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         >
           <ControlPanelSidebar
             activeView={activeView}
+            workspaceIntroAllowed={!showSettings && !isSidePanelLayout}
             onViewChange={setActiveView}
             onOpenSettings={() => {
               setSettingsSection(undefined);
@@ -1377,6 +1396,8 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                     onMeetingRecordingRequestHandled={handleMeetingRecordingRequestHandled}
                     invitationEntry={invitationNotesEntry}
                     onInvitationEntryHandled={() => setInvitationNotesEntry(null)}
+                    notesHandOff={notesHandOff}
+                    onNotesHandOffDone={finishNotesHandOff}
                   />
                 </Suspense>
               )}

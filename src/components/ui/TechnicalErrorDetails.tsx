@@ -3,12 +3,11 @@ import type { JSX } from "react";
 import { useTranslation } from "react-i18next";
 import { useCopyFeedback } from "../../hooks/useCopyFeedback";
 import { formatProviderErrorDetails } from "../../utils/describeProviderError";
-import { cn } from "../lib/utils";
 import type { TechnicalErrorDetailsData } from "./useToast";
 
 export function TechnicalErrorDetails({
   details,
-  onDark = false,
+  onDark,
 }: {
   details?: TechnicalErrorDetailsData;
   onDark?: boolean;
@@ -20,10 +19,11 @@ export function TechnicalErrorDetails({
 
   return (
     <details
-      className={cn(
-        "group/details mt-1.5 rounded-[3px] border px-1.5 py-1 text-xs",
-        onDark ? "border-white/6 bg-white/4 text-white/45" : "border-border bg-muted/50"
-      )}
+      className={
+        onDark
+          ? "group/details mt-1.5 rounded-[3px] border border-white/10 bg-white/5 px-1.5 py-1 text-xs"
+          : "group/details mt-1.5 rounded-[3px] border border-border bg-muted/50 px-1.5 py-1 text-xs"
+      }
     >
       <summary className="cursor-pointer select-none text-xs text-muted-foreground">
         {t("reasoning.enterprise.technicalDetails.title")}
@@ -38,12 +38,7 @@ export function TechnicalErrorDetails({
         <button
           type="button"
           onClick={() => void copy()}
-          className={cn(
-            "shrink-0 rounded-xs p-1 transition-colors",
-            onDark
-              ? "text-white/30 hover:bg-white/6 hover:text-white/70"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          )}
+          className="shrink-0 rounded-xs p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           aria-label={t("reasoning.enterprise.technicalDetails.copy")}
         >
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />}

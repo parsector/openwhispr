@@ -843,6 +843,11 @@ export interface Workspace {
   has_subscription?: boolean;
 }
 
+export interface MemberTeamRef {
+  id: string;
+  name: string;
+}
+
 export interface WorkspaceMember {
   user_id: string;
   role: WorkspaceRole;
@@ -851,6 +856,7 @@ export interface WorkspaceMember {
   email: string;
   name: string | null;
   image: string | null;
+  teams?: MemberTeamRef[];
 }
 
 export type TeamRole = "admin" | "member";
@@ -3568,6 +3574,7 @@ declare global {
       getAgentConversation?: (id: number) => Promise<{
         id: number;
         title: string;
+        note_id?: number | null;
         archived_at?: string;
         cloud_id?: string | null;
         client_conversation_id?: string | null;
@@ -3583,6 +3590,7 @@ declare global {
         }>;
       } | null>;
       deleteAgentConversation?: (id: number) => Promise<{ success: boolean }>;
+      markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
       updateAgentConversationTitle?: (id: number, title: string) => Promise<{ success: boolean }>;
       addAgentMessage?: (
         conversationId: number,
@@ -4646,6 +4654,7 @@ declare global {
         error?: string;
         note?: NoteItem;
       }>;
+      markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,

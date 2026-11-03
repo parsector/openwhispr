@@ -25,6 +25,8 @@ interface ControlPanelSidebarProps {
   isOverLimit?: boolean;
   isSignedIn?: boolean;
   updateAction?: React.ReactNode;
+  /** False while another modal (Settings) is open, so the workspace intro waits. */
+  workspaceIntroAllowed?: boolean;
 }
 
 export default function ControlPanelSidebar({
@@ -35,6 +37,7 @@ export default function ControlPanelSidebar({
   isOverLimit,
   isSignedIn,
   updateAction,
+  workspaceIntroAllowed = false,
 }: ControlPanelSidebarProps) {
   const { t } = useTranslation();
 
@@ -170,7 +173,7 @@ export default function ControlPanelSidebar({
         />
 
         <div className="pt-1">
-          <WorkspaceSwitcher />
+          <WorkspaceSwitcher introAllowed={workspaceIntroAllowed} />
         </div>
       </div>
     </div>

@@ -155,24 +155,17 @@ import { usePolicyModeOptions, usePolicySnapshot } from "../hooks/usePolicy";
 import { usePolicyStore } from "../stores/policyStore";
 import { requestSignIn } from "../utils/requestSignIn";
 import { canManageSystemAudioInApp } from "../utils/systemAudioAccess";
-import WorkspaceSection from "./settings/WorkspaceSection";
+import WorkspaceGeneralSection from "./settings/WorkspaceGeneralSection";
+import WorkspacePeopleSection from "./settings/WorkspacePeopleSection";
+import WorkspaceDeveloperSection from "./settings/WorkspaceDeveloperSection";
+import type { SettingsSectionType } from "../lib/settingsNav";
 import ProfileSection from "./settings/ProfileSection";
 import ToneStyleSection from "./settings/ToneStyleSection";
 import { enterpriseProviderName, getTranscriptionProvider } from "../models/ModelRegistry";
 import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
 import { supportsLiveTranscriptionPreview } from "../utils/transcriptionPreview";
 
-export type SettingsSectionType =
-  | "account"
-  | "workspace"
-  | "people"
-  | "general"
-  | "hotkeys"
-  | "toneStyle"
-  | "speechToText"
-  | "llms"
-  | "privacyData"
-  | "system";
+export type { SettingsSectionType };
 
 interface SettingsPageProps {
   activeSection?: SettingsSectionType;
@@ -180,6 +173,7 @@ interface SettingsPageProps {
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
   onOpenNote?: (noteId: number, rowId: string) => void;
+  onChooseWorkspace?: () => void;
 }
 
 const UI_LANGUAGE_OPTIONS: import("./ui/LanguageSelector").LanguageOption[] = [
@@ -1206,6 +1200,7 @@ export default function SettingsPage({
   onNavigateToSection,
   initialSubTab,
   onOpenNote,
+  onChooseWorkspace,
 }: SettingsPageProps) {
   const { isCompact } = useSettingsLayout();
   const {
@@ -2214,8 +2209,19 @@ export default function SettingsPage({
           </div>
         );
 
-      case "workspace":
-        return <WorkspaceSection initialSubTab={initialSubTab} />;
+      case "workspaceGeneral":
+        return (
+          <WorkspaceGeneralSection
+            onNavigateToSection={onNavigateToSection}
+            onChooseWorkspace={onChooseWorkspace}
+          />
+        );
+
+      case "workspacePeople":
+        return <WorkspacePeopleSection initialSubTab={initialSubTab} />;
+
+      case "workspaceDeveloper":
+        return <WorkspaceDeveloperSection />;
 
       case "toneStyle":
         return (

@@ -2,6 +2,7 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { Gift, LogOut, UserCircle } from "./icons";
 import MemberAvatar from "./MemberAvatar";
+import { Badge } from "./ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +29,7 @@ export default function ProfileMenu({
   onSignOut,
 }: ProfileMenuProps): React.ReactElement {
   const { t } = useTranslation();
-  const { isSignedIn, isLoaded, user } = useAuth();
+  const { isSignedIn, isLoaded, isOfflineAccount, user } = useAuth();
 
   // Until the session settles a signed-in user reads as signed out; hold the slot instead of
   // flashing Sign in.
@@ -64,6 +65,11 @@ export default function ProfileMenu({
               <p dir="auto" className="min-w-0 truncate text-[13px] font-medium text-foreground">
                 {name}
               </p>
+              {isOfflineAccount && (
+                <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px] font-medium">
+                  {t("settingsPage.account.offline")}
+                </Badge>
+              )}
             </div>
             {user.email && (
               <p className="truncate text-[11px] text-muted-foreground">

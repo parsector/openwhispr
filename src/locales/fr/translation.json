@@ -1222,7 +1222,8 @@
     },
     "welcomeSubtitle": "Le pouvoir de votre voix. À vos conditions.",
     "welcomeTitle": "Bienvenue sur OpenWhispr",
-    "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription."
+    "sessionExpired": "Session expirée. Veuillez relancer le processus d'inscription.",
+    "unconfirmedSession": "Nous n'avons pas pu confirmer votre connexion, donc rien n'a été modifié. Réessayez dès qu'OpenWhispr pourra joindre ses serveurs."
   },
   "calendar": {
     "title": "Google Agenda",
@@ -1621,7 +1622,8 @@
       "account": "Compte",
       "app": "Application",
       "aiModels": "Modèles IA",
-      "system": "Système"
+      "system": "Système",
+      "workspace": "Espace de travail"
     },
     "sections": {
       "account": {
@@ -1663,6 +1665,18 @@
       "plansBilling": {
         "description": "Forfaits, utilisation & facturation",
         "label": "Forfaits & facturation"
+      },
+      "workspaceGeneral": {
+        "label": "Général",
+        "description": "Nom et icône de l'espace de travail"
+      },
+      "workspacePeople": {
+        "label": "Personnes",
+        "description": "Membres et équipes"
+      },
+      "workspaceDeveloper": {
+        "label": "Développeur",
+        "description": "Clés API de l'espace de travail"
       }
     },
     "title": "Paramètres"
@@ -1685,7 +1699,8 @@
         "general": "Général",
         "members": "Membres",
         "teams": "Groupes",
-        "developer": "Développeur"
+        "developer": "Développeur",
+        "invitations": "Invitations"
       },
       "role": {
         "owner": "Propriétaire",
@@ -1710,7 +1725,16 @@
           "title": "Quitter {{name}} ?",
           "description": "Vous perdrez l'accès immédiatement. Un administrateur pourra vous réinviter."
         },
-        "left": "Vous avez quitté {{name}}"
+        "left": "Vous avez quitté {{name}}",
+        "title": "Général",
+        "subtitleManage": "Gérez le nom, les icônes et plus encore de votre espace",
+        "subtitleView": "Le nom et l'icône de votre espace.",
+        "nameHint": "Le nom de l'espace peut contenir jusqu'à 65 caractères",
+        "iconLabel": "Icône de l'espace",
+        "iconHint": "Cette icône apparaît dans votre barre latérale et vos notifications.",
+        "roleLabel": "Votre rôle",
+        "ownerTitle": "Propriétaire de l'espace",
+        "ownerDescription": "Transférez la propriété à un autre membre de l'espace."
       },
       "members": {
         "title": "Membres",
@@ -1866,6 +1890,60 @@
           "canceled": "Annulé",
           "incomplete": "Incomplet",
           "unpaid": "Impayé"
+        }
+      },
+      "people": {
+        "title": "Personnes",
+        "description": "Gérez les personnes de votre espace de travail et leurs rôles.",
+        "subtitleView": "Les personnes de votre espace de travail et leurs rôles.",
+        "add": "Ajouter",
+        "addLabel": "Inviter des personnes",
+        "columns": {
+          "name": "Nom",
+          "team": "Groupe",
+          "role": "Rôle dans l'espace",
+          "email": "E-mail",
+          "status": "Statut",
+          "actions": "Actions"
+        },
+        "you": "Vous",
+        "teamsNone": "Aucun",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Chargement des membres…",
+          "body": "Les membres de votre espace de travail apparaîtront ici."
+        },
+        "failed": {
+          "title": "Impossible de charger les membres",
+          "body": "Vérifiez votre connexion et réessayez."
+        },
+        "search": {
+          "placeholder": "Rechercher des membres",
+          "clear": "Effacer la recherche",
+          "noResultsTitle": "Aucun membre ne correspond à « {{query}} »",
+          "noResultsBody": "Vérifiez l’orthographe ou recherchez par adresse e-mail."
+        },
+        "roleMenuLabel": "Modifier le rôle de {{name}}",
+        "roleDescription": {
+          "member": "Peut consulter et modifier les notes.",
+          "admin": "Gère les membres, les invitations, les groupes et les paramètres."
+        },
+        "roleFailed": "Impossible de modifier le rôle de {{name}}. Vérifiez votre connexion et réessayez.",
+        "roleNotAllowed": "Vous n'avez plus l'autorisation de modifier les rôles dans {{workspace}}.",
+        "invitations": {
+          "loading": "Chargement des invitations…",
+          "failedTitle": "Impossible de charger les invitations",
+          "emptyTitle": "Aucune invitation",
+          "emptyBody": "Les nouvelles invitations apparaissent ici jusqu'à ce qu'elles soient acceptées.",
+          "pending_one": "En attente · Expire dans {{count}} jour",
+          "pending_other": "En attente · Expire dans {{count}} jours",
+          "expired": "Expirée",
+          "resend": "Renvoyer l'invitation",
+          "cancel": "Annuler l'invitation",
+          "resendFailed": "Impossible de renvoyer l'invitation à {{email}}. Annulez-la et invitez de nouveau cette personne.",
+          "resendNotAllowed": "Vous n'avez plus l'autorisation de renvoyer des invitations dans {{workspace}}.",
+          "noLongerPending": "L'invitation pour {{email}} n'est plus en attente",
+          "refreshFailed": "Impossible d'actualiser les invitations. Cette liste n'est peut-être pas à jour."
         }
       }
     },
@@ -2099,6 +2177,10 @@
       "planUnavailable": {
         "title": "Forfait indisponible",
         "description": "Nous n'avons pas pu charger votre forfait pour le moment. Votre accès reste inchangé."
+      },
+      "offlineAccount": {
+        "title": "Affichage de votre dernière connexion",
+        "description": "La synchronisation et les modifications du compte sont en pause jusqu'à ce qu'OpenWhispr puisse joindre ses serveurs."
       }
     },
     "agentConfig": {
@@ -3086,7 +3168,39 @@
         "admin": "Gère les membres",
         "member": "Utilise l'espace de travail"
       },
-      "seatCost": "En cas d’acceptation, un siège sera ajouté à votre offre · facturation au prorata estimée à {{amount}}."
+      "seatCost": "En cas d’acceptation, un siège sera ajouté à votre offre · facturation au prorata estimée à {{amount}}.",
+      "emailHint": "Séparez les adresses par des virgules. Tout le monde reçoit le même rôle.",
+      "removeRecipient": "Retirer {{email}}",
+      "suggestions": "Suggestions",
+      "seatCostMany_one": "Si toutes les invitations sont acceptées, {{count}} siège sera ajouté à votre offre · facturation au prorata estimée à {{amount}}.",
+      "seatCostMany_other": "Si toutes les invitations sont acceptées, {{count}} sièges seront ajoutés à votre offre · facturation au prorata estimée à {{amount}}.",
+      "seatCostManyUnpriced_one": "Si toutes les invitations sont acceptées, {{count}} siège sera ajouté à votre offre.",
+      "seatCostManyUnpriced_other": "Si toutes les invitations sont acceptées, {{count}} sièges seront ajoutés à votre offre.",
+      "submit_one": "Envoyer {{count}} invitation",
+      "submit_other": "Envoyer {{count}} invitations",
+      "sentTitle_one": "{{count}} invitation envoyée",
+      "sentTitle_other": "{{count}} invitations envoyées",
+      "sentOne": "Vous avez invité {{email}} dans {{workspace}}",
+      "sentMany_one": "Vous avez invité {{count}} personne dans {{workspace}}",
+      "sentMany_other": "Vous avez invité {{count}} personnes dans {{workspace}}",
+      "noEmail_one": "{{count}} invitation a été créée, mais son e-mail n'a pas pu être envoyé. Renvoyez-la depuis Invitations.",
+      "noEmail_other": "{{count}} invitations ont été créées, mais leurs e-mails n'ont pas pu être envoyés. Renvoyez-les depuis Invitations.",
+      "someFailed_one": "{{count}} adresse n'a pas pu être invitée. Corrigez-la ou retirez-la pour réessayer.",
+      "someFailed_other": "{{count}} adresses n'ont pas pu être invitées. Corrigez-les ou retirez-les pour réessayer.",
+      "tooMany": "Vous pouvez inviter jusqu'à 20 personnes à la fois.",
+      "done": "Terminé",
+      "errors": {
+        "invalid": "{{email}} n'est pas une adresse e-mail valide",
+        "alreadyMember": "{{email}} est déjà membre",
+        "alreadyInvited": "{{email}} a déjà une invitation en attente. Renvoyez-la depuis Invitations.",
+        "seatLimit": "Cet espace a atteint sa limite de sièges.",
+        "directoryRequired": "Attribuez d'abord {{email}} dans votre fournisseur d'identité.",
+        "notAllowed": "Vous ne pouvez plus inviter de personnes dans {{workspace}}.",
+        "ssoRequired": "Connectez-vous avec l'authentification unique (SSO) de votre entreprise pour inviter des personnes dans {{workspace}}.",
+        "sessionExpired": "Impossible d'inviter {{email}} : votre session a expiré ou a changé. Reconnectez-vous, puis réessayez.",
+        "requestFailed": "Impossible d'inviter {{email}}. Vérifiez votre connexion et réessayez.",
+        "refused": "Impossible d'inviter {{email}} : {{reason}}"
+      }
     },
     "join": {
       "title": "Rejoignez votre équipe",
@@ -3120,6 +3234,85 @@
       "errorTitle": "Impossible d'accepter l'invitation",
       "sentTo": "Invitation envoyée à {{email}}",
       "wrongAccount": "Cette invitation a été envoyée à {{email}}. Vous êtes connecté en tant que {{current}}."
+    },
+    "exit": {
+      "leave": {
+        "title": "Quitter {{name}} ?",
+        "body": "Vous perdrez l'accès à cet espace, à ses équipes et à ses espaces d'équipe. Un administrateur de l'espace pourra vous réinviter.",
+        "failed": "Impossible de quitter {{name}}. Vérifiez votre connexion et réessayez."
+      },
+      "left": {
+        "title": "Vous avez quitté {{name}}"
+      },
+      "chooseAnother": "Choisissez un autre espace pour continuer.",
+      "chooseWorkspace": "Choisir un espace",
+      "delete": {
+        "title": "Supprimer {{name}} ?",
+        "body": "Cela supprime définitivement l'espace, ses notes, ses fichiers, ses équipes et ses espaces d'équipe pour tout le monde. Cette action est irréversible."
+      },
+      "deleting": {
+        "title": "Suppression de {{name}}…",
+        "body": "Gardez cette fenêtre ouverte pendant la suppression de l'espace."
+      },
+      "deleteFailed": {
+        "title": "Impossible de supprimer l'espace",
+        "body": "{{name}} est toujours disponible. Vérifiez votre connexion et réessayez."
+      },
+      "deleted": {
+        "title": "{{name}} a été supprimé"
+      },
+      "tryAgain": "Réessayer"
+    },
+    "removeMember": {
+      "title": "Retirer {{name}} de {{workspace}} ?",
+      "body": "Cette personne perdra l'accès à tous les espaces d'équipe et à toutes les équipes de cet espace. Vous pouvez l'inviter à nouveau à tout moment.",
+      "confirm": "Retirer",
+      "removing": "Retrait…",
+      "failed": "Impossible de retirer {{name}}. Vérifiez votre connexion et réessayez.",
+      "notAllowed": "Vous n'avez plus l'autorisation de retirer des personnes de {{workspace}}.",
+      "alreadyRemoved": "{{name}} a déjà été retiré"
+    },
+    "cancelInvitation": {
+      "title": "Annuler l'invitation de {{email}} ?",
+      "body": "Cette personne ne pourra pas rejoindre l'espace avec cette invitation. Les membres actuels conservent leur accès.",
+      "keep": "Conserver l'invitation",
+      "canceling": "Annulation…",
+      "done": "Invitation annulée",
+      "failed": "Impossible d'annuler l'invitation. Vérifiez votre connexion et réessayez.",
+      "notAllowed": "Vous n'avez plus l'autorisation d'annuler des invitations dans {{workspace}}."
+    },
+    "ssoRequired": "Connectez-vous avec l'authentification unique (SSO) de votre entreprise pour gérer les personnes de {{workspace}}.",
+    "transfer": {
+      "title": "Choisir un nouveau propriétaire",
+      "body": "Choisissez un membre existant de l'espace. Vous deviendrez administrateur après le transfert.",
+      "newOwner": "Nouveau propriétaire",
+      "placeholder": "Choisir un membre de l'espace",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "Transférer la propriété à {{name}} ?",
+      "confirmBody": "{{name}} deviendra propriétaire de {{workspace}}. Vous deviendrez administrateur.",
+      "submit": "Transférer la propriété",
+      "transferringTitle": "Transfert de la propriété…",
+      "transferringBody": "Gardez cette fenêtre ouverte. La propriété changera à la fin du transfert.",
+      "transferring": "Transfert en cours…",
+      "failed": "Impossible de transférer la propriété. Vous êtes toujours propriétaire. Réessayez.",
+      "noCandidates": "Invitez quelqu'un dans {{workspace}} avant de transférer la propriété.",
+      "done": "Propriété de l'espace transférée à {{name}}. Vous êtes maintenant administrateur."
+    },
+    "intro": {
+      "workspace": {
+        "title": "Votre espace de travail est votre point d'ancrage",
+        "body": "Toute votre entreprise travaille ici. Vos notes privées restent privées jusqu'à ce que vous les partagiez."
+      },
+      "teamspaces": {
+        "title": "Partagez des notes dans des teamspaces",
+        "body": "Dans un espace de travail, créez un teamspace pour un projet ou un sujet, comme Appels clients. Toutes les personnes que vous ajoutez peuvent lire et modifier ses notes."
+      },
+      "teams": {
+        "title": "Ajoutez toute une équipe d'un coup",
+        "body": "Regroupez des personnes dans une équipe, comme Ventes, puis ajoutez l'équipe à n'importe quel teamspace en une seule étape."
+      },
+      "getStarted": "Commencer",
+      "progress": "Étape {{current}} sur {{total}}"
     }
   },
   "chat": {
@@ -3149,6 +3342,13 @@
       "todos": "Liste mes tâches récentes",
       "meeting": "Prépare-moi pour ma prochaine réunion",
       "sharedNotes": "Mets en avant mes notes partagées"
+    },
+    "sourceNote": {
+      "from": "Depuis la note",
+      "open": "Ouvrir la note",
+      "deleted": "Cette note a été supprimée",
+      "deletedShort": "Supprimée",
+      "askAbout": "Posez une question sur {{title}}..."
     }
   },
   "referral": {
@@ -3331,7 +3531,9 @@
         "viaGroup": "via {{group}}",
         "managedByGroup": "Ajouté via {{group}}. Retirez-le depuis ce groupe.",
         "roleFromGroup": "Admin via {{group}}. Modifiez-le là-bas.",
-        "invited": "Invitation envoyée à {{email}}"
+        "invited": "Invitation envoyée à {{email}}",
+        "invitedMany_one": "Invitation envoyée à {{count}} personne",
+        "invitedMany_other": "Invitations envoyées à {{count}} personnes"
       },
       "invitedTo_one": "Vous rejoindrez {{count}} espace d'équipe",
       "invitedTo_other": "Vous rejoindrez {{count}} espaces d'équipe",
@@ -3470,7 +3672,8 @@
         "taskList": "Liste de tâches",
         "blockquote": "Citation",
         "table": "Insérer un tableau"
-      }
+      },
+      "generateWithTemplate": "Générer avec {{template}}"
     },
     "participants": {
       "attendee": "participant",
@@ -3771,7 +3974,12 @@
       "replaceEditedTitle": "Remplacer le résumé modifié ?",
       "replaceEditedDescription": "Vos modifications apportées à ce résumé IA seront remplacées.",
       "replaceEditedConfirm": "Remplacer le résumé",
-      "replaceEditedCancel": "Annuler"
+      "replaceEditedCancel": "Annuler",
+      "defaultLabel": "Modèle de résumé par défaut",
+      "defaultHint": "Utiliser ce modèle pour le bouton de résumé après une réunion.",
+      "defaultBadge": "Par défaut",
+      "saveBeforeDefault": "Enregistrez ce modèle pour le définir par défaut.",
+      "defaultSaveFailed": "Impossible de mettre à jour le modèle par défaut. Réessayez."
     },
     "onboarding": {
       "llm": {

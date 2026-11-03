@@ -93,3 +93,13 @@ test("the header shows account identity without a plan badge", async (t) => {
   assert.match(markup, /chad@example.com/);
   assert.doesNotMatch(markup, />Pro</);
 });
+
+test("an account presented offline says so in place of the plan", async (t) => {
+  const { render } = await loadProfileMenu(t);
+  globalThis.__planLabel = "Pro";
+
+  const markup = render({ ...signedIn, isOfflineAccount: true });
+
+  assert.match(markup, />settingsPage\.account\.offline</);
+  assert.doesNotMatch(markup, />Pro</);
+});

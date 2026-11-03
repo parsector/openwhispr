@@ -3861,6 +3861,9 @@ class IPCHandlers {
       }
       return result;
     });
+    ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds) =>
+      this.databaseManager.markNoteCreatesAttempted(clientNoteIds)
+    );
     ipcMain.handle(
       "db-acknowledge-note-create",
       (_, id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) => {
@@ -4070,6 +4073,9 @@ class IPCHandlers {
     );
     ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
       this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
+    );
+    ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
+      this.databaseManager.markConversationCreateAttempted(id)
     );
     ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
       this.databaseManager.markConversationSynced(id, cloudId)

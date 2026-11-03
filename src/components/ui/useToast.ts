@@ -28,9 +28,8 @@ export interface ToastProps {
   secondaryDescription?: string;
   copyCommand?: string;
   technicalDetails?: TechnicalErrorDetailsData;
-  action?: React.ReactNode;
   actions?: ToastActionConfig[];
-  /** Which side of a standard toast its `actions` row sits on; start by default. */
+  action?: React.ReactNode;
   actionsAlign?: "start" | "end";
   presentation?: ToastPresentation;
   variant?: "default" | "destructive" | "success";

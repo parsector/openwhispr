@@ -1222,7 +1222,8 @@
     },
     "welcomeSubtitle": "El poder de tu voz. En tus términos.",
     "welcomeTitle": "Bienvenido a OpenWhispr",
-    "sessionExpired": "Sesión expirada"
+    "sessionExpired": "Sesión expirada",
+    "unconfirmedSession": "No pudimos confirmar tu inicio de sesión, así que no se cambió nada. Inténtalo de nuevo cuando OpenWhispr pueda conectarse a sus servidores."
   },
   "cleanupPrompt": "Corrección",
   "developerSection": {
@@ -1579,7 +1580,8 @@
       "account": "Cuenta",
       "app": "Aplicación",
       "aiModels": "Modelos de IA",
-      "system": "Sistema"
+      "system": "Sistema",
+      "workspace": "Espacio de trabajo"
     },
     "sections": {
       "account": {
@@ -1621,6 +1623,18 @@
       "plansBilling": {
         "description": "Planes, uso y facturación",
         "label": "Planes y facturación"
+      },
+      "workspaceGeneral": {
+        "label": "General",
+        "description": "Nombre e icono del espacio de trabajo"
+      },
+      "workspacePeople": {
+        "label": "Personas",
+        "description": "Miembros y equipos"
+      },
+      "workspaceDeveloper": {
+        "label": "Desarrollador",
+        "description": "Claves API del espacio de trabajo"
       }
     },
     "title": "Ajustes"
@@ -1856,6 +1870,10 @@
       "planUnavailable": {
         "title": "Plan no disponible",
         "description": "No pudimos cargar tu plan ahora mismo. Tu acceso no ha cambiado."
+      },
+      "offlineAccount": {
+        "title": "Se muestra tu último inicio de sesión",
+        "description": "La sincronización y los cambios de cuenta están en pausa hasta que OpenWhispr pueda conectarse a sus servidores."
       }
     },
     "agentConfig": {
@@ -2441,7 +2459,8 @@
         "general": "General",
         "members": "Miembros",
         "teams": "Grupos",
-        "developer": "Desarrollador"
+        "developer": "Desarrollador",
+        "invitations": "Invitaciones"
       },
       "role": {
         "owner": "Propietario",
@@ -2466,7 +2485,16 @@
           "title": "¿Salir de {{name}}?",
           "description": "Perderás el acceso de inmediato. Un administrador puede invitarte de nuevo."
         },
-        "left": "Saliste de {{name}}"
+        "left": "Saliste de {{name}}",
+        "title": "General",
+        "subtitleManage": "Gestiona el nombre, los iconos y más de tu espacio de trabajo",
+        "subtitleView": "El nombre y el icono de tu espacio de trabajo.",
+        "nameHint": "El nombre del espacio de trabajo puede tener hasta 65 caracteres",
+        "iconLabel": "Icono del espacio de trabajo",
+        "iconHint": "Este icono aparece en tu barra lateral y en las notificaciones.",
+        "roleLabel": "Tu rol",
+        "ownerTitle": "Propietario del espacio de trabajo",
+        "ownerDescription": "Transfiere la propiedad a otro miembro del espacio de trabajo."
       },
       "members": {
         "title": "Miembros",
@@ -2622,6 +2650,60 @@
           "canceled": "Cancelada",
           "incomplete": "Incompleta",
           "unpaid": "Sin pagar"
+        }
+      },
+      "people": {
+        "title": "Personas",
+        "description": "Gestiona las personas de tu espacio de trabajo y sus roles.",
+        "subtitleView": "Las personas de tu espacio de trabajo y sus roles.",
+        "add": "Añadir",
+        "addLabel": "Invitar personas",
+        "columns": {
+          "name": "Nombre",
+          "team": "Grupo",
+          "role": "Rol en el espacio de trabajo",
+          "email": "Correo electrónico",
+          "status": "Estado",
+          "actions": "Acciones"
+        },
+        "you": "Tú",
+        "teamsNone": "Ninguno",
+        "teamsMore": "+{{count}}",
+        "loading": {
+          "title": "Cargando miembros…",
+          "body": "Los miembros de tu espacio de trabajo aparecerán aquí."
+        },
+        "failed": {
+          "title": "No se pudieron cargar los miembros",
+          "body": "Comprueba tu conexión e inténtalo de nuevo."
+        },
+        "search": {
+          "placeholder": "Buscar miembros",
+          "clear": "Borrar búsqueda",
+          "noResultsTitle": "Ningún miembro coincide con «{{query}}»",
+          "noResultsBody": "Revisa la ortografía o busca por correo electrónico."
+        },
+        "roleMenuLabel": "Cambiar el rol de {{name}}",
+        "roleDescription": {
+          "member": "Puede ver y editar notas.",
+          "admin": "Gestiona miembros, invitaciones, grupos y ajustes."
+        },
+        "roleFailed": "No se pudo cambiar el rol de {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
+        "roleNotAllowed": "Ya no tienes permiso para cambiar roles en {{workspace}}.",
+        "invitations": {
+          "loading": "Cargando invitaciones…",
+          "failedTitle": "No se pudieron cargar las invitaciones",
+          "emptyTitle": "No hay invitaciones",
+          "emptyBody": "Las nuevas invitaciones aparecen aquí hasta que se aceptan.",
+          "pending_one": "Pendiente · Expira en {{count}} día",
+          "pending_other": "Pendiente · Expira en {{count}} días",
+          "expired": "Expirada",
+          "resend": "Reenviar invitación",
+          "cancel": "Cancelar invitación",
+          "resendFailed": "No se pudo reenviar la invitación a {{email}}. Cancélala e invita a la persona de nuevo.",
+          "resendNotAllowed": "Ya no tienes permiso para reenviar invitaciones en {{workspace}}.",
+          "noLongerPending": "La invitación para {{email}} ya no está pendiente",
+          "refreshFailed": "No se pudieron actualizar las invitaciones. Es posible que esta lista no esté al día."
         }
       }
     },
@@ -3030,7 +3112,9 @@
         "viaGroup": "vía {{group}}",
         "managedByGroup": "Añadido a través de {{group}}. Quítalo desde ahí.",
         "roleFromGroup": "Administrador a través de {{group}}. Cámbialo allí.",
-        "invited": "Invitación enviada a {{email}}"
+        "invited": "Invitación enviada a {{email}}",
+        "invitedMany_one": "Invitación enviada a {{count}} persona",
+        "invitedMany_other": "Invitaciones enviadas a {{count}} personas"
       },
       "invitedTo_one": "Te unirás a {{count}} espacio de equipo",
       "invitedTo_other": "Te unirás a {{count}} espacios de equipo",
@@ -3169,7 +3253,8 @@
         "taskList": "Lista de verificación",
         "blockquote": "Cita",
         "table": "Insertar tabla"
-      }
+      },
+      "generateWithTemplate": "Generar con {{template}}"
     },
     "participants": {
       "attendee": "asistente",
@@ -3454,7 +3539,12 @@
       "replaceEditedTitle": "¿Reemplazar el resumen editado?",
       "replaceEditedDescription": "Se reemplazarán los cambios que hizo en este resumen de IA.",
       "replaceEditedConfirm": "Reemplazar resumen",
-      "replaceEditedCancel": "Cancelar"
+      "replaceEditedCancel": "Cancelar",
+      "defaultLabel": "Plantilla de resumen predeterminada",
+      "defaultHint": "Usar esta plantilla para el botón de resumen después de una reunión.",
+      "defaultBadge": "Predeterminada",
+      "saveBeforeDefault": "Guarda esta plantilla para establecerla como predeterminada.",
+      "defaultSaveFailed": "No se pudo actualizar la plantilla predeterminada. Inténtalo de nuevo."
     },
     "empty": {
       "title": "Todavía no hay notas aquí",
@@ -4042,6 +4132,13 @@
       "todos": "Enumera mis tareas recientes",
       "meeting": "Prepárame para mi próxima reunión",
       "sharedNotes": "Destaca mis notas compartidas"
+    },
+    "sourceNote": {
+      "from": "De la nota",
+      "open": "Abrir nota",
+      "deleted": "Esta nota se eliminó",
+      "deletedShort": "Eliminada",
+      "askAbout": "Pregunta sobre {{title}}..."
     }
   },
   "support": {
@@ -5106,7 +5203,39 @@
         "admin": "Administra miembros",
         "member": "Usa el espacio de trabajo"
       },
-      "seatCost": "Si acepta, se añadirá un puesto a tu plan · cargo prorrateado estimado de {{amount}}."
+      "seatCost": "Si acepta, se añadirá un puesto a tu plan · cargo prorrateado estimado de {{amount}}.",
+      "emailHint": "Separa los correos con comas. Todos reciben el mismo rol.",
+      "removeRecipient": "Quitar {{email}}",
+      "suggestions": "Sugerencias",
+      "seatCostMany_one": "Si todos aceptan, se añadirá {{count}} puesto a tu plan · cargo prorrateado estimado de {{amount}}.",
+      "seatCostMany_other": "Si todos aceptan, se añadirán {{count}} puestos a tu plan · cargo prorrateado estimado de {{amount}}.",
+      "seatCostManyUnpriced_one": "Si todos aceptan, se añadirá {{count}} puesto a tu plan.",
+      "seatCostManyUnpriced_other": "Si todos aceptan, se añadirán {{count}} puestos a tu plan.",
+      "submit_one": "Enviar {{count}} invitación",
+      "submit_other": "Enviar {{count}} invitaciones",
+      "sentTitle_one": "{{count}} invitación enviada",
+      "sentTitle_other": "{{count}} invitaciones enviadas",
+      "sentOne": "Invitaste a {{email}} a {{workspace}}",
+      "sentMany_one": "Invitaste a {{count}} persona a {{workspace}}",
+      "sentMany_other": "Invitaste a {{count}} personas a {{workspace}}",
+      "noEmail_one": "Se creó {{count}} invitación, pero no se pudo entregar su correo. Reenvíala desde Invitaciones.",
+      "noEmail_other": "Se crearon {{count}} invitaciones, pero no se pudieron entregar sus correos. Reenvíalas desde Invitaciones.",
+      "someFailed_one": "No se pudo invitar a {{count}} dirección. Corrígela o quítala para volver a intentarlo.",
+      "someFailed_other": "No se pudo invitar a {{count}} direcciones. Corrígelas o quítalas para volver a intentarlo.",
+      "tooMany": "Puedes invitar hasta 20 personas a la vez.",
+      "done": "Listo",
+      "errors": {
+        "invalid": "{{email}} no es una dirección de correo válida",
+        "alreadyMember": "{{email}} ya es miembro",
+        "alreadyInvited": "{{email}} ya tiene una invitación pendiente. Reenvíala desde Invitaciones.",
+        "seatLimit": "Este espacio de trabajo alcanzó su límite de puestos.",
+        "directoryRequired": "Primero asigna a {{email}} en tu proveedor de identidad.",
+        "notAllowed": "Ya no puedes invitar personas a {{workspace}}.",
+        "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para invitar personas a {{workspace}}.",
+        "sessionExpired": "No se pudo invitar a {{email}}: tu sesión caducó o cambió. Vuelve a iniciar sesión e inténtalo de nuevo.",
+        "requestFailed": "No se pudo invitar a {{email}}. Revisa tu conexión e inténtalo de nuevo.",
+        "refused": "No se pudo invitar a {{email}}: {{reason}}"
+      }
     },
     "join": {
       "title": "Únete a tu equipo",
@@ -5140,6 +5269,85 @@
       "errorTitle": "No se pudo aceptar la invitación",
       "sentTo": "Invitación enviada a {{email}}",
       "wrongAccount": "Esta invitación se envió a {{email}}. Has iniciado sesión como {{current}}."
+    },
+    "exit": {
+      "leave": {
+        "title": "¿Salir de {{name}}?",
+        "body": "Perderás el acceso a este espacio de trabajo, a sus equipos y a sus espacios de equipo. Un administrador del espacio de trabajo puede volver a invitarte.",
+        "failed": "No se pudo salir de {{name}}. Comprueba tu conexión e inténtalo de nuevo."
+      },
+      "left": {
+        "title": "Saliste de {{name}}"
+      },
+      "chooseAnother": "Elige otro espacio de trabajo para continuar.",
+      "chooseWorkspace": "Elegir espacio de trabajo",
+      "delete": {
+        "title": "¿Eliminar {{name}}?",
+        "body": "Esto elimina de forma permanente el espacio de trabajo, sus notas, archivos, equipos y espacios de equipo para todos. No se puede deshacer."
+      },
+      "deleting": {
+        "title": "Eliminando {{name}}…",
+        "body": "Mantén esta ventana abierta mientras se elimina el espacio de trabajo."
+      },
+      "deleteFailed": {
+        "title": "No se pudo eliminar el espacio de trabajo",
+        "body": "{{name}} sigue disponible. Comprueba tu conexión e inténtalo de nuevo."
+      },
+      "deleted": {
+        "title": "Se eliminó {{name}}"
+      },
+      "tryAgain": "Intentar de nuevo"
+    },
+    "removeMember": {
+      "title": "¿Quitar a {{name}} de {{workspace}}?",
+      "body": "Perderá el acceso a todos los espacios de equipo y equipos de este espacio de trabajo. Puedes volver a invitarle cuando quieras.",
+      "confirm": "Quitar",
+      "removing": "Quitando…",
+      "failed": "No se pudo quitar a {{name}}. Comprueba tu conexión e inténtalo de nuevo.",
+      "notAllowed": "Ya no tienes permiso para quitar personas de {{workspace}}.",
+      "alreadyRemoved": "{{name}} ya había sido quitado"
+    },
+    "cancelInvitation": {
+      "title": "¿Cancelar la invitación para {{email}}?",
+      "body": "No podrá unirse con esta invitación. Los miembros actuales conservan su acceso.",
+      "keep": "Conservar invitación",
+      "canceling": "Cancelando…",
+      "done": "Invitación cancelada",
+      "failed": "No se pudo cancelar la invitación. Comprueba tu conexión e inténtalo de nuevo.",
+      "notAllowed": "Ya no tienes permiso para cancelar invitaciones en {{workspace}}."
+    },
+    "ssoRequired": "Inicia sesión con el inicio de sesión único (SSO) de tu empresa para gestionar a las personas de {{workspace}}.",
+    "transfer": {
+      "title": "Elige un nuevo propietario",
+      "body": "Elige a un miembro existente del espacio de trabajo. Pasarás a ser administrador tras la transferencia.",
+      "newOwner": "Nuevo propietario",
+      "placeholder": "Elige a un miembro del espacio de trabajo",
+      "candidate": "{{name}} · {{role}}",
+      "confirmTitle": "¿Transferir la propiedad a {{name}}?",
+      "confirmBody": "{{name}} será el propietario de {{workspace}}. Tú pasarás a ser administrador.",
+      "submit": "Transferir propiedad",
+      "transferringTitle": "Transfiriendo la propiedad…",
+      "transferringBody": "Mantén esta ventana abierta. La propiedad cambiará cuando termine la transferencia.",
+      "transferring": "Transfiriendo…",
+      "failed": "No se pudo transferir la propiedad. Sigues siendo el propietario. Inténtalo de nuevo.",
+      "noCandidates": "Invita a alguien a {{workspace}} antes de transferir la propiedad.",
+      "done": "Propiedad del espacio de trabajo transferida a {{name}}. Ahora eres administrador."
+    },
+    "intro": {
+      "workspace": {
+        "title": "Tu espacio de trabajo es tu base",
+        "body": "Todos en tu empresa trabajan aquí. Tus notas privadas siguen siendo privadas hasta que las compartas."
+      },
+      "teamspaces": {
+        "title": "Comparte notas en teamspaces",
+        "body": "Dentro de un espacio de trabajo, crea un teamspace para un proyecto o tema, como Llamadas con clientes. Todas las personas que añadas pueden leer y editar sus notas."
+      },
+      "teams": {
+        "title": "Añade un equipo entero de una vez",
+        "body": "Agrupa a personas en un equipo, como Ventas, y luego añade el equipo a cualquier teamspace en un solo paso."
+      },
+      "getStarted": "Empezar",
+      "progress": "Paso {{current}} de {{total}}"
     }
   },
   "dictationTranslation": {
