@@ -4365,12 +4365,16 @@ declare global {
         embeddingCount: number;
         mappingCount: number;
         noteEmbeddingCount: number;
+        sampleCount: number;
+        candidateCount: number;
       }>;
       clearVoiceData?: (expected: {
         personCount: number;
         embeddingCount: number;
         mappingCount: number;
         noteEmbeddingCount: number;
+        sampleCount: number;
+        candidateCount: number;
       }) => Promise<{
         success: boolean;
         error?: string;

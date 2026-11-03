@@ -1269,7 +1269,19 @@ function previewClearVoiceData(database) {
   const noteEmbeddingCount = db
     .prepare("SELECT COUNT(*) AS n FROM note_speaker_embeddings")
     .get().n;
-  return { success: true, personCount, embeddingCount, mappingCount, noteEmbeddingCount };
+  const sampleCount = db.prepare("SELECT COUNT(*) AS n FROM voice_exemplars").get().n;
+  const candidateCount = db
+    .prepare("SELECT COUNT(*) AS n FROM voice_enrollment_candidates")
+    .get().n;
+  return {
+    success: true,
+    personCount,
+    embeddingCount,
+    mappingCount,
+    noteEmbeddingCount,
+    sampleCount,
+    candidateCount,
+  };
 }
 function clearVoiceData(database, expected) {
   return database.db.transaction(() => {
@@ -1277,9 +1289,14 @@ function clearVoiceData(database, expected) {
     const preview = previewClearVoiceData(database);
     if (
       expected &&
-      ["personCount", "embeddingCount", "mappingCount", "noteEmbeddingCount"].some(
-        (key) => expected[key] !== undefined && expected[key] !== preview[key]
-      )
+      [
+        "personCount",
+        "embeddingCount",
+        "mappingCount",
+        "noteEmbeddingCount",
+        "sampleCount",
+        "candidateCount",
+      ].some((key) => expected[key] !== undefined && expected[key] !== preview[key])
     )
       return { success: false, error: "preview_changed" };
     const id = randomUUID();

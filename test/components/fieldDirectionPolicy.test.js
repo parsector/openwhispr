@@ -78,7 +78,7 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/EnterpriseAudioSettings.tsx": ["ltr"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
   // Search and rename accept any script; dates and numeric calibration budgets stay LTR.
-  "src/components/settings/PeoplePage.tsx": ["auto", "auto", "ltr", "ltr", "ltr", "ltr"],
+  "src/components/settings/PeoplePage.tsx": ["auto", "auto", "ltr", "ltr", "ltr", "ltr", "auto"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceSection.tsx": ["auto"],
   // A skill's name and the skills search accept text in any script.

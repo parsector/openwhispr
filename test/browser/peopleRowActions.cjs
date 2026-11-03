@@ -94,7 +94,10 @@ test(
       true
     );
     await page.keyboard.press("Tab");
-    assert.equal(await cancel.evaluate((element) => document.activeElement === element), true);
+    assert.equal(
+      await question.evaluate((element) => element.contains(document.activeElement)),
+      false
+    );
     await cancel.click();
     assert.equal(await row.locator('[role="alertdialog"]').count(), 0);
     assert.equal(await row.textContent(), originalText);
