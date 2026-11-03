@@ -5756,6 +5756,9 @@
     "archiveLabel": "Archived"
   },
   "people": {
+    "historyPage": "History",
+    "voiceSettings": "Voice settings",
+    "voiceData": "Voice data",
     "approvedSamples": "Approved samples",
     "oddSample": "Review this sample",
     "splitSample": "Split on transcript",

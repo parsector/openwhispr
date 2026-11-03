@@ -5774,6 +5774,9 @@
     "archiveLabel": "Archivé"
   },
   "people": {
+    "historyPage": "Historique",
+    "voiceSettings": "Paramètres vocaux",
+    "voiceData": "Données vocales",
     "approvedSamples": "Extraits approuvés",
     "oddSample": "Vérifier cet extrait",
     "splitSample": "Séparer dans la transcription",

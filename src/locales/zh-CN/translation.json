@@ -5756,6 +5756,9 @@
     "archiveLabel": "已归档"
   },
   "people": {
+    "historyPage": "历史",
+    "voiceSettings": "语音设置",
+    "voiceData": "语音数据",
     "approvedSamples": "已批准的样本",
     "oddSample": "检查此样本",
     "splitSample": "在转录中拆分",

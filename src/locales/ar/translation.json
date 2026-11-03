@@ -5954,6 +5954,9 @@
     "archiveLabel": "مؤرشف"
   },
   "people": {
+    "historyPage": "السجل",
+    "voiceSettings": "إعدادات الصوت",
+    "voiceData": "بيانات الصوت",
     "approvedSamples": "العينات المعتمدة",
     "oddSample": "راجع هذه العينة",
     "splitSample": "قسّم في النص",
