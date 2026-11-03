@@ -4,6 +4,7 @@ const { randomUUID, createHash } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
 const history = require("./speakerGlobalHistory");
+const { resolveMeetingAudioSpan } = require("./meetingAudioSpan");
 
 const RATE = 24000;
 const MODEL_RATE = 16000;
@@ -212,7 +213,16 @@ function candidateId(profileId, noteId, rowId, span) {
 }
 function candidateReport(database, store, profileId) {
   const db = database.db;
-  const reasons = { short: 0, long: 0, audio: 0, overlap: 0, uncertain: 0, reviewed: 0, limit: 0 };
+  const reasons = {
+    short: 0,
+    long: 0,
+    audio: 0,
+    overlap: 0,
+    uncertain: 0,
+    reviewed: 0,
+    limit: 0,
+    resolution: 0,
+  };
   if (!db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(profileId))
     return { candidates: [], reasons };
   const approved = samples(db, profileId).length;
@@ -230,7 +240,6 @@ function candidateReport(database, store, profileId) {
     const rows = readTranscriptDocument(note.transcript).rows;
     const changed = changedRows(note);
     for (const row of rows) {
-      const span = row.audioSpan;
       if (row.deleted || !attributed(db, note.id, row, profileId)) continue;
       const exclude = (reason) => {
         reasons[reason]++;
@@ -241,41 +250,58 @@ function candidateReport(database, store, profileId) {
         exclude("uncertain");
         continue;
       }
+      if (row.overlap || row.uncertainty?.reason === "overlapping_speech") {
+        exclude("overlap");
+        continue;
+      }
       if (
         row.uncertainty ||
-        row.overlap ||
         row.speakerStatus === "provisional" ||
         row.speakerStatus === "suggested"
       ) {
         exclude("uncertain");
         continue;
       }
-      if (
-        !["complete", "incomplete"].includes(audioState.state) ||
-        audioState.bytes === 0 ||
-        !span ||
-        span.recordingId !== (audioState.recordingId ?? note.id) ||
-        !["mic", "system"].includes(span.trackId)
-      ) {
+      if (!["complete", "incomplete"].includes(audioState.state) || audioState.bytes === 0) {
         exclude("audio");
         continue;
       }
-      const overlapsOtherVoice = rows.some(
-        (other) =>
-          other !== row &&
-          !other.deleted &&
-          other.speaker !== row.speaker &&
-          other.audioSpan?.trackId === span.trackId &&
-          other.audioSpan?.startSample < span.endSample &&
-          other.audioSpan?.endSample > span.startSample
+      const resolved = resolveMeetingAudioSpan(
+        row,
+        rows,
+        audioState.recordingId ?? note.id,
+        audioState.startedAt,
+        audioState.tracks
       );
+      if (resolved.reason) {
+        exclude(
+          ["gap", "outside_recorded_range"].includes(resolved.reason) ? "audio" : "resolution"
+        );
+        continue;
+      }
+      const overlapsOtherVoice = rows.some((other) => {
+        if (other === row || other.deleted || other.speaker === row.speaker) return false;
+        const otherSpan = resolveMeetingAudioSpan(
+          other,
+          rows,
+          audioState.recordingId ?? note.id,
+          audioState.startedAt,
+          audioState.tracks
+        );
+        return (
+          !otherSpan.reason &&
+          otherSpan.track === resolved.track &&
+          otherSpan.from < resolved.to &&
+          otherSpan.to > resolved.from
+        );
+      });
       if (overlapsOtherVoice) {
         exclude("overlap");
         continue;
       }
       // Exclude the first and last 250 ms around a transcript boundary.
-      const startSample = span.startSample + RATE / 4;
-      const endSample = span.endSample - RATE / 4;
+      const startSample = Math.round((resolved.from + 0.25) * RATE);
+      const endSample = Math.round((resolved.to - 0.25) * RATE);
       const duration = (endSample - startSample) / RATE;
       if (duration < 3) {
         exclude("short");
@@ -287,16 +313,16 @@ function candidateReport(database, store, profileId) {
       }
       // Retention may leave a note present while its actual span is gone.
       const available = store.spanAvailable
-        ? store.spanAvailable(note.id, span.trackId, startSample, endSample)
+        ? store.spanAvailable(note.id, resolved.track, startSample, endSample)
         : (() => {
-            const audio = store.span(note.id, span.trackId, startSample / RATE, endSample / RATE);
+            const audio = store.span(note.id, resolved.track, startSample / RATE, endSample / RATE);
             return audio.state === "available" && !audio.partial;
           })();
       if (!available) {
         exclude("audio");
         continue;
       }
-      const trimmed = { ...span, startSample, endSample };
+      const trimmed = { trackId: resolved.track, startSample, endSample };
       const id = candidateId(profileId, note.id, row.id, trimmed);
       const overlapsApproved = db
         .prepare(
@@ -304,12 +330,12 @@ function candidateReport(database, store, profileId) {
         WHERE profile_id = ? AND note_id = ? AND track = ?
           AND start_sample < ? AND end_sample > ?`
         )
-        .get(profileId, note.id, span.trackId, endSample, startSample);
+        .get(profileId, note.id, resolved.track, endSample, startSample);
       if (overlapsApproved) {
         exclude("reviewed");
         continue;
       }
-      const spanKey = [profileId, note.id, span.trackId, startSample, endSample];
+      const spanKey = [profileId, note.id, resolved.track, startSample, endSample];
       if (
         db
           .prepare(
@@ -334,7 +360,7 @@ function candidateReport(database, store, profileId) {
         noteTitle: note.title,
         meetingDate: note.created_at,
         rowIds: [row.id],
-        track: span.trackId,
+        track: resolved.track,
         startSample,
         endSample,
         durationSeconds: duration,
@@ -349,7 +375,7 @@ function candidateReport(database, store, profileId) {
               row.suggestedProfileId,
               row.correctionRevision,
               changed.has(row.id),
-              row.audioSpan,
+              resolved,
             ])
           )
           .digest("hex"),

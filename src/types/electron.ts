@@ -4267,6 +4267,7 @@ declare global {
           uncertain: number;
           reviewed: number;
           limit: number;
+          resolution: number;
         };
       }>;
       listVoiceEnrollmentSamples?: (profileId: number) => Promise<

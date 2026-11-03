@@ -1,6 +1,7 @@
 const { createHash } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
+const { resolveMeetingAudioSpan } = require("./meetingAudioSpan");
 
 function machineAssignment(row, related, personChanges) {
   const ordered = [...related].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
@@ -43,7 +44,7 @@ function buildCalibrationLabels(note, audio, status = {}) {
   const actions = readSpeakerActionLog(note).actions;
   const transcriptRows = readTranscriptDocument(note.transcript).rows;
   const recordingId = status.recordingId ?? note.id;
-  const rows = transcriptRows.map((row, index) => {
+  const rows = transcriptRows.map((row) => {
     const related = actions.filter(
       (action) =>
         ["correction", "split", "reconsideration"].includes(action.kind) &&
@@ -53,79 +54,13 @@ function buildCalibrationLabels(note, audio, status = {}) {
           (action.event?.rowId ? [action.event.rowId] : [])
         ).includes(row.id)
     );
-    const relative = (value) =>
-      value == null || !Number.isFinite(value)
-        ? null
-        : value > 1e12
-          ? status.startedAt != null
-            ? (value - status.startedAt) / 1000
-            : null
-          : value;
-    const timebaseUnavailable =
-      (!row.audioSpan && (row.timestamp == null || status.startedAt == null)) ||
-      (row.recordingId != null && row.recordingId !== recordingId) ||
-      (row.recordingOrigin != null && row.recordingOrigin !== status.startedAt) ||
-      (row.timebase === "epoch" && row.timestamp != null && row.timestamp < 1e12) ||
-      (row.timebase === "recording" &&
-        (row.recordingId == null || (row.timestamp != null && row.timestamp > 1e12))) ||
-      (row.timebase == null &&
-        status.startedAt != null &&
-        row.timestamp != null &&
-        row.timestamp < 1e12 &&
-        !row.audioSpan);
-    const start = row.audioSpan
-      ? row.audioSpan.startSample / 24000
-      : (relative(row.speechStart) ?? Math.max(0, (relative(row.timestamp) ?? 0) - 10));
-    const end = row.audioSpan
-      ? row.audioSpan.endSample / 24000
-      : (relative(row.speechEnd) ?? relative(row.timestamp) ?? start + 10);
-    const track = row.source;
-    const chunks = status.tracks?.[track]?.chunks || [];
-    const anchor = row.audioSpan
-      ? start
-      : (relative(row.speechStart) ?? relative(row.timestamp) ?? start);
-    const regions = [];
-    for (const chunk of chunks) {
-      const from = chunk.startSample / 24000;
-      const to = (chunk.startSample + chunk.sampleCount) / 24000;
-      const last = regions.at(-1);
-      if (last && from <= last.to) last.to = Math.max(last.to, to);
-      else regions.push({ from, to });
-    }
-    const containing = regions.find((region) => region.from <= anchor && region.to > anchor);
-    const nextStart = transcriptRows
-      .slice(index + 1)
-      .filter(
-        (item) =>
-          item.source === track && (item.recordingId == null || item.recordingId === recordingId)
-      )
-      .map((item) =>
-        item.audioSpan?.recordingId === recordingId &&
-        item.audioSpan.trackId === track &&
-        item.wordTimings?.length
-          ? item.audioSpan.startSample / 24000
-          : relative(item.speechStart)
-      )
-      .find((value) => value != null && Number.isFinite(value));
-    const from = Math.max(0, Math.round((start - 0.04) * 1000) / 1000, containing?.from ?? 0);
-    const to =
-      Math.round(Math.min(end + 0.04, nextStart ?? Infinity, containing?.to ?? Infinity) * 1000) /
-      1000;
-    const recordedEnd =
-      status.tracks?.[track]?.sampleCount != null
-        ? status.tracks[track].sampleCount / 24000
-        : Math.max(0, ...chunks.map((chunk) => (chunk.startSample + chunk.sampleCount) / 24000));
-    const unavailableReason =
-      timebaseUnavailable ||
-      (row.audioSpan?.recordingId != null && row.audioSpan.recordingId !== recordingId)
-        ? "timebase"
-        : row.audioSpan?.trackId !== undefined && row.audioSpan.trackId !== track
-          ? "track_mismatch"
-          : status.tracks && (!containing || to <= from)
-            ? anchor < 0 || anchor >= recordedEnd
-              ? "outside_recorded_range"
-              : "gap"
-            : null;
+    const resolved = resolveMeetingAudioSpan(
+      row,
+      transcriptRows,
+      recordingId,
+      status.startedAt,
+      status.tracks
+    );
     const firstCorrection = related.find((action) => action.event?.actor !== "machine");
     const personChanges = actions.filter(
       (action) =>
@@ -139,13 +74,13 @@ function buildCalibrationLabels(note, audio, status = {}) {
       .map((action) => action.id);
     return {
       rowId: row.id,
-      track,
-      start,
-      end,
-      from,
-      to,
-      approximate: !row.audioSpan,
-      unavailableReason,
+      track: resolved.track ?? row.source,
+      start: resolved.start ?? null,
+      end: resolved.end ?? null,
+      from: resolved.from ?? null,
+      to: resolved.to ?? null,
+      approximate: resolved.approximate ?? true,
+      unavailableReason: resolved.reason,
       textHash: createHash("sha256")
         .update(String(row.text || ""))
         .digest("hex"),

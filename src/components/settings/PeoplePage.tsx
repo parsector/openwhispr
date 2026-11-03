@@ -183,6 +183,7 @@ export default function PeoplePage({
     uncertain: 0,
     reviewed: 0,
     limit: 0,
+    resolution: 0,
   });
   const [enrollmentSamples, setEnrollmentSamples] = useState<EnrollmentSample[]>([]);
   const [enrollmentLoading, setEnrollmentLoading] = useState(false);
