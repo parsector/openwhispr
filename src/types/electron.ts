@@ -1660,6 +1660,9 @@ declare global {
         args: Record<string, unknown>
       ) => Promise<{ success: boolean; data: unknown; displayText: string }>;
       commitmentsForNote: (noteId: number) => Promise<Commitment[]>;
+      commitmentsReextractNote: (
+        noteId: number
+      ) => Promise<{ created: number; proposals: number; skipped: boolean }>;
       commitmentsOpenTodos: (filter: {
         kind: "note" | "person";
         value: string;

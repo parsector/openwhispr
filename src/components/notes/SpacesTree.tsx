@@ -833,6 +833,8 @@ function NoteLeaf({
   const [moveSearch, setMoveSearch] = useState("");
   const [newFolderName, setNewFolderName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const { toast } = useToast();
 
   const multiSpace = spaces.length > 1;
 
@@ -889,7 +891,7 @@ function NoteLeaf({
   );
 
   const title = note.title || t("notes.list.untitled");
-  const hasActions = noteFilesEnabled || canMove || canDelete;
+  const hasActions = noteFilesEnabled || canMove || canDelete || !!note.transcript;
 
   return (
     <div
@@ -978,6 +980,51 @@ function NoteLeaf({
                 </DropdownMenuItem>
                 {(canMove || canDelete) && <DropdownMenuSeparator />}
               </>
+            )}
+            {!!note.transcript && (
+              <DropdownMenuItem
+                disabled={isExtracting}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsExtracting(true);
+                  void window.electronAPI
+                    .commitmentsReextractNote(note.id)
+                    .then((result) => {
+                      toast({
+                        title: result.skipped
+                          ? t("notes.context.noTranscriptRows", {
+                              defaultValue: "No transcript rows found",
+                            })
+                          : t("notes.context.extractTodosComplete", {
+                              defaultValue: "Todo extraction complete",
+                            }),
+                        ...(!result.skipped && {
+                          description: t("notes.context.extractTodosResult", {
+                            defaultValue:
+                              "{{created}} todos extracted, {{proposals}} completion proposals",
+                            created: result.created,
+                            proposals: result.proposals,
+                          }),
+                        }),
+                      });
+                    })
+                    .catch(() =>
+                      toast({
+                        title: t("notes.context.extractTodosFailed", {
+                          defaultValue: "Could not extract todos",
+                        }),
+                        variant: "destructive",
+                      })
+                    )
+                    .finally(() => setIsExtracting(false));
+                }}
+                className={MENU_ITEM_CLASS}
+              >
+                <FileText size={11} className="text-muted-foreground/70" />
+                {t("notes.context.extractTodosFromNote", {
+                  defaultValue: "Extract todos from this note",
+                })}
+              </DropdownMenuItem>
             )}
             {canMove && (
               <SearchableMoveSubmenu
