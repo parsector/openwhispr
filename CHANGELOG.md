@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.8] - 2026-11-03
+
+Upstream caught up, and the People header now looks like the rest of the app.
+
+### People
+
+- **History and Voice settings are real tabs.** They use the same pill tab control as Speech-to-Text — icon, label, tinted selected tab, selection remembered — instead of three loose buttons. Review rows stays a separate action with its own icon, available from every tab.
+- **No duplicate navigation.** The breadcrumbs that repeated the tab row are gone.
+
+### From upstream
+
+- A workspace People page with members, invitations and invite.
+- A chat row now names the note it was started from.
+- Default summary template selection in notes.
+- The calendar event name is kept as a meeting's title.
+- Deleting a note or chat that never synced removes it from the device immediately.
+- An account validated offline stays available read-only.
+- Every toast uses the dictation error card's design.
+- Retired GLM 5.3 Flash and migrated existing selections.
+- Fixed custom endpoint routing for Gemini-compatible providers, the notes divider highlight while resizing, and the activation clock re-syncing instead of retrying a rejected batch forever.
+
+### Kept ours
+
+Recording without a workspace, sign-in or connection still works; there is no telemetry, billing or upsell; and speaker identity, retention and the enrol flow are unchanged.
+
 ## [1.12.7] - 2026-11-03
 
 The People area now behaves like one place: your work stays where you left it, the erase action asks properly, and enrolment can finally see the audio you labelled.
