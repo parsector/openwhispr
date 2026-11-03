@@ -205,13 +205,13 @@ test("persistent warning offers a scoped stop and does not leak into the next se
   await interrupt();
   const warning = globalThis.__interruptionToasts[0];
   assert.equal(warning.duration, 0);
-  assert.equal(warning.actions.length, 1);
-  await React.act(async () => warning.actions[0].onClick());
+  assert.equal(warning.action?.type, "button");
+  await React.act(async () => warning.action.props.onClick());
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
   await React.act(async () =>
     store.startRecording({ noteId: null, noteTitle: null, folderId: null, autoEndEligible: false })
   );
-  await React.act(async () => warning.actions[0].onClick());
+  await React.act(async () => warning.action.props.onClick());
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
   await render(false);
   await render(true);
