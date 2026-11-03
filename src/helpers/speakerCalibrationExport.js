@@ -1,7 +1,7 @@
 const { createHash } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
-const { resolveMeetingAudioSpan } = require("./meetingAudioSpan");
+const { resolveMeetingAudioSpan } = require("./meetingAudioSpan.mjs");
 
 function machineAssignment(row, related, personChanges) {
   const ordered = [...related].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));

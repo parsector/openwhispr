@@ -94,4 +94,4 @@ function resolveMeetingAudioSpan(row, rows, recordingId, startedAt, tracks) {
   return { ...details, from, to, reason: null };
 }
 
-module.exports = { resolveMeetingAudioSpan, RATE, MARGIN };
+export { resolveMeetingAudioSpan, RATE, MARGIN };

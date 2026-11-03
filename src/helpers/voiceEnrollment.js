@@ -4,7 +4,7 @@ const { randomUUID, createHash } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
 const history = require("./speakerGlobalHistory");
-const { resolveMeetingAudioSpan } = require("./meetingAudioSpan");
+const { resolveMeetingAudioSpan } = require("./meetingAudioSpan.mjs");
 
 const RATE = 24000;
 const MODEL_RATE = 16000;

@@ -1,4 +1,4 @@
-import { resolveMeetingAudioSpan } from "../helpers/meetingAudioSpan";
+import { resolveMeetingAudioSpan } from "../helpers/meetingAudioSpan.mjs";
 
 type Pausable = { pause(): void };
 type PlaybackRow = {
