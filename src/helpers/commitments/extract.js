@@ -1,6 +1,7 @@
 const { parseDueDate } = require("./parseDueDate");
 const { normaliseText, shouldMerge, matchCompletion } = require("./matching");
 const { CommitmentStore } = require("./store");
+const { parseSegments } = require("./segments");
 
 const VERSION = "slice1-v1";
 const MARKER = "__OPENWHISPR_COMMITMENTS_COMPLETE__";
@@ -30,20 +31,6 @@ const RESPONSE_FORMAT = {
     additionalProperties: false,
   },
 };
-
-function parseSegments(raw) {
-  try {
-    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-    if (
-      !Array.isArray(parsed) ||
-      !parsed.some((part) => typeof part?.text === "string" && part.text.trim())
-    )
-      return [];
-    return parsed.map((part) => (part && typeof part.text === "string" ? part : { text: "" }));
-  } catch {
-    return [];
-  }
-}
 
 function windows(segments, maxChars = 8000) {
   const result = [];
@@ -119,7 +106,7 @@ function validItem(item, segments) {
 }
 
 async function extractCommitments({ note, database, model, infer }) {
-  const segments = parseSegments(note?.transcript);
+  const segments = parseSegments(note?.transcript, note?.id);
   if (!segments.length) return { created: 0, proposals: 0, skipped: true };
   if (!model?.model) throw new Error("No routines model selected");
   const local = model.mode === "local";
