@@ -5781,7 +5781,8 @@
       "overlap": "Überlappt eine andere Stimme: {{count}}",
       "uncertain": "Als zwei Personen oder unsicher markiert: {{count}}",
       "reviewed": "Bereits geprüft oder überlappt genehmigtes Audio: {{count}}",
-      "limit": "Limit genehmigter Beispiele erreicht: {{count}} von 20"
+      "limit": "Limit genehmigter Beispiele erreicht: {{count}} von 20",
+      "resolution": "Bereich konnte nicht bestimmt werden; Transkriptwiedergabe prüfen: {{count}}"
     },
     "neverCorrected": "Nie korrigiert",
     "listen": "Anhören",

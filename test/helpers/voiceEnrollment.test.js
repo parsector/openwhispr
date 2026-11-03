@@ -20,6 +20,68 @@ test('all voice guard thresholds carry the same uncalibrated label', () => {
     ['uncalibrated', 'uncalibrated', 'uncalibrated', 'uncalibrated']);
 });
 
+test('a retained legacy row without a persisted span is offered for review', async (t) => {
+  const f = fixture(t);
+  const { noteId } = f.note('legacy');
+  const doc = JSON.parse(f.db.getNote(noteId).transcript);
+  const startedAt = 1_700_000_000_000;
+  Object.assign(doc.rows[0], { timestamp: startedAt + 5_000, speechStart: startedAt + 1_000,
+    speechEnd: startedAt + 5_000, recordingId: noteId, recordingOrigin: startedAt,
+    timebase: 'epoch' });
+  delete doc.rows[0].audioSpan;
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  f.audio.status = () => ({ state: 'complete', bytes: 100, startedAt, recordingId: noteId,
+    tracks: { mic: { chunks: [{ startSample: 0, sampleCount: 24000 * 6 }] } } });
+  const report = enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.deepEqual(report.candidates.map(candidate => candidate.rowIds[0]), ['legacy-0']);
+  assert.equal(report.reasons.audio, 0);
+  const { playbackRange } = await import('../../src/utils/meetingAudioPlayback.ts');
+  const { buildCalibrationLabels } = require('../../src/helpers/speakerCalibrationExport');
+  const status = f.audio.status(noteId);
+  const range = playbackRange(doc.rows[0], doc.rows, noteId, startedAt, status.tracks);
+  const label = buildCalibrationLabels({ id: noteId, transcript: JSON.stringify(doc) }, {}, status).rows[0];
+  assert.deepEqual([label.from, label.to, label.unavailableReason], [range.from, range.to, null]);
+  assert.deepEqual([report.candidates[0].startSample, report.candidates[0].endSample],
+    [Math.round((Math.max(range.from, label.start) + .25) * 24000),
+      Math.round((Math.min(range.to, label.end) - .25) * 24000)]);
+
+  doc.rows[0].audioSpan = { recordingId: 'old-recording', trackId: 'mic',
+    startSample: 24000, endSample: 24000 * 5 };
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 1);
+
+  f.audio.status = () => ({ state: 'expired', bytes: 0 });
+  const expired = enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.equal(expired.candidates.length, 0);
+  assert.equal(expired.reasons.audio, 1);
+
+  f.audio.status = () => ({ state: 'complete', bytes: 100, startedAt, recordingId: noteId,
+    tracks: { mic: { chunks: [{ startSample: 24000 * 20, sampleCount: 24000 * 6 }] } } });
+  assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.audio, 1);
+
+  delete doc.rows[0].audioSpan;
+  doc.rows[0].timestamp = 5;
+  delete doc.rows[0].timebase;
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  f.audio.status = () => ({ state: 'complete', bytes: 100, startedAt, recordingId: noteId,
+    tracks: { mic: { chunks: [{ startSample: 0, sampleCount: 24000 * 6 }] } } });
+  assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.resolution, 1);
+
+  doc.rows[0].timestamp = startedAt + 5_000;
+  doc.rows[0].timebase = 'epoch';
+  doc.rows[0].speechEnd = startedAt + 3_000;
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  const short = enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.equal(short.candidates.length, 0);
+  assert.equal(short.reasons.short, 1);
+
+  doc.rows[0].overlap = true;
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  const overlap = enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.equal(overlap.candidates.length, 0);
+  assert.equal(overlap.reasons.overlap, 1);
+});
+
 function fixture(t) {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-enroll-'));
   const db = new DatabaseManager();
@@ -66,6 +128,18 @@ test('fresh identity stays unenrolled; approval needs playback; rejection is dur
   f.completeReview(candidate.id, played.token);
   assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'reject', played.token)).success, true);
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
+});
+
+test('a rejected exact span from before shared resolution is not offered again', (t) => {
+  const f = fixture(t);
+  const { noteId } = f.note('previously-rejected');
+  f.db.db.prepare(`INSERT INTO voice_enrollment_candidates
+    (id, profile_id, note_id, track, start_sample, end_sample)
+    VALUES (?, ?, ?, ?, ?, ?)`)
+    .run('old-rejection', f.person.id, noteId, 'mic', 6000, 90000);
+  const report = enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.equal(report.candidates.length, 0);
+  assert.equal(report.reasons.reviewed, 1);
 });
 
 test("a row corrected to this person is offered, while Unknown and another person are not", (t) => {
@@ -170,10 +244,11 @@ test("empty enrolment reports short, expired, and two-person rows separately", (
     short: 3,
     long: 0,
     audio: 2,
-    overlap: 0,
-    uncertain: 1,
+    overlap: 1,
+    uncertain: 0,
     reviewed: 0,
     limit: 0,
+    resolution: 0,
   });
 });
 
@@ -250,6 +325,40 @@ test('three approved corrected spans across two recordings graduate without nami
     scope: 'row', rowIds: ['one-0'], name: 'Bob' }).success, true);
   assert.equal(enrollment.progress(f.db, f.person.id).usable, false);
   assert.equal(f.db.getSpeakerProfiles(true).length, 0);
+});
+
+test('three legacy spans across two labelled meetings graduate only after each full review', async (t) => {
+  const f = fixture(t);
+  const first = f.note('legacy-one', 2);
+  const second = f.note('legacy-two');
+  const startedAt = 1_700_000_000_000;
+  for (const { noteId } of [first, second]) {
+    const doc = JSON.parse(f.db.getNote(noteId).transcript);
+    for (const [index, row] of doc.rows.entries()) {
+      delete row.audioSpan;
+      Object.assign(row, { timebase: 'epoch', recordingId: noteId, recordingOrigin: startedAt,
+        speechStart: startedAt + index * 5_000,
+        speechEnd: startedAt + index * 5_000 + 4_000,
+        timestamp: startedAt + index * 5_000 + 4_000 });
+    }
+    f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  }
+  f.audio.status = (noteId) => ({ state: 'complete', bytes: 100, recordingId: noteId,
+    startedAt, tracks: { mic: { chunks: [{ startSample: 0, sampleCount: 24000 * 15 }] } } });
+  const candidates = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  assert.equal(candidates.length, 3, 'synthetic two-meeting fixture offers three rows');
+  assert.equal(enrollment.progress(f.db, f.person.id).usable, false);
+  for (const candidate of candidates) {
+    assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id,
+      'approve', null)).success, false);
+    const playback = enrollment.play(f.db, f.audio, candidate.id);
+    assert.equal(playback.state, 'available');
+    f.completeReview(candidate.id, playback.token);
+    assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id,
+      'approve', playback.token)).success, true);
+  }
+  assert.equal(enrollment.progress(f.db, f.person.id).usable, true);
+  assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.reviewed, 3);
 });
 
 test('cloud label adoption demotes a profile backed by changed rows', async t => {
@@ -337,13 +446,14 @@ test('overlapping rows cannot count the same audio twice', async t => {
   doc.rows[1].audioSpan.startSample = 24000;
   doc.rows[1].audioSpan.endSample = 24000 * 5;
   f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
-  const [first, second] = enrollment.listCandidates(f.db, f.audio, f.person.id);
-  assert.ok(first && second);
-  const { token } = enrollment.play(f.db, f.audio, first.id);
-  f.completeReview(first.id, token);
-  assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, first.id, 'approve', token)).success, true);
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  assert.ok(candidate);
+  assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.short, 1);
+  const { token } = enrollment.play(f.db, f.audio, candidate.id);
+  f.completeReview(candidate.id, token);
+  assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token)).success, true);
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
-  assert.equal(enrollment.play(f.db, f.audio, second.id).state, 'unavailable');
+  assert.equal(enrollment.play(f.db, f.audio, candidate.id).state, 'unavailable');
 });
 
 test('reset and clear voice data remove approved samples; deleted audio cannot leave an offer', async t => {
@@ -578,6 +688,7 @@ test('overlapping speech is not offered and clipped audio cannot be approved', a
   doc.rows[0].uncertainty = { reason: 'overlapping_speech' };
   f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
+  assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.overlap, 1);
   delete doc.rows[0].uncertainty;
   f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
   const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);

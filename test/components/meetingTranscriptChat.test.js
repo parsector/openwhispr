@@ -15,6 +15,15 @@ const SEGMENTS = [
   { id: "s3", text: "second remote line", source: "system", timestamp: 3, speaker: "speaker_0" },
 ];
 
+test("renderer resolves a legacy playback range through the shared helper", async (t) => {
+  const vite = await createRendererServer(t, { cachePrefix: "openwhispr-span-resolver-" });
+  const { playbackRange } = await vite.ssrLoadModule("/utils/meetingAudioPlayback.ts");
+  const row = { id: "legacy", source: "mic", timestamp: 5, speechStart: 1,
+    speechEnd: 5, timebase: "recording", recordingId: "meeting" };
+  assert.deepEqual(playbackRange(row, [row], "meeting"),
+    { from: 0.96, to: 5.04, track: "mic", approximate: true });
+});
+
 async function renderChat(props) {
   if (!i18next.isInitialized) {
     const en = JSON.parse(

@@ -5781,7 +5781,8 @@
       "overlap": "別の話者と重複: {{count}}",
       "uncertain": "2人または不確実とマーク: {{count}}",
       "reviewed": "確認済み、または承認済み音声と重複: {{count}}",
-      "limit": "承認済みサンプルの上限: {{count}} / 20"
+      "limit": "承認済みサンプルの上限: {{count}} / 20",
+      "resolution": "音声区間を特定できません。文字起こしの再生を確認: {{count}}"
     },
     "neverCorrected": "修正履歴なし",
     "listen": "聞く",

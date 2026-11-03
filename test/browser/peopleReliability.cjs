@@ -265,6 +265,17 @@ test(
     );
     await capture("merge-focus");
 
+    const deletedRow = page.locator('[data-person-row="2"]');
+    await deletedRow.locator('[data-person-menu="2"]').click();
+    await page.getByRole("menuitem", { name: "Delete person" }).click();
+    await deletedRow.getByRole("button", { name: "Delete person" }).click();
+    await page.evaluate(() => window.finishPersonAction());
+    await page.waitForFunction(() =>
+      document.activeElement?.closest('[data-person-row]:not([data-person-row="2"])') ||
+      document.activeElement?.matches("[data-people-list-header]")
+    );
+    assert.equal(await deletedRow.count(), 0);
+
     const tabUntil = async (selector, label) => {
       for (let i = 0; i < 150; i++) {
         await page.keyboard.press("Tab");

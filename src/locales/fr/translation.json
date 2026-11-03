@@ -5799,7 +5799,8 @@
       "overlap": "Chevauche une autre voix : {{count}}",
       "uncertain": "Marqué comme deux personnes ou incertain : {{count}}",
       "reviewed": "Déjà examiné ou chevauche un audio approuvé : {{count}}",
-      "limit": "Limite d’extraits approuvés atteinte : {{count}} sur 20"
+      "limit": "Limite d’extraits approuvés atteinte : {{count}} sur 20",
+      "resolution": "Extrait introuvable ; vérifiez la lecture du transcript : {{count}}"
     },
     "neverCorrected": "Jamais corrigée",
     "listen": "Écouter",

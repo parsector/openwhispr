@@ -5799,7 +5799,8 @@
       "overlap": "Se solapa con otra voz: {{count}}",
       "uncertain": "Marcado como dos personas o incierto: {{count}}",
       "reviewed": "Ya revisado o solapado con audio aprobado: {{count}}",
-      "limit": "Límite de muestras aprobadas alcanzado: {{count}} de 20"
+      "limit": "Límite de muestras aprobadas alcanzado: {{count}} de 20",
+      "resolution": "No se pudo determinar el fragmento; comprueba la reproducción: {{count}}"
     },
     "neverCorrected": "Nunca corregida",
     "listen": "Escuchar",

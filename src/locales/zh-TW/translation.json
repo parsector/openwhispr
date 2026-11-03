@@ -5781,7 +5781,8 @@
       "overlap": "與其他說話者的聲音重疊：{{count}}",
       "uncertain": "標記為兩人或不確定：{{count}}",
       "reviewed": "已審核或與已核准音訊重疊：{{count}}",
-      "limit": "已達核准樣本上限：{{count}} / 20"
+      "limit": "已達核准樣本上限：{{count}} / 20",
+      "resolution": "無法確定音訊片段；請檢查逐字稿播放：{{count}}"
     },
     "neverCorrected": "從未更正",
     "listen": "聆聽",

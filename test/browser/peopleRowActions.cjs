@@ -179,8 +179,8 @@ test(
     );
     assert.match(await enrolDialog.textContent(), /Alexndra Rivera/);
     assert.match(await enrolDialog.textContent(), /Clean spans: 0 \/ 3 · recordings: 0 \/ 2/);
-    assert.match(await enrolDialog.textContent(), /Shorter than 3 s: 3/);
-    assert.match(await enrolDialog.textContent(), /Audio expired, missing, or evicted: 2/);
+    assert.match(await enrolDialog.textContent(), /No span long enough \(under 3 s\): 3/);
+    assert.match(await enrolDialog.textContent(), /Audio gone or unavailable: 2/);
     assert.match(await enrolDialog.textContent(), /Marked as two people or uncertain: 1/);
     await enrolDialog.getByRole("button", { name: "Cancel" }).click();
     assert.equal(await enrolRow.textContent(), enrolOriginal);

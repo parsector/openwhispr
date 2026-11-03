@@ -5799,7 +5799,8 @@
       "overlap": "Si sovrappone a un’altra voce: {{count}}",
       "uncertain": "Contrassegnato come due persone o incerto: {{count}}",
       "reviewed": "Già esaminato o sovrapposto ad audio approvato: {{count}}",
-      "limit": "Limite di campioni approvati raggiunto: {{count}} su 20"
+      "limit": "Limite di campioni approvati raggiunto: {{count}} su 20",
+      "resolution": "Impossibile determinare l'intervallo; controlla la riproduzione: {{count}}"
     },
     "neverCorrected": "Mai corretta",
     "listen": "Ascolta",
