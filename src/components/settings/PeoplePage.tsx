@@ -4,7 +4,8 @@ import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { SectionHeader } from "../ui/SettingsSection";
-import { Breadcrumb } from "../ui/Breadcrumb";
+import { ProviderTabs } from "../ui/ProviderTabs";
+import { useSubTab } from "../../hooks/useSubTab";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import {
   DropdownMenu,
@@ -12,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { MoreHorizontal, Pencil, Users } from "../icons";
+import { ClipboardCheck, Clock, MoreHorizontal, Pencil, Settings2, Users } from "../icons";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
@@ -68,6 +69,8 @@ const calibrationFields: Array<keyof CalibrationValues> = [
 ];
 const reviewReturnKey = "peopleReviewReturn";
 const peopleReturnKey = "peopleListReturn";
+const PEOPLE_TABS = ["people", "history", "voice"] as const;
+type PeopleTab = (typeof PEOPLE_TABS)[number];
 type ReviewReturn = { reason: string; personFilter: string; limit: number; scrollTop: number };
 type PeopleReturn = { query: string; sort: "usage" | "heard"; windowY: number; hostY: number };
 const savedPeopleReturn = (): PeopleReturn | null => {
@@ -93,40 +96,26 @@ export default function PeoplePage({
   const { t } = useTranslation();
   const { toast } = useToast();
   const locale = useUiLocale();
-  const [view, setView] = useState<"people" | "history" | "voice">("people");
+  const [view, setView] = useSubTab<PeopleTab>("settings.peopleTab", PEOPLE_TABS);
   const reviewReturn = useRef(savedReviewReturn());
   const peopleReturn = useRef(savedPeopleReturn());
   const reviewScroll = useRef<HTMLDivElement>(null);
   const [reviewOpen, setReviewOpen] = useState(!!reviewReturn.current);
   const rootRef = useRef<HTMLDivElement>(null);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
-  const historyTrigger = useRef<HTMLButtonElement>(null);
-  const voiceTrigger = useRef<HTMLButtonElement>(null);
-  const pageTrigger = useRef<HTMLButtonElement | null>(null);
   const peopleScroll = useRef({ windowY: 0, hostY: 0 });
-  const openPage = (next: "history" | "voice") => {
-    pageTrigger.current = next === "history" ? historyTrigger.current : voiceTrigger.current;
+  const selectPage = (next: PeopleTab) => {
+    if (next === view) return;
     const host = rootRef.current?.closest(".overflow-y-auto");
-    peopleScroll.current = { windowY: window.scrollY, hostY: host?.scrollTop || 0 };
+    if (view === "people") {
+      peopleScroll.current = { windowY: window.scrollY, hostY: host?.scrollTop || 0 };
+    }
     setView(next);
-    window.scrollTo(0, 0);
-    if (host) host.scrollTop = 0;
-  };
-  const returnToPeople = () => {
-    setView("people");
     requestAnimationFrame(() => {
-      window.scrollTo(0, peopleScroll.current.windowY);
-      const host = rootRef.current?.closest(".overflow-y-auto");
-      if (host) host.scrollTop = peopleScroll.current.hostY;
-      pageTrigger.current?.focus({ preventScroll: true });
+      window.scrollTo(0, next === "people" ? peopleScroll.current.windowY : 0);
+      if (host) host.scrollTop = next === "people" ? peopleScroll.current.hostY : 0;
     });
   };
-  useEffect(() => {
-    if (view === "people") return;
-    requestAnimationFrame(() =>
-      rootRef.current?.querySelector<HTMLElement>("nav button")?.focus({ preventScroll: true })
-    );
-  }, [view]);
   const [people, setPeople] = useState<Person[]>([]);
   const [actionHistory, setActionHistory] = useState<HistoryAction[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -967,25 +956,40 @@ export default function PeoplePage({
       data-capturing={working || renameWorking ? "" : undefined}
       className="space-y-5 pb-8 text-foreground"
     >
-      <div className={view === "people" ? "space-y-4" : "hidden"}>
-        <div
-          data-people-list-header
-          tabIndex={-1}
-          className="flex flex-wrap items-start justify-between gap-3 rounded-md outline-none focus:ring-2 focus:ring-ring"
-        >
-          <SectionHeader title={t("people.title")} description={t("people.subtitle")} />
-          <div className="flex flex-wrap gap-2">
-            <Button ref={historyTrigger} variant="outline" onClick={() => openPage("history")}>
-              {t("people.historyPage")}
-            </Button>
-            <Button ref={voiceTrigger} variant="outline" onClick={() => openPage("voice")}>
-              {t("people.voiceSettings")}
-            </Button>
-            <Button ref={reviewTrigger} variant="outline" onClick={() => setReviewOpen(true)}>
-              {t("people.tabs.review")}
-            </Button>
-          </div>
+      <div
+        data-people-list-header
+        tabIndex={-1}
+        className="space-y-4 outline-none focus:ring-2 focus:ring-ring"
+      >
+        <SectionHeader title={t("people.title")} description={t("people.subtitle")} />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <ProviderTabs
+            providers={[
+              { id: "people", name: t("people.tabs.people") },
+              { id: "history", name: t("people.historyPage") },
+              { id: "voice", name: t("people.voiceSettings") },
+            ]}
+            selectedId={view}
+            onSelect={(id) => selectPage(id as PeopleTab)}
+            renderIcon={(id) =>
+              id === "people" ? (
+                <Users className="w-3.5 h-3.5" />
+              ) : id === "history" ? (
+                <Clock className="w-3.5 h-3.5" />
+              ) : (
+                <Settings2 className="w-3.5 h-3.5" />
+              )
+            }
+            ariaLabel={t("people.title")}
+            wrap
+          />
+          <Button ref={reviewTrigger} variant="secondary" onClick={() => setReviewOpen(true)}>
+            <ClipboardCheck className="size-4" />
+            {t("people.tabs.review")}
+          </Button>
         </div>
+      </div>
+      <div className={view === "people" ? "space-y-4" : "hidden"}>
         {refreshing && !loading && (
           <p role="status" className="text-xs text-muted-foreground">
             {t("people.loading")}
@@ -1699,13 +1703,6 @@ export default function PeoplePage({
       </div>
       {view === "history" && (
         <div className="space-y-4">
-          <Breadcrumb
-            label={t("people.historyPage")}
-            items={[
-              { label: t("people.title"), onSelect: returnToPeople },
-              { label: t("people.historyPage") },
-            ]}
-          />
           <SectionHeader title={t("people.actionHistory")} />
           {historyLoading && <p role="status">{t("people.loading")}</p>}
           {historyError && (
@@ -1804,13 +1801,6 @@ export default function PeoplePage({
       )}
       {view === "voice" && (
         <div className="space-y-6">
-          <Breadcrumb
-            label={t("people.voiceSettings")}
-            items={[
-              { label: t("people.title"), onSelect: returnToPeople },
-              { label: t("people.voiceSettings") },
-            ]}
-          />
           <SectionHeader title={t("people.voiceSettings")} />
           <section
             className="rounded-xl border border-border p-4"

@@ -4,7 +4,9 @@ import { I18nextProvider } from "react-i18next";
 import i18n from "./i18n";
 import PeoplePage from "./components/settings/PeoplePage";
 import SidebarModal from "./components/ui/SidebarModal";
-import { Users } from "./components/icons";
+import { FileAudio, Mic, Upload, Users } from "./components/icons";
+import { SectionHeader } from "./components/ui/SettingsSection";
+import { ProviderTabs } from "./components/ui/ProviderTabs";
 import { ToastProvider } from "./components/ui/Toast";
 import "./index.css";
 
@@ -197,16 +199,46 @@ function ProofPage() {
       </main>
     );
   return location.search.includes("proof-rich") ? (
-    <SidebarModal
-      open
-      onOpenChange={() => {}}
-      title="Settings"
-      sidebarItems={[{ id: "people", label: "People", icon: Users }]}
-      activeSection="people"
-      onSectionChange={() => {}}
-    >
-      {peoplePage}
-    </SidebarModal>
+    <>
+      <div
+        data-speech-tab-reference
+        aria-hidden="true"
+        className="fixed top-0 left-0 -z-10 w-[600px] space-y-4 invisible pointer-events-none"
+      >
+        <SectionHeader
+          title={i18n.t("settingsPage.speechToText.title")}
+          description={i18n.t("settingsPage.speechToText.description")}
+        />
+        <ProviderTabs
+          providers={[
+            { id: "dictation", name: i18n.t("settingsPage.speechToText.tabs.dictation") },
+            { id: "noteRecording", name: i18n.t("settingsPage.speechToText.tabs.noteRecording") },
+            { id: "upload", name: i18n.t("settingsPage.speechToText.tabs.upload") },
+          ]}
+          selectedId="dictation"
+          onSelect={() => {}}
+          renderIcon={(id) =>
+            id === "dictation" ? (
+              <Mic className="w-3.5 h-3.5" />
+            ) : id === "upload" ? (
+              <Upload className="w-3.5 h-3.5" />
+            ) : (
+              <FileAudio className="w-3.5 h-3.5" />
+            )
+          }
+        />
+      </div>
+      <SidebarModal
+        open
+        onOpenChange={() => {}}
+        title="Settings"
+        sidebarItems={[{ id: "people", label: "People", icon: Users }]}
+        activeSection="people"
+        onSectionChange={() => {}}
+      >
+        {peoplePage}
+      </SidebarModal>
+    </>
   ) : (
     <main className="mx-auto max-w-[1016px] px-4 pt-7">{peoplePage}</main>
   );

@@ -167,15 +167,12 @@ test(
 
     await page.goto(`${base}?history-fail`);
     await page.locator('[data-person-row="1"]').waitFor();
-    await page.getByRole("button", { name: "History" }).click();
+    await page.getByRole("tab", { name: "History" }).click();
     await page.getByRole("alert").waitFor();
-    await page
-      .getByRole("navigation", { name: "History" })
-      .getByRole("button", { name: "People" })
-      .click();
+    await page.getByRole("tab", { name: "People" }).click();
     assert.equal(await page.locator('[data-person-row="1"]').count(), 1);
 
-    await page.getByRole("button", { name: "Voice settings" }).click();
+    await page.getByRole("tab", { name: "Voice settings" }).click();
     await page.getByRole("button", { name: "Clear all voice data" }).click();
     const clear = page.getByRole("dialog", { name: "Clear all voice data" });
     await clear.waitFor();
@@ -228,10 +225,7 @@ test(
     await clear.waitFor({ state: "hidden" });
     await page.getByRole("button", { name: "Undo" }).waitFor();
 
-    await page
-      .getByRole("navigation", { name: "Voice settings" })
-      .getByRole("button", { name: "People" })
-      .click();
+    await page.getByRole("tab", { name: "People" }).click();
     const row = page.locator('[data-person-row="1"]');
     await row.locator('[data-person-menu="1"]').click();
     await page.getByRole("menuitem", { name: "Merge into…" }).click();
@@ -270,9 +264,10 @@ test(
     await page.getByRole("menuitem", { name: "Delete person" }).click();
     await deletedRow.getByRole("button", { name: "Delete person" }).click();
     await page.evaluate(() => window.finishPersonAction());
-    await page.waitForFunction(() =>
-      document.activeElement?.closest('[data-person-row]:not([data-person-row="2"])') ||
-      document.activeElement?.matches("[data-people-list-header]")
+    await page.waitForFunction(
+      () =>
+        document.activeElement?.closest('[data-person-row]:not([data-person-row="2"])') ||
+        document.activeElement?.matches("[data-people-list-header]")
     );
     assert.equal(await deletedRow.count(), 0);
 
@@ -306,6 +301,7 @@ test(
         await tabUntil("button", "History");
         await page.keyboard.press("Enter");
         await page.getByRole("heading", { name: "Action history" }).waitFor();
+        await page.keyboard.press("Shift+Tab");
         await page.keyboard.press("Enter");
         await tabUntil("button", "Voice settings");
         await page.keyboard.press("Enter");

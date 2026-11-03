@@ -22,6 +22,7 @@ interface ProviderTabsProps {
   colorScheme?: ColorScheme;
   /** Wrap pills onto multiple lines when there are many providers */
   wrap?: boolean;
+  ariaLabel?: string;
 }
 
 export function ProviderTabs({
@@ -31,6 +32,7 @@ export function ProviderTabs({
   renderIcon,
   colorScheme = "purple",
   wrap = false,
+  ariaLabel,
 }: ProviderTabsProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -72,6 +74,8 @@ export function ProviderTabs({
   return (
     <div
       ref={containerRef}
+      role={ariaLabel ? "tablist" : undefined}
+      aria-label={ariaLabel}
       className={cn("relative items-center gap-1 p-0.5", wrap ? "flex flex-wrap" : "inline-flex")}
     >
       <div
@@ -88,6 +92,8 @@ export function ProviderTabs({
           <button
             key={provider.id}
             data-tab-button
+            role={ariaLabel ? "tab" : undefined}
+            aria-selected={ariaLabel ? isSelected : undefined}
             type="button"
             disabled={isDisabled}
             aria-disabled={isDisabled}
@@ -96,6 +102,31 @@ export function ProviderTabs({
               if (isDisabled) return;
               onSelect(provider.id);
             }}
+            onKeyDown={
+              ariaLabel
+                ? (event) => {
+                    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+                    const enabled = providers.filter((item) => !item.disabled);
+                    const current = enabled.findIndex((item) => item.id === provider.id);
+                    if (current < 0) return;
+                    event.preventDefault();
+                    const next =
+                      event.key === "Home"
+                        ? enabled[0]
+                        : event.key === "End"
+                          ? enabled[enabled.length - 1]
+                          : enabled[
+                              (current + (event.key === "ArrowRight" ? 1 : -1) + enabled.length) %
+                                enabled.length
+                            ];
+                    onSelect(next.id);
+                    const nextIndex = providers.findIndex((item) => item.id === next.id);
+                    containerRef.current
+                      ?.querySelectorAll<HTMLButtonElement>("[data-tab-button]")
+                      [nextIndex]?.focus();
+                  }
+                : undefined
+            }
             className={cn(
               "relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-full font-medium text-xs whitespace-nowrap transition-colors duration-150",
               isDisabled
