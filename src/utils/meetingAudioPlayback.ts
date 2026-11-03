@@ -37,7 +37,7 @@ export function playbackRange(
   >
 ): { from: number; to: number; track: "mic" | "system"; approximate: boolean } {
   const result = resolveMeetingAudioSpan(row, rows, recordingId, startedAt, tracks);
-  if (result.reason) {
+  if (!("from" in result)) {
     throw new PlaybackUnavailableError(
       result.reason === "track_mismatch"
         ? "track"

@@ -333,6 +333,7 @@ export default function PeoplePage({
           uncertain: 0,
           reviewed: 0,
           limit: 0,
+          resolution: 0,
         }
       );
       setEnrollmentSamples(samples || []);
@@ -423,6 +424,7 @@ export default function PeoplePage({
           uncertain: 0,
           reviewed: 0,
           limit: 0,
+          resolution: 0,
         }
       );
       setEnrollmentSamples(samples || []);
