@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-11-04
+
+Reviewing rows now leads somewhere: you see the newest audio first, and only the rows that can actually become a voice sample.
+
+### People
+
+- **Newest first.** Review rows opens on the most recent recordings and works down, instead of starting at the oldest.
+- **Only rows that can be enrolled.** A filter, on by default, hides rows whose audio cannot produce a sample for the person you label: under 3 seconds of voiced audio, overlapping another voice, unresolvable against the recording, or past the 20-sample cap. The panel says how many it is showing and why the rest are excluded.
+- The choice is remembered per device. Labelling itself is unchanged — a hidden row still takes a label, the filter only decides what you're asked to review.
+- The filter judges by the span, not the row, and reflects the audio you still have: once a recording ages out of retention, its rows stop qualifying.
+
 ## [1.12.10] - 2026-11-03
 
 Creating todos from a note now works, on any model you configure yourself.
