@@ -144,8 +144,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/routines/RoutinesView.tsx": ["auto"],
   "src/components/settings/ChatAgentSettings.tsx": ["auto"],
   "src/components/settings/ProfileSection.tsx": ["inherit"],
-  // The scope radio inherits direction; technical fields use the shared Input.
-  "src/components/settings/PeoplePage.tsx": ["inherit"],
+  // The scope radio and review eligibility checkbox inherit direction; technical fields use the shared Input.
+  "src/components/settings/PeoplePage.tsx": ["inherit", "inherit"],
   "src/components/todos/TodoMentionInput.tsx": ["auto"],
   "src/components/workspace/InvitePeopleView.tsx": ["ltr"],
   "src/components/todos/TodoPersonPicker.tsx": ["auto"],
