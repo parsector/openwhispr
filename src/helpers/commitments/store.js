@@ -64,7 +64,7 @@ class CommitmentStore {
     return this.db
       .prepare(
         `SELECT * FROM commitments WHERE account_id IS ? AND source_note_id=?
-      AND archived_at IS NULL AND quote_segment_index IS NOT NULL ORDER BY created_at DESC`
+      AND archived_at IS NULL AND (quote_segment_index IS NOT NULL OR source='summary') ORDER BY created_at DESC`
       )
       .all(this.scope(), String(noteId));
   }
@@ -82,7 +82,13 @@ class CommitmentStore {
       quote_segment_index: fields.quote_segment_index ?? null,
       source_note_id: fields.source_note_id == null ? null : String(fields.source_note_id),
       source_note_title: fields.source_note_title || null,
-      source: agent ? "agent" : user ? "manual" : "meeting",
+      source: agent
+        ? "agent"
+        : user
+          ? "manual"
+          : fields.source === "summary"
+            ? "summary"
+            : "meeting",
       source_agent: agent ? String(agent).slice(0, 100) : null,
       person: Array.isArray(fields.person) ? JSON.stringify(fields.person) : fields.person || null,
       direction: fields.direction === "waiting" ? "waiting" : "owe",

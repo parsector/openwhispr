@@ -80,6 +80,7 @@ import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
 import transcriptsEmptyLight from "../../assets/empty-states/notes-transcripts-light.svg";
 import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-dark.svg";
 import { Button } from "../ui/button";
+import { useToast } from "../ui/useToast";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import ActionChips from "./ActionChips";
@@ -297,6 +298,7 @@ export default function NoteEditor({
   onFlushPendingSaves,
 }: NoteEditorProps) {
   const { t } = useTranslation();
+  const { toast } = useToast();
   const [routineLinks, setRoutineLinks] =
     useState<Awaited<ReturnType<Window["electronAPI"]["routineNoteLinks"]>>>(null);
   useEffect(() => {
@@ -1273,6 +1275,38 @@ export default function NoteEditor({
 
   const runAction = useCallback(
     (action: ActionItem) => {
+      if (action.translation_key === "notes.actions.builtin.makeTodos") {
+        void Promise.resolve(onFlushPendingSaves?.(note.id))
+          .then(() => window.electronAPI.commitmentsExtractSummaryNote(note.id))
+          .then((result) => {
+            const reasonKey: Record<string, string> = {
+              note_missing: "extractTodosFailed",
+              no_summary_actions: "extractTodosNoSummaryActions",
+              no_new_todos: "extractTodosAlreadyPresent",
+            };
+            toast({
+              title: result.created
+                ? t("notes.context.extractTodosComplete")
+                : t("notes.context.extractTodosNothing", {
+                    reason: t(
+                      `notes.context.${reasonKey[result.reason || ""] || "extractTodosFailed"}`
+                    ),
+                  }),
+              ...(result.created
+                ? {
+                    description: t("notes.context.extractTodosResult", {
+                      created: result.created,
+                      proposals: 0,
+                    }),
+                  }
+                : {}),
+            });
+          })
+          .catch(() =>
+            toast({ title: t("notes.context.extractTodosFailed"), variant: "destructive" })
+          );
+        return;
+      }
       if (action.output === "chat") {
         handleChatAction(action);
         return;
@@ -1281,7 +1315,7 @@ export default function NoteEditor({
       if (chatMode === "floating") closeChat();
       onRunNoteAction?.(action);
     },
-    [chatMode, closeChat, handleChatAction, onRunNoteAction]
+    [chatMode, closeChat, handleChatAction, note.id, onFlushPendingSaves, onRunNoteAction, t, toast]
   );
   const offersActions =
     !isRecording &&

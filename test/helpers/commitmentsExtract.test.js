@@ -20,6 +20,7 @@ function setup(t) {
   });
   delete require.cache[require.resolve("../../src/helpers/database")];
   const db = new (require("../../src/helpers/database"))();
+  db.commitmentsTestDir = dir;
   t.after(() => db.db.close());
   return db;
 }
@@ -139,14 +140,213 @@ test("malformed later model window persists zero rows", async (t) => {
   assert.equal(db.db.prepare("SELECT count(*) AS n FROM commitments").get().n, 0);
 });
 
-test("cloud response requires completion marker", () => {
-  assert.throws(() =>
-    require("../../src/helpers/commitments/extract").parseResponse('{"items":[]}', false)
+test("cloud response accepts JSON with or without completion marker", () => {
+  assert.deepEqual(
+    require("../../src/helpers/commitments/extract").parseResponse('{"items":[]}', false),
+    []
   );
   assert.deepEqual(
     require("../../src/helpers/commitments/extract").parseResponse(`{"items":[]}${MARKER}`, false),
     []
   );
+});
+
+test("fenced and prose-wrapped JSON both create a todo", async (t) => {
+  const db = setup(t);
+  for (const body of [
+    `\`\`\`json\n${JSON.stringify({ items: [items[0]] })}\n\`\`\``,
+    `Here are the actions: ${JSON.stringify({ items: [items[0]] })} Thanks.`,
+  ]) {
+    const result = await extractCommitments({
+      note,
+      database: db,
+      model: { mode: "local", model: "mock" },
+      infer: async () => body,
+    });
+    assert.equal(result.created, 1);
+  }
+});
+
+test("raw JSON, HTTP failure, empty items, and malformed envelopes have distinct outcomes", async (t) => {
+  const db = setup(t);
+  const options = { note, database: db, model: { mode: "local", model: "mock" } };
+  assert.equal(
+    (
+      await extractCommitments({
+        ...options,
+        infer: async () => JSON.stringify({ items: [items[0]] }),
+      })
+    ).created,
+    1
+  );
+  await assert.rejects(
+    extractCommitments({
+      ...options,
+      infer: async () => {
+        const error = new Error("HTTP 500");
+        error.status = 500;
+        throw error;
+      },
+    }),
+    (error) => error.reason === "http_error"
+  );
+  assert.equal(
+    (await extractCommitments({ ...options, infer: async () => '{"items":[]}' })).reason,
+    "empty_items"
+  );
+  assert.equal(new CommitmentStore(db).list().length, 1);
+  await assert.rejects(
+    extractCommitments({ ...options, infer: async () => '{"other":[]}' }),
+    (error) => error.reason === "invalid_response"
+  );
+  await assert.rejects(
+    extractCommitments({ ...options, infer: async () => "not JSON" }),
+    (error) => error.reason === "invalid_response"
+  );
+  const log = fs
+    .readFileSync(path.join(db.commitmentsTestDir, "logs", "commitments-extract.log"), "utf8")
+    .trim()
+    .split("\n")
+    .map(JSON.parse);
+  assert.equal(log.length, 5);
+  assert.deepEqual(
+    log.map((entry) => entry.skip_reason),
+    [null, "http_error", "empty_items", "invalid_response", "invalid_response"]
+  );
+  assert.equal(log[1].http_status, 500);
+  assert.equal(log[4].raw_response_length, "not JSON".length);
+  assert.ok(log[4].raw_response_snippet.length <= 300);
+  assert.ok(log.every((entry) => !JSON.stringify(entry).includes(segments[0].text)));
+});
+
+test("punctuation and diacritics in a neighbouring quote still anchor a todo", async (t) => {
+  const db = setup(t);
+  const result = await extractCommitments({
+    note: {
+      ...note,
+      transcript: JSON.stringify([
+        { text: "We discussed the plan." },
+        { text: "I'll prepare the café-demo tomorrow." },
+      ]),
+    },
+    database: db,
+    model: { mode: "local", model: "mock" },
+    infer: async () =>
+      JSON.stringify({
+        items: [
+          {
+            text: "prepare the cafe demo",
+            quote: "I'll prepare the cafe demo tomorrow",
+            segment_index: 0,
+            kind: "new",
+          },
+        ],
+      }),
+  });
+  assert.equal(result.created, 1);
+  assert.equal(new CommitmentStore(db).list()[0].quote_segment_index, 1);
+});
+
+test("completion-only re-extraction preserves the existing todo and proposes completion", async (t) => {
+  const db = setup(t);
+  const base = { note, database: db, model: { mode: "local", model: "mock" } };
+  await extractCommitments({ ...base, infer: async () => JSON.stringify({ items: [items[0]] }) });
+  const result = await extractCommitments({
+    ...base,
+    infer: async () => JSON.stringify({ items: [items[4]] }),
+  });
+  assert.equal(result.proposals, 1);
+  assert.equal(new CommitmentStore(db).list().length, 1);
+});
+
+test("transcript and model skips plus rejected quotes have logged reasons", async (t) => {
+  const db = setup(t);
+  const base = {
+    database: db,
+    model: { mode: "local", model: "mock" },
+    infer: async () => JSON.stringify({ items: [{ ...items[0], quote: "invented quotation" }] }),
+  };
+  assert.equal(
+    (await extractCommitments({ ...base, note: { ...note, transcript: null } })).reason,
+    "no_transcript_rows"
+  );
+  assert.equal((await extractCommitments({ ...base, note, model: null })).reason, "no_model");
+  assert.equal((await extractCommitments({ ...base, note })).reason, "all_items_rejected");
+  const entries = fs
+    .readFileSync(path.join(db.commitmentsTestDir, "logs", "commitments-extract.log"), "utf8")
+    .trim()
+    .split("\n")
+    .map(JSON.parse);
+  assert.deepEqual(
+    entries.map((entry) => entry.skip_reason),
+    ["no_transcript_rows", "no_model", "all_items_rejected"]
+  );
+  assert.equal(entries[2].rejected_reasons.quote_not_found, 1);
+});
+
+test("owner action items in a v2 transcript produce four todos end to end", async (t) => {
+  const db = setup(t);
+  const lines = [
+    "Fix the JSON loop/crash issue occurring during page edits — Kosmas",
+    "Refine the Improve Existing functionality — You",
+    "Prepare a demo for tomorrow, including context and generation features — Kosmas and You",
+    "Implement bulk generation after the current tasks are finished — Kosmas",
+  ];
+  const ownerNote = {
+    ...note,
+    transcript: JSON.stringify({
+      version: 2,
+      rows: lines.map((text, index) => ({
+        id: String(index),
+        text,
+        speaker: "you",
+        source: "mic",
+      })),
+    }),
+  };
+  const modelItems = lines.map((line, index) => ({
+    text: line.split(" — ")[0],
+    quote: line,
+    segment_index: index,
+    person: index === 2 ? ["Kosmas", "You"] : line.split(" — ")[1],
+    kind: "new",
+  }));
+  const result = await extractCommitments({
+    note: ownerNote,
+    database: db,
+    model: { mode: "local", model: "mock" },
+    infer: async () => `\`\`\`json\n${JSON.stringify({ items: modelItems })}\n\`\`\``,
+  });
+  assert.equal(result.created, 4);
+  assert.equal(new CommitmentStore(db).list().length, 4);
+  const log = JSON.parse(
+    fs
+      .readFileSync(path.join(db.commitmentsTestDir, "logs", "commitments-extract.log"), "utf8")
+      .trim()
+  );
+  assert.equal(log.transcript_shape, "rows");
+  assert.equal(log.transcript_version, 2);
+  assert.equal(log.segment_count, 4);
+  assert.equal(log.parsed_item_count, 4);
+  assert.equal(log.accepted_count, 4);
+  assert.equal(log.created_count, 4);
+});
+
+test("summary action items create source summary rows once without a transcript", (t) => {
+  const db = setup(t);
+  const summaryNote = {
+    ...note,
+    transcript: null,
+    enhanced_content: `## Action Items\n- [ ] Fix the JSON loop/crash issue occurring during page edits — Kosmas\n- [ ] Refine the Improve Existing functionality — You\n- [ ] Prepare a demo for tomorrow, including context and generation features — Kosmas and You\n- [ ] Implement bulk generation after the current tasks are finished — Kosmas`,
+  };
+  db.getNote = (id) => (id === note.id ? summaryNote : null);
+  const { extractSummaryForNote } = require("../../src/helpers/commitments/extract");
+  assert.equal(extractSummaryForNote(note.id, { database: db }).created, 4);
+  assert.equal(extractSummaryForNote(note.id, { database: db }).created, 0);
+  const rows = new CommitmentStore(db).list();
+  assert.equal(rows.length, 4);
+  assert.ok(rows.every((row) => row.source === "summary"));
+  assert.equal(rows.find((row) => row.text.startsWith("Prepare"))?.person, '["Kosmas","You"]');
 });
 
 test("windows overlap one segment and preserve source indexes", () => {
@@ -276,6 +476,11 @@ test("one-note re-extraction loads only the requested existing note", async (t) 
     skipped: false,
   });
   assert.deepEqual(requested, [existing.id]);
-  assert.deepEqual(await extractForNote(999, options), { created: 0, proposals: 0, skipped: true });
+  assert.deepEqual(await extractForNote(999, options), {
+    created: 0,
+    proposals: 0,
+    skipped: true,
+    reason: "note_missing",
+  });
   assert.equal(db.db.prepare("SELECT count(*) AS n FROM commitments").get().n, 1);
 });
