@@ -211,6 +211,195 @@ function candidateId(profileId, noteId, rowId, span) {
     )
     .digest("hex");
 }
+function createEligibilityContext(database, store) {
+  const db = database.db;
+  const statuses = new Map();
+  const changedByNote = new Map();
+  const resolvedByNote = new Map();
+  const approvedByProfile = new Map();
+  const echoBySpan = new Map();
+  const availabilityBySpan = new Map();
+  const resolve = (note, rows, row, status) => {
+    let spans = resolvedByNote.get(note.id);
+    if (!spans) {
+      spans = new Map();
+      resolvedByNote.set(note.id, spans);
+    }
+    if (!spans.has(row.id)) {
+      const own = resolveMeetingAudioSpan(
+        row,
+        rows,
+        status.recordingId ?? note.id,
+        status.startedAt,
+        status.tracks
+      );
+      // Split transcript rows can share one recorded span. Resolve against its
+      // last row so the next-row boundary does not cut the shared audio short.
+      const matching =
+        row.audioSpan &&
+        rows.filter(
+          (item) =>
+            !item.deleted &&
+            item.audioSpan &&
+            item.source === row.source &&
+            item.audioSpan.recordingId === row.audioSpan.recordingId &&
+            item.audioSpan.trackId === row.audioSpan.trackId &&
+            item.audioSpan.startSample === row.audioSpan.startSample &&
+            item.audioSpan.endSample === row.audioSpan.endSample
+        );
+      const anchor =
+        matching?.length > 1 && (!own.reason || own.reason === "gap") ? matching.at(-1) : row;
+      spans.set(
+        row.id,
+        anchor === row
+          ? own
+          : resolveMeetingAudioSpan(
+              anchor,
+              rows,
+              status.recordingId ?? note.id,
+              status.startedAt,
+              status.tracks
+            )
+      );
+    }
+    return spans.get(row.id);
+  };
+  function check(note, rows, row, profileId, hypothetical = false) {
+    if (row.deleted) return { reason: "uncertain" };
+    if (profileId != null) {
+      if (!approvedByProfile.has(profileId))
+        approvedByProfile.set(
+          profileId,
+          db
+            .prepare(
+              "SELECT COUNT(*) AS count FROM voice_exemplars WHERE profile_id = ? AND approved_at IS NOT NULL"
+            )
+            .get(profileId).count
+        );
+      if (approvedByProfile.get(profileId) >= MAX_SAMPLES) return { reason: "limit" };
+    }
+    if (!changedByNote.has(note.id)) changedByNote.set(note.id, changedRows(note));
+    const changed = changedByNote.get(note.id);
+    if (!hypothetical && changed.has(row.id) && row.speakerLockSource !== "user")
+      return { reason: "uncertain" };
+    if (row.overlap || (!hypothetical && row.uncertainty?.reason === "overlapping_speech"))
+      return { reason: "overlap" };
+    if (
+      !hypothetical &&
+      (row.uncertainty || ["provisional", "suggested"].includes(row.speakerStatus))
+    )
+      return { reason: "uncertain" };
+    if (!statuses.has(note.id)) statuses.set(note.id, store.status(note.id));
+    const status = statuses.get(note.id);
+    if (!["complete", "incomplete"].includes(status.state) || status.bytes === 0)
+      return { reason: "audio" };
+    const resolved = resolve(note, rows, row, status);
+    if (resolved.reason)
+      return {
+        reason: ["gap", "outside_recorded_range"].includes(resolved.reason)
+          ? "audio"
+          : "resolution",
+      };
+    const overlap = rows.some((other) => {
+      if (other === row || other.deleted || other.speaker === row.speaker) return false;
+      const otherSpan = resolve(note, rows, other, status);
+      return (
+        !otherSpan.reason &&
+        otherSpan.track === resolved.track &&
+        otherSpan.from < resolved.to &&
+        otherSpan.to > resolved.from
+      );
+    });
+    if (overlap) return { reason: "overlap" };
+    const startSample = Math.round((Math.max(resolved.from, resolved.start) + 0.25) * RATE);
+    const endSample = Math.round((Math.min(resolved.to, resolved.end) - 0.25) * RATE);
+    const duration = (endSample - startSample) / RATE;
+    if (duration < 3) return { reason: "short" };
+    if (duration > 8) return { reason: "long" };
+    const availableKey = `${note.id}:${resolved.track}:${startSample}:${endSample}`;
+    if (!availabilityBySpan.has(availableKey))
+      availabilityBySpan.set(
+        availableKey,
+        store.spanAvailable
+          ? store.spanAvailable(note.id, resolved.track, startSample, endSample)
+          : (() => {
+              const audio = store.span(
+                note.id,
+                resolved.track,
+                startSample / RATE,
+                endSample / RATE
+              );
+              return audio.state === "available" && !audio.partial;
+            })()
+      );
+    const available = availabilityBySpan.get(availableKey);
+    if (!available) return { reason: "audio" };
+    const otherTrack = resolved.track === "mic" ? "system" : "mic";
+    if (status.tracks?.[otherTrack]?.chunks?.length) {
+      const key = `${note.id}:${resolved.track}:${startSample}:${endSample}`;
+      if (!echoBySpan.has(key))
+        echoBySpan.set(
+          key,
+          isEchoSpan(store, note.id, resolved.track, startSample, endSample, status)
+        );
+      if (echoBySpan.get(key)) return { reason: "overlap" };
+    }
+    const spanKey = [profileId, note.id, resolved.track, startSample, endSample];
+    if (profileId != null) {
+      const overlapsApproved = db
+        .prepare(
+          `SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ? AND track = ?
+          AND start_sample < ? AND end_sample > ?`
+        )
+        .get(profileId, note.id, resolved.track, endSample, startSample);
+      if (
+        overlapsApproved ||
+        db
+          .prepare(
+            `SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ? AND note_id = ?
+          AND track = ? AND start_sample = ? AND end_sample = ?`
+          )
+          .get(...spanKey)
+      )
+        return { reason: "reviewed" };
+    }
+    if (hypothetical) return { candidate: null };
+    const candidate = {
+      id: candidateId(profileId, note.id, row.id, {
+        trackId: resolved.track,
+        startSample,
+        endSample,
+      }),
+      profileId,
+      noteId: note.id,
+      noteTitle: note.title,
+      meetingDate: note.created_at,
+      rowIds: [row.id],
+      track: resolved.track,
+      startSample,
+      endSample,
+      durationSeconds: duration,
+      revision: createHash("sha256")
+        .update(
+          JSON.stringify([
+            row.text,
+            row.speaker,
+            row.speakerName,
+            row.speakerLockSource,
+            row.speakerStatus,
+            row.suggestedProfileId,
+            row.correctionRevision,
+            changed.has(row.id),
+            resolved,
+          ])
+        )
+        .digest("hex"),
+      everCorrected: changed.has(row.id) || !!Number(row.correctionRevision),
+    };
+    return { candidate };
+  }
+  return { check };
+}
 function candidateReport(database, store, profileId) {
   const db = database.db;
   const reasons = {
@@ -231,156 +420,18 @@ function candidateReport(database, store, profileId) {
     return { candidates: [], reasons };
   }
   const offered = [];
+  const eligibility = createEligibilityContext(database, store);
   for (const note of db
     .prepare(
       "SELECT id, title, created_at, transcript, speaker_action_log, speaker_label_undo FROM notes WHERE note_type = 'meeting' AND deleted_at IS NULL"
     )
     .all()) {
-    const audioState = store.status(note.id);
     const rows = readTranscriptDocument(note.transcript).rows;
-    const changed = changedRows(note);
     for (const row of rows) {
       if (row.deleted || !attributed(db, note.id, row, profileId)) continue;
-      const exclude = (reason) => {
-        reasons[reason]++;
-      };
-      // Reconsideration and split events can change a machine attribution.
-      // Only an explicit owner label lifts the old changed-row exclusion.
-      if (changed.has(row.id) && row.speakerLockSource !== "user") {
-        exclude("uncertain");
-        continue;
-      }
-      if (row.overlap || row.uncertainty?.reason === "overlapping_speech") {
-        exclude("overlap");
-        continue;
-      }
-      if (
-        row.uncertainty ||
-        row.speakerStatus === "provisional" ||
-        row.speakerStatus === "suggested"
-      ) {
-        exclude("uncertain");
-        continue;
-      }
-      if (!["complete", "incomplete"].includes(audioState.state) || audioState.bytes === 0) {
-        exclude("audio");
-        continue;
-      }
-      const resolved = resolveMeetingAudioSpan(
-        row,
-        rows,
-        audioState.recordingId ?? note.id,
-        audioState.startedAt,
-        audioState.tracks
-      );
-      if (resolved.reason) {
-        exclude(
-          ["gap", "outside_recorded_range"].includes(resolved.reason) ? "audio" : "resolution"
-        );
-        continue;
-      }
-      const overlapsOtherVoice = rows.some((other) => {
-        if (other === row || other.deleted || other.speaker === row.speaker) return false;
-        const otherSpan = resolveMeetingAudioSpan(
-          other,
-          rows,
-          audioState.recordingId ?? note.id,
-          audioState.startedAt,
-          audioState.tracks
-        );
-        return (
-          !otherSpan.reason &&
-          otherSpan.track === resolved.track &&
-          otherSpan.from < resolved.to &&
-          otherSpan.to > resolved.from
-        );
-      });
-      if (overlapsOtherVoice) {
-        exclude("overlap");
-        continue;
-      }
-      // Exclude the first and last 250 ms around a transcript boundary.
-      const startSample = Math.round((Math.max(resolved.from, resolved.start) + 0.25) * RATE);
-      const endSample = Math.round((Math.min(resolved.to, resolved.end) - 0.25) * RATE);
-      const duration = (endSample - startSample) / RATE;
-      if (duration < 3) {
-        exclude("short");
-        continue;
-      }
-      if (duration > 8) {
-        exclude("long");
-        continue;
-      }
-      // Retention may leave a note present while its actual span is gone.
-      const available = store.spanAvailable
-        ? store.spanAvailable(note.id, resolved.track, startSample, endSample)
-        : (() => {
-            const audio = store.span(note.id, resolved.track, startSample / RATE, endSample / RATE);
-            return audio.state === "available" && !audio.partial;
-          })();
-      if (!available) {
-        exclude("audio");
-        continue;
-      }
-      const trimmed = { trackId: resolved.track, startSample, endSample };
-      const id = candidateId(profileId, note.id, row.id, trimmed);
-      const overlapsApproved = db
-        .prepare(
-          `SELECT 1 FROM voice_exemplars
-        WHERE profile_id = ? AND note_id = ? AND track = ?
-          AND start_sample < ? AND end_sample > ?`
-        )
-        .get(profileId, note.id, resolved.track, endSample, startSample);
-      if (overlapsApproved) {
-        exclude("reviewed");
-        continue;
-      }
-      const spanKey = [profileId, note.id, resolved.track, startSample, endSample];
-      if (
-        db
-          .prepare(
-            `SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ?
-        AND track = ? AND start_sample = ? AND end_sample = ?`
-          )
-          .get(...spanKey) ||
-        db
-          .prepare(
-            `SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ? AND note_id = ?
-        AND track = ? AND start_sample = ? AND end_sample = ?`
-          )
-          .get(...spanKey)
-      ) {
-        exclude("reviewed");
-        continue;
-      }
-      offered.push({
-        id,
-        profileId,
-        noteId: note.id,
-        noteTitle: note.title,
-        meetingDate: note.created_at,
-        rowIds: [row.id],
-        track: resolved.track,
-        startSample,
-        endSample,
-        durationSeconds: duration,
-        revision: createHash("sha256")
-          .update(
-            JSON.stringify([
-              row.text,
-              row.speaker,
-              row.speakerName,
-              row.speakerLockSource,
-              row.speakerStatus,
-              row.suggestedProfileId,
-              row.correctionRevision,
-              changed.has(row.id),
-              resolved,
-            ])
-          )
-          .digest("hex"),
-        everCorrected: changed.has(row.id) || !!Number(row.correctionRevision),
-      });
+      const result = eligibility.check(note, rows, row, profileId);
+      if (result.reason) reasons[result.reason]++;
+      else offered.push(result.candidate);
     }
   }
   return { candidates: offered, reasons };
@@ -530,6 +581,27 @@ function echoLike(wav, other) {
   }
   return left > 0 && right > 0 && dot / Math.sqrt(left * right) > calibration.echoCorrelation.value;
 }
+function isEchoSpan(
+  store,
+  noteId,
+  track,
+  startSample,
+  endSample,
+  status = store.status(noteId),
+  wav = null
+) {
+  const otherTrack = track === "mic" ? "system" : "mic";
+  if (!status.tracks?.[otherTrack]?.chunks?.length) return false;
+  if (store.spanAvailable && !store.spanAvailable(noteId, otherTrack, startSample, endSample))
+    return false;
+  const start = startSample / RATE,
+    end = endSample / RATE;
+  const current = wav ? { state: "available", wav } : store.span(noteId, track, start, end);
+  const other = store.span(noteId, otherTrack, start, end);
+  return (
+    current.state === "available" && other.state === "available" && echoLike(current.wav, other.wav)
+  );
+}
 async function decide(database, store, extractor, id, choice, token, sender = null) {
   const playback = played.get(id);
   if (
@@ -554,18 +626,18 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
   if (audio.state !== "available" || audio.partial)
     return { success: false, error: "audio_unavailable" };
   if (choice === "approve") {
-    const otherTrack = candidate.track === "mic" ? "system" : "mic";
-    const hasOther = store.status(candidate.noteId).tracks?.[otherTrack]?.chunks?.length;
-    if (hasOther) {
-      const other = store.span(
+    if (
+      isEchoSpan(
+        store,
         candidate.noteId,
-        otherTrack,
-        candidate.startSample / RATE,
-        candidate.endSample / RATE
-      );
-      if (other.state === "available" && echoLike(audio.wav, other.wav))
-        return { success: false, error: "echo_audio" };
-    }
+        candidate.track,
+        candidate.startSample,
+        candidate.endSample,
+        store.status(candidate.noteId),
+        audio.wav
+      )
+    )
+      return { success: false, error: "echo_audio" };
   }
   const embedding = choice === "approve" ? await embed(audio.wav, extractor) : null;
   if (choice === "approve" && !embedding) return { success: false, error: "poor_audio" };
@@ -959,6 +1031,7 @@ function removeNoteEvidence(db, noteId) {
 module.exports = {
   listCandidates,
   candidateReport,
+  createEligibilityContext,
   listSamples,
   play,
   complete,

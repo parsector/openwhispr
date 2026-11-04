@@ -14645,7 +14645,12 @@ class IPCHandlers {
         : { quarantined: false };
     });
     ipcMain.handle("people-review", (_event, profileId) =>
-      require("./peopleActions").listReviewRows(this.databaseManager, profileId)
+      require("./peopleActions").listReviewRows(
+        this.databaseManager,
+        profileId,
+        this.meetingAudioStore,
+        true
+      )
     );
     ipcMain.handle("people-preview", (_event, request) =>
       require("./peopleActions").previewPersonAction(this.databaseManager, request)

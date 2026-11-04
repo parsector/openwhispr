@@ -6010,6 +6010,7 @@
       "uncertain": "2人または不確実とマーク: {{count}}",
       "reviewed": "確認済み、または承認済み音声と重複: {{count}}",
       "limit": "承認済みサンプルの上限: {{count}} / 20",
+      "reviewLimit": "サンプル数の上限に達しました: {{count}} 行",
       "resolution": "音声区間を特定できません。文字起こしの再生を確認: {{count}}"
     },
     "neverCorrected": "修正履歴なし",
@@ -6133,6 +6134,9 @@
     "filterPerson": "人物で絞り込む",
     "allPeople": "すべての人物",
     "reviewEmpty": "この条件で確認が必要な行はありません。",
+    "reviewEligibleOnly": "音声サンプルに使用できる行のみ表示",
+    "reviewShowing": "{{total}} 行中 {{shown}} 行を表示",
+    "reviewExcluded": "除外された行の理由",
     "unknown": "不明な話者",
     "openRow": "行を開く",
     "showMore": "さらに表示",

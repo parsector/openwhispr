@@ -6010,6 +6010,7 @@
       "uncertain": "標記為兩人或不確定：{{count}}",
       "reviewed": "已審核或與已核准音訊重疊：{{count}}",
       "limit": "已達核准樣本上限：{{count}} / 20",
+      "reviewLimit": "已達樣本上限：{{count}} 列",
       "resolution": "無法確定音訊片段；請檢查逐字稿播放：{{count}}"
     },
     "neverCorrected": "從未更正",
@@ -6133,6 +6134,9 @@
     "filterPerson": "依人物篩選",
     "allPeople": "所有人物",
     "reviewEmpty": "這些篩選條件下沒有待審核的列。",
+    "reviewEligibleOnly": "僅顯示可用於語音樣本的列",
+    "reviewShowing": "顯示 {{shown}} / {{total}} 列",
+    "reviewExcluded": "排除列的原因",
     "unknown": "未知說話者",
     "openRow": "開啟該列",
     "showMore": "顯示更多",

@@ -68,6 +68,7 @@ const calibrationFields: Array<keyof CalibrationValues> = [
   "overlapToleranceSeconds",
 ];
 const reviewReturnKey = "peopleReviewReturn";
+const reviewEligibleKey = "peopleReviewEligibleOnly";
 const peopleReturnKey = "peopleListReturn";
 const PEOPLE_TABS = ["people", "history", "voice"] as const;
 type PeopleTab = (typeof PEOPLE_TABS)[number];
@@ -148,6 +149,13 @@ export default function PeoplePage({
   const [reviewLoaded, setReviewLoaded] = useState(false);
   const [reviewError, setReviewError] = useState(false);
   const [reviewReload, setReviewReload] = useState(0);
+  const [eligibleOnly, setEligibleOnly] = useState(() => {
+    try {
+      return window.localStorage.getItem(reviewEligibleKey) !== "false";
+    } catch {
+      return true;
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(false);
@@ -575,7 +583,7 @@ export default function PeoplePage({
       setReviewLoaded(true);
       return;
     }
-    void load(personFilter ? Number(personFilter) : null)
+    void load(null)
       .then((rows) => {
         if (alive) setReview(rows);
       })
@@ -591,7 +599,7 @@ export default function PeoplePage({
     return () => {
       alive = false;
     };
-  }, [reviewOpen, personFilter, loading, error, reviewReload]);
+  }, [reviewOpen, loading, error, reviewReload]);
   const selectedId = selected?.id;
   const request: Request | null = useMemo(
     () =>
@@ -648,7 +656,7 @@ export default function PeoplePage({
     () => [...new Set(review.map((r) => r.reason).filter((r) => r !== "person"))].sort(),
     [review]
   );
-  const shownReview = useMemo(
+  const matchingReview = useMemo(
     () =>
       review.filter(
         (r) =>
@@ -658,6 +666,18 @@ export default function PeoplePage({
       ),
     [review, reason, personFilter]
   );
+  const shownReview = useMemo(
+    () => matchingReview.filter((row) => !eligibleOnly || !row.eligibilityReason),
+    [matchingReview, eligibleOnly]
+  );
+  const excludedReview = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const row of matchingReview) {
+      if (row.eligibilityReason)
+        counts[row.eligibilityReason] = (counts[row.eligibilityReason] || 0) + 1;
+    }
+    return counts;
+  }, [matchingReview]);
   const reasonLabel = (row: Review) =>
     row.reason === "person"
       ? t("people.reasons.person")
@@ -2284,9 +2304,54 @@ export default function PeoplePage({
                 </SelectContent>
               </Select>
             </div>
+            {!reviewLoading && !reviewError && (
+              <div className="space-y-1 text-sm">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={eligibleOnly}
+                    onChange={(event) => {
+                      setEligibleOnly(event.target.checked);
+                      try {
+                        window.localStorage.setItem(
+                          reviewEligibleKey,
+                          String(event.target.checked)
+                        );
+                      } catch {
+                        /* storage unavailable */
+                      }
+                      setLimit(100);
+                    }}
+                  />
+                  {t("people.reviewEligibleOnly")}
+                </label>
+                <p className="text-muted-foreground">
+                  {t("people.reviewShowing", {
+                    shown: shownReview.length,
+                    total: matchingReview.length,
+                  })}
+                </p>
+                {eligibleOnly && Object.keys(excludedReview).length > 0 && (
+                  <details className="text-muted-foreground">
+                    <summary>{t("people.reviewExcluded")}</summary>
+                    <ul className="ps-5">
+                      {Object.entries(excludedReview).map(([key, count]) => (
+                        <li key={key}>
+                          {t(`people.enrollmentReasons.${key === "limit" ? "reviewLimit" : key}`, {
+                            count,
+                          })}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
             {!reviewLoading && !reviewError && shownReview.length === 0 && (
               <p className="rounded-xl border border-border p-6 text-sm text-muted-foreground">
-                {t("people.reviewEmpty")}
+                {eligibleOnly && matchingReview.length > 0
+                  ? t("people.noEnrollmentCandidates")
+                  : t("people.reviewEmpty")}
               </p>
             )}
             <div className="divide-y divide-border rounded-xl border border-border">

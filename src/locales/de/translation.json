@@ -6010,6 +6010,7 @@
       "uncertain": "Als zwei Personen oder unsicher markiert: {{count}}",
       "reviewed": "Bereits geprüft oder überlappt genehmigtes Audio: {{count}}",
       "limit": "Limit genehmigter Beispiele erreicht: {{count}} von 20",
+      "reviewLimit": "Probenlimit erreicht: {{count}} Zeilen",
       "resolution": "Bereich konnte nicht bestimmt werden; Transkriptwiedergabe prüfen: {{count}}"
     },
     "neverCorrected": "Nie korrigiert",
@@ -6133,6 +6134,9 @@
     "filterPerson": "Nach Person filtern",
     "allPeople": "Alle Personen",
     "reviewEmpty": "Für diese Filter gibt es keine zu prüfenden Zeilen.",
+    "reviewEligibleOnly": "Nur Zeilen anzeigen, die als Stimmproben geeignet sind",
+    "reviewShowing": "{{shown}} von {{total}} angezeigt",
+    "reviewExcluded": "Gründe für ausgeschlossene Zeilen",
     "unknown": "Unbekannter Sprecher",
     "openRow": "Zeile öffnen",
     "showMore": "Mehr anzeigen",

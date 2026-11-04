@@ -6028,6 +6028,7 @@
       "uncertain": "Contrassegnato come due persone o incerto: {{count}}",
       "reviewed": "Già esaminato o sovrapposto ad audio approvato: {{count}}",
       "limit": "Limite di campioni approvati raggiunto: {{count}} su 20",
+      "reviewLimit": "Limite campioni raggiunto: {{count}} righe",
       "resolution": "Impossibile determinare l'intervallo; controlla la riproduzione: {{count}}"
     },
     "neverCorrected": "Mai corretta",
@@ -6151,6 +6152,9 @@
     "filterPerson": "Filtra per persona",
     "allPeople": "Tutte le persone",
     "reviewEmpty": "Nessuna riga da rivedere con questi filtri.",
+    "reviewEligibleOnly": "Mostra solo le righe idonee ai campioni vocali",
+    "reviewShowing": "Visualizzazione di {{shown}} su {{total}}",
+    "reviewExcluded": "Motivi di esclusione",
     "unknown": "Parlante sconosciuto",
     "openRow": "Apri riga",
     "showMore": "Mostra altri",

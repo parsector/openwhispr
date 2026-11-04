@@ -1405,8 +1405,11 @@ function undoClearVoiceData(database, id) {
     return { success: true };
   })();
 }
-function listReviewRows(database, selectedProfileId = null) {
+function listReviewRows(database, selectedProfileId = null, store = null, includeAll = false) {
   const result = [];
+  const eligibility = store
+    ? require("./voiceEnrollment").createEligibilityContext(database, store)
+    : null;
   const people = database.db
     .prepare("SELECT id, display_name AS displayName FROM speaker_profiles")
     .all();
@@ -1426,7 +1429,8 @@ function listReviewRows(database, selectedProfileId = null) {
         )
         .flatMap((action) => action.event?.affectedRowIds || action.event?.rowIds || [])
     );
-    for (const row of readTranscriptDocument(note.transcript).rows) {
+    const rows = readTranscriptDocument(note.transcript).rows;
+    for (const [position, row] of rows.entries()) {
       if (row.deleted) continue;
       const reason =
         row.uncertainty?.reason ||
@@ -1436,7 +1440,15 @@ function listReviewRows(database, selectedProfileId = null) {
             ? "unassessed"
             : null);
       const profileId = rowProfile(row, map) || byName.get(normalized(row.speakerName)) || null;
-      if (selectedProfileId != null ? profileId !== selectedProfileId : !reason) continue;
+      if (selectedProfileId != null ? profileId !== selectedProfileId : !includeAll && !reason)
+        continue;
+      // A review label is an explicit owner correction: it clears uncertainty and
+      // gives the row to this person. Check that prospective state without writing it.
+      const eligibilityReason = !row.id
+        ? "resolution"
+        : note.note_type !== "meeting"
+          ? "audio"
+          : eligibility?.check(note, rows, row, profileId, true).reason || null;
       result.push({
         noteId: note.id,
         noteTitle: note.title,
@@ -1447,10 +1459,17 @@ function listReviewRows(database, selectedProfileId = null) {
         reason: reason || "person",
         candidates: row.uncertainty?.candidates || null,
         timestamp: note.created_at,
+        eligibilityReason,
+        position,
       });
     }
   }
-  return result;
+  return result.sort(
+    (a, b) =>
+      String(b.timestamp || "").localeCompare(String(a.timestamp || "")) ||
+      b.noteId - a.noteId ||
+      b.position - a.position
+  );
 }
 module.exports = {
   listPeople,
