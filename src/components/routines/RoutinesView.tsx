@@ -32,7 +32,13 @@ type TriggerConfig = {
   skip_declined?: boolean;
   folder_ids?: number[];
 };
-type ModelChoice = { mode: string; provider: string; model: string; remoteUrl: string };
+type ModelChoice = {
+  mode: string;
+  provider: string;
+  model: string;
+  remoteUrl: string;
+  supportsToolCalls?: boolean;
+};
 type Draft = {
   id?: string;
   name: string;

@@ -1780,6 +1780,7 @@ declare global {
         provider: string;
         model: string;
         remoteUrl: string;
+        supportsToolCalls?: boolean;
       } | null>;
       saveRoutine: (routine: {
         id?: string;
@@ -1848,6 +1849,7 @@ declare global {
         cloudBaseUrl: string;
         useChatEndpointKey: boolean;
         useRoutinesEndpointKey: boolean;
+        supportsToolCalls: boolean;
       }) => Promise<boolean>;
       setRoutineRecording: (source: string, active: boolean) => void;
       onRoutinesUpdated: (callback: () => void) => () => void;

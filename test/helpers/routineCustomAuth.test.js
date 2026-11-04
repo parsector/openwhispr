@@ -198,20 +198,19 @@ test("401 never exposes the endpoint key in run data, notes, notifications, or l
   }
 });
 
-test("missing chat endpoint key fails before the request and names its setting", async () => {
-  const { db, execute } = setup("");
+test("missing chat endpoint key sends without an Authorization header", async () => {
+  const { execute } = setup("");
   const result = await execute();
-  assert.equal(result.status, "failed");
-  assert.match(db.updates.at(-1).error, /Chat.*API key.*Settings/i);
-  assert.equal(requests.length, 0);
+  assert.equal(result.status, "partial");
+  assert.equal(requests[0].init.headers.Authorization, undefined);
 });
 
 test("a different routine endpoint cannot borrow the chat key", async () => {
   const { choice, execute } = setup("fake-routine-key");
   const result = await execute({ ...choice, remoteUrl: "https://other.example/v1" });
-  assert.equal(result.status, "failed");
-  assert.match(result.error, /Routines.*API key.*Settings/i);
-  assert.equal(requests.length, 0);
+  assert.equal(result.status, "partial");
+  assert.equal(requests[0].url, "https://other.example/v1/chat/completions");
+  assert.equal(requests[0].init.headers.Authorization, undefined);
 });
 
 test.after(() => fs.rmSync(directory, { recursive: true, force: true }));

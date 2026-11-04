@@ -88,6 +88,7 @@ import {
 } from "../utils/dictionaryPromptCap";
 import type { EnterpriseSetupMode } from "../types/enterpriseIdentity";
 import { getManagedScopeResolution } from "./enterpriseIdentityStore";
+import { toolEndpointKey } from "../utils/modelCapability";
 
 let _ReasoningService: typeof import("../services/ReasoningService").default | null = null;
 
@@ -1249,6 +1250,8 @@ export interface SettingsState
   setDictationAgentDisableThinking: (value: boolean) => void;
   setNoteFormattingDisableThinking: (value: boolean) => void;
   setChatAgentDisableThinking: (value: boolean) => void;
+  endpointToolsDisabled: Record<string, true>;
+  setEndpointToolSupport: (scope: InferenceScope, enabled: boolean) => void;
 
   setUseLocalWhisper: (value: boolean) => void;
   setWhisperModel: (value: string) => void;
@@ -1729,6 +1732,37 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   cleanupCustomApiKey: "",
 
   // Enterprise providers
+  endpointToolsDisabled: (() => {
+    try {
+      const value = JSON.parse(readString("endpointToolsDisabled", "{}"));
+      return value && typeof value === "object" && !Array.isArray(value)
+        ? (Object.fromEntries(
+            Object.entries(value).filter(([, disabled]) => disabled === true)
+          ) as Record<string, true>)
+        : {};
+    } catch {
+      return {};
+    }
+  })(),
+  setEndpointToolSupport: (scope, enabled) => {
+    const state = useSettingsStore.getState();
+    const config = selectResolvedLLMConfig(state, scope);
+    const enterpriseEndpoint =
+      config.mode === "enterprise"
+        ? config.provider === "azure"
+          ? state.azureEndpoint
+          : config.provider === "bedrock"
+            ? state.bedrockRegion
+            : ""
+        : "";
+    const key = toolEndpointKey(config, enterpriseEndpoint);
+    if (!key) return;
+    const next = { ...state.endpointToolsDisabled };
+    if (enabled) delete next[key];
+    else next[key] = true;
+    if (isBrowser) localStorage.setItem("endpointToolsDisabled", JSON.stringify(next));
+    set({ endpointToolsDisabled: next });
+  },
   enterpriseSetupMode: (() => {
     const v = readString("enterpriseSetupMode", "auto");
     if (v === "auto" || v === "managed" || v === "manual") return v;
@@ -3119,6 +3153,7 @@ export interface ResolvedLLMConfig {
   customApiKey?: string;
   disableThinking: boolean;
   reasoningEffort?: string;
+  supportsToolCalls: boolean;
 }
 
 export const selectResolvedLLMConfig = (
@@ -3139,6 +3174,19 @@ export const selectResolvedLLMConfig = (
   const disableThinkingKey = def.storeKeys.disableThinking;
   const disableThinking = disableThinkingKey ? (state[disableThinkingKey] as boolean) : true;
 
+  const supportsToolCalls = (choice: Omit<ResolvedLLMConfig, "scope" | "supportsToolCalls">) => {
+    const enterpriseEndpoint =
+      choice.mode === "enterprise"
+        ? choice.provider === "azure"
+          ? state.azureEndpoint
+          : choice.provider === "bedrock"
+            ? state.bedrockRegion
+            : ""
+        : "";
+    const key = toolEndpointKey(choice, enterpriseEndpoint);
+    return key === null || state.endpointToolsDisabled[key] !== true;
+  };
+
   const localConfig: ResolvedLLMConfig = {
     scope,
     mode: (def.inheritMode
@@ -3155,18 +3203,22 @@ export const selectResolvedLLMConfig = (
     customApiKey: read("customApiKey"),
     disableThinking,
     reasoningEffort: read("reasoningEffort"),
+    supportsToolCalls: true,
   };
   const managed = getManagedScopeResolution(scope, state.enterpriseSetupMode);
   if (managed.kind === "error") {
     return { ...localConfig, mode: "enterprise", provider: "", model: "" };
   }
-  if (managed.kind !== "managed") return localConfig;
-  return {
+  if (managed.kind !== "managed") {
+    return { ...localConfig, supportsToolCalls: supportsToolCalls(localConfig) };
+  }
+  const managedConfig = {
     ...localConfig,
     mode: "enterprise",
     provider: managed.provider,
     model: managed.model,
-  };
+  } as ResolvedLLMConfig;
+  return { ...managedConfig, supportsToolCalls: supportsToolCalls(managedConfig) };
 };
 
 // Scope custom keys are secrets kept in the OS secure store, not localStorage

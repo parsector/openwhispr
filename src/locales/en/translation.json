@@ -780,6 +780,12 @@
     "getApiKey": "Get your API key ->",
     "selectModel": "Select Model",
     "availableModels": "Available Models",
+    "toolCalls": {
+      "label": "This model supports tool calls",
+      "help": "Allow the assistant and routines to use tools with this endpoint and model. Turn off if the server rejects tool calls.",
+      "disabledMessage": "Tool calling is turned off for this endpoint in Settings → Models. Turn on “This model supports tool calls” to let me create todos and use other tools.",
+      "localUnavailable": "This local model cannot use tools because its size is below 4B or unknown. Check its selection in Settings → Models."
+    },
     "disableThinking": {
       "label": "Disable thinking output",
       "help": "Skips reasoning tokens for cleaner output. Recommended for cleanup. Some servers ignore this hint."

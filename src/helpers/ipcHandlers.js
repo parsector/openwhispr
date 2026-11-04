@@ -973,12 +973,6 @@ class IPCHandlers {
           : route[0]
             ? this.environmentManager[route[0]]()
             : null;
-      if (customEndpoint && !key) {
-        const setting = customKeySetting || "Routines";
-        throw new Error(
-          `${setting} custom endpoint API key is missing. Set it in Settings → ${setting}.`
-        );
-      }
       if ((route?.[0] || model.provider === "tinfoil") && !key)
         throw new Error(`${model.provider} key is missing`);
       let complete;
@@ -1489,13 +1483,15 @@ class IPCHandlers {
         cloudBaseUrl = "",
         useChatEndpointKey = false,
         useRoutinesEndpointKey = false,
+        supportsToolCalls = true,
       } = choice || {};
       if (![mode, provider, model].every((value) => typeof value === "string")) return false;
       if (
         typeof remoteUrl !== "string" ||
         typeof cloudBaseUrl !== "string" ||
         typeof useChatEndpointKey !== "boolean" ||
-        typeof useRoutinesEndpointKey !== "boolean"
+        typeof useRoutinesEndpointKey !== "boolean" ||
+        typeof supportsToolCalls !== "boolean"
       )
         return false;
       this._routineModelChoice = {
@@ -1506,6 +1502,7 @@ class IPCHandlers {
         cloudBaseUrl,
         useChatEndpointKey,
         useRoutinesEndpointKey,
+        supportsToolCalls,
       };
       fs.writeFileSync(choicePath, JSON.stringify(this._routineModelChoice));
       return true;

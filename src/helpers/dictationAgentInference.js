@@ -201,6 +201,8 @@ export function resolveChatStreamingInference(
       customApiKey: vision.config.customApiKey,
       disableThinking: vision.config.disableThinking,
       reasoningEffort: vision.config.reasoningEffort,
+      supportsToolCalls: selectResolvedLLMConfig(settings, "dictationAgentVision")
+        .supportsToolCalls,
     },
     attachScreenContext: true,
   };

@@ -37,6 +37,7 @@ export function routineModelChoice(
     mode: config.mode,
     provider: config.provider,
     model: config.model,
+    supportsToolCalls: config.supportsToolCalls,
     remoteUrl,
     cloudBaseUrl,
     useChatEndpointKey:

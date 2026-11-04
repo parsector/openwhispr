@@ -774,6 +774,12 @@
     "getApiKey": "Obter chave API ->",
     "selectModel": "Selecionar modelo",
     "availableModels": "Modelos disponíveis",
+    "toolCalls": {
+      "label": "Este modelo aceita chamadas de ferramentas",
+      "help": "Permite que o assistente e as rotinas usem ferramentas com este endpoint e modelo. Desative se o servidor rejeitar as chamadas.",
+      "disabledMessage": "As chamadas de ferramentas estão desativadas para este endpoint em Definições → Modelos. Ative «Este modelo aceita chamadas de ferramentas» para criar tarefas e usar outras ferramentas.",
+      "localUnavailable": "Este modelo local não pode usar ferramentas porque tem menos de 4 mil milhões de parâmetros ou o tamanho é desconhecido. Verifique a seleção em Definições → Modelos."
+    },
     "disableThinking": {
       "label": "Desativar saída de raciocínio",
       "help": "Ignora tokens de raciocínio para uma saída mais limpa. Recomendado para limpeza. Alguns servidores ignoram esta dica."

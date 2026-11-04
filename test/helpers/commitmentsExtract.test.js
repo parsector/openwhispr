@@ -82,6 +82,30 @@ const note = {
   transcript: JSON.stringify(segments),
 };
 
+test("self-hosted extraction runs with endpoint tool calling disabled", async (t) => {
+  const db = setup(t);
+  let calls = 0;
+  const result = await extractCommitments({
+    note,
+    database: db,
+    model: {
+      mode: "self-hosted",
+      provider: "lan",
+      remoteUrl: "https://inference.aimaterialhub.com/v1",
+      model: "deepseek-v4.1-flash:1017-cloud",
+      supportsToolCalls: false,
+    },
+    infer: async ({ model, responseFormat }) => {
+      calls++;
+      assert.equal(model.supportsToolCalls, false);
+      assert.equal(responseFormat, undefined);
+      return JSON.stringify({ items: [] }) + MARKER;
+    },
+  });
+  assert.equal(calls, 1);
+  assert.deepEqual(result, { created: 0, proposals: 0, skipped: false, reason: "empty_items" });
+});
+
 test("extractor persists three todos, restatement and completion proposal", async (t) => {
   const db = setup(t);
   let calls = 0;

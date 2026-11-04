@@ -4,6 +4,8 @@ const assert = require("node:assert/strict");
 const {
   estimateModelSizeB,
   modelSupportsToolCalls,
+  endpointSupportsToolCalls,
+  routineEndpointSupportsTools,
 } = require("../../src/utils/modelCapability.ts");
 
 const cases = [
@@ -39,4 +41,27 @@ test("cloud suffix overrides the local size floor", () => {
 test("size syntax is case insensitive", () => {
   assert.equal(estimateModelSizeB("model:71.5B"), 71.5);
   assert.equal(estimateModelSizeB("model-4B"), 4);
+});
+
+test("a user endpoint trusts the owner's model capability setting", () => {
+  const endpoint = {
+    mode: "self-hosted",
+    provider: "lan",
+    remoteUrl: "https://inference.aimaterialhub.com/v1",
+    model: "deepseek-v4.1-flash:1017-cloud",
+  };
+  assert.equal(estimateModelSizeB(endpoint.model), null);
+  assert.equal(endpointSupportsToolCalls(endpoint), true);
+  assert.equal(routineEndpointSupportsTools(endpoint), true);
+  assert.equal(endpointSupportsToolCalls({ ...endpoint, supportsToolCalls: false }), false);
+  assert.equal(routineEndpointSupportsTools({ ...endpoint, supportsToolCalls: false }), false);
+  assert.equal(endpointSupportsToolCalls({ ...endpoint, mode: "enterprise" }), true);
+});
+
+test("the same id on the managed local lineup keeps its known-size requirement", () => {
+  const local = { mode: "local", provider: "ollama", model: "deepseek-v4.1-flash:1017-cloud" };
+  assert.equal(endpointSupportsToolCalls(local), false);
+  assert.equal(routineEndpointSupportsTools(local), false);
+  assert.equal(endpointSupportsToolCalls({ ...local, model: "gemma3:3b" }), false);
+  assert.equal(endpointSupportsToolCalls({ ...local, model: "llama3.1:8b" }), true);
 });
