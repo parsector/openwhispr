@@ -293,6 +293,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   todosToolUpdate: (args) => ipcRenderer.invoke("todos-tool-update", args),
   commitmentsForNote: (noteId) => ipcRenderer.invoke("commitments-for-note", noteId),
   commitmentsReextractNote: (noteId) => ipcRenderer.invoke("commitments-reextract-note", noteId),
+  commitmentsExtractSummaryNote: (noteId) =>
+    ipcRenderer.invoke("commitments-extract-summary-note", noteId),
   commitmentsOpenTodos: (filter) => ipcRenderer.invoke("commitments-open-todos", filter),
   commitmentsPendingTodosFilter: () => ipcRenderer.invoke("commitments-pending-todos-filter"),
   onTodosNavigationPending: registerListener(

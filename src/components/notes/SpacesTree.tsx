@@ -990,22 +990,32 @@ function NoteLeaf({
                   void window.electronAPI
                     .commitmentsReextractNote(note.id)
                     .then((result) => {
+                      const reasonKey: Record<string, string> = {
+                        no_transcript_rows: "noTranscriptRows",
+                        no_model: "extractTodosNoModel",
+                        empty_items: "extractTodosNoItems",
+                        all_items_rejected: "extractTodosRejected",
+                        no_new_todos: "extractTodosAlreadyPresent",
+                        invalid_response: "extractTodosInvalidResponse",
+                        http_error: "extractTodosHttpError",
+                      };
                       toast({
-                        title: result.skipped
-                          ? t("notes.context.noTranscriptRows", {
-                              defaultValue: "No transcript rows found",
-                            })
-                          : t("notes.context.extractTodosComplete", {
-                              defaultValue: "Todo extraction complete",
-                            }),
-                        ...(!result.skipped && {
-                          description: t("notes.context.extractTodosResult", {
-                            defaultValue:
-                              "{{created}} todos extracted, {{proposals}} completion proposals",
-                            created: result.created,
-                            proposals: result.proposals,
-                          }),
-                        }),
+                        title:
+                          result.created || result.proposals
+                            ? t("notes.context.extractTodosComplete")
+                            : t("notes.context.extractTodosNothing", {
+                                reason: t(
+                                  `notes.context.${reasonKey[result.reason || ""] || "extractTodosFailed"}`
+                                ),
+                              }),
+                        ...(result.created || result.proposals
+                          ? {
+                              description: t("notes.context.extractTodosResult", {
+                                created: result.created,
+                                proposals: result.proposals,
+                              }),
+                            }
+                          : {}),
                       });
                     })
                     .catch(() =>

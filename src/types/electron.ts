@@ -1662,7 +1662,10 @@ declare global {
       commitmentsForNote: (noteId: number) => Promise<Commitment[]>;
       commitmentsReextractNote: (
         noteId: number
-      ) => Promise<{ created: number; proposals: number; skipped: boolean }>;
+      ) => Promise<{ created: number; proposals: number; skipped: boolean; reason?: string }>;
+      commitmentsExtractSummaryNote: (
+        noteId: number
+      ) => Promise<{ created: number; proposals: number; skipped: boolean; reason?: string }>;
       commitmentsOpenTodos: (filter: {
         kind: "note" | "person";
         value: string;

@@ -1179,11 +1179,8 @@ class IPCHandlers {
         setImmediate(() => {
           Promise.resolve()
             .then(() => {
-              const note = this.databaseManager.getNote(data.noteId);
-              if (!note || note.deleted_at) return { skipped: true };
-              const { extractCommitments } = require("./commitments/extract");
-              return extractCommitments({
-                note,
+              const { extractForNote } = require("./commitments/extract");
+              return extractForNote(data.noteId, {
                 database: this.databaseManager,
                 model: this._routineModelChoice,
                 infer: (options) => infer({ ...options, toolsAvailable: false }),
@@ -1259,13 +1256,33 @@ class IPCHandlers {
     );
     ipcMain.handle("commitments-reextract-note", async (_event, noteId) => {
       const { extractForNote } = require("./commitments/extract");
-      const result = await extractForNote(noteId, {
-        database: this.databaseManager,
-        model: this._routineModelChoice,
-        infer: (options) => infer({ ...options, toolsAvailable: false }),
-      });
-      if (!result.skipped) broadcastToWindows("commitments-updated");
-      return result;
+      try {
+        const result = await extractForNote(noteId, {
+          database: this.databaseManager,
+          model: this._routineModelChoice,
+          infer: (options) => infer({ ...options, toolsAvailable: false }),
+        });
+        if (result.created || result.proposals) broadcastToWindows("commitments-updated");
+        return result;
+      } catch (error) {
+        return {
+          created: 0,
+          proposals: 0,
+          skipped: true,
+          reason: error.reason || "extraction_failed",
+        };
+      }
+    });
+    ipcMain.handle("commitments-extract-summary-note", (_event, noteId) => {
+      try {
+        const result = require("./commitments/extract").extractSummaryForNote(noteId, {
+          database: this.databaseManager,
+        });
+        if (result.created) broadcastToWindows("commitments-updated");
+        return result;
+      } catch {
+        return { created: 0, proposals: 0, skipped: true, reason: "extraction_failed" };
+      }
     });
     ipcMain.handle("commitments-open-todos", async (_event, filter) => {
       if (
