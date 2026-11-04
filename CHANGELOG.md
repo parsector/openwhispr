@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.12.10] - 2026-11-03
+
+Creating todos from a note now works, on any model you configure yourself.
+
+### Todos
+
+- **"Create to-dos" saves them.** The button under a summary's Action Items used to draft a checklist in chat and save nothing. It now writes those items as real todos, once, however many times you press it.
+- **"Extract todos from this note" reads the note it was asked about.** Both manual paths report what happened instead of returning silently: how many todos were created, or why none were ("no transcript rows", "choose a model first", "already present").
+- **Extraction no longer insists on a Routines model.** It uses your saved Routines choice if you made one, otherwise the model your chat is already using.
+- **Messy model replies no longer count as zero.** JSON wrapped in code fences or prose, and quotes with different punctuation, are read instead of discarded.
+
+### Models
+
+- **Self-hosted and enterprise endpoints are trusted to call tools.** The parameter-count guess was marking `deepseek-v4.1-flash:1017-cloud` as too small, so the assistant refused every tool request and told you to switch models. Custom endpoints now default to tool-capable, with a per-endpoint toggle in Models if you want tools off; bundled local models keep the size gate.
+- **The refusal names the real cause.** When tools are off, the assistant points at that toggle instead of suggesting a bigger model.
+
+Each extraction attempt now writes one line to `logs/commitments-extract.log` with the note id, transcript shape, model used and outcome.
+
 ## [1.12.9] - 2026-11-03
 
 Todo extraction now reads the notes the app actually writes.
