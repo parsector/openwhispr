@@ -135,6 +135,24 @@ test("tool support override is saved for one endpoint and model", async (t) => {
   assert.equal(current().supportsToolCalls, true);
 });
 
+test("partial settings default unknown endpoints to tool capable", async (t) => {
+  installBrowserGlobals(t);
+  const vite = await createRendererServer(t, { cachePrefix: "partial-endpoint-tools-" });
+  const { selectResolvedLLMConfig } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const config = {
+    chatAgentMode: "providers",
+    chatAgentProvider: "custom",
+    chatAgentModel: "private-model",
+    chatAgentCloudBaseUrl: "https://custom.example/v1",
+  };
+  assert.equal(selectResolvedLLMConfig(config, "chatIntelligence").supportsToolCalls, true);
+  assert.equal(
+    selectResolvedLLMConfig({ ...config, endpointToolsDisabled: {} }, "chatIntelligence")
+      .supportsToolCalls,
+    true
+  );
+});
+
 test("Providers Custom keeps its base URL and selected model in the main routine choice", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: {

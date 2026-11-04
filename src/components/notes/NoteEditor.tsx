@@ -1,4 +1,12 @@
-import { useState, useRef, useEffect, useMemo, useCallback, type ComponentProps } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  useCallback,
+  useContext,
+  type ComponentProps,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
 import { usePolicySnapshot } from "../../hooks/usePolicy";
@@ -80,7 +88,7 @@ import ThemedEmptyIllustration from "../ui/ThemedEmptyIllustration";
 import transcriptsEmptyLight from "../../assets/empty-states/notes-transcripts-light.svg";
 import transcriptsEmptyDark from "../../assets/empty-states/notes-transcripts-dark.svg";
 import { Button } from "../ui/button";
-import { useToast } from "../ui/useToast";
+import { ToastContext } from "../ui/useToast";
 import EmbeddedChat, { type EmbeddedChatMode } from "./EmbeddedChat";
 import { useEmbeddedChat } from "../../hooks/useEmbeddedChat";
 import ActionChips from "./ActionChips";
@@ -298,7 +306,7 @@ export default function NoteEditor({
   onFlushPendingSaves,
 }: NoteEditorProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const toast = useContext(ToastContext)?.toast;
   const [routineLinks, setRoutineLinks] =
     useState<Awaited<ReturnType<Window["electronAPI"]["routineNoteLinks"]>>>(null);
   useEffect(() => {
@@ -1285,7 +1293,7 @@ export default function NoteEditor({
               no_summary_actions: "extractTodosNoSummaryActions",
               no_new_todos: "extractTodosAlreadyPresent",
             };
-            toast({
+            toast?.({
               title: result.created
                 ? t("notes.context.extractTodosComplete")
                 : t("notes.context.extractTodosNothing", {
@@ -1304,7 +1312,7 @@ export default function NoteEditor({
             });
           })
           .catch(() =>
-            toast({ title: t("notes.context.extractTodosFailed"), variant: "destructive" })
+            toast?.({ title: t("notes.context.extractTodosFailed"), variant: "destructive" })
           );
         return;
       }

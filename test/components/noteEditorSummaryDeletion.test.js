@@ -744,6 +744,27 @@ const FOLLOW_UP = {
   translation_key: null,
 };
 
+test("Create to-dos still extracts when no toast provider is mounted", async (t) => {
+  const makeTodos = { ...FOLLOW_UP, translation_key: "notes.actions.builtin.makeTodos" };
+  globalThis.__noteActions = [makeTodos];
+  t.after(() => delete globalThis.__noteActions);
+  const { render, latest, unmount } = await loadNoteEditor(t);
+  const calls = [];
+  window.electronAPI.commitmentsExtractSummaryNote = async (noteId) => {
+    calls.push(["extract", noteId]);
+    return { created: 1 };
+  };
+  await render(ENHANCEMENT, {
+    onFlushPendingSaves: async (noteId) => calls.push(["flush", noteId]),
+  });
+  await React.act(async () => {
+    findBottomBar(latest()).props.actionPicker.props.onRunAction(makeTodos);
+    await new Promise((resolve) => setImmediate(resolve));
+  });
+  assert.deepEqual(calls, [["flush", NOTE.id], ["extract", NOTE.id]]);
+  await unmount();
+});
+
 test("a question sent from the ask bar opens the docked chat in a new conversation", async (t) => {
   globalThis.__embeddedChatSent = [];
   t.after(() => delete globalThis.__embeddedChatSent);

@@ -3184,7 +3184,7 @@ export const selectResolvedLLMConfig = (
             : ""
         : "";
     const key = toolEndpointKey(choice, enterpriseEndpoint);
-    return key === null || state.endpointToolsDisabled[key] !== true;
+    return key === null || state.endpointToolsDisabled?.[key] !== true;
   };
 
   const localConfig: ResolvedLLMConfig = {
