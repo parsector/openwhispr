@@ -6028,6 +6028,7 @@
       "uncertain": "Marcado como dos personas o incierto: {{count}}",
       "reviewed": "Ya revisado o solapado con audio aprobado: {{count}}",
       "limit": "Límite de muestras aprobadas alcanzado: {{count}} de 20",
+      "reviewLimit": "Límite de muestras alcanzado: {{count}} filas",
       "resolution": "No se pudo determinar el fragmento; comprueba la reproducción: {{count}}"
     },
     "neverCorrected": "Nunca corregida",
@@ -6151,6 +6152,9 @@
     "filterPerson": "Filtrar por persona",
     "allPeople": "Todas las personas",
     "reviewEmpty": "No hay filas para revisar con estos filtros.",
+    "reviewEligibleOnly": "Mostrar solo filas aptas para muestras de voz",
+    "reviewShowing": "Se muestran {{shown}} de {{total}}",
+    "reviewExcluded": "Motivos de exclusión",
     "unknown": "Hablante desconocido",
     "openRow": "Abrir fila",
     "showMore": "Mostrar más",

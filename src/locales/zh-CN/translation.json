@@ -6010,6 +6010,7 @@
       "uncertain": "标记为两人或不确定：{{count}}",
       "reviewed": "已审核或与已批准音频重叠：{{count}}",
       "limit": "已达到批准样本上限：{{count}} / 20",
+      "reviewLimit": "已达到样本上限：{{count}} 行",
       "resolution": "无法确定音频片段；请检查转录播放：{{count}}"
     },
     "neverCorrected": "从未更正",
@@ -6133,6 +6134,9 @@
     "filterPerson": "按人物筛选",
     "allPeople": "所有人物",
     "reviewEmpty": "这些筛选条件下没有待审核的行。",
+    "reviewEligibleOnly": "仅显示可用于语音样本的行",
+    "reviewShowing": "显示 {{shown}} / {{total}} 行",
+    "reviewExcluded": "排除行的原因",
     "unknown": "未知说话人",
     "openRow": "打开该行",
     "showMore": "显示更多",

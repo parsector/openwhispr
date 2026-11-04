@@ -741,9 +741,18 @@ test('cross-note review defaults to flagged rows and a person filter finds all t
   ], [['speaker_0', person]]);
   assert.deepEqual(listReviewRows(f.db).map(row => row.rowId), ['a']);
   const owned = listReviewRows(f.db, person.id);
-  assert.deepEqual(owned.map(row => row.rowId), ['a', 'b']);
-  assert.deepEqual(owned[0].candidates, ['Alex', 'Sam']);
-  assert.equal(owned[0].noteId, note);
+  assert.deepEqual(owned.map(row => row.rowId), ['b', 'a']);
+  assert.deepEqual(listReviewRows(f.db, null, null, true).map(row => row.rowId), ['b', 'a']);
+  assert.deepEqual(owned[1].candidates, ['Alex', 'Sam']);
+  assert.equal(owned[1].noteId, note);
+});
+test('review rows sort by note date descending, then row position descending', t => {
+  const f = fixture(t); if (!f) return;
+  const older = f.note('older', [{ id: 'old-0' }, { id: 'old-1' }], []);
+  const newer = f.note('newer', [{ id: 'new-0' }, { id: 'new-1' }], []);
+  f.db.db.prepare('UPDATE notes SET created_at = ? WHERE id = ?').run('2025-01-01T00:00:00.000Z', older);
+  f.db.db.prepare('UPDATE notes SET created_at = ? WHERE id = ?').run('2026-01-01T00:00:00.000Z', newer);
+  assert.deepEqual(listReviewRows(f.db).map(row => row.rowId), ['new-1', 'new-0', 'old-1', 'old-0']);
 });
 test('a soft-deleted note is rewritten and logged so restoring it cannot revive a discarded name', t => {
   const f = fixture(t); if (!f) return;

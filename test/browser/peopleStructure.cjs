@@ -105,10 +105,34 @@ test(
     await page.getByRole("heading", { name: "Voice data" }).waitFor();
     assert.equal(await page.getByRole("button", { name: "Clear all voice data" }).count(), 1);
     await page.getByRole("tab", { name: "People" }).click();
+    await page.evaluate(() => {
+      const load = window.electronAPI.listPeopleReview;
+      window.electronAPI.listPeopleReview = async () => [
+        ...(await load()),
+        {
+          noteId: 42,
+          rowId: "row-too-short",
+          noteTitle: "October planning meeting",
+          reason: "unassessed",
+          candidates: null,
+          profileId: 1,
+          text: "This span is too short.",
+          speakerName: "Alexandra Rivera",
+          eligibilityReason: "short",
+        },
+      ];
+    });
     const trigger = page.getByRole("button", { name: "Review rows" });
     await trigger.click();
     const dialog = page.getByRole("dialog", { name: "Review rows" });
     await dialog.waitFor();
+    const eligibleOnly = dialog.getByRole("checkbox", {
+      name: "Only show rows eligible for voice samples",
+    });
+    assert.equal(await eligibleOnly.isChecked(), true);
+    await dialog.getByText("Showing 1 of 2").waitFor();
+    await eligibleOnly.uncheck();
+    await dialog.getByText("Showing 2 of 2").waitFor();
     await page.keyboard.press("Tab");
     assert.equal(await dialog.evaluate((el) => el.contains(document.activeElement)), true);
     await page.keyboard.press("Escape");
@@ -123,10 +147,13 @@ test(
     await page.getByRole("tab", { name: "People" }).click();
     assert.equal(await page.locator('[data-person-row="1"]').count(), 1);
     await page.getByRole("button", { name: "Review rows" }).click();
-    await page
-      .getByRole("dialog", { name: "Review rows" })
-      .getByRole("button", { name: "Open row" })
-      .click();
+    const returnedReview = page.getByRole("dialog", { name: "Review rows" });
+    const persistedToggle = returnedReview.getByRole("checkbox", {
+      name: "Only show rows eligible for voice samples",
+    });
+    assert.equal(await persistedToggle.isChecked(), false);
+    await persistedToggle.check();
+    await returnedReview.getByRole("button", { name: "Open row" }).click();
     await page.getByText("View Transcript").waitFor();
     assert.equal(await page.evaluate(() => document.body.dataset.openedRow), "row-1");
 

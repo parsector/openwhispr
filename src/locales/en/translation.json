@@ -6010,6 +6010,7 @@
       "uncertain": "Marked as two people or uncertain: {{count}}",
       "reviewed": "Already reviewed or overlaps approved audio: {{count}}",
       "limit": "Approved sample limit reached: {{count}} of 20",
+      "reviewLimit": "Sample limit reached: {{count}} rows",
       "resolution": "Span could not be resolved; check transcript playback: {{count}}"
     },
     "neverCorrected": "Never corrected",
@@ -6133,6 +6134,9 @@
     "filterPerson": "Filter by person",
     "allPeople": "All people",
     "reviewEmpty": "No rows need review for these filters.",
+    "reviewEligibleOnly": "Only show rows eligible for voice samples",
+    "reviewShowing": "Showing {{shown}} of {{total}}",
+    "reviewExcluded": "Why rows are excluded",
     "unknown": "Unknown speaker",
     "openRow": "Open row",
     "showMore": "Show more",

@@ -6028,6 +6028,7 @@
       "uncertain": "Marqué comme deux personnes ou incertain : {{count}}",
       "reviewed": "Déjà examiné ou chevauche un audio approuvé : {{count}}",
       "limit": "Limite d’extraits approuvés atteinte : {{count}} sur 20",
+      "reviewLimit": "Limite d’échantillons atteinte : {{count}} lignes",
       "resolution": "Extrait introuvable ; vérifiez la lecture du transcript : {{count}}"
     },
     "neverCorrected": "Jamais corrigée",
@@ -6151,6 +6152,9 @@
     "filterPerson": "Filtrer par personne",
     "allPeople": "Toutes les personnes",
     "reviewEmpty": "Aucune ligne à vérifier pour ces filtres.",
+    "reviewEligibleOnly": "Afficher uniquement les lignes admissibles aux échantillons vocaux",
+    "reviewShowing": "{{shown}} sur {{total}} affichées",
+    "reviewExcluded": "Pourquoi des lignes sont exclues",
     "unknown": "Locuteur inconnu",
     "openRow": "Ouvrir la ligne",
     "showMore": "Afficher plus",

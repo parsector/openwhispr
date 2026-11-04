@@ -4349,6 +4349,8 @@ declare global {
           reason: string;
           candidates: [string, string] | null;
           timestamp: string;
+          eligibilityReason: string | null;
+          position: number;
         }>
       >;
       previewPersonAction?: (request: {

@@ -14,10 +14,88 @@ Module._load = function(request, parent, isMain) {
 process.env.NODE_ENV = 'test';
 const DatabaseManager = require('../../src/helpers/database');
 const enrollment = require('../../src/helpers/voiceEnrollment');
+const { listReviewRows } = require('../../src/helpers/peopleActions');
 
 test('all voice guard thresholds carry the same uncalibrated label', () => {
   assert.deepEqual(Object.values(enrollment.calibration).map(item => item.status),
     ['uncalibrated', 'uncalibrated', 'uncalibrated', 'uncalibrated']);
+});
+
+test('review eligibility matches enrolment after owner labels, and changes when audio expires', async t => {
+  const f = fixture(t);
+  const { noteId } = f.note('review', 5);
+  const doc = JSON.parse(f.db.getNote(noteId).transcript);
+  for (const row of doc.rows) {
+    delete row.speakerName;
+    delete row.suggestedProfileId;
+    delete row.speakerLockSource;
+    row.speakerIsPlaceholder = true;
+  }
+  doc.rows[1].audioSpan.endSample = doc.rows[1].audioSpan.startSample + 2 * 24000;
+  doc.rows[2].overlap = true;
+  doc.rows[3].audioSpan.trackId = 'system';
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  f.audio.spanAvailable = (_note, _track, start) => start !== 5 * 24000 + 6000;
+  const before = listReviewRows(f.db, null, f.audio);
+  const byId = new Map(before.map(row => [row.rowId, row.eligibilityReason]));
+  assert.deepEqual([...before.map(row => row.rowId)], ['review-4', 'review-3', 'review-2', 'review-1', 'review-0']);
+  assert.equal(byId.get('review-0'), null);
+  assert.equal(byId.get('review-1'), 'short');
+  assert.equal(byId.get('review-2'), 'overlap');
+  assert.equal(byId.get('review-3'), 'resolution');
+  assert.equal(byId.get('review-4'), null);
+  const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
+  for (const row of doc.rows) {
+    assert.equal(applySpeakerCorrection(f.db, null, {
+      type: 'apply', noteId, id: `label-${row.id}`, scope: 'row', rowIds: [row.id],
+      name: 'Alex', profileId: f.person.id,
+    }).success, true);
+  }
+  const offered = new Set(enrollment.listCandidates(f.db, f.audio, f.person.id).map(c => c.rowIds[0]));
+  for (const [rowId, reason] of byId) assert.equal(offered.has(rowId), reason === null, rowId);
+  for (const candidate of enrollment.listCandidates(f.db, f.audio, f.person.id)) {
+    const playback = enrollment.play(f.db, f.audio, candidate.id);
+    assert.equal(playback.state, 'available');
+    f.completeReview(candidate.id, playback.token);
+    assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', playback.token)).success, true);
+  }
+  f.audio.status = () => ({ state: 'expired', bytes: 0 });
+  const afterExpiry = new Map(listReviewRows(f.db, f.person.id, f.audio).map(row => [row.rowId, row.eligibilityReason]));
+  assert.equal(afterExpiry.get('review-0'), 'audio');
+  assert.equal(afterExpiry.get('review-4'), 'audio');
+  assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
+});
+
+test('review and enrolment use the whole shared span, echo guard, and sample cap', t => {
+  const f = fixture(t);
+  const { noteId } = f.note('shared', 2);
+  const doc = JSON.parse(f.db.getNote(noteId).transcript);
+  doc.rows[1].audioSpan = { ...doc.rows[0].audioSpan };
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio).map(row => row.eligibilityReason), [null, null]);
+  assert.deepEqual(enrollment.listCandidates(f.db, f.audio, f.person.id).map(c => c.rowIds[0]), ['shared-0', 'shared-1']);
+
+  doc.rows[0].recordingId = 'different-recording';
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio).map(row => row.eligibilityReason), [null, 'resolution']);
+  assert.deepEqual(enrollment.listCandidates(f.db, f.audio, f.person.id).map(c => c.rowIds[0]), ['shared-1']);
+  delete doc.rows[0].recordingId;
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+
+  f.audio.status = () => ({ state: 'complete', tracks: {
+    mic: { chunks: [{ startSample: 0, sampleCount: 5 * 24000 }] },
+    system: { chunks: [{ startSample: 0, sampleCount: 5 * 24000 }] },
+  } });
+  assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio).map(row => row.eligibilityReason), ['overlap', 'overlap']);
+  assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
+
+  f.audio.status = () => ({ state: 'complete' });
+  const insert = f.db.db.prepare(`INSERT INTO voice_exemplars
+    (id, profile_id, note_id, track, start_sample, end_sample, approved_at)
+    VALUES (?, ?, ?, 'mic', ?, ?, CURRENT_TIMESTAMP)`);
+  for (let i = 0; i < 20; i++) insert.run(`cap-${i}`, f.person.id, noteId, 24000 * (100 + i), 24000 * (101 + i));
+  assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio).map(row => row.eligibilityReason), ['limit', 'limit']);
+  assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
 });
 
 test('a retained legacy row without a persisted span is offered for review', async (t) => {
