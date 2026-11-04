@@ -3859,6 +3859,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "Nichts gefunden: {{reason}}",
       "extractTodosNoModel": "Wähle zuerst ein Chatmodell",
+      "extractTodosNoConfiguredModel": "Wähle in den Einstellungen ein Modell, bevor du To-dos extrahierst",
       "extractTodosNoItems": "Das Modell hat keine Aufgaben gefunden",
       "extractTodosRejected": "Alle Vorschläge hatten keinen brauchbaren Beleg",
       "extractTodosAlreadyPresent": "Diese Aufgaben sind bereits vorhanden",

@@ -3424,6 +3424,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "No se encontró nada: {{reason}}",
       "extractTodosNoModel": "Elige un modelo de chat primero",
+      "extractTodosNoConfiguredModel": "Elige un modelo en Configuración antes de extraer tareas",
       "extractTodosNoItems": "El modelo no encontró tareas",
       "extractTodosRejected": "Los elementos propuestos no tenían pruebas válidas",
       "extractTodosAlreadyPresent": "Estas tareas ya existen",

@@ -3396,6 +3396,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "Ничего не найдено: {{reason}}",
       "extractTodosNoModel": "Сначала выберите модель чата",
+      "extractTodosNoConfiguredModel": "Выберите модель в настройках перед извлечением задач",
       "extractTodosNoItems": "Модель не нашла задач",
       "extractTodosRejected": "У предложенных задач нет подходящих подтверждений",
       "extractTodosAlreadyPresent": "Эти задачи уже существуют",

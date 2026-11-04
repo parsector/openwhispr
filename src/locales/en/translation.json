@@ -4011,6 +4011,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "Nothing found: {{reason}}",
       "extractTodosNoModel": "Choose a chat model first",
+      "extractTodosNoConfiguredModel": "Choose a model in Settings before extracting todos",
       "extractTodosNoItems": "The model found no action items",
       "extractTodosRejected": "All proposed items lacked usable evidence",
       "extractTodosAlreadyPresent": "These todos are already present",

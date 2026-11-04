@@ -992,7 +992,7 @@ function NoteLeaf({
                     .then((result) => {
                       const reasonKey: Record<string, string> = {
                         no_transcript_rows: "noTranscriptRows",
-                        no_model: "extractTodosNoModel",
+                        no_model: "extractTodosNoConfiguredModel",
                         empty_items: "extractTodosNoItems",
                         all_items_rejected: "extractTodosRejected",
                         no_new_todos: "extractTodosAlreadyPresent",

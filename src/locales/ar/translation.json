@@ -2833,6 +2833,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "لم يتم العثور على شيء: {{reason}}",
       "extractTodosNoModel": "اختر نموذج دردشة أولاً",
+      "extractTodosNoConfiguredModel": "اختر نموذجًا في الإعدادات قبل استخراج المهام",
       "extractTodosNoItems": "لم يعثر النموذج على مهام",
       "extractTodosRejected": "لم تتضمن العناصر المقترحة أدلة صالحة",
       "extractTodosAlreadyPresent": "هذه المهام موجودة بالفعل",

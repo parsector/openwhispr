@@ -201,12 +201,14 @@ function safeResponseSnippet(raw) {
     .replace(/[\p{L}\p{N}_]+/gu, (word) => (safeWords.has(word) ? word : "x"));
 }
 
-async function extractCommitments({ note, database, model, infer }) {
+async function extractCommitments({ note, database, model, source, infer }) {
   const log = {
     note_id: note?.id ?? null,
     ...transcriptInfo(note?.transcript),
     segment_count: 0,
     model_id: model?.model ?? null,
+    model_provider: model?.provider ?? null,
+    model_source: source ?? null,
     http_status: null,
     raw_response_length: 0,
     parsed_item_count: 0,
@@ -406,13 +408,15 @@ async function extractCommitments({ note, database, model, infer }) {
   }
 }
 
-async function extractForNote(noteId, { database, model, infer }) {
+async function extractForNote(noteId, { database, model, source, infer }) {
   if (!Number.isSafeInteger(noteId) || noteId <= 0) {
     writeExtractLog({
       note_id: noteId,
       ...transcriptInfo(null),
       segment_count: 0,
       model_id: model?.model ?? null,
+      model_provider: model?.provider ?? null,
+      model_source: source ?? null,
       http_status: null,
       raw_response_length: 0,
       parsed_item_count: 0,
@@ -432,6 +436,8 @@ async function extractForNote(noteId, { database, model, infer }) {
       ...transcriptInfo(null),
       segment_count: 0,
       model_id: model?.model ?? null,
+      model_provider: model?.provider ?? null,
+      model_source: source ?? null,
       http_status: null,
       raw_response_length: 0,
       parsed_item_count: 0,
@@ -444,7 +450,7 @@ async function extractForNote(noteId, { database, model, infer }) {
     });
     return { created: 0, proposals: 0, skipped: true, reason: "note_missing" };
   }
-  return extractCommitments({ note, database, model, infer });
+  return extractCommitments({ note, database, model, source, infer });
 }
 
 function summaryActions(markdown) {
@@ -478,13 +484,15 @@ function summaryActions(markdown) {
   return actions;
 }
 
-function extractSummaryForNote(noteId, { database }) {
+function extractSummaryForNote(noteId, { database, model, source }) {
   const note = Number.isSafeInteger(noteId) && noteId > 0 ? database.getNote(noteId) : null;
   const log = {
     note_id: noteId,
     ...transcriptInfo(note?.transcript),
     segment_count: note ? parseSegments(note.transcript, note.id).length : 0,
-    model_id: null,
+    model_id: model?.model ?? null,
+    model_provider: model?.provider ?? null,
+    model_source: source ?? null,
     http_status: null,
     raw_response_length: 0,
     parsed_item_count: 0,
@@ -499,6 +507,10 @@ function extractSummaryForNote(noteId, { database }) {
   try {
     if (!note || note.deleted_at) {
       log.skip_reason = "note_missing";
+      return { created: 0, proposals: 0, skipped: true, reason: log.skip_reason };
+    }
+    if (!model?.model) {
+      log.skip_reason = "no_model";
       return { created: 0, proposals: 0, skipped: true, reason: log.skip_reason };
     }
     const actions = summaryActions(note.enhanced_content);

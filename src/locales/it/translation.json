@@ -3372,6 +3372,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "Nessun risultato: {{reason}}",
       "extractTodosNoModel": "Scegli prima un modello di chat",
+      "extractTodosNoConfiguredModel": "Scegli un modello nelle Impostazioni prima di estrarre le attività",
       "extractTodosNoItems": "Il modello non ha trovato attività",
       "extractTodosRejected": "Le attività proposte non avevano prove valide",
       "extractTodosAlreadyPresent": "Queste attività esistono già",

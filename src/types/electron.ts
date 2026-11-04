@@ -1850,6 +1850,17 @@ declare global {
         useChatEndpointKey: boolean;
         useRoutinesEndpointKey: boolean;
         supportsToolCalls: boolean;
+        routineOverride: boolean;
+        chatChoice: {
+          mode: string;
+          provider: string;
+          model: string;
+          remoteUrl: string;
+          cloudBaseUrl: string;
+          useChatEndpointKey: boolean;
+          useRoutinesEndpointKey: boolean;
+          supportsToolCalls: boolean;
+        };
       }) => Promise<boolean>;
       setRoutineRecording: (source: string, active: boolean) => void;
       onRoutinesUpdated: (callback: () => void) => () => void;

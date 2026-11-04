@@ -6,6 +6,7 @@ const path = require("node:path");
 const Module = require("node:module");
 const { extractCommitments, windows, MARKER } = require("../../src/helpers/commitments/extract");
 const { CommitmentStore } = require("../../src/helpers/commitments/store");
+const { resolveExtractionModel } = require("../../src/helpers/commitments/extractionModel");
 
 function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-todos-extract-"));
@@ -104,6 +105,57 @@ test("self-hosted extraction runs with endpoint tool calling disabled", async (t
   });
   assert.equal(calls, 1);
   assert.deepEqual(result, { created: 0, proposals: 0, skipped: false, reason: "empty_items" });
+});
+
+test("extraction uses the configured self-hosted chat model without a routine override", async (t) => {
+  const db = setup(t);
+  const chat = {
+    mode: "self-hosted",
+    provider: "custom",
+    remoteUrl: "https://models.example/v1",
+    model: "chat-only-model",
+    supportsToolCalls: false,
+  };
+  const selection = resolveExtractionModel(null, chat);
+  assert.equal(selection.source, "chat-model");
+  const result = await extractCommitments({
+    note,
+    database: db,
+    ...selection,
+    infer: async ({ model }) => {
+      assert.equal(model, chat);
+      return JSON.stringify({ items: [items[0]] }) + MARKER;
+    },
+  });
+  assert.equal(result.created, 1);
+  const log = JSON.parse(
+    fs.readFileSync(path.join(db.commitmentsTestDir, "logs", "commitments-extract.log"), "utf8")
+  );
+  assert.equal(log.model_provider, "custom");
+  assert.equal(log.model_id, "chat-only-model");
+  assert.equal(log.model_source, "chat-model");
+});
+
+test("extraction skips with no configured model and prefers an explicit routine choice", async (t) => {
+  const db = setup(t);
+  const missing = resolveExtractionModel(null, null);
+  let called = false;
+  const skipped = await extractCommitments({
+    note,
+    database: db,
+    ...missing,
+    infer: async () => {
+      called = true;
+    },
+  });
+  assert.equal(called, false);
+  assert.deepEqual(skipped, { created: 0, proposals: 0, skipped: true, reason: "no_model" });
+  const routine = { mode: "local", provider: "local", model: "routine-model" };
+  assert.deepEqual(resolveExtractionModel(routine, { model: "chat-model" }), {
+    model: routine,
+    source: "routine-choice",
+  });
+  assert.equal(resolveExtractionModel({ ...routine, routineOverride: false }, null).model, null);
 });
 
 test("extractor persists three todos, restatement and completion proposal", async (t) => {
@@ -365,8 +417,19 @@ test("summary action items create source summary rows once without a transcript"
   };
   db.getNote = (id) => (id === note.id ? summaryNote : null);
   const { extractSummaryForNote } = require("../../src/helpers/commitments/extract");
-  assert.equal(extractSummaryForNote(note.id, { database: db }).created, 4);
-  assert.equal(extractSummaryForNote(note.id, { database: db }).created, 0);
+  const selection = resolveExtractionModel(null, {
+    mode: "self-hosted",
+    provider: "custom",
+    model: "chat-model",
+  });
+  assert.deepEqual(extractSummaryForNote(note.id, { database: db, model: null }), {
+    created: 0,
+    proposals: 0,
+    skipped: true,
+    reason: "no_model",
+  });
+  assert.equal(extractSummaryForNote(note.id, { database: db, ...selection }).created, 4);
+  assert.equal(extractSummaryForNote(note.id, { database: db, ...selection }).created, 0);
   const rows = new CommitmentStore(db).list();
   assert.equal(rows.length, 4);
   assert.ok(rows.every((row) => row.source === "summary"));

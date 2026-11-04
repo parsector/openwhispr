@@ -3372,6 +3372,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "找不到內容：{{reason}}",
       "extractTodosNoModel": "請先選擇聊天模型",
+      "extractTodosNoConfiguredModel": "擷取待辦事項前，請先在設定中選擇模型",
       "extractTodosNoItems": "模型找不到待辦事項",
       "extractTodosRejected": "建議的項目缺少可用依據",
       "extractTodosAlreadyPresent": "這些待辦事項已存在",

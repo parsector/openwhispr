@@ -3144,6 +3144,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "見つかりませんでした: {{reason}}",
       "extractTodosNoModel": "先にチャットモデルを選択してください",
+      "extractTodosNoConfiguredModel": "ToDoを抽出する前に設定でモデルを選択してください",
       "extractTodosNoItems": "モデルはタスクを見つけませんでした",
       "extractTodosRejected": "提案された項目に有効な根拠がありません",
       "extractTodosAlreadyPresent": "これらのタスクは既に存在します",

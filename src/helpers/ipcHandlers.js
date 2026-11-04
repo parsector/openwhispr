@@ -813,6 +813,10 @@ class IPCHandlers {
     } catch {
       this._routineModelChoice = null;
     }
+    this._chatModelChoice = this._routineModelChoice?.chatChoice ?? null;
+    const { resolveExtractionModel } = require("./commitments/extractionModel");
+    const extractionModel = () =>
+      resolveExtractionModel(this._routineModelChoice, this._chatModelChoice);
     const infer = async ({
       model,
       prompt,
@@ -1174,9 +1178,10 @@ class IPCHandlers {
           Promise.resolve()
             .then(() => {
               const { extractForNote } = require("./commitments/extract");
+              const selection = extractionModel();
               return extractForNote(data.noteId, {
                 database: this.databaseManager,
-                model: this._routineModelChoice,
+                ...selection,
                 infer: (options) => infer({ ...options, toolsAvailable: false }),
               });
             })
@@ -1251,9 +1256,10 @@ class IPCHandlers {
     ipcMain.handle("commitments-reextract-note", async (_event, noteId) => {
       const { extractForNote } = require("./commitments/extract");
       try {
+        const selection = extractionModel();
         const result = await extractForNote(noteId, {
           database: this.databaseManager,
-          model: this._routineModelChoice,
+          ...selection,
           infer: (options) => infer({ ...options, toolsAvailable: false }),
         });
         if (result.created || result.proposals) broadcastToWindows("commitments-updated");
@@ -1269,8 +1275,10 @@ class IPCHandlers {
     });
     ipcMain.handle("commitments-extract-summary-note", (_event, noteId) => {
       try {
+        const selection = extractionModel();
         const result = require("./commitments/extract").extractSummaryForNote(noteId, {
           database: this.databaseManager,
+          ...selection,
         });
         if (result.created) broadcastToWindows("commitments-updated");
         return result;
@@ -1484,6 +1492,8 @@ class IPCHandlers {
         useChatEndpointKey = false,
         useRoutinesEndpointKey = false,
         supportsToolCalls = true,
+        routineOverride = true,
+        chatChoice = null,
       } = choice || {};
       if (![mode, provider, model].every((value) => typeof value === "string")) return false;
       if (
@@ -1491,9 +1501,17 @@ class IPCHandlers {
         typeof cloudBaseUrl !== "string" ||
         typeof useChatEndpointKey !== "boolean" ||
         typeof useRoutinesEndpointKey !== "boolean" ||
-        typeof supportsToolCalls !== "boolean"
+        typeof supportsToolCalls !== "boolean" ||
+        typeof routineOverride !== "boolean" ||
+        (chatChoice !== null &&
+          (typeof chatChoice !== "object" ||
+            !["mode", "provider", "model", "remoteUrl", "cloudBaseUrl"].every(
+              (key) => typeof chatChoice[key] === "string"
+            ) ||
+            typeof chatChoice.supportsToolCalls !== "boolean"))
       )
         return false;
+      this._chatModelChoice = chatChoice;
       this._routineModelChoice = {
         mode,
         provider,
@@ -1503,6 +1521,8 @@ class IPCHandlers {
         useChatEndpointKey,
         useRoutinesEndpointKey,
         supportsToolCalls,
+        routineOverride,
+        chatChoice,
       };
       fs.writeFileSync(choicePath, JSON.stringify(this._routineModelChoice));
       return true;
