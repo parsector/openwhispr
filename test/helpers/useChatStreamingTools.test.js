@@ -127,6 +127,23 @@ test("a paid, signed-in chat offers the connector tools", async (t) => {
   assert.ok(offeredTools[0].includes("find_contact"));
 });
 
+test("the owner's self-hosted todo request reaches the tool registry; override off strips tools", async (t) => {
+  const settings = {
+    chatAgentMode: "self-hosted",
+    chatAgentProvider: "lan",
+    chatAgentModel: "deepseek-v4.1-flash:1017-cloud",
+    chatAgentRemoteUrl: "https://inference.aimaterialhub.com/v1",
+    isSignedIn: false,
+  };
+  const { captured, offeredTools, vite } = await renderChatStreaming(t, {}, { settings });
+  await captured.sendToAI("Add these to my todos", []);
+  assert.ok(offeredTools[0].includes("create_todo"));
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  useSettingsStore.getState().setEndpointToolSupport("chatIntelligence", false);
+  await captured.sendToAI("Add these to my todos", []);
+  assert.deepEqual(offeredTools[1], []);
+});
+
 test("a surface that doesn't opt in (container chat) never offers them", async (t) => {
   const { captured, offeredTools } = await renderChatStreaming(t);
   await captured.sendToAI("Reply to Maria", []);
@@ -976,7 +993,7 @@ test("a local model too small for tools is told so, with no tool notes in its hi
   const [system, ...history] = sentMessages[0];
   assert.match(
     system.content,
-    /- Tools \(web search, calendar, searching or changing notes, integrations\): the selected model runs without tools .* in Settings → Language Models\..* You can still use anything already in this prompt, such as note text/
+    /- Tools \(web search, calendar, searching or changing notes, integrations\): This local model cannot use tools because its size is below 4B or unknown\./
   );
   assert.doesNotMatch(system.content, /Tools used/);
   assert.equal(history[1].content, "Sunny.");

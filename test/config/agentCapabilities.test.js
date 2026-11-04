@@ -230,3 +230,13 @@ test("models without tools point to the existing documentation site", async () =
   assert.match(text, /https:\/\/docs\.openwhispr\.com/);
   assert.doesNotMatch(text, /Support → OpenWhispr Help/);
 });
+
+test("a disabled endpoint names its toggle instead of suggesting another provider", async () => {
+  const { resolveUnavailableCapabilities, describeUnavailable } = await load();
+  const unavailable = resolveUnavailableCapabilities(
+    input({ supportsTools: false, toolUnavailableReason: "endpointToolsOff" })
+  );
+  const text = describeUnavailable(unavailable);
+  assert.match(text, /This model supports tool calls/);
+  assert.doesNotMatch(text, /larger model|cloud provider/);
+});

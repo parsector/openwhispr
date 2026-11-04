@@ -10,8 +10,8 @@ test("meeting finalize schedules extraction after returning from the IPC listene
   assert.ok(start >= 0 && end > start);
   const handler = source.slice(start, end);
   assert.match(handler, /setImmediate\(\(\) => \{/);
-  assert.match(handler, /extractCommitments\(/);
-  assert.doesNotMatch(handler, /await\s+extractCommitments\(/);
+  assert.match(handler, /extractForNote\(/);
+  assert.doesNotMatch(handler, /await\s+extractForNote\(/);
   assert.match(handler, /\.catch\(\(error\) =>\s*debugLogger\.error\(/);
 });
 

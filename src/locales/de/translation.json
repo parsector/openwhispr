@@ -780,6 +780,12 @@
     "getApiKey": "API-Schlüssel holen ->",
     "selectModel": "Modell auswählen",
     "availableModels": "Verfügbare Modelle",
+    "toolCalls": {
+      "label": "Dieses Modell unterstützt Werkzeugaufrufe",
+      "help": "Erlaubt Assistent und Routinen, mit diesem Endpunkt und Modell Werkzeuge zu nutzen. Deaktivieren, wenn der Server Aufrufe ablehnt.",
+      "disabledMessage": "Werkzeugaufrufe sind für diesen Endpunkt unter Einstellungen → Modelle deaktiviert. Aktiviere „Dieses Modell unterstützt Werkzeugaufrufe“, um Aufgaben zu erstellen und andere Werkzeuge zu verwenden.",
+      "localUnavailable": "Dieses lokale Modell kann keine Werkzeuge verwenden, weil es weniger als 4 Milliarden Parameter hat oder seine Größe unbekannt ist. Prüfe die Auswahl unter Einstellungen → Modelle."
+    },
     "disableThinking": {
       "label": "Denkausgabe deaktivieren",
       "help": "Überspringt Reasoning-Token für eine sauberere Ausgabe. Empfohlen für Bereinigung. Einige Server ignorieren diesen Hinweis."
@@ -3853,6 +3859,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "Nichts gefunden: {{reason}}",
       "extractTodosNoModel": "Wähle zuerst ein Chatmodell",
+      "extractTodosNoConfiguredModel": "Wähle in den Einstellungen ein Modell, bevor du To-dos extrahierst",
       "extractTodosNoItems": "Das Modell hat keine Aufgaben gefunden",
       "extractTodosRejected": "Alle Vorschläge hatten keinen brauchbaren Beleg",
       "extractTodosAlreadyPresent": "Diese Aufgaben sind bereits vorhanden",

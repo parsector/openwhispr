@@ -780,6 +780,12 @@
     "getApiKey": "Obtenir la clé API ->",
     "selectModel": "Sélectionner un modèle",
     "availableModels": "Modèles disponibles",
+    "toolCalls": {
+      "label": "Ce modèle prend en charge les appels d’outils",
+      "help": "Autorise l’assistant et les routines à utiliser des outils avec ce point de terminaison et ce modèle. Désactivez si le serveur refuse les appels.",
+      "disabledMessage": "Les appels d’outils sont désactivés pour ce point de terminaison dans Paramètres → Modèles. Activez « Ce modèle prend en charge les appels d’outils » pour créer des tâches et utiliser d’autres outils.",
+      "localUnavailable": "Ce modèle local ne peut pas utiliser d’outils car il compte moins de 4 milliards de paramètres ou sa taille est inconnue. Vérifiez sa sélection dans Paramètres → Modèles."
+    },
     "disableThinking": {
       "label": "Désactiver la sortie de raisonnement",
       "help": "Ignore les jetons de raisonnement pour une sortie plus propre. Recommandé pour le nettoyage. Certains serveurs ignorent cette indication."
@@ -3853,6 +3859,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "Aucun résultat : {{reason}}",
       "extractTodosNoModel": "Choisissez d’abord un modèle de chat",
+      "extractTodosNoConfiguredModel": "Choisissez un modèle dans les paramètres avant d’extraire les tâches",
       "extractTodosNoItems": "Le modèle n’a trouvé aucune tâche",
       "extractTodosRejected": "Les éléments proposés manquent de preuves utilisables",
       "extractTodosAlreadyPresent": "Ces tâches existent déjà",

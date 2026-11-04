@@ -780,6 +780,12 @@
     "getApiKey": "API キーを取得 ->",
     "selectModel": "モデルを選択",
     "availableModels": "利用可能なモデル",
+    "toolCalls": {
+      "label": "このモデルはツール呼び出しに対応",
+      "help": "このエンドポイントとモデルでアシスタントとルーチンがツールを使えるようにします。サーバーが拒否する場合はオフにしてください。",
+      "disabledMessage": "設定 → モデルでこのエンドポイントのツール呼び出しがオフになっています。「このモデルはツール呼び出しに対応」をオンにすると、ToDo の作成や他のツールを使えます。",
+      "localUnavailable": "このローカルモデルはパラメータ数が40億未満、またはサイズ不明のためツールを使えません。設定 → モデルで選択を確認してください。"
+    },
     "disableThinking": {
       "label": "思考出力を無効にする",
       "help": "推論トークンをスキップして出力をクリーンに保ちます。クリーンアップに推奨。一部のサーバーはこのヒントを無視します。"
@@ -3138,6 +3144,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "見つかりませんでした: {{reason}}",
       "extractTodosNoModel": "先にチャットモデルを選択してください",
+      "extractTodosNoConfiguredModel": "ToDoを抽出する前に設定でモデルを選択してください",
       "extractTodosNoItems": "モデルはタスクを見つけませんでした",
       "extractTodosRejected": "提案された項目に有効な根拠がありません",
       "extractTodosAlreadyPresent": "これらのタスクは既に存在します",

@@ -73,6 +73,7 @@ test("custom chat endpoint resolves into a routine choice with or without its sc
     cloudBaseUrl: "",
     useChatEndpointKey: true,
     useRoutinesEndpointKey: false,
+    supportsToolCalls: true,
   });
   setResolvedLLMConfig("routines", {
     mode: "self-hosted",
@@ -103,8 +104,35 @@ test("custom chat endpoint resolves into a routine choice with or without its sc
     cloudBaseUrl: "",
     useChatEndpointKey: false,
     useRoutinesEndpointKey: false,
+    supportsToolCalls: true,
   });
   assert.equal(globalThis.localStorage.getItem("routinesModel"), "routine-model");
+});
+
+test("tool support override is saved for one endpoint and model", async (t) => {
+  installBrowserGlobals(t, {
+    initialStorage: {
+      _llmScopeKeysMigrated: "1",
+      chatAgentMode: "self-hosted",
+      chatAgentProvider: "lan",
+      chatAgentModel: "deepseek-v4.1-flash:1017-cloud",
+      chatAgentRemoteUrl: "https://inference.aimaterialhub.com/v1",
+    },
+  });
+  const vite = await createRendererServer(t, { cachePrefix: "endpoint-tool-setting-" });
+  const { useSettingsStore, selectResolvedLLMConfig, setResolvedLLMConfig } =
+    await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const current = () => selectResolvedLLMConfig(useSettingsStore.getState(), "chatIntelligence");
+  assert.equal(current().supportsToolCalls, true);
+  useSettingsStore.getState().setEndpointToolSupport("chatIntelligence", false);
+  assert.equal(current().supportsToolCalls, false);
+  assert.ok(globalThis.localStorage.getItem("endpointToolsDisabled"));
+  setResolvedLLMConfig("chatIntelligence", { model: "another-model" });
+  assert.equal(current().supportsToolCalls, true);
+  setResolvedLLMConfig("chatIntelligence", { model: "deepseek-v4.1-flash:1017-cloud" });
+  assert.equal(current().supportsToolCalls, false);
+  setResolvedLLMConfig("chatIntelligence", { remoteUrl: "https://another.example/v1" });
+  assert.equal(current().supportsToolCalls, true);
 });
 
 test("Providers Custom keeps its base URL and selected model in the main routine choice", async (t) => {
@@ -140,6 +168,7 @@ test("Providers Custom keeps its base URL and selected model in the main routine
       cloudBaseUrl: "https://custom.example/api/v1?compat=chat",
       useChatEndpointKey: true,
       useRoutinesEndpointKey: false,
+      supportsToolCalls: true,
     }
   );
   setResolvedLLMConfig("routines", {
@@ -162,6 +191,7 @@ test("Providers Custom keeps its base URL and selected model in the main routine
     cloudBaseUrl: "https://own.example/api/v1",
     useChatEndpointKey: false,
     useRoutinesEndpointKey: true,
+    supportsToolCalls: true,
   });
   assert.equal(
     globalThis.localStorage.getItem("routinesCloudBaseUrl"),

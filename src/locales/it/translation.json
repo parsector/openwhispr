@@ -780,6 +780,12 @@
     "getApiKey": "Ottieni la chiave API ->",
     "selectModel": "Seleziona modello",
     "availableModels": "Modelli disponibili",
+    "toolCalls": {
+      "label": "Questo modello supporta le chiamate agli strumenti",
+      "help": "Consente all’assistente e alle routine di usare strumenti con questo endpoint e modello. Disattiva se il server rifiuta le chiamate.",
+      "disabledMessage": "Le chiamate agli strumenti sono disattivate per questo endpoint in Impostazioni → Modelli. Attiva «Questo modello supporta le chiamate agli strumenti» per creare attività e usare altri strumenti.",
+      "localUnavailable": "Questo modello locale non può usare strumenti perché ha meno di 4 miliardi di parametri o la sua dimensione è sconosciuta. Controlla la selezione in Impostazioni → Modelli."
+    },
     "disableThinking": {
       "label": "Disattiva output di ragionamento",
       "help": "Salta i token di ragionamento per un output più pulito. Consigliato per la pulizia. Alcuni server ignorano questo suggerimento."
@@ -3366,6 +3372,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "Nessun risultato: {{reason}}",
       "extractTodosNoModel": "Scegli prima un modello di chat",
+      "extractTodosNoConfiguredModel": "Scegli un modello nelle Impostazioni prima di estrarre le attività",
       "extractTodosNoItems": "Il modello non ha trovato attività",
       "extractTodosRejected": "Le attività proposte non avevano prove valide",
       "extractTodosAlreadyPresent": "Queste attività esistono già",

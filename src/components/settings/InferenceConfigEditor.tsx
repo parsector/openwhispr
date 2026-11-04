@@ -67,6 +67,7 @@ export default function InferenceConfigEditor({
   const isSignedIn = useSettingsStore((s) => s.isSignedIn);
   const keepLocalModelLoaded = useSettingsStore((s) => s.keepLocalModelLoaded);
   const setKeepLocalModelLoaded = useSettingsStore((s) => s.setKeepLocalModelLoaded);
+  const setEndpointToolSupport = useSettingsStore((s) => s.setEndpointToolSupport);
   const enterpriseSetupMode = useSettingsStore((s) => s.enterpriseSetupMode);
   const setEnterpriseSetupMode = useSettingsStore((s) => s.setEnterpriseSetupMode);
   const managed = useManagedScopeResolution(scope, enterpriseSetupMode);
@@ -284,6 +285,24 @@ export default function InferenceConfigEditor({
           }
         />
       )}
+
+      {(effectiveMode === "self-hosted" ||
+        effectiveMode === "enterprise" ||
+        (effectiveMode === "providers" && config.provider === "custom")) &&
+        !!config.model && (
+          <div className="flex items-start justify-between gap-3 pt-1">
+            <div className="min-w-0 flex-1">
+              <h4 className="text-sm font-medium text-foreground">
+                {t("reasoning.toolCalls.label")}
+              </h4>
+              <p className="text-xs text-muted-foreground">{t("reasoning.toolCalls.help")}</p>
+            </div>
+            <Toggle
+              checked={config.supportsToolCalls}
+              onChange={(enabled) => setEndpointToolSupport(scope, enabled)}
+            />
+          </div>
+        )}
 
       {showThinkingToggle && (
         <div className="flex items-start justify-between gap-3 pt-1">

@@ -291,16 +291,31 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   const routineModel = useSettingsStore(
     useShallow((settings) => {
       const effective = selectPolicyEffectiveSettings(settings, policySnapshot);
+      const chat = selectResolvedLLMConfig(effective, "chatIntelligence");
       return routineModelChoice(
         selectResolvedLLMConfig(effective, "routines"),
-        selectResolvedLLMConfig(effective, "chatIntelligence"),
+        chat,
         Boolean(effective.routinesMode)
       );
     })
   );
+  const chatModel = useSettingsStore(
+    useShallow((settings) => {
+      const effective = selectPolicyEffectiveSettings(settings, policySnapshot);
+      const chat = selectResolvedLLMConfig(effective, "chatIntelligence");
+      return routineModelChoice(chat, chat);
+    })
+  );
+  const routineOverride = useSettingsStore((settings) =>
+    Boolean(selectPolicyEffectiveSettings(settings, policySnapshot).routinesMode)
+  );
   useEffect(() => {
-    void window.electronAPI?.setRoutineModelChoice?.(routineModel);
-  }, [routineModel]);
+    void window.electronAPI?.setRoutineModelChoice?.({
+      ...routineModel,
+      routineOverride,
+      chatChoice: chatModel,
+    });
+  }, [routineModel, chatModel, routineOverride]);
   useEffect(() => {
     if (activeNoteId != null) void window.electronAPI?.markRoutineSeen?.(activeNoteId);
   }, [activeNoteId]);

@@ -780,6 +780,12 @@
     "getApiKey": "Obtener clave API ->",
     "selectModel": "Seleccionar modelo",
     "availableModels": "Modelos disponibles",
+    "toolCalls": {
+      "label": "Este modelo admite llamadas a herramientas",
+      "help": "Permite al asistente y a las rutinas usar herramientas con este endpoint y modelo. Desactívalo si el servidor rechaza las llamadas.",
+      "disabledMessage": "Las llamadas a herramientas están desactivadas para este endpoint en Ajustes → Modelos. Activa «Este modelo admite llamadas a herramientas» para crear tareas y usar otras herramientas.",
+      "localUnavailable": "Este modelo local no puede usar herramientas porque tiene menos de 4 mil millones de parámetros o se desconoce su tamaño. Revisa su selección en Ajustes → Modelos."
+    },
     "disableThinking": {
       "label": "Desactivar salida de razonamiento",
       "help": "Omite los tokens de razonamiento para una salida más limpia. Recomendado para limpieza. Algunos servidores ignoran esta indicación."
@@ -3418,6 +3424,7 @@
       "extractTodosResult": "{{created}} todos extracted, {{proposals}} completion proposals",
       "extractTodosNothing": "No se encontró nada: {{reason}}",
       "extractTodosNoModel": "Elige un modelo de chat primero",
+      "extractTodosNoConfiguredModel": "Elige un modelo en Configuración antes de extraer tareas",
       "extractTodosNoItems": "El modelo no encontró tareas",
       "extractTodosRejected": "Los elementos propuestos no tenían pruebas válidas",
       "extractTodosAlreadyPresent": "Estas tareas ya existen",

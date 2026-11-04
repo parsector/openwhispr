@@ -1281,6 +1281,7 @@ export default function NoteEditor({
           .then((result) => {
             const reasonKey: Record<string, string> = {
               note_missing: "extractTodosFailed",
+              no_model: "extractTodosNoConfiguredModel",
               no_summary_actions: "extractTodosNoSummaryActions",
               no_new_todos: "extractTodosAlreadyPresent",
             };

@@ -126,6 +126,43 @@ test("a tool-only source is recorded unavailable on the cloud reasoning endpoint
   );
 });
 
+test("a disabled self-hosted endpoint strips routine and MCP tools", async () => {
+  const routine = {
+    id: "endpoint-tools-off",
+    name: "Brief",
+    prompt: "Write a brief",
+    space_id: 1,
+    allowed_tools: ["github__read"],
+    model_override: null,
+  };
+  const database = fakeDatabase(routine);
+  const runner = new RoutineRunner({
+    database,
+    mcpApi: mcpApi(),
+    infer: async ({ toolsAvailable, registry }) => {
+      assert.equal(toolsAvailable, false);
+      assert.equal(registry.get("github__read"), undefined);
+      return { text: "A brief", toolsAvailable: false };
+    },
+  });
+  const result = await runner.run({
+    id: "endpoint-tools-off-run",
+    routineId: routine.id,
+    model: {
+      mode: "self-hosted",
+      provider: "lan",
+      remoteUrl: "https://inference.aimaterialhub.com/v1",
+      model: "deepseek-v4.1-flash:1017-cloud",
+      supportsToolCalls: false,
+    },
+  });
+  assert.equal(result.status, "partial");
+  assert.match(
+    JSON.parse(database.updates.at(-1).source_status).github__read,
+    /needs a tool-capable model/
+  );
+});
+
 function fakeDatabase(routine) {
   const updates = [];
   const notes = [];

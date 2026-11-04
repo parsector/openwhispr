@@ -8,7 +8,7 @@ import { resolveChatStreamingInference } from "../../helpers/dictationAgentInfer
 import { describeProviderError } from "../../utils/describeProviderError";
 import { productHelpMetadata } from "../../services/help/productHelp";
 import logger from "../../utils/logger";
-import { estimateModelSizeB, modelSupportsToolCalls } from "../../utils/modelCapability";
+import { endpointSupportsToolCalls } from "../../utils/modelCapability";
 import {
   isAgentAllowed,
   isConnectorsAllowed,
@@ -83,9 +83,6 @@ import {
 const RAG_NOTE_LIMIT = 5;
 const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
-
-const warnedUnknownToolModels = new Set<string>();
-const LOCAL_TOOL_MIN_PARAMS_B = 4;
 
 // The tool reads the DB mirror over IPC (not the control panel's store), so it
 // also works from the dictation window, for the workspace every window uses now.
@@ -475,23 +472,7 @@ export function useChatStreaming({
             "openrouter",
             "corti",
           ].includes(llmConfig.provider);
-        if (
-          isLocalProvider &&
-          estimateModelSizeB(llmConfig.model) === null &&
-          !warnedUnknownToolModels.has(llmConfig.model)
-        ) {
-          warnedUnknownToolModels.add(llmConfig.model);
-          logger.warn(
-            "Unknown model size; omitting tool calls",
-            { modelId: llmConfig.model },
-            "chat"
-          );
-        }
-        const localModelCanUseTool =
-          isLocalProvider &&
-          estimateModelSizeB(llmConfig.model) !== null &&
-          modelSupportsToolCalls(llmConfig.model);
-        const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
+        const supportsTools = isCloudAgent || endpointSupportsToolCalls(llmConfig);
         // A local or LAN model may have a 16k context; hosted models have room to spare.
         const contextTier =
           !isCloudAgent && (isLocalProvider || isLanAgent) ? "selfHosted" : "hosted";
@@ -632,6 +613,11 @@ export function useChatStreaming({
         // instead of claiming it can't; built per send, outside the registry cache.
         const unavailable = resolveUnavailableCapabilities({
           supportsTools,
+          toolUnavailableReason: llmConfig.mode === "local" ? "modelTooSmall" : "endpointToolsOff",
+          toolUnavailableExplanation:
+            llmConfig.mode === "local"
+              ? t("reasoning.toolCalls.localUnavailable")
+              : t("reasoning.toolCalls.disabledMessage"),
           isSignedIn: settings.isSignedIn,
           webSearch: { allowed: webSearchEnabled, blockedByOrg: isWebSearchBlockedByOrg(policy) },
           calendarConnected,

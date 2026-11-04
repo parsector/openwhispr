@@ -13,7 +13,8 @@ export type UnavailableReason =
   | "unavailableInBuild"
   | "notConnected"
   | "needsReconnect"
-  | "modelTooSmall";
+  | "modelTooSmall"
+  | "endpointToolsOff";
 
 export interface UnavailableCapability {
   name: string;
@@ -22,6 +23,7 @@ export interface UnavailableCapability {
   where?: string;
   /** Sends, posts or files for the user, so the model still writes the text itself. */
   delivers?: boolean;
+  explanation?: string;
 }
 
 /** Where each fix lives, as the UI labels it (localized by the caller). */
@@ -39,8 +41,10 @@ export interface ConnectorAvailability {
 }
 
 export interface UnavailableCapabilityInput {
-  /** False when the selected model gets no tools at all (a small local model). */
+  /** False when the selected model gets no tools (local size gate or endpoint setting). */
   supportsTools: boolean;
+  toolUnavailableReason?: "modelTooSmall" | "endpointToolsOff";
+  toolUnavailableExplanation?: string;
   isSignedIn: boolean;
   webSearch: { allowed: boolean; blockedByOrg: boolean };
   calendarConnected: boolean;
@@ -76,7 +80,12 @@ export function resolveUnavailableCapabilities(
     const tools = ["web search", "calendar", "searching or changing notes"];
     if (input.connectors) tools.push("integrations");
     return [
-      { name: `Tools (${tools.join(", ")})`, reason: "modelTooSmall", where: locations.models },
+      {
+        name: `Tools (${tools.join(", ")})`,
+        reason: input.toolUnavailableReason ?? "modelTooSmall",
+        where: locations.models,
+        explanation: input.toolUnavailableExplanation,
+      },
     ];
   }
 
@@ -129,8 +138,9 @@ export function resolveUnavailableCapabilities(
   return unavailable;
 }
 
-function describeOne({ name, reason, where }: UnavailableCapability): string {
+function describeOne({ name, reason, where, explanation }: UnavailableCapability): string {
   const at = where ? ` in ${where}` : "";
+  if (explanation) return `${name}: ${explanation}`;
   switch (reason) {
     case "signedOut":
       return `${name}: needs the user to sign in to OpenWhispr${at}.`;
@@ -145,7 +155,9 @@ function describeOne({ name, reason, where }: UnavailableCapability): string {
     case "needsReconnect":
       return `${name}: the connection has expired; the user can reconnect it${at}.`;
     case "modelTooSmall":
-      return `${name}: the selected model runs without tools (small or unrecognized local models do); the user can choose a larger model or a cloud provider${at}. For OpenWhispr product questions, the user can open ${DOCS_ORIGIN} or inspect their current settings in Settings. You can still use anything already in this prompt, such as note text, and write any text the user asks for.`;
+      return `${name}: this local model runs without tools because its size is below 4B or unknown. Check the local model selection${at}. For OpenWhispr product questions, the user can open ${DOCS_ORIGIN}. You can still use anything already in this prompt, such as note text, and write any text the user asks for.`;
+    case "endpointToolsOff":
+      return `${name}: tool calling is turned off for this endpoint. Turn on “This model supports tool calls”${at}.`;
   }
 }
 
