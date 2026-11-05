@@ -4269,6 +4269,9 @@ declare global {
             createdAt: string;
           }>;
           voiceProgress: {
+            pendingRecovery?: number;
+            unrecoverable?: number;
+            legacyRecovered?: number;
             cleanSpans: number;
             meetings: number;
             approvedSpans: number;

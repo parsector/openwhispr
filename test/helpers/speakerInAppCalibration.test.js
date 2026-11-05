@@ -1,6 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { buildReport } = require("../../src/helpers/speakerInAppCalibration");
+const retainedRecording = (noteId) => ({
+  noteId,
+  recordingId: `9aabbcc0-0000-4000-8000-${String(noteId).padStart(12, "0")}`,
+  status: "complete",
+  tracks: { system: { chunks: [{ file: "retained.opus" }] } },
+});
 const profiles = [
   { id: 1, name: "Ada", vector: [1, 0] },
   { id: 2, name: "Ben", vector: [0, 1] },
@@ -100,7 +106,7 @@ test("a verified completion supplies stored centroid evidence to calibration", (
         cause: null,
       }),
     },
-    { status: () => ({ state: "complete", tracks: {} }) },
+    { status: () => ({ state: "complete", tracks: {} }), recordingProvenance: retainedRecording },
     { kind: "all" },
     { notes: 1, rows: 10 }
   );
@@ -264,6 +270,7 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
     ],
   };
   const audioStore = {
+    recordingProvenance: retainedRecording,
     status: () => ({
       state: "complete",
       bytes: 100,
@@ -372,6 +379,7 @@ test("missing centroids use retained row audio and never write speaker training 
   };
   let state = "complete";
   const audioStore = {
+    recordingProvenance: retainedRecording,
     status: () => ({
       state,
       recordingId: 1,
@@ -472,6 +480,7 @@ test("unaligned reviewed row uses the player's recording timebase and stays esti
     saveNoteSpeakerEmbeddings: () => writes.push("centroid"),
   };
   const audioStore = {
+    recordingProvenance: retainedRecording,
     status: () => ({
       state,
       startedAt: origin,
@@ -576,6 +585,7 @@ test("a 576 row labelled note reports the 400 row budget and evaluates only cons
     ],
   };
   const audioStore = {
+    recordingProvenance: retainedRecording,
     status: () => ({
       state: "complete",
       startedAt: origin,

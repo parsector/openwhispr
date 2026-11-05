@@ -23,6 +23,11 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   const fixture = fs.readFileSync(path.join(__dirname, "fixtures/people-proof.tsx"), "utf8");
   const inject = `
     rows[0].exemplars = [{ id: "permanent-clip", durationSeconds: 3.5, meetingDate: "2026-10-30 12:00:00", createdAt: "2026-11-05" }];
+    rows[0].voiceProgress.legacyRecovered = 1;
+    rows[0].hasVoice = true;
+    rows[0].voiceProgress.cleanSpans = 1;
+    rows[0].voiceProgress.meetings = 1;
+    rows[1].voiceProgress.unrecoverable = 1;
     window.electronAPI.playVoiceEnrollmentCandidate = async (id) => {
       window.playedExemplar = id;
       return { state: "available", wav: ${JSON.stringify(wav.toString("base64"))} };
@@ -68,6 +73,10 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/voice-exemplar-proof.html`);
   const row = page.locator('[data-person-row="1"]');
+  await row.getByText("Recovered legacy samples: 1.", { exact: false }).waitFor();
+  const unavailable = page.locator('[data-person-row="2"]');
+  await unavailable.getByText("Voice unavailable", { exact: true }).waitFor();
+  await unavailable.getByText(/permanently ineligible for recognition and recording diversity/).waitFor();
   await row
     .getByText(
       "This clip is kept until you erase it by deleting the person, clearing all voice data, resetting their voice, removing the sample, or undoing its approval. Recording retention, eviction, note deletion, re-diarisation and app restart never erase it."

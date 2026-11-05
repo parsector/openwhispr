@@ -49,34 +49,56 @@ function repair(db) {
     END;
   `);
   sweepOrphans(db);
-  // c42ba9e09 made durable removals irreversible but retained before_sample and
-  // older vector snapshots. Repair only removals explicitly marked as erased;
-  // reversible legacy-vector removals retain their undo data.
-  if (
-    !db
-      .prepare(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'speaker_global_actions'"
-      )
-      .get()
-  )
-    return;
+  // c42ba9e09 retained durable removal vectors. Read the removal snapshots and
+  // their durable ownership links directly: global history is a bounded UI list.
   db.transaction(() => {
+    const durableIds = new Set();
+    // Old removals without an ownership snapshot may still carry explicit erase
+    // intent here. Use it when present, while finding snapshots independently of
+    // this prunable list. Never equate an absent marker with permission to erase.
+    const erasedActions = new Set(
+      db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'speaker_global_actions'").get()
+        ? db
+            .prepare(
+              "SELECT id FROM speaker_global_actions WHERE unavailable_reason = 'voice_data_cleared'"
+            )
+            .all()
+            .map((row) => row.id)
+        : []
+    );
+    if (
+      db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'voice_sample_action_snapshots'").get()
+    )
+      for (const row of db.prepare("SELECT snapshot FROM voice_sample_action_snapshots").all())
+        for (const sample of JSON.parse(row.snapshot).audioOwnership || [])
+          durableIds.add(sample.id);
     const removals = db
       .prepare(
-        `SELECT a.candidate_id, a.profile_id
-      FROM voice_enrollment_actions a JOIN speaker_global_actions h ON h.id = a.id
-      WHERE a.choice = 'remove' AND a.before_sample IS NOT NULL
-        AND h.unavailable_reason = 'voice_data_cleared'`
+        `SELECT id, candidate_id, profile_id, before_sample FROM voice_enrollment_actions
+      WHERE choice = 'remove' AND before_sample IS NOT NULL`
       )
       .all();
-    for (const row of removals)
-      scrubVectorSnapshots(db, { profileIds: [row.profile_id], sampleIds: [row.candidate_id] });
+    for (const row of removals) {
+      const sample = JSON.parse(row.before_sample);
+      const durable =
+        erasedActions.has(row.id) ||
+        durableIds.has(row.candidate_id) ||
+        sample.durable_audio ||
+        sample.byte_length != null ||
+        (Object.hasOwn(sample, "note_identity") && !Object.hasOwn(sample, "recording_id"));
+      if (durable)
+        scrubVectorSnapshots(db, { profileIds: [row.profile_id], sampleIds: [row.candidate_id] });
+    }
   })();
 }
 
 function sweepOrphans(db) {
   // Also repairs imports made with foreign_keys disabled. Deleting the row
   // deletes its encrypted blob atomically, including after an interrupted erase.
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'voice_exemplars'").get())
+    db.exec(`DELETE FROM voice_exemplars WHERE id IN
+      (SELECT id FROM voice_exemplar_audio WHERE NOT EXISTS
+        (SELECT 1 FROM speaker_profiles WHERE id = profile_id))`);
   return db
     .prepare(
       `DELETE FROM voice_exemplar_audio
@@ -300,9 +322,10 @@ function scrubVectorSnapshots(db, scope = null) {
     db.prepare("UPDATE voice_enrollment_actions SET before_sample = NULL WHERE id = ?").run(
       action.id
     );
-    db.prepare(
-      "UPDATE speaker_global_actions SET unavailable_reason = 'voice_data_cleared' WHERE id = ?"
-    ).run(action.id);
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'speaker_global_actions'").get())
+      db.prepare(
+        "UPDATE speaker_global_actions SET unavailable_reason = 'voice_data_cleared' WHERE id = ?"
+      ).run(action.id);
   }
 }
 

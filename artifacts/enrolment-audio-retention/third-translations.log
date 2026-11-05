@@ -1,0 +1,17 @@
+✔ every t() key referenced in source resolves in en (498.737471ms)
+✔ every model registry descriptionKey resolves in en (15.79124ms)
+✔ every en key is present in every other language (752.560508ms)
+✔ interpolation variables match en in every language (1132.634132ms)
+✔ every messageKey literal resolves in en (280.586768ms)
+✔ Arabic defines every CLDR plural category for each counted message (10.79282ms)
+✔ the dictionary's counted strings define every plural form they need (207.262213ms)
+✔ Arabic non-count numeric templates remain number-neutral (64.750209ms)
+✔ Arabic plural counts resolve the exact CLDR form without English fallback (112.091846ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3420.570145

@@ -425,6 +425,7 @@ function listPeople(database) {
   return profiles.map((p) => {
     const hit = usage.get(p.id);
     const voiceSamples = require("./voiceEnrollment").listSamples(database, p.id);
+    const voice = require("./voiceEnrollment").resolveProfile(db, p.id);
     return {
       id: p.id,
       displayName: p.display_name,
@@ -435,8 +436,8 @@ function listPeople(database) {
       segmentCount: hit.segmentCount,
       lastHeard: hit.lastHeard,
       lastSeen: later(hit.lastSeen, hit.lastHeard),
-      sampleCount: p.sample_count || 0,
-      hasVoice: !!p.embedding?.length && p.sample_count > 0,
+      sampleCount: voice.result.cleanSpans,
+      hasVoice: voice.embedding.length === 2048,
       needsReapproval: p.voice_needs_reapproval === 1,
       legacyVoice: !!p.embedding?.length && p.sample_count > 0 && !voiceSamples.length,
       voiceProgress: require("./voiceEnrollment").progress(database, p.id),

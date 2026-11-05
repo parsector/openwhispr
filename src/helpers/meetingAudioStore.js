@@ -144,6 +144,9 @@ class MeetingAudioStore {
     this.noticeFile = path.join(root, "evictions.json");
     this.evictions = this._readJson(this.noticeFile) || [];
     this.repair();
+    // Recover prior approvals before retention can erase their source chunks.
+    this.legacyRecovery =
+      this.database?.db && require("./voiceEnrollment").recoverLegacy(this.database, this);
     this.enforce();
   }
 
@@ -387,7 +390,6 @@ class MeetingAudioStore {
         version: 1,
         noteId,
         noteIdentity: this._noteIdentity(noteId),
-        recordingId: randomUUID(),
         startedAt: this.now(),
         retentionDays: this.policy.days,
         keep: false,
@@ -482,7 +484,7 @@ class MeetingAudioStore {
       bytes: TRACKS.reduce((sum, track) => sum + (manifest.tracks?.[track]?.byteLength || 0), 0),
       tracks: manifest.tracks,
       startedAt: manifest.startedAt,
-      recordingId: manifest.recordingId ?? noteId,
+      recordingId: manifest.recordingId ?? null,
       keep: manifest.keep,
     };
     if (
@@ -517,6 +519,18 @@ class MeetingAudioStore {
       }
     }
     return result;
+  }
+
+  recordingProvenance(noteId) {
+    const manifest = this._manifest(noteId);
+    if (!manifest || !["complete", "incomplete"].includes(manifest.status)) return null;
+    const chunks = TRACKS.flatMap((track) => manifest.tracks?.[track]?.chunks || []);
+    if (
+      !chunks.length ||
+      !chunks.some((chunk) => fs.existsSync(this._chunkFile(noteId, chunk.file)))
+    )
+      return null;
+    return manifest;
   }
 
   // Cheap listing check: validate the retained chunk coverage without decoding
@@ -702,7 +716,6 @@ class MeetingAudioStore {
       version: 1,
       noteId,
       noteIdentity: this._noteIdentity(noteId),
-      recordingId: randomUUID(),
       tracks: {},
     };
     for (const track of TRACKS) {
@@ -842,12 +855,18 @@ class MeetingAudioStore {
       if (!/^\d+$/.test(name)) continue;
       usedBytes += this.status(Number(name)).bytes;
     }
-    const hasExemplars = this.database?.db?.prepare(
-      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'voice_exemplar_audio'"
-    ).get();
-    const permanent = hasExemplars ? this.database.db.prepare(
-      "SELECT COALESCE(SUM(length(ciphertext)), 0) AS bytes, COUNT(*) AS clips FROM voice_exemplar_audio"
-    ).get() : { bytes: 0, clips: 0 };
+    const hasExemplars = this.database?.db
+      ?.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'voice_exemplar_audio'"
+      )
+      .get();
+    const permanent = hasExemplars
+      ? this.database.db
+          .prepare(
+            "SELECT COALESCE(SUM(length(ciphertext)), 0) AS bytes, COUNT(*) AS clips FROM voice_exemplar_audio"
+          )
+          .get()
+      : { bytes: 0, clips: 0 };
     return {
       usedBytes,
       permanentAudioBytes: permanent.bytes,
@@ -867,6 +886,7 @@ class MeetingAudioStore {
       const noteId = Number(name);
       const manifest = this._manifest(noteId);
       if (!manifest || !["complete", "incomplete"].includes(manifest.status)) continue;
+      if (this.legacyRecovery?.deferredNotes.includes(noteId)) continue;
       if (!manifest.keep && now >= manifest.startedAt + manifest.retentionDays * 86400000) {
         removed.push({ noteId, reason: "expired", ...this.delete(noteId, "expired") });
       } else candidates.push(manifest);

@@ -1372,6 +1372,7 @@ class DatabaseManager {
       }
 
       require("./voiceExemplarAudio").open(this.db);
+      require("./voiceRecordingIdentity").open(this.db);
 
       // Local voice evidence has explicit recording provenance. The cache in
       // speaker_profiles is invalidated whenever its source audio is removed.
@@ -7741,18 +7742,20 @@ class DatabaseManager {
         : `SELECT id, display_name, email, sample_count, voice_usable, created_at, updated_at
            FROM speaker_profiles`;
       const profiles = this.db.prepare(query).all();
-      if (!includeEmbedding) return profiles;
+      if (!includeEmbedding)
+        return profiles.map((profile) => {
+          const { result } = require("./voiceEnrollment").resolveProfile(this.db, profile.id);
+          return {
+            ...profile,
+            sample_count: result.cleanSpans,
+            voice_usable: Number(result.usable),
+          };
+        });
       // Approved evidence is authoritative even when the derived profile cache
       // is missing. Resolve from its saved vectors without reconstructing audio
       // or repairing the separate diarization-centroid write path.
       return profiles
         .map((profile) => {
-          if (
-            !this.db
-              .prepare("SELECT 1 FROM voice_exemplar_audio WHERE profile_id = ? LIMIT 1")
-              .get(profile.id)
-          )
-            return profile;
           const { result, embedding } = require("./voiceEnrollment").resolveProfile(
             this.db,
             profile.id

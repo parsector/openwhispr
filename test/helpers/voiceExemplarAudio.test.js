@@ -137,6 +137,278 @@ function fixture(t) {
   };
 }
 
+test("third run: legacy-only unrecognised evidence cannot return a recognition profile", (t) => {
+  const f = fixture(t);
+  const db = f.database.db;
+  const embedding = Buffer.from(
+    Float32Array.from({ length: 512 }, (_, i) => Number(i === 0)).buffer
+  );
+  db.prepare(
+    `INSERT INTO voice_exemplars
+    (id, profile_id, note_id, row_ids, track, start_sample, end_sample, embedding, approved_at)
+    VALUES ('unknown', ?, ?, '["approved-row"]', 'mic', 0, 96000, ?, CURRENT_TIMESTAMP)`
+  ).run(f.person.id, f.noteId, embedding);
+  const doc = JSON.parse(f.database.getNote(f.noteId).transcript);
+  delete doc.rows[0].audioSpan.recordingId;
+  db.prepare("UPDATE notes SET transcript = ? WHERE id = ?").run(JSON.stringify(doc), f.noteId);
+  db.prepare(
+    "UPDATE speaker_profiles SET embedding = ?, sample_count = 1, voice_usable = 1 WHERE id = ?"
+  ).run(embedding, f.person.id);
+  const result = {
+    usable: enrollment.progress(f.database, f.person.id).usable,
+    resolvedBytes: enrollment.resolveProfile(db, f.person.id).embedding.length,
+    recognitionProfiles: f.database.getSpeakerProfiles(true).length,
+    provisionalProfiles: f.database.getSpeakerProfiles(true, { includeProvisional: true }).length,
+  };
+  t.diagnostic(`unrecognised-evidence recognition: ${JSON.stringify(result)}`);
+  assert.deepEqual(result, {
+    usable: false,
+    resolvedBytes: 0,
+    recognitionProfiles: 0,
+    provisionalProfiles: 0,
+  });
+  assert.equal(
+    f.database.getSpeakerProfiles().find((profile) => profile.id === f.person.id).voice_usable,
+    0
+  );
+});
+
+test("third run: unresolved evidence stays pending through three scans, deletion and restart", async (t) => {
+  const f = fixture(t);
+  await f.approve();
+  f.addMeeting();
+  await f.approve();
+  f.addMeeting();
+  await f.approve();
+  const db = f.database.db;
+  // Reproduce an old unresolved approval, with no surviving recording manifest.
+  db.exec(
+    "UPDATE voice_exemplar_audio SET recording_id = NULL; UPDATE voice_exemplars SET recording_id = NULL"
+  );
+  if (db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'voice_evidence_provenance'").get())
+    db.exec("DELETE FROM voice_evidence_provenance");
+  for (const note of db.prepare("SELECT id, transcript FROM notes").all()) {
+    const doc = JSON.parse(note.transcript);
+    for (const row of doc.rows) delete row.audioSpan.recordingId;
+    db.prepare("UPDATE notes SET transcript = ? WHERE id = ?").run(JSON.stringify(doc), note.id);
+    fs.unlinkSync(path.join(directory, "recordings", String(note.id), "manifest.json"));
+  }
+  const summary = () => {
+    const { meetings, usable } = enrollment.progress(f.database, f.person.id);
+    return { meetings, usable };
+  };
+  const stages = [summary()];
+  for (let i = 0; i < 3; i++) {
+    enrollment.candidateReport(f.database, f.store, f.person.id);
+    stages.push(summary());
+  }
+  f.store.delete(f.noteId);
+  const tombstonePath = path.join(directory, "recordings", String(f.noteId), "manifest.json");
+  const tombstone = JSON.parse(fs.readFileSync(tombstonePath, "utf8"));
+  tombstone.recordingId = crypto.randomUUID(); // historical deletion-generated UUID
+  fs.writeFileSync(tombstonePath, JSON.stringify(tombstone));
+  enrollment.candidateReport(f.database, f.store, f.person.id);
+  stages.push(summary());
+  f.restart();
+  stages.push(summary());
+  t.diagnostic(`three scans + deletion + restart: ${JSON.stringify(stages)}`);
+  assert.ok(stages.every((item) => item.meetings === 0 && item.usable === false));
+  assert.ok(
+    enrollment
+      .listSamples(f.database, f.person.id)
+      .every((sample) => sample.provenance === "pending_recovery")
+  );
+});
+
+test("third run: startup recovers legacy approval bytes before retention and is idempotent", async (t) => {
+  const f = fixture(t);
+  const { candidate, playback } = await f.approve();
+  f.database.db.prepare("DELETE FROM voice_exemplar_audio WHERE id = ?").run(candidate.id);
+  if (
+    f.database.db
+      .prepare("SELECT 1 FROM sqlite_master WHERE name = 'voice_evidence_provenance'")
+      .get()
+  )
+    f.database.db.exec("DELETE FROM voice_evidence_provenance");
+  f.database.db.exec("UPDATE voice_exemplars SET recording_id = NULL");
+  // A second approval whose source audio is already gone must be reported.
+  f.addMeeting();
+  const other = await f.approve();
+  f.database.db.prepare("DELETE FROM voice_exemplar_audio WHERE id = ?").run(other.candidate.id);
+  fs.rmSync(path.join(directory, "recordings", String(other.candidate.noteId)), {
+    recursive: true,
+  });
+  // Actual pre-classifier schema on disk, opened by DatabaseManager on restart.
+  f.database.db.exec(
+    "DROP TABLE voice_evidence_provenance; ALTER TABLE voice_exemplars DROP COLUMN recording_id"
+  );
+  f.advance(4);
+  f.restart();
+  const audio = f.database.getVoiceExemplarAudio();
+  const bytesEqual =
+    audio.length === 1 &&
+    enrollment.play(f.database, f.store, candidate.id).wav.equals(playback.wav);
+  t.diagnostic(
+    `startup legacy recovery: ${JSON.stringify({ report: f.store.legacyRecovery, bytesEqual, clips: audio.length })}`
+  );
+  assert.equal(bytesEqual, true);
+  assert.equal(f.store.legacyRecovery.recovered, 1);
+  assert.equal(f.store.legacyRecovery.unrecoverable, 1);
+  assert.equal(enrollment.progress(f.database, f.person.id).unrecoverable, 1);
+  assert.equal(
+    f.database.db
+      .prepare("SELECT state FROM voice_evidence_provenance WHERE sample_id = ?")
+      .get(other.candidate.id).state,
+    "unrecoverable"
+  );
+  const before = f.database.db.prepare("SELECT * FROM voice_exemplar_audio").get();
+  f.restart();
+  assert.deepEqual(f.database.db.prepare("SELECT * FROM voice_exemplar_audio").get(), before);
+  assert.equal(f.store.legacyRecovery.recovered, 0);
+  t.diagnostic(`second startup: ${JSON.stringify(f.store.legacyRecovery)}`);
+});
+
+test("third run: startup recovers approvals even at the sample cap", async (t) => {
+  const f = fixture(t);
+  const { candidate, playback } = await f.approve();
+  f.database.db.prepare("DELETE FROM voice_exemplar_audio WHERE id = ?").run(candidate.id);
+  for (let i = 1; i < enrollment.MAX_SAMPLES; i++)
+    f.database.db
+      .prepare(
+        `INSERT INTO voice_exemplars
+      (id, profile_id, note_id, track, start_sample, end_sample, embedding, approved_at, row_ids)
+      SELECT ?, profile_id, note_id, track, start_sample, end_sample, embedding, approved_at, row_ids
+      FROM voice_exemplars WHERE id = ?`
+      )
+      .run(`legacy-at-cap-${i}`, candidate.id);
+  f.database.db.exec("DROP TABLE voice_evidence_provenance");
+  f.restart();
+  assert.equal(f.store.legacyRecovery.recovered, enrollment.MAX_SAMPLES);
+  assert.equal(f.database.getVoiceExemplarAudio().length, enrollment.MAX_SAMPLES);
+  for (const sample of f.database.getVoiceExemplarAudio())
+    assert.deepEqual(enrollment.play(f.database, f.store, sample.id).wav, playback.wav);
+  t.diagnostic(
+    `startup at cap: ${JSON.stringify({ recovered: f.store.legacyRecovery.recovered, equalClips: enrollment.MAX_SAMPLES })}`
+  );
+});
+
+test("third run: startup restores a graduated legacy profile without re-review", async (t) => {
+  const f = fixture(t);
+  await f.approve();
+  f.addMeeting();
+  await f.approve();
+  f.addMeeting();
+  await f.approve();
+  f.database.db.exec(`DELETE FROM voice_exemplar_audio;
+    DROP TABLE voice_evidence_provenance;
+    UPDATE speaker_profiles SET voice_needs_reapproval = 0;
+    UPDATE notes SET transcript = NULL;`);
+  f.advance(4);
+  f.restart();
+  const { meetings, cleanSpans, usable } = enrollment.progress(f.database, f.person.id);
+  const profiles = f.database.getSpeakerProfiles(true).length;
+  const result = {
+    recovered: f.store.legacyRecovery.recovered,
+    meetings,
+    cleanSpans,
+    usable,
+    profiles,
+  };
+  t.diagnostic(`graduated legacy startup: ${JSON.stringify(result)}`);
+  assert.deepEqual(result, { recovered: 3, meetings: 3, cleanSpans: 3, usable: true, profiles: 1 });
+});
+
+test("third run: temporary key loss defers recovery and holds source audio before retention", async (t) => {
+  const f = fixture(t);
+  const { candidate, playback } = await f.approve();
+  f.database.db.prepare("DELETE FROM voice_exemplar_audio WHERE id = ?").run(candidate.id);
+  f.database.db.exec("DROP TABLE voice_evidence_provenance");
+  const decrypt = f.encryption.decryptBytes;
+  f.encryption.decryptBytes = () => {
+    throw Error("Temporarily unavailable");
+  };
+  f.advance(4);
+  f.restart();
+  assert.equal(f.store.legacyRecovery.pendingRecovery, 1);
+  assert.equal(f.store.legacyRecovery.unrecoverable, 0);
+  assert.deepEqual(f.store.legacyRecovery.deferredNotes, [f.noteId]);
+  const manifest = JSON.parse(
+    fs.readFileSync(path.join(directory, "recordings", String(f.noteId), "manifest.json"))
+  );
+  assert.equal(manifest.status, "complete");
+  f.encryption.decryptBytes = decrypt;
+  f.restart();
+  assert.equal(f.store.legacyRecovery.recovered, 1);
+  assert.deepEqual(enrollment.play(f.database, f.store, candidate.id).wav, playback.wav);
+});
+
+test("third run: pending clip resolves once from its genuine manifest, never from scans", async (t) => {
+  const f = fixture(t);
+  const { candidate } = await f.approve();
+  const db = f.database.db;
+  db.exec("DELETE FROM voice_evidence_provenance");
+  const manifestPath = path.join(directory, "recordings", String(f.noteId), "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const actualId = manifest.recordingId;
+  delete manifest.recordingId;
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  f.restart();
+  assert.equal(enrollment.progress(f.database, f.person.id).pendingRecovery, 1);
+  assert.equal(enrollment.progress(f.database, f.person.id).meetings, 0);
+  manifest.recordingId = actualId;
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  enrollment.candidateReport(f.database, f.store, f.person.id);
+  assert.equal(enrollment.progress(f.database, f.person.id).meetings, 0);
+  f.restart();
+  assert.equal(enrollment.progress(f.database, f.person.id).meetings, 1);
+  manifest.recordingId = crypto.randomUUID();
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+  f.restart();
+  assert.equal(
+    f.database.db
+      .prepare("SELECT recording_id FROM voice_evidence_provenance WHERE sample_id = ?")
+      .get(candidate.id).recording_id,
+    actualId
+  );
+});
+
+test("third run: calibration cannot reuse a pending or unrecoverable approval through its transcript centroid", async (t) => {
+  const f = fixture(t);
+  const { candidate } = await f.approve();
+  const db = f.database.db;
+  const embedding = db
+    .prepare("SELECT embedding FROM voice_exemplar_audio WHERE id = ?")
+    .get(candidate.id).embedding;
+  db.prepare(
+    "INSERT INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, 'speaker_0', ?)"
+  ).run(f.noteId, embedding);
+  db.exec("DELETE FROM voice_evidence_provenance");
+  const collect = () =>
+    require("../../src/helpers/speakerInAppCalibration").collectRows(
+      f.database,
+      f.store,
+      { kind: "all" },
+      { notes: 10, rows: 10 }
+    );
+  const pendingRows = collect().rows.length;
+  assert.equal(pendingRows, 0);
+  // A legacy approval whose audio was declared lost is terminal even if a source
+  // later appears. Its matching note centroid must remain excluded too.
+  db.prepare("DELETE FROM voice_exemplar_audio WHERE id = ?").run(candidate.id);
+  require("../../src/helpers/voiceRecordingIdentity").classifyEvidence(
+    db,
+    db.prepare("SELECT * FROM voice_exemplars WHERE id = ?").get(candidate.id),
+    { record: true, unavailable: "legacy_audio_unavailable" }
+  );
+  const unrecoverableRows = collect().rows.length;
+  const profiles = f.database.getSpeakerProfiles(true, { includeProvisional: true }).length;
+  assert.equal(unrecoverableRows, 0);
+  assert.equal(profiles, 0);
+  t.diagnostic(
+    `calibration fallback: ${JSON.stringify({ pendingRows, unrecoverableRows, profiles })}`
+  );
+});
+
 test("approved exemplar bytes and row survive a retention sweep past the window and restart", async (t) => {
   const f = fixture(t);
   const { candidate, playback } = await f.approve();
@@ -414,6 +686,8 @@ test("mixed legacy and durable spans from one recording cannot graduate or split
   f.database.db
     .prepare("UPDATE voice_exemplars SET recording_id = NULL WHERE id = ?")
     .run(first.candidate.id);
+  // Startup recovery restores an existing approval without another owner review.
+  assert.equal(enrollment.recoverLegacy(f.database, f.store).recovered, 1);
   f.extractor.extractEmbeddingFromSamples = async () =>
     Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? 0.8 : i === 1 ? 0.6 : 0));
   await f.approve();
@@ -446,6 +720,7 @@ test("mixed legacy and durable spans from one recording cannot graduate or split
   f.database.db.exec(`UPDATE voice_exemplars SET recording_id = NULL;
     UPDATE voice_exemplar_audio SET recording_id = NULL;
     UPDATE notes SET transcript = replace(transcript, 'recordingId', 'unknownRecordingId');`);
+  f.database.db.exec("DELETE FROM voice_evidence_provenance");
   const unknown = enrollment.progress(f.database, f.person.id);
   t.diagnostic(
     `unknown provenance: ${JSON.stringify({ ...unknown, vectorBytes: enrollment.resolveProfile(f.database.db, f.person.id).embedding.length })}`
@@ -458,7 +733,9 @@ test("mixed legacy and durable spans from one recording cannot graduate or split
     .prepare("SELECT id FROM voice_exemplar_audio WHERE note_id != ?")
     .get(f.noteId);
   f.database.db
-    .prepare("UPDATE voice_exemplar_audio SET recording_id = 'known-recording' WHERE id = ?")
+    .prepare(
+      "INSERT INTO voice_evidence_provenance (sample_id, state, recording_id) VALUES (?, 'resolved', 'known-recording')"
+    )
     .run(known.id);
   const knownVector = f.database.db
     .prepare("SELECT embedding FROM voice_exemplar_audio WHERE id = ?")
@@ -518,6 +795,29 @@ for (const mapped of [false, true]) {
   });
 }
 
+test("startup repairs c42ba9e09 removal without an older ownership snapshot when erase intent survives", async (t) => {
+  const f = fixture(t);
+  const { candidate } = await f.approve();
+  const sample = f.database.db
+    .prepare(
+      `SELECT id, profile_id, note_id, track, start_sample,
+    end_sample, embedding, approved_at, created_at, row_ids, meeting_date
+    FROM voice_exemplar_audio WHERE id = ?`
+    )
+    .get(candidate.id);
+  const removed = enrollment.removeSample(f.database, candidate.id);
+  f.database.db
+    .prepare("UPDATE voice_enrollment_actions SET before_sample = ? WHERE id = ?")
+    .run(JSON.stringify({ ...sample, embedding: sample.embedding.toString("base64") }), removed.id);
+  f.restart();
+  assert.equal(
+    f.database.db
+      .prepare("SELECT before_sample FROM voice_enrollment_actions WHERE id = ?")
+      .get(removed.id).before_sample,
+    null
+  );
+});
+
 test("startup repairs c42ba9e09 irreversible removal snapshots and preserves reversible legacy removal", async (t) => {
   const f = fixture(t);
   const { candidate } = await f.approve();
@@ -557,6 +857,23 @@ test("startup repairs c42ba9e09 irreversible removal snapshots and preserves rev
     profileId: f.person.id,
     noteId: f.noteId,
   });
+  for (let i = 0; i < 110; i++)
+    require("../../src/helpers/speakerGlobalHistory").add(db, {
+      id: `ordinary-history-${i}`,
+      kind: "rename",
+      profileId: f.person.id,
+    });
+  assert.equal(
+    db.prepare("SELECT 1 FROM speaker_global_actions WHERE id = ?").get(removed.id),
+    undefined
+  );
+  // Make the reversible action the current undo point after ordinary activity.
+  require("../../src/helpers/speakerGlobalHistory").add(db, {
+    id: "reversible-legacy",
+    kind: "enrollment",
+    profileId: f.person.id,
+    noteId: f.noteId,
+  });
   f.restart();
   const repaired = f.database.db
     .prepare("SELECT before_sample FROM voice_enrollment_actions WHERE id = ?")
@@ -565,7 +882,7 @@ test("startup repairs c42ba9e09 irreversible removal snapshots and preserves rev
     .prepare("SELECT snapshot FROM voice_sample_action_snapshots WHERE id = 'legacy-history'")
     .get().snapshot;
   t.diagnostic(
-    `legacy startup repair: ${JSON.stringify({ removedVectorRetained: repaired !== null, historicalVectorRetained: history.includes(sample.embedding.toString("base64")), liveDurableSamples: f.database.getVoiceExemplarAudio().length })}`
+    `legacy startup repair: ${JSON.stringify({ historyAdditions: 110, markerPresent: !!f.database.db.prepare("SELECT 1 FROM speaker_global_actions WHERE id = ?").get(removed.id), removedVectorRetained: repaired !== null, historicalVectorRetained: history.includes(sample.embedding.toString("base64")), liveDurableSamples: f.database.getVoiceExemplarAudio().length })}`
   );
   assert.equal(repaired, null);
   assert.equal(history.includes(sample.embedding.toString("base64")), false);
@@ -584,6 +901,9 @@ test("startup repairs c42ba9e09 irreversible removal snapshots and preserves rev
     f.database.db.prepare("SELECT embedding FROM voice_exemplars WHERE id = 'other-sample'").get()
       .embedding,
     sample.embedding
+  );
+  t.diagnostic(
+    `reversible undo: ${JSON.stringify({ exactVectorRestored: true, vectorBytes: sample.embedding.length, historyAdditions: 110 })}`
   );
   f.restart();
   assert.equal(

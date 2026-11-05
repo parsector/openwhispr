@@ -2,7 +2,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
 const { buildCalibrationLabels } = require("./speakerCalibrationExport");
-const { recordingIdentity, overlapsRecording } = require("./voiceRecordingIdentity");
+const { classifyEvidence, overlapsRecording } = require("./voiceRecordingIdentity");
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const noteEmbeddingsFingerprint = (items) =>
@@ -275,13 +275,20 @@ function collectRows(database, audioStore, scope, budget) {
     selectedOrigins.add(key);
     return true;
   };
-  const exemplars = (database.getVoiceExemplarAudio?.() || []).filter(
+  // Every existing approval suppresses its transcript fallback, including an
+  // ineligible approval. Otherwise an excluded vector can re-enter as a centroid.
+  const approvedEvidence = database.getVoiceExemplarAudio
+    ? require("./voiceEnrollment").samples(db)
+    : [];
+  const exemplars = approvedEvidence.filter(
     (sample) =>
+      sample.durable_audio &&
+      classifyEvidence(db, sample).state === "resolved" &&
       sample.valid !== 0 &&
       (scope.kind !== "range" ||
         (sample.meeting_date?.slice(0, 10) >= scope.from &&
           sample.meeting_date?.slice(0, 10) <= scope.to)) &&
-      selectOrigin(recordingIdentity(db, sample))
+      selectOrigin(classifyEvidence(db, sample).recordingId)
   );
   const where = scope.kind === "range" ? " AND date(created_at) BETWEEN date(?) AND date(?)" : "";
   const chosen = db
@@ -291,12 +298,11 @@ function collectRows(database, audioStore, scope, budget) {
     .all(...(scope.kind === "range" ? [scope.from, scope.to] : []), budget.notes)
     .filter((note) =>
       selectOrigin(
-        recordingIdentity(
+        classifyEvidence(
           db,
           { note_id: note.id, note_identity: note.client_note_id },
-          audioStore.status(note.id),
-          note
-        )
+          { store: audioStore }
+        ).recordingId ?? null
       )
     );
   const rows = [],
@@ -318,6 +324,7 @@ function collectRows(database, audioStore, scope, budget) {
       exemplarId: sample.id,
       contentHash: sample.content_hash,
       truePerson: person.display_name,
+      recordingId: classifyEvidence(db, sample).recordingId,
       clusterId: `exemplar:${sample.id}`,
       vector: vectorOf(sample.embedding),
       vectorSource: "approved-exemplar",
@@ -330,6 +337,11 @@ function collectRows(database, audioStore, scope, budget) {
   }
   for (const note of chosen) {
     const status = audioStore.status(note.id);
+    const provenance = classifyEvidence(
+      db,
+      { note_id: note.id, note_identity: note.client_note_id },
+      { store: audioStore }
+    );
     if (status.state === "recording") continue;
     const labels = buildCalibrationLabels(note, {}, status).rows;
     const noteEmbeddings = database.getNoteSpeakerEmbeddings(note.id);
@@ -359,7 +371,7 @@ function collectRows(database, audioStore, scope, budget) {
     for (const label of labels) {
       const row = transcriptRows.get(label.rowId);
       if (
-        exemplars.some(
+        approvedEvidence.some(
           (sample) =>
             (sample.note_id === note.id &&
               sample.note_identity === note.client_note_id &&
@@ -368,7 +380,7 @@ function collectRows(database, audioStore, scope, budget) {
               db,
               sample,
               note,
-              status,
+              audioStore,
               label.track,
               label.from * 24000,
               label.to * 24000
@@ -385,7 +397,7 @@ function collectRows(database, audioStore, scope, budget) {
         continue;
       reviewedCount++;
       if (rows.length >= budget.rows) continue;
-      const vector = vectors.get(String(row.speaker));
+      const vector = provenance.state === "resolved" ? vectors.get(String(row.speaker)) : null;
       if (!vector) {
         const reason =
           completion?.cause ||
@@ -434,9 +446,10 @@ function collectRows(database, audioStore, scope, budget) {
         playbackPlaceable: !label.unavailableReason,
         approximate: label.approximate,
         audioFingerprint: null,
-        recordingId: status.recordingId,
+        recordingId: provenance.recordingId,
         audioManifestFingerprint: sha(JSON.stringify(status.tracks || {})),
-        audioAvailable: ["complete", "incomplete"].includes(status.state),
+        audioAvailable:
+          provenance.state === "resolved" && ["complete", "incomplete"].includes(status.state),
         audioState: status.state,
       });
     }
@@ -499,7 +512,10 @@ async function runJob(
     }
     if (row.exemplarId) {
       const audio = require("./voiceExemplarAudio").play(database.db, audioStore, row.exemplarId);
-      if (audio?.state !== "available") {
+      if (
+        audio?.state !== "available" ||
+        classifyEvidence(database.db, { id: row.exemplarId }).state !== "resolved"
+      ) {
         row.vector = null;
         exclusions.push({
           noteId: row.noteId,
@@ -632,6 +648,7 @@ async function reportStillCurrent(
       const sample = database.getVoiceExemplarAudio?.().find((item) => item.id === exemplarId);
       if (
         !sample ||
+        classifyEvidence(database.db, sample).state !== "resolved" ||
         sample.revision !== revision ||
         sample.content_hash !== contentHash ||
         require("./voiceExemplarAudio").play(database.db, audioStore, exemplarId)?.state !==
@@ -651,7 +668,11 @@ async function reportStillCurrent(
         const status = audioStore.status(noteId);
         if (
           !["complete", "incomplete"].includes(status.state) ||
-          status.recordingId !== report.fingerprints.recordings[noteId] ||
+          classifyEvidence(
+            database.db,
+            { note_id: noteId, note_identity: note.client_note_id },
+            { store: audioStore }
+          ).recordingId !== report.fingerprints.recordings[noteId] ||
           sha(JSON.stringify(status.tracks || {})) !== report.fingerprints.audioManifests?.[noteId]
         )
           return false;

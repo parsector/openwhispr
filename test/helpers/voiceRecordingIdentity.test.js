@@ -2,99 +2,88 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Database = require("better-sqlite3");
 const {
-  recordingIdentity,
+  open,
+  classifyEvidence,
   overlapsRecording,
-  rememberRecording,
 } = require("../../src/helpers/voiceRecordingIdentity");
-
-test("legacy and durable evidence resolve the real recording UUID without trusting reused note IDs", (t) => {
+const uuid = "9aabbcc0-0000-4000-8000-000000000001";
+function fixture(t) {
   const db = new Database(":memory:");
   t.after(() => db.close());
-  db.exec(`CREATE TABLE notes (id INTEGER, client_note_id TEXT, transcript TEXT);
-    CREATE TABLE voice_exemplar_audio (note_identity TEXT, recording_id TEXT);`);
-  const document = JSON.stringify({
-    version: 2,
-    rows: [{ id: "row", audioSpan: { recordingId: "recording-uuid" } }],
+  db.exec("CREATE TABLE speaker_profiles (id INTEGER PRIMARY KEY)");
+  open(db);
+  const sample = {
+    id: "approved",
+    note_id: 1,
+    note_identity: "original",
+    track: "mic",
+    start_sample: 100,
+    end_sample: 200,
+  };
+  const manifest = {
+    noteId: 1,
+    noteIdentity: "original",
+    recordingId: uuid,
+    status: "complete",
+    tracks: { mic: { chunks: [{ file: "real.opus" }] } },
+  };
+  const store = { recordingProvenance: () => manifest };
+  return { db, sample, manifest, store };
+}
+test("readers ignore cached IDs, status, transcripts and sibling identities", (t) => {
+  const { db, sample, store } = fixture(t);
+  assert.deepEqual(classifyEvidence(db, { ...sample, recording_id: uuid }), {
+    state: "pending_recovery",
   });
-  db.prepare("INSERT INTO notes VALUES (1, 'original-note', ?)").run(document);
-  const legacy = { note_id: 1, track: "mic", start_sample: 100, end_sample: 200 };
-  const durable = { ...legacy, note_identity: "original-note", recording_id: "recording-uuid" };
-  assert.equal(recordingIdentity(db, legacy), recordingIdentity(db, durable));
-  assert.equal(recordingIdentity(db, legacy), "recording:recording-uuid");
-  db.prepare("UPDATE notes SET client_note_id = 'replacement-note', transcript = ?").run(
-    JSON.stringify({ version: 2, rows: [] })
-  );
-  const replacement = { id: 1, client_note_id: "replacement-note" };
+  assert.deepEqual(classifyEvidence(db, sample, { store }), { state: "pending_recovery" });
+  assert.equal(db.prepare("SELECT count(*) n FROM voice_evidence_provenance").get().n, 0);
+  assert.deepEqual(classifyEvidence(db, sample, { store, record: true }), {
+    state: "resolved",
+    recordingId: uuid,
+  });
+});
+test("pending identity rejects tombstones, synthesized IDs and another note's manifest", (t) => {
+  const { db, sample, manifest, store } = fixture(t);
+  for (const change of [
+    { status: "deleted", tracks: {} },
+    { recordingId: "note:1" },
+    { recordingId: 1 },
+    { noteIdentity: "replacement" },
+    { tracks: {} },
+  ]) {
+    const badStore = { recordingProvenance: () => ({ ...manifest, ...change }) };
+    assert.equal(
+      classifyEvidence(db, sample, { store: badStore, record: true }).state,
+      "pending_recovery"
+    );
+  }
+  assert.equal(classifyEvidence(db, sample, { store, record: true }).recordingId, uuid);
+});
+test("resolved and unrecoverable classifications are terminal across future manifests", (t) => {
+  const { db, sample, store, manifest } = fixture(t);
+  classifyEvidence(db, sample, { store, record: true });
+  manifest.recordingId = "9aabbcc0-0000-4000-8000-000000000002";
+  assert.equal(classifyEvidence(db, sample, { store, record: true }).recordingId, uuid);
+  const lost = { ...sample, id: "lost" };
+  classifyEvidence(db, lost, { record: true, unavailable: "legacy_audio_unavailable" });
+  assert.deepEqual(classifyEvidence(db, lost, { store, record: true }), {
+    state: "unrecoverable",
+    reason: "legacy_audio_unavailable",
+  });
+});
+test("overlap uses classified provenance; unresolved same-note intervals still suppress duplicates", (t) => {
+  const { db, sample, store } = fixture(t);
   assert.equal(
-    overlapsRecording(
-      db,
-      durable,
-      replacement,
-      { recordingId: "replacement-recording" },
-      "mic",
-      120,
-      150
-    ),
-    false
-  );
-  assert.equal(
-    overlapsRecording(db, durable, replacement, { recordingId: "recording-uuid" }, "mic", 120, 150),
+    overlapsRecording(db, sample, { id: 1, client_note_id: "original" }, store, "mic", 120, 150),
     true
   );
   assert.equal(
-    overlapsRecording(db, durable, replacement, { recordingId: "recording-uuid" }, "mic", 200, 250),
+    overlapsRecording(db, sample, { id: 1, client_note_id: "replacement" }, store, "mic", 120, 150),
     false
   );
-});
-
-test("missing recording provenance is explicitly unresolved, even across immutable note identities", (t) => {
-  const db = new Database(":memory:");
-  t.after(() => db.close());
-  db.exec(`CREATE TABLE notes (id INTEGER, client_note_id TEXT, transcript TEXT);
-    CREATE TABLE voice_exemplar_audio (note_identity TEXT, recording_id TEXT);
-    INSERT INTO notes VALUES (1, 'note-uuid', NULL);`);
-  assert.equal(recordingIdentity(db, { note_id: 1 }), null);
-  assert.equal(recordingIdentity(db, { note_id: 1, note_identity: "note-uuid" }), null);
-  assert.equal(recordingIdentity(db, { note_id: 2, note_identity: "other-note" }), null);
-  const span = { note_id: 1, track: "mic", start_sample: 10, end_sample: 20 };
+  classifyEvidence(db, sample, { store, record: true });
   assert.equal(
-    overlapsRecording(db, span, { id: 2, client_note_id: "other-note" }, {}, "mic", 12, 18),
+    overlapsRecording(db, sample, { id: 1, client_note_id: "original" }, store, "mic", 200, 250),
     false
-  );
-  assert.equal(
-    overlapsRecording(db, span, { id: 1, client_note_id: "note-uuid" }, {}, "mic", 12, 18),
-    true
-  );
-});
-
-test("audio-store UUID resolution upgrades legacy provenance without attaching an old note's exemplars", (t) => {
-  const db = new Database(":memory:");
-  t.after(() => db.close());
-  db.exec(`CREATE TABLE notes (id INTEGER, client_note_id TEXT, transcript TEXT);
-    CREATE TABLE voice_exemplars (note_id INTEGER, recording_id TEXT);
-    CREATE TABLE voice_exemplar_audio (note_id INTEGER, note_identity TEXT, recording_id TEXT);
-    INSERT INTO notes VALUES (1, 'current-note', NULL);
-    INSERT INTO voice_exemplars VALUES (1, NULL);
-    INSERT INTO voice_exemplar_audio VALUES (1, 'current-note', NULL), (1, 'deleted-note', NULL);`);
-  const note = { id: 1, client_note_id: "current-note", transcript: null };
-  const sample = { note_id: 1, track: "mic", start_sample: 10, end_sample: 20 };
-  const status = { recordingId: "audio-store-uuid" };
-  assert.equal(overlapsRecording(db, sample, note, status, "mic", 12, 18), true);
-  rememberRecording(db, note, status);
-  assert.equal(
-    db.prepare("SELECT recording_id FROM voice_exemplars").get().recording_id,
-    status.recordingId
-  );
-  assert.equal(
-    db
-      .prepare("SELECT recording_id FROM voice_exemplar_audio WHERE note_identity = 'current-note'")
-      .get().recording_id,
-    status.recordingId
-  );
-  assert.equal(
-    db
-      .prepare("SELECT recording_id FROM voice_exemplar_audio WHERE note_identity = 'deleted-note'")
-      .get().recording_id,
-    null
   );
 });

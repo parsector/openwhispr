@@ -198,6 +198,9 @@ function fixture(t) {
   const recordingIds = new Map();
   const audio = { encryption: require('../lib/fakeAudioEncryption'), now: () => reviewClock, status: id => ({ state: 'complete', recordingId: recordingIds.get(id) }), span: () => ({ state: 'available',
     wav, partial: false }) };
+  audio.recordingProvenance = id => ({ noteId: id,
+    noteIdentity: db.db.prepare('SELECT client_note_id FROM notes WHERE id = ?').get(id)?.client_note_id,
+    status: 'complete', recordingId: recordingIds.get(id), tracks: { mic: { chunks: [{ file: 'retained.opus' }] } } });
   const vector = (x, y = 0) => Float32Array.from({ length: 512 }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };
   const note = (suffix, count = 1) => {
@@ -1102,9 +1105,13 @@ test('fresh install can delete its first recording before any enrolment action',
 
 function assertRecordingDiversityRequired(f) {
   f.db.db.exec("UPDATE voice_exemplars SET recording_id = 'same-recording'; UPDATE voice_exemplar_audio SET recording_id = 'same-recording'");
+  // Cached IDs and mutable transcripts cannot change an approval's provenance.
+  assert.equal(enrollment.progress(f.db, f.person.id).usable, true);
+  f.db.db.exec("UPDATE voice_evidence_provenance SET recording_id = 'same-recording' WHERE state = 'resolved'");
   assert.equal(enrollment.progress(f.db, f.person.id).meetings, 1);
   assert.equal(enrollment.progress(f.db, f.person.id).usable, false);
   f.db.db.exec("UPDATE voice_exemplars SET recording_id = NULL; UPDATE voice_exemplar_audio SET recording_id = NULL; UPDATE notes SET transcript = replace(transcript, 'recordingId', 'unknownRecordingId')");
+  f.db.db.exec("DELETE FROM voice_evidence_provenance");
   assert.equal(enrollment.progress(f.db, f.person.id).meetings, 0);
   assert.equal(enrollment.progress(f.db, f.person.id).usable, false);
   assert.equal(enrollment.resolveProfile(f.db.db, f.person.id).embedding.length, 0);

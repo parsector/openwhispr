@@ -222,7 +222,7 @@ test('upgrade backfills three meeting notes once and People finds picker contact
   assert.ok(people.every(p => !p.hasVoice && p.segmentCount === 0));
   const attendee = people.find(p => p.email === 'kostas@example.test');
   upgraded.db.prepare('UPDATE speaker_profiles SET embedding = ?, sample_count = 1 WHERE id = ?').run(Buffer.alloc(2048, 1), attendee.id);
-  assert.equal(listPeople(upgraded).find(p => p.id === attendee.id).hasVoice, true);
+  assert.equal(listPeople(upgraded).find(p => p.id === attendee.id).hasVoice, false);
 });
 test('one attendee across two meetings is one person with two meetings', t => {
   const f = fixture(t); if (!f) return;

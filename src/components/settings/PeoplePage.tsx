@@ -1740,9 +1740,15 @@ export default function PeoplePage({
                                   spans: p.voiceProgress.cleanSpans,
                                   meetings: p.voiceProgress.meetings,
                                 })
-                              : p.hasVoice || p.voiceProgress.cleanSpans > 0
-                                ? t("people.voiceProvisional")
-                                : t("people.noVoice")}
+                              : !p.hasVoice &&
+                                  (p.legacyVoice ||
+                                    p.voiceProgress.approvedSpans > 0 ||
+                                    p.voiceProgress.unrecoverable ||
+                                    p.voiceProgress.pendingRecovery)
+                                ? t("people.voiceUnavailable")
+                                : p.hasVoice || p.voiceProgress.cleanSpans > 0
+                                  ? t("people.voiceProvisional")
+                                  : t("people.noVoice")}
                           </Badge>
                           {p.duplicates.map((d) => (
                             <Badge key={d.id} variant="warning" className="text-[11px]">
@@ -1760,6 +1766,21 @@ export default function PeoplePage({
                             </Badge>
                           )}
                         </div>
+                        {p.legacyVoice ||
+                        p.voiceProgress.pendingRecovery ||
+                        p.voiceProgress.unrecoverable ||
+                        p.voiceProgress.legacyRecovered ? (
+                          <p role="status" className="mt-2 max-w-xl text-sm text-foreground">
+                            {!!p.voiceProgress.legacyRecovered && (
+                              <>
+                                {t("people.legacyRecovered", {
+                                  count: p.voiceProgress.legacyRecovered,
+                                })}{" "}
+                              </>
+                            )}
+                            {t("people.legacyRecoveryDisclosure")}
+                          </p>
+                        ) : null}
                         <Button
                           type="button"
                           size="sm"
