@@ -842,8 +842,16 @@ class MeetingAudioStore {
       if (!/^\d+$/.test(name)) continue;
       usedBytes += this.status(Number(name)).bytes;
     }
+    const hasExemplars = this.database?.db?.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'voice_exemplar_audio'"
+    ).get();
+    const permanent = hasExemplars ? this.database.db.prepare(
+      "SELECT COALESCE(SUM(length(ciphertext)), 0) AS bytes, COUNT(*) AS clips FROM voice_exemplar_audio"
+    ).get() : { bytes: 0, clips: 0 };
     return {
       usedBytes,
+      permanentAudioBytes: permanent.bytes,
+      permanentAudioCount: permanent.clips,
       budgetBytes: this.policy.budgetBytes,
       days: this.policy.days,
       evictions: this.evictions,

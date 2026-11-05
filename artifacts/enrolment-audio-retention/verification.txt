@@ -1,518 +1,164 @@
-Enrolment audio retention verification
-Branch: fix/enrolment-audio-retention; base: 4e9b938a0
+Enrolment exemplar retention — review fixes
+Branch: fix/enrolment-audio-retention
+Review base: c42ba9e09c52e05476ee79a188c5231709703c44
+Work order: /opt/data/dev/apps/_briefs/openwhispr-enrolment-audio-review-fixes.md
 
-Implementation is complete. No placeholders. Previously deleted source audio cannot be recovered; new approvals save the exact bytes that earned playback proof.
-Meeting recording retention is unchanged. Exemplars have person ownership only and no note foreign key. Ciphertext is inline in SQLite, so blob and row erasure are one transaction.
-Verification is not fully green: eight unchanged behavioral assertions require superseded destruction/unavailability/undo semantics. No behavioral assertion was rewritten to make it pass.
+This supersedes the previous completion statement. All six requested fixes are applied and the required checks pass. All eight originally failing tests were updated; none were deleted. Four additional reset assertions were updated to the same irreversible-erasure contract. No required fix remains open.
 
-Files changed (new-side diff ranges):
-src/components/settings/PeoplePage.tsx [229-267, 506-507, 1484-1486, 1826-1863, 1996-1998, 2149-2155, 2315-2317, 2329] - Show retention/capture details, independent exemplar playback, and honest erase/restore wording.
-src/helpers/database.js [1374-1375, 1391-1394, 1442-1443, 4841-4846, 7728-7731, 7736-7739, 7742-7771, 7845] - Open additive schema; preserve exemplar-backed profiles and resolve approved vectors before cached profiles.
-src/helpers/peopleActions.js [427, 441, 443, 688-691, 800-803, 1261, 1264, 1287-1292, 1366-1367, 1515-1517, 1519, 1522-1531] - Carry exemplar ownership through person actions; erase blobs/vectors/snapshots and sweep orphans.
-src/helpers/speakerInAppCalibration.js [98, 135, 162-166, 215, 250-254, 270-284, 288, 290-291, 298-320, 351-359, 432, 481-491, 550, 611-623] - Resolve approved evidence before note audio, preserve source identity, budgets, and report freshness.
-src/helpers/voiceEnrollment.js [10, 72-74, 127, 139-148, 159, 212-214, 217-218, 223, 231-233, 251-254, 266, 269-277, 281-285, 344, 434-444, 448, 526-527, 536, 554-565, 594-604, 608, 637, 651, 717-718, 732, 758-759, 798, 933-935, 958, 980, 1033-1039, 1068-1069, 1071, 1094-1101, 1104-1106, 1109-1118, 1120, 1139-1142, 1146, 1156-1160, 1162-1164, 1168-1177, 1180-1182, 1184, 1249-1251, 1260-1262, 1285, 1288-1295, 1431, 1450] - Save exact proven playback bytes atomically with approval and retain evidence independently of notes.
-src/helpers/voiceExemplarAudio.js [1-181 (new)] - Encrypted SQLite exemplar store, provenance/hash metadata, fail-closed reads/writes, and orphan repair.
-src/locales/ar/translation.json [6230-6233, 6245, 6418] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/de/translation.json [5996-5999, 6011, 6184] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/en/translation.json [5996-5999, 6011, 6184] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/es/translation.json [6014-6017, 6029, 6202] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/fr/translation.json [6014-6017, 6029, 6202] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/it/translation.json [6014-6017, 6029, 6202] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/ja/translation.json [5996-5999, 6011, 6184] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/pt/translation.json [6014-6017, 6029, 6202] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/ru/translation.json [6098-6101, 6113, 6286] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/zh-CN/translation.json [5996-5999, 6011, 6184] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/locales/zh-TW/translation.json [5996-5999, 6011, 6184] - Translate retention, capture date/duration, saved-evidence source, erasure, mapping restoration, and key-unavailable copy.
-src/types/electron.ts [3998, 4263-4268, 4317-4318] - Type exemplar metadata and calibration source counts across the existing IPC API.
-test/browser/voiceExemplarPlayback.cjs [1-97 (new)] - Prove person-row playback requires neither a note nor a candidate scan; capture four responsive/theme views.
-test/components/peopleEnrollmentMessages.test.js [7-8] - Extend strict message contract with the new encryption-key failure; existing assertions remain intact.
-test/helpers/voiceEnrollment.test.js [197] - Inject a hermetic cipher into the existing fixture; behavioral assertions remain unchanged.
-test/helpers/voiceExemplarAudio.test.js [1-438 (new)] - Ten hermetic regressions covering permanent retention, resolution, erasure, schema, and key failure.
-test/lib/fakeAudioEncryption.js [1-15 (new)] - Provide process-local AES-GCM test encryption without host credential services.
-artifacts/enrolment-audio-retention/1440-dark.png [binary] - Person-row playback evidence at desktop/mobile in light/dark themes.
-artifacts/enrolment-audio-retention/1440-light.png [binary] - Person-row playback evidence at desktop/mobile in light/dark themes.
-artifacts/enrolment-audio-retention/412-dark.png [binary] - Person-row playback evidence at desktop/mobile in light/dark themes.
-artifacts/enrolment-audio-retention/412-light.png [binary] - Person-row playback evidence at desktop/mobile in light/dark themes.
-artifacts/enrolment-audio-retention/verification.txt [new] - Schema, source locations, exact validation commands, real results, and unchanged failing assertions.
+1. P1 — recording identity and interval deduplication
+Changed: src/helpers/voiceRecordingIdentity.js:5,32,53; src/helpers/voiceExemplarAudio.js:13,102; src/helpers/database.js:1428; src/helpers/voiceEnrollment.js:183,255,366,442,580,595,676,1002; src/helpers/speakerInAppCalibration.js:284,364; src/helpers/peopleActions.js:1529,1541.
+Both approval stores persist the actual recording UUID from audio-store status. Legacy provenance is resolved through retained recording metadata/current original-note provenance, and upgraded when the audio store supplies its UUID. Immutable client note identity provides a common fallback when UUID provenance is absent. Numeric reused note IDs cannot join unrelated durable evidence. Graduation and equal-per-recording centroid votes use the same resolver. Eligibility, candidate scans, focused approval, review rows and calibration suppress overlapping durable recording intervals, including new segment row IDs.
+Proof: test/helpers/voiceRecordingIdentity.test.js:10,50,62 (SQLite :memory:); test/helpers/voiceExemplarAudio.test.js:393 (mixed legacy/durable, cleanSpans=3, meetings=1, usable=false, then exact equal-recording centroid check); :443 (durable-only overlap, eligibility, scan, already-listened focused approval rejection, calibration counts one exemplar). Existing overlap/no-reoffer tests survive.
 
-New schema (PRAGMA user_version unchanged):
-CREATE TABLE IF NOT EXISTS voice_exemplar_audio (
-      id TEXT PRIMARY KEY,
-      profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
-      note_id INTEGER NOT NULL,
-      note_identity TEXT,
-      note_title TEXT NOT NULL,
-      row_ids TEXT NOT NULL,
-      revision TEXT NOT NULL,
-      track TEXT NOT NULL,
-      start_sample INTEGER NOT NULL,
-      end_sample INTEGER NOT NULL,
-      duration_ms INTEGER NOT NULL,
-      byte_length INTEGER NOT NULL,
-      codec TEXT NOT NULL,
-      sample_rate INTEGER NOT NULL,
-      meeting_date TEXT,
-      approved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      content_hash TEXT NOT NULL,
-      ciphertext BLOB NOT NULL,
-      embedding BLOB NOT NULL,
-      valid INTEGER NOT NULL DEFAULT 1
-    );
-    CREATE INDEX IF NOT EXISTS idx_voice_exemplar_audio_person_row
-      ON voice_exemplar_audio(profile_id, note_id, row_ids, revision);
+2. P1 — reset/undo cannot restore erased biometrics
+Changed: src/helpers/voiceExemplarAudio.js:141; src/helpers/voiceEnrollment.js:1312; src/helpers/peopleActions.js:865.
+Reset erases live samples and scrubs the affected profile, sample and note-vector snapshots from earlier history and the new reset snapshot. Identity and mapping history remains restorable. Scrubbing follows original sample ownership through merge history and preserves unrelated people and their snapshots. Undo never reconstructs missing ciphertext.
+Proof: test/helpers/voiceExemplarAudio.test.js:541 starts with three approved recordings and a graduated profile, resets, restarts, undoes reset and an older rename, then requires zero durable audio, legacy vectors, note vectors and matchable profiles; mappings/name return and unrelated live/historical vectors survive. :485 now also performs clear-all -> restart -> undo and requires continued erasure. test/helpers/peopleActions.test.js:462,479,499,586,601 cover mapping-only and no-note reset undo.
 
-Resolution order:
-src/helpers/voiceEnrollment.js:138 - durable per-person exemplars precede legacy note-owned samples
-src/helpers/voiceEnrollment.js:512 - approved exemplars resolve as reviewed before note-audio exclusion
-src/helpers/voiceEnrollment.js:715 - exemplar playback precedes live candidate/note resolution; a key failure never falls through
-src/helpers/speakerInAppCalibration.js:268 - approved evidence is collected before note rows
-src/helpers/speakerInAppCalibration.js:481 - saved audio and approved vector are used without reconstruction
-src/helpers/database.js:7744 - person matching resolves approved vectors before the derived cache, without writing a centroid repair
+3. P2 — correction invalidation belongs to the original note identity
+Changed: src/helpers/voiceEnrollment.js:1203.
+Durable correction invalidation compares client note identity before interpreting numeric note/row IDs, including explicit mapping changes.
+Proof: test/helpers/voiceExemplarAudio.test.js:160 now creates a real replacement note with recorded audio and the reused original row ID. Its audio can be offered independently; an actual user correction plus explicit mapping invalidation leaves the original exemplar valid and its clean-span count unchanged through restart. Retained bytes are unchanged.
 
-New regression pass output (from the final focused run):
-✔ approved exemplar bytes and row survive a retention sweep past the window and restart (563.633592ms)
-✔ exemplar survives re-diarisation, hard note deletion and note-id reuse (407.789059ms)
-✔ playback, candidate resolution and calibration prefer approved exemplars to expired note audio (397.069443ms)
-✔ a graduated person remains matchable after every source meeting expires and is deleted (812.600705ms)
-✔ approval copies the proven playback bytes without reading or re-encoding the span again (231.411527ms)
-✔ opening the exemplar schema preserves the existing migration version and uses only person ownership (233.913217ms)
-✔ delete person removes exemplar ciphertext and vectors without an orphan blob (396.387215ms)
-✔ clear all voice data erases exemplar blobs and vector snapshots while preserving identity, labels and action log (415.764893ms)
-✔ orphan sweep on open removes an unowned encrypted exemplar blob (399.072661ms)
-✔ missing encryption key fails approval closed with exemplar_key_unavailable and no plaintext write (282.273119ms)
+4. P2 — irreversible removal leaves no historical vector; merge transfers action ownership
+Changed: src/helpers/voiceEnrollment.js:1093,1159,1169,1291,1301,1342; src/helpers/voiceExemplarAudio.js:141; src/helpers/peopleActions.js:696,805.
+Durable removal stores NULL before_sample, scrubs older vector snapshots and disables biometric undo. Approval undo also scrubs the irreversibly removed sample. Both merge paths transfer enrollment action and global-history ownership alongside live evidence; undo restores source ownership. Historical source vector snapshots are scrubbed when the merged survivor's evidence is erased.
+Proof: test/helpers/voiceExemplarAudio.test.js:629 removes a durable sample, verifies NULL/no historical vector, rejects undo and proves an older snapshot cannot restore it after restart. :664 runs both direct survivor deletion and removal-before-survivor-deletion, checking transferred enrollment/global ownership and absence of original vectors from surviving history. test/helpers/voiceEnrollment.test.js:1194 proves merge -> recording deletion -> undo retains survivor ciphertext/vector, restores source ciphertext/action ownership, and never reoffers transferred spans.
 
-Exact commands and real output:
+5. P2 — playback preserves exemplar_key_unavailable with playback-specific wording
+Changed: src/components/settings/PeoplePage.tsx:232,258,264,1858; src/types/electron.ts:4326; src/locales/en/translation.json:5999 and corresponding keys in all 11 locales.
+The person row retains the backend error code and displays a saved-clip playback/key message. The approval failure message remains specific to an unsuccessful save.
+Proof: test/browser/voiceExemplarPlayback.cjs:96 injects the actual IPC response shape, clicks Listen and requires the playback-specific key message, excluding "No exemplar was saved". test/components/peopleEnrollmentMessages.test.js:36 verifies distinct copy and storage interpolations in every locale; translation coverage passes. test/helpers/voiceExemplarAudio.test.js:769 covers the backend missing-key response (current test title: "missing encryption key fails approval closed with exemplar_key_unavailable and no plaintext write").
+
+6. P2 — permanent audio usage is visible and separate from recording eviction
+Changed: src/helpers/meetingAudioStore.js:845,853; src/components/SettingsPage.tsx:1387,3555; src/types/electron.ts:3969; src/locales/en/translation.json:6235 and all other locales.
+Usage reports separate ciphertext bytes and clip count. Settings displays them alongside the recording budget. Only recording bytes participate in eviction; permanent clips remain person-owned.
+Proof: test/helpers/voiceExemplarAudio.test.js:729 checks exact ciphertext-byte accounting, ownership merge, zero-budget recording eviction, restart, retained playback and accounting returning to zero after sample removal. Existing meetingAudioStore budget/eviction tests pass.
+
+Eight formerly failing tests — exact replaced assertions and preserved invariants
+1. test/helpers/peopleActions.test.js:462,473
+   Old: note_speaker_embeddings count after clear/undo == 1.
+   New: == 0; also durable audio count == 0 and profile embedding length == 0.
+   Kept: clear removes note embeddings; undo succeeds, restores original speaker mapping and preserves the Alex identity/label.
+2. test/helpers/voiceEnrollment.test.js:49,89
+   Old: expired approved review-0/review-4 eligibility == "audio".
+   New: both == "reviewed"; unapproved expired review-3 == "audio".
+   Kept: owner labelling produces the same eligible set as enrolment, distinct exclusion reasons, and expiry produces no new candidates.
+3. test/helpers/voiceEnrollment.test.js:956,973
+   Old: approved playback state == "unavailable".
+   New: == "available".
+   Kept: overlapping audio is not counted/offered twice, including zero candidates returned by the decision and next scan. Added durable-only/resegmented/mixed-origin coverage in fix 1.
+4. test/helpers/voiceEnrollment.test.js:1007,1038
+   Old: profile embedding length after recording deletion == 0.
+   New: == 2048; saved playback bytes equal the originally heard WAV.
+   Kept: recording-owned review cache is emptied, legacy note-owned exemplars disappear, no new candidates appear, and the retired recording-owned enrollment action cannot undo deletion.
+5. test/helpers/voiceEnrollment.test.js:1100,1111
+   Old: matchable profiles count == 0 and voice_usable == 0 after note FK deletion.
+   New: both == 1 and approvedSpans == 3.
+   Kept: note FK cascade deletes its legacy rows and the other meeting still exists.
+6. test/helpers/voiceEnrollment.test.js:1117,1128
+   Old: approvedSpans == 3, meetings == 2, voice_usable == 0, matchable profiles == 0.
+   New: respectively 4, 3, 1, 1.
+   Kept: the original four-sample, three-recording setup and eligibility checks.
+7. test/helpers/voiceEnrollment.test.js:1134,1144
+   Old: profile embedding length after hard note deletion == 0.
+   New: == 2048; durable playback remains available.
+   Kept: note-owned legacy exemplars and enrollment actions are deleted.
+8. test/helpers/voiceEnrollment.test.js:1194,1217
+   Old: survivor embedding length/sample_count/sample-list length after recording deletion and merge undo == 0/0/0.
+   New: == 2048/1/1; source sample-list length == 1.
+   Kept: transferred spans are never reoffered and the source note survives. Added byte-for-byte ciphertext preservation, per-clip owner restoration, and enrollment/global action-owner restoration.
+
+Additional obsolete reset assertions updated, not deleted
+- peopleActions.test.js:479,495: undo restores 1 unrelated note embedding, formerly 3. Soft-deleted note ownership/erasure remains covered; deleting Alex still leaves Sam's embedding.
+- peopleActions.test.js:499,511: name-only reset undo leaves 0 note embeddings, formerly 1; unique-name ownership and successful undo remain.
+- peopleActions.test.js:586,598: reset undo sample_count remains 0, formerly 1; name/labels remain and the original mapping returns.
+- peopleActions.test.js:601,610: no-note reset undo hasVoice remains false, formerly true; Solo's identity and successful undo remain.
+
+Final verification commands and real outputs (all exit 0)
+Working directory: /opt/data/dev/worktrees/openwhispr-enrolment-audio
+Logs below are in artifacts/enrolment-audio-retention/.
 
 $ npm run lint
-exit 0
-npm notice run open-whispr@1.13.0 lint
-npm notice run eslint . --max-warnings=0 && cd src && eslint . --max-warnings=0
+review-lint.log: eslint . --max-warnings=0 && cd src && eslint . --max-warnings=0; exit 0, no warnings/errors.
 
 $ node --import tsx --test test/helpers/voiceExemplarAudio.test.js test/helpers/voiceEnrollment.test.js test/helpers/meetingAudioStore.test.js test/helpers/peopleActions.test.js test/helpers/speakerInAppCalibration.test.js test/components/peopleEnrollmentDecision.test.js test/components/peopleEnrollmentMessages.test.js
-exit 1
-✔ committed approval remains visible when the candidate reload fails (137.20498ms)
-✔ a failed save keeps the candidate and reports its exact error (1.741295ms)
-✔ committed approval remains visible when the People refresh fails (2.675236ms)
-✔ en gives every enrollment failure its own message (76.831639ms)
-✔ ar gives every enrollment failure its own message (8.998147ms)
-✔ de gives every enrollment failure its own message (4.539033ms)
-✔ es gives every enrollment failure its own message (5.282511ms)
-✔ fr gives every enrollment failure its own message (5.286594ms)
-✔ it gives every enrollment failure its own message (4.833332ms)
-✔ ja gives every enrollment failure its own message (5.076881ms)
-✔ pt gives every enrollment failure its own message (72.60295ms)
-✔ ru gives every enrollment failure its own message (26.386596ms)
-✔ zh-CN gives every enrollment failure its own message (60.720439ms)
-✔ zh-TW gives every enrollment failure its own message (14.045278ms)
-✔ audio store uses injected cipher, codec, and directory (26.808063ms)
-✔ interrupt, repair encrypted tracks, retrieve two arbitrary exact-duration spans (889.207003ms)
-✔ expiry and explicit deletion remove audio and derived voice, retain corrected transcript (97.099273ms)
-✔ stored meeting audio survives restart, exports on request, and deletion makes it unplayable (94.210238ms)
-✔ budget evicts the oldest recording and keep only exempts age expiry (2837.626731ms)
-✔ missing encryption key fails closed without a plaintext file (3.025246ms)
-✔ a manifest cannot redirect deletion or evict another note (72.582583ms)
-✔ symlink chunks are never read or followed during deletion (18.67066ms)
-✔ deletion removes unindexed tails and repair never resurrects tombstones (66.214749ms)
-✔ a failed unlink is reported and a later delete retries every owned chunk (27.1648ms)
-✔ one corrupt chunk does not prevent repair of a later meeting (92.113682ms)
-✔ device erasure drops live buffers and ciphertext; a reused note id cannot reach old audio (22.463302ms)
-✔ physical database reset leaves no recording for reused note one (96.019494ms)
-✔ deletion and device purge notify every window to discard playback (75.862753ms)
-✔ a replaced key leaves existing ciphertext and its manifest intact (19.079878ms)
-[INFO][database] People identity backfill complete { created: 5 }
-✔ permanent note deletion retires its correction and a trashed note says so (731.905788ms)
-✔ a local note with mapping history stays in trash until its mapping is undone (278.19493ms)
-✔ local folder deletion retires note corrections and exposes older undo (288.792626ms)
-✔ deleting one note retires a multi-note global rename without stranding older undo (195.896674ms)
-✔ undoing a correction in trash restores the note before changing its transcript (218.23893ms)
-✔ unavailable note markers cannot strand an older person action (394.703965ms)
-✔ deletion removes unmapped name-only biometric bytes from clear snapshots (222.789925ms)
-✔ deleted identity names are purged from persisted history across restart (193.501735ms)
-✔ history compacts 200 renames and displays the newest undoable action (686.21062ms)
-✔ people list counts notes and segments and flags near duplicates and used once (223.402149ms)
-✔ calendar and manual attendees become identity-only people, deduped against a speaker email (198.361613ms)
-✔ upgrade backfills three meeting notes once and People finds picker contacts by name and email (293.721048ms)
-✔ one attendee across two meetings is one person with two meetings (264.435774ms)
-✔ picker-only contacts keep merge undo and explicit deletion across restart (203.488957ms)
-✔ People searches every linked picker name and email when contacts share an identity (200.053907ms)
-✔ naming a speaker reuses an attendee identity and never names other rows (192.102281ms)
-✔ a correction rejects a deleted profile id inside its transaction (200.741967ms)
-✔ deleting an attendee identity hides old attendance until a new meeting registers them (213.173129ms)
-✔ an attendee-only person can be renamed and merged with undo (293.558293ms)
-✔ rename changes labels across notes, keeps locks, and undo restores labels (212.952623ms)
-✔ merge preserves survivor embedding, rewrites pinned rows, and restores loser on undo (210.905943ms)
-✔ a user locked Unknown stays Unknown when its old cluster is merged or deleted (202.177005ms)
-✔ merge counts only owned rows across runs, duplicate names, and soft-deleted notes (205.437632ms)
-✔ deletion clears suggestion-only notes and counts them (269.210191ms)
-✔ deleting a person invalidates name-only correction and legacy restores (219.547088ms)
-✔ deleting a person removes every row record for a name-only multi-row correction (214.891382ms)
-✖ clear voice deletes note embeddings and undo restores them (196.017425ms)
-✔ reset and delete erase owned note embeddings, including soft-deleted notes (192.226242ms)
-✔ reset owns name-only note voice evidence when the name is unique (223.871452ms)
-✔ persistent action history stays ordered across another database manager and cancelled previews (198.460489ms)
-✔ global history distinguishes identical note-scoped adoption ids (200.793884ms)
-✔ a reset with no notes cannot undo after a later clear (257.964977ms)
-✔ delete allocates new unknown numbers and cannot restore the person (184.448161ms)
-✔ deleting a person removes their history and reports deleted references honestly (133.160724ms)
-✔ deleting one of two people with the same name leaves unattributed rows alone (130.694909ms)
-✔ reset voice removes embedding and samples but keeps name and labels (153.034248ms)
-✔ reset voice with no notes can be undone (132.403245ms)
-✔ clear voice evidence keeps identities, transcript labels, and action history, then allows reassignment (167.851598ms)
-✔ deleting after a global clear removes saved voice evidence and blocks its undo (144.548274ms)
-✔ deleting a merge survivor invalidates a zero-note identity restore (147.347765ms)
-✔ deleting after a zero-note clear counts and invalidates its saved history (126.599509ms)
-✔ person actions share ordered note history with an in-note correction (142.208754ms)
-✔ changed preview does not apply a wider action (171.374441ms)
-✔ naming a new speaker creates a person without voice training (179.88404ms)
-✔ rename, merge, and reset log in order around a note correction and undo in reverse (153.87602ms)
-✔ cross-note review defaults to flagged rows and a person filter finds all their rows (151.355079ms)
-✔ review rows sort by note date descending, then row position descending (168.724871ms)
-✔ a soft-deleted note is rewritten and logged so restoring it cannot revive a discarded name (148.148411ms)
-✔ stored centroid sweep measures the final pass against current profiles and refuses unsupported gates (5.403851ms)
-✔ a failed completion is visible with its count and exact cause in calibration (3.777475ms)
-✔ a verified completion supplies stored centroid evidence to calibration (1.107779ms)
-✔ live row comparison is explicitly estimated and never uses a centroid as a live query (1.992428ms)
-✔ reconstructed reviewed audio is labelled and can calibrate only with the full evidence gate (5.233513ms)
-✔ applying a supported report records an ordered action and undo restores status and values (96.795056ms)
-✔ a plausible hash and positive row count alone cannot calibrate a parameter (1.66546ms)
-✔ background job counts retained bytes and re-embedded reviewed rows (193.279188ms)
-✔ missing centroids use retained row audio and never write speaker training data (84.472689ms)
-✔ unaligned reviewed row uses the player's recording timebase and stays estimated (85.687513ms)
-✔ a 576 row labelled note reports the 400 row budget and evaluates only considered rows (606.939654ms)
-review cache benchmark: cold 20 span resolutions / 165.9 ms; warm 0 / 4.5 ms
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"bd641c0d982961d4271ca378a0d0a911ebfb9789791e20e4c8cfcf85e540db52","statement":"validate completed playback"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"a5c4b62266ee075c5fcfdb98d7c8bb102a8c9e70b182278f60379f61aa4c54ae","statement":"validate completed playback"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"candidate_unavailable","noteId":1,"personId":1,"candidateId":"a5c4b62266ee075c5fcfdb98d7c8bb102a8c9e70b182278f60379f61aa4c54ae","statement":"recheck candidate and recording"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"a7c465dfbf6881c1062b3e5ea8a84e64bdaf54c08096c15b0da7367dcb75c253","statement":"validate completed playback"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"0127bf072e4e500361a48947f97e9f0e4d6999751db47e0b484872e48ff5c656","statement":"validate completed playback"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"already_approved","noteId":1,"personId":1,"candidateId":"05fb6e37a2240c52e435c741b780e30d2fc4bb24e4f08433c4e410c14099dbbf","statement":"recheck candidate and recording"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"person_or_meeting_changed","noteId":1,"personId":1,"candidateId":"58813763eddbea139b81f7de75592ed26e6fd3634c35b3c503267c61164d5d2f","statement":"recheck candidate and recording"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"database_busy","noteId":1,"personId":1,"candidateId":"1dcbdcad82f19e75cf5c1cb321fa6f554d191371729cb1a88286f0497b9cbde1","statement":"INSERT INTO voice_exemplars"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"constraint_failed","noteId":1,"personId":1,"candidateId":"c8c929bf2f4bf5be3841c5a68f6c6574fa5d934c34aba73f673d367bcb3ea2ca","statement":"INSERT INTO voice_exemplars"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"span_mismatch","noteId":1,"personId":1,"candidateId":"38de28d6de7040b916ae9a51e04df96d06203a280b26a6a7fdca63e0dfd2a0a2","statement":"recheck candidate and recording"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"echo_audio","noteId":1,"personId":1,"candidateId":"d445fa9cf6685f9d914e310621ed1f385036904c9f8e5ae8dac8bfd79a4c82d4","statement":"check other audio track for echo"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"4f9b32cfb71fe40ba14b2ef6f4350e0b48ab306fc54ae243635421a65c1c1b2c","statement":"validate completed playback"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"cff0934657a059f91f1f973a71483f18a37916a80a293a93959aabff8270725b","statement":"validate completed playback"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"4c44fd33d1a88296c327c1d22d012e6c3675cb38db773b6576f594e8de2cdefb","statement":"validate completed playback"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"fa0c7ed2b72190f4bdee630119a83efe79e232e985eb93dc16cb03b445683505","statement":"validate completed playback"}
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"poor_audio","noteId":1,"personId":1,"candidateId":"72ba8792432d60803b681d40d61068cf6c55f44af95c78d925feccd524d91dda","statement":"check audio suitability"}
-✔ all voice guard thresholds carry the same uncalibrated label (8.146173ms)
-✔ decision timing emits one structured debug line after renderer refresh (58.676133ms)
-✖ review eligibility matches enrolment after owner labels, and changes when audio expires (541.11254ms)
-✔ review and enrolment use the whole shared span, echo guard, and sample cap (362.111104ms)
-✔ a retained legacy row without a persisted span is offered for review (218.644065ms)
-✔ focused candidate agrees with the scan and falls back after a revision change (195.156695ms)
-✔ enrolment facts cache invalidates for edits, audio loss, expiry and rules changes (384.38015ms)
-✔ listing, repeated play, complete and approve resolve a span only during the listing (294.811909ms)
-✔ voice query indexes exist on a fresh database and return after a version 3 upgrade (238.072787ms)
-✔ review cache recomputes only edited notes and keeps the person cap live (210.607561ms)
-✔ review cache invalidates for removed and expired audio and a rules-version bump (273.412052ms)
-✔ twenty-recording review benchmark preserves ordering and grouped reasons on a warm open (520.556787ms)
-✔ fresh identity stays unenrolled; approval needs playback; rejection is durable (215.724987ms)
-✔ a rejected exact span from before shared resolution is not offered again (265.566887ms)
-✔ a row corrected to this person is offered, while Unknown and another person are not (208.346501ms)
-✔ empty enrolment reports short, expired, and two-person rows separately (178.032492ms)
-✔ approval requires server-observed playback completion for the same candidate revision (211.804592ms)
-✔ a rolled-back approval reports its statement and permits retry with the completed listen (282.467082ms)
-✔ a second Play replaces the completed listening proof (197.680844ms)
-✔ an expired proof refuses approval and exposes its deadline to the listener (209.801081ms)
-✔ a candidate already saved is reported as approved (215.873158ms)
-✔ a changed meeting is distinguished from an ordinary changed candidate (188.689107ms)
-✔ a busy database refuses save without consuming completed playback (224.927896ms)
-✔ a schema constraint refuses save without consuming completed playback (289.919362ms)
-✔ a span whose recording changed reports the mismatch (190.761745ms)
-✔ echo from the other track refuses approval (125.523814ms)
-✔ elapsed time and a forged completion cannot replace audible playback in the requesting window (153.401466ms)
-✔ three approved corrected spans across two recordings graduate without naming rows; a later correction demotes (192.302951ms)
-✔ three legacy spans across two labelled meetings graduate only after each full review (159.855053ms)
-✔ cloud label adoption demotes a profile backed by changed rows (206.749583ms)
-✔ a direct transcript attribution change invalidates contributing evidence (185.130971ms)
-✔ changing a contributing speaker mapping demotes the old identity (192.781297ms)
-✔ two spans in one meeting stay provisional; an odd approved vector is surfaced (277.713956ms)
-✖ overlapping rows cannot count the same audio twice (157.503283ms)
-✔ reset and clear voice data remove approved samples; deleted audio cannot leave an offer (169.102589ms)
-✔ enrolment decisions undo in the same ordered action history (155.611774ms)
-✖ deleting real retained audio removes approved vectors and blocks their undo (251.715853ms)
-✔ retention expiry makes a persisted review fact stale before the audio sweep (200.500751ms)
-✔ deleting source audio scrubs older clear-voice embedding snapshots (125.339475ms)
-✔ fresh install can delete its first recording before any enrolment action (111.221269ms)
-✖ note FK deletion demotes a profile even when other approved meetings remain (158.377139ms)
-✖ audio deletion demotes a profile even when enough other samples remain (202.318173ms)
-✖ hard note deletion scrubs enrollment actions and saved vectors (121.813423ms)
-✔ merging two approved voices preserves samples and flags the mixed profile (181.974178ms)
-✔ merge and reset retain rejected candidate tombstones (114.890241ms)
-✖ merge does not reoffer transferred spans or restore a deleted survivor voice on undo (145.290585ms)
-✔ renaming a person keeps approved acoustic provenance clean (151.381038ms)
-✔ overlapping speech is not offered and clipped audio cannot be approved (120.623684ms)
-✔ approved exemplar bytes and row survive a retention sweep past the window and restart (563.633592ms)
-✔ exemplar survives re-diarisation, hard note deletion and note-id reuse (407.789059ms)
-[WARN][voice-enrollment] Voice enrollment decision failed {"code":"exemplar_key_unavailable","noteId":1,"personId":1,"candidateId":"17f7aac33ca0a6a3c52b0953535633f16be8aa93575feb105e5006c0992a3ebd","statement":"BEGIN voice enrollment decision"}
-✔ playback, candidate resolution and calibration prefer approved exemplars to expired note audio (397.069443ms)
-✔ a graduated person remains matchable after every source meeting expires and is deleted (812.600705ms)
-✔ approval copies the proven playback bytes without reading or re-encoding the span again (231.411527ms)
-✔ opening the exemplar schema preserves the existing migration version and uses only person ownership (233.913217ms)
-✔ delete person removes exemplar ciphertext and vectors without an orphan blob (396.387215ms)
-✔ clear all voice data erases exemplar blobs and vector snapshots while preserving identity, labels and action log (415.764893ms)
-✔ orphan sweep on open removes an unowned encrypted exemplar blob (399.072661ms)
-✔ missing encryption key fails approval closed with exemplar_key_unavailable and no plaintext write (282.273119ms)
-ℹ tests 146
-ℹ suites 0
-ℹ pass 138
-ℹ fail 8
-ℹ cancelled 0
-ℹ skipped 0
-ℹ todo 0
-ℹ duration_ms 14549.323571
+final-focused.log: tests 153; pass 153; fail 0; cancelled 0; skipped 0; todo 0.
+This is the original report's exact seven-file focused set, rerun after the fixes and final regression strengthening. Original report: 146 tests, 138 pass, 8 fail; seven new regression cases bring it to 153.
 
-✖ failing tests:
-
-test at test/helpers/peopleActions.test.js:462:1
-✖ clear voice deletes note embeddings and undo restores them (196.017425ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-
-  0 !== 1
-
-      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/peopleActions.test.js:473:10)
-      at Test.runInAsyncScope (node:async_hooks:226:14)
-      at Test.run (node:internal/test_runner/test:1397:25)
-      at Test.processPendingSubtests (node:internal/test_runner/test:969:18)
-      at Test.postRun (node:internal/test_runner/test:1537:19)
-      at Test.run (node:internal/test_runner/test:1462:12)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 0,
-    expected: 1,
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at test/helpers/voiceEnrollment.test.js:49:1
-✖ review eligibility matches enrolment after owner labels, and changes when audio expires (541.11254ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  + actual - expected
-
-  + 'reviewed'
-  - 'audio'
-
-      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:89:10)
-      at async Test.run (node:internal/test_runner/test:1404:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 'reviewed',
-    expected: 'audio',
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at test/helpers/voiceEnrollment.test.js:955:1
-✖ overlapping rows cannot count the same audio twice (157.503283ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  + actual - expected
-
-  + 'available'
-  - 'unavailable'
-
-      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:972:10)
-      at async Test.run (node:internal/test_runner/test:1404:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 'available',
-    expected: 'unavailable',
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at test/helpers/voiceEnrollment.test.js:1006:1
-✖ deleting real retained audio removes approved vectors and blocks their undo (251.715853ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-
-  2048 !== 0
-
-      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1037:10)
-      at async Test.run (node:internal/test_runner/test:1404:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 2048,
-    expected: 0,
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at test/helpers/voiceEnrollment.test.js:1098:1
-✖ note FK deletion demotes a profile even when other approved meetings remain (158.377139ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-
-  1 !== 0
-
-      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1109:10)
-      at async Test.run (node:internal/test_runner/test:1404:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 1,
-    expected: 0,
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at test/helpers/voiceEnrollment.test.js:1114:1
-✖ audio deletion demotes a profile even when enough other samples remain (202.318173ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-
-  4 !== 3
-
-      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1125:10)
-      at async Test.run (node:internal/test_runner/test:1404:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 4,
-    expected: 3,
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at test/helpers/voiceEnrollment.test.js:1131:1
-✖ hard note deletion scrubs enrollment actions and saved vectors (121.813423ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-
-  2048 !== 0
-
-      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1141:10)
-      at async Test.run (node:internal/test_runner/test:1404:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 2048,
-    expected: 0,
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
-
-test at test/helpers/voiceEnrollment.test.js:1190:1
-✖ merge does not reoffer transferred spans or restore a deleted survivor voice on undo (145.290585ms)
-  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-
-  2048 !== 0
-
-      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1211:10)
-      at async Test.run (node:internal/test_runner/test:1404:7)
-      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
-    generatedMessage: true,
-    code: 'ERR_ASSERTION',
-    actual: 2048,
-    expected: 0,
-    operator: 'strictEqual',
-    diff: 'simple'
-  }
+$ node --test test/helpers/voiceRecordingIdentity.test.js
+final-identity.log: tests 3; pass 3; fail 0; cancelled 0; skipped 0; todo 0.
+Expanded focused command including this helper also passed 156/156 (review-focused.log).
 
 $ node --import tsx --test test/helpers/speakerCorrectionTransaction.test.js test/helpers/speakerEmbeddingsLifecycle.test.js test/helpers/speakerEmbeddingsClusterCentroids.test.js test/helpers/secretCryptoBackup.test.js test/components/peopleEnrollmentMessages.test.js
-exit 0
-✔ en gives every enrollment failure its own message (14.879757ms)
-✔ ar gives every enrollment failure its own message (6.844134ms)
-✔ de gives every enrollment failure its own message (4.740288ms)
-✔ es gives every enrollment failure its own message (53.400871ms)
-✔ fr gives every enrollment failure its own message (6.411581ms)
-✔ it gives every enrollment failure its own message (5.328012ms)
-✔ ja gives every enrollment failure its own message (8.342464ms)
-✔ pt gives every enrollment failure its own message (6.403998ms)
-✔ ru gives every enrollment failure its own message (7.557861ms)
-✔ zh-CN gives every enrollment failure its own message (4.706454ms)
-✔ zh-TW gives every enrollment failure its own message (4.14294ms)
-[WARN][secretCrypto] OS keychain unavailable — falling back to safeStorage { error: 'locked', platform: 'linux' }
-[INFO][secretCrypto] recovered master key from safeStorage backup {}
-✔ an unreadable or missing Keychain entry recovers the existing backup without replacing it (80.893785ms)
-✔ device erasure removes the Keychain key and its on-disk backup (8.927563ms)
-✔ splitting a cluster keeps row ids and locks, gives a new number, and undoes in order (358.076137ms)
-✔ atomic correction merges a live row appended while IPC waits (25.652744ms)
-✔ failed persistence leaves mapping transcript and identifier unchanged (3.665178ms)
-✔ map undo and another identification cannot revive name or profile (6.959345ms)
-✔ undo restores from the ordered action log when transcript rows carry no history (7.614154ms)
-✔ only post-final corrections record the changed-after-final marker (53.537962ms)
-✔ migrating a current-tip note keeps every undo action without duplicating row events (13.634309ms)
-✔ legacy split and recognition events order with cloud adoption without losing either action (5.234385ms)
-✔ migrated row-only correction names its affected row for transcript history (7.1431ms)
-✔ older correction on different target waits for newest action (8.74585ms)
-✔ older correction on same cluster target is refused (5.326554ms)
-✔ cluster undo restores only its run mapping (55.582598ms)
-✔ same-target undo uses event order when the clock moves backward (3.554344ms)
-✔ an early correction survives 55 later corrections to other rows (414.961626ms)
-✔ a cloud label change preserves the local event and label without conflict (2.856076ms)
-✔ owner can correct a 650-row cluster and undo it from one indexed event (100.638742ms)
-✔ owner can correct a 500-row selection without filling first-event history (80.003655ms)
-✔ an oversized action rejects without changing the transcript or action log (211.101659ms)
-✔ undoing an old run never replaces the active run cache with its historical name (18.834873ms)
-[WARN] speaker-embeddings cluster voice unavailable { speaker: 'speaker_a', error: 'onnx worker request timeout' }
-✔ each cluster's voice comes from its three longest segments of 1.5 s or more (77.074318ms)
-✔ short voiced turns are concatenated into one cluster vector (3.82939ms)
-✔ concatenated silent turns do not become a speaker vector (7.449358ms)
-✔ only the audio each voice uses is read, never the whole WAV (14.05257ms)
-✔ a segment longer than 8 s is embedded from its last 8 s (62.207394ms)
-✔ a cluster whose voice fails leaves the other clusters' voices intact (10.164849ms)
-✔ a cancel between clusters stops before the next cluster (9.974097ms)
-✔ a cancelled upload stops before extracting voices (1.161156ms)
-✔ an extract arms an idle unload that releases the speaker session, then the worker (284.893925ms)
-✔ each extract restarts the idle window (307.502663ms)
-✔ extracts queued together leave a single idle timer (200.959558ms)
-✔ a failed extract still arms the idle unload (6.983851ms)
-✔ an extract in flight holds off the idle unload until it finishes (179.906794ms)
-✔ a segment too short to embed neither loads the model nor arms the timer (5.209013ms)
-✔ unload waits for an in-flight extract and a racing extract reloads after release (217.761167ms)
-✔ worker serializes speaker unload behind in-flight native inference (173.787756ms)
-✔ reloads after the shared worker restarts (194.55293ms)
-✔ a failed idle unload is logged and the next extract still reloads (134.364174ms)
-ℹ tests 50
-ℹ suites 0
-ℹ pass 50
-ℹ fail 0
-ℹ cancelled 0
-ℹ skipped 0
-ℹ todo 0
-ℹ duration_ms 3137.733711
+final-additional.log: tests 50; pass 50; fail 0; cancelled 0; skipped 0; todo 0.
+This is the original report's additional focused set.
+
+$ node --import tsx --test test/components/settingsConnectionCheck.test.js test/components/settingsVadGate.test.js test/components/peopleSelectCheck.test.js
+review-settings.log: tests 6; pass 6; fail 0; cancelled 0; skipped 0; todo 0.
 
 $ node --test test/locales/translationCoverage.test.js
-exit 0
-✔ every t() key referenced in source resolves in en (360.443626ms)
-✔ every model registry descriptionKey resolves in en (13.591724ms)
-✔ every en key is present in every other language (385.290181ms)
-✔ interpolation variables match en in every language (1598.659908ms)
-✔ every messageKey literal resolves in en (417.115039ms)
-✔ Arabic defines every CLDR plural category for each counted message (86.22238ms)
-✔ the dictionary's counted strings define every plural form they need (236.769993ms)
-✔ Arabic non-count numeric templates remain number-neutral (28.236684ms)
-✔ Arabic plural counts resolve the exact CLDR form without English fallback (377.468938ms)
-ℹ tests 9
-ℹ suites 0
-ℹ pass 9
-ℹ fail 0
-ℹ cancelled 0
-ℹ skipped 0
-ℹ todo 0
-ℹ duration_ms 4199.403412
+final-translations.log: tests 9; pass 9; fail 0; cancelled 0; skipped 0; todo 0.
 
 $ node --test test/browser/voiceExemplarPlayback.cjs
-exit 0
-✔ person row plays a retained exemplar without loading its note or enrolment candidates (26683.849857ms)
-ℹ tests 1
-ℹ suites 0
-ℹ pass 1
-ℹ fail 0
-ℹ cancelled 0
-ℹ skipped 0
-ℹ todo 0
-ℹ duration_ms 28590.259831
+final-browser.log: tests 1; pass 1; fail 0; cancelled 0; skipped 0; todo 0.
+Test title explicitly says mocked exemplar WAV playback and missing-key errors.
 
 $ node_modules/.bin/tsc --noEmit --project src/tsconfig.json
-exit 0
-
+review-types.log: no diagnostics; exit 0.
 
 $ npm run build:renderer
-exit 0
-transforming...✓ 2096 modules transformed.
-(!) Some chunks are larger than 500 kB after minification. Consider:
-✓ built in 15.29s
+final-build.log: built in 13.79s; exit 0. Vite reports its >500 kB chunk-size warning.
+Renderer output: src/dist/ (ignored build output).
+
+$ git diff --check
+exit 0, no output.
+
+The above suites total 222 test executions, zero failures/skips. The enrollment-message suite intentionally appears in both original commands; this is not a count of distinct tests.
+Baseline reproduction: review-baseline.log, exact original voiceEnrollment + peopleActions command, 96 tests / 88 pass / the eight review-listed failures.
+
+Verification limits
+- Legacy approvals are not backfilled into durable audio. New approvals save their proven playback bytes; previously deleted legacy source audio is not recovered.
+- Physical erasure from SQLite free pages/WAL/backups is unverified. Tests verify logical removal of live ciphertext/vector rows and affected historical vector snapshots.
+- The browser test injects a mock WAV and checks readyState >= 1 plus renderer error wording. It proves renderer wiring, not encrypted end-to-end playback through Electron IPC and actual audio output. Separate helper tests exercise real SQLite/filesystem persistence, injected AES-GCM encryption/decryption and restart, with a fixture audio codec.
+- Native/system-keychain recovery and the production codec were not exercised by these fixture tests. No production data, process, deployment or release was touched.
+
+Artifacts
+- This corrected verification.txt supersedes the original report.
+- final-focused.log, final-identity.log, final-additional.log, final-translations.log, final-browser.log, final-build.log.
+- review-lint.log, review-types.log, review-settings.log, review-baseline.log.
+- 1440-light.png, 1440-dark.png, 412-light.png, 412-dark.png: renderer playback fixtures, not encrypted end-to-end evidence.
+
+Changed files — new-side diff ranges relative to c42ba9e09
+src/components/SettingsPage.tsx: 1387-1388, 3555-3567
+src/components/settings/PeoplePage.tsx: 232, 258, 264-266, 1858-1865
+src/helpers/database.js: 1428
+src/helpers/meetingAudioStore.js: 845-850, 853-854
+src/helpers/peopleActions.js: 696, 805, 865-868, 1514-1515, 1529, 1541-1556, 1620
+src/helpers/speakerInAppCalibration.js: 5, 284, 292-301, 364-375
+src/helpers/voiceEnrollment.js: 11-15, 155-173, 183, 255, 366-367, 386, 442-444, 471, 566, 580, 595-603, 605, 630, 676-681, 683-686, 991, 1001-1002, 1093-1097, 1125, 1133-1134, 1159, 1169-1173, 1203-1206, 1291-1293, 1301-1310, 1312, 1339, 1342-1350, 1519, 1525
+src/helpers/voiceExemplarAudio.js: 13, 35-41, 68, 93, 96, 102, 141-167, 169-177, 179-193, 204, 206, 228-243
+src/locales/ar/translation.json: 6233, 6469
+src/locales/de/translation.json: 5999, 6235
+src/locales/en/translation.json: 5999, 6235
+src/locales/es/translation.json: 6017, 6253
+src/locales/fr/translation.json: 6017, 6253
+src/locales/it/translation.json: 6017, 6253
+src/locales/ja/translation.json: 5999, 6235
+src/locales/pt/translation.json: 6017, 6253
+src/locales/ru/translation.json: 6101, 6337
+src/locales/zh-CN/translation.json: 5999, 6235
+src/locales/zh-TW/translation.json: 5999, 6235
+src/types/electron.ts: 3969-3970, 4326
+test/browser/voiceExemplarPlayback.cjs: 7, 96-109
+test/components/peopleEnrollmentMessages.test.js: 36-42
+test/helpers/peopleActions.test.js: 462, 473-477, 495, 511, 598-599, 610-611
+test/helpers/voiceEnrollment.test.js: 89-91, 973, 1007, 1038-1039, 1100, 1111-1113, 1117, 1128-1131, 1134, 1144-1145, 1194, 1212-1213, 1217-1227
+test/helpers/voiceExemplarAudio.test.js: 175-219, 225-229, 336, 353, 356-360, 393-484, 528-756
+src/helpers/voiceRecordingIdentity.js: 1-65 (new)
+test/helpers/voiceRecordingIdentity.test.js: 1-92 (new)
+artifacts/enrolment-audio-retention/verification.txt: replaced report
+artifacts/enrolment-audio-retention/1440-light.png: regenerated browser fixture screenshot
+Artifact logs: new files containing the command outputs listed above, with trailing whitespace removed for git diff checks.
+
+Post-commit git status --porcelain is checked and reported in the final response.

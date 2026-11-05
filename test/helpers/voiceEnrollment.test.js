@@ -86,8 +86,9 @@ test('review eligibility matches enrolment after owner labels, and changes when 
   }
   f.audio.status = () => ({ state: 'expired', bytes: 0 });
   const afterExpiry = new Map(listReviewRows(f.db, f.person.id, f.audio).map(row => [row.rowId, row.eligibilityReason]));
-  assert.equal(afterExpiry.get('review-0'), 'audio');
-  assert.equal(afterExpiry.get('review-4'), 'audio');
+  assert.equal(afterExpiry.get('review-0'), 'reviewed');
+  assert.equal(afterExpiry.get('review-4'), 'reviewed');
+  assert.equal(afterExpiry.get('review-3'), 'audio');
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
 });
 
@@ -969,7 +970,7 @@ test('overlapping rows cannot count the same audio twice', async t => {
   assert.equal(decision.success, true);
   assert.equal(decision.offers.candidates.length, 0);
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
-  assert.equal(enrollment.play(f.db, f.audio, candidate.id).state, 'unavailable');
+  assert.equal(enrollment.play(f.db, f.audio, candidate.id).state, 'available');
 });
 
 test('reset and clear voice data remove approved samples; deleted audio cannot leave an offer', async t => {
@@ -1003,7 +1004,7 @@ test('enrolment decisions undo in the same ordered action history', async t => {
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 1);
 });
 
-test('deleting real retained audio removes approved vectors and blocks their undo', async t => {
+test('deleting recording audio preserves approved audio and vectors and blocks recording-owned undo', async t => {
   const f = fixture(t);
   const { noteId } = f.note('one');
   const { MeetingAudioStore, RATE } = require('../../src/helpers/meetingAudioStore');
@@ -1034,7 +1035,8 @@ test('deleting real retained audio removes approved vectors and blocks their und
   store.delete(noteId);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM review_row_cache WHERE note_id = ?').get(noteId).n, 0);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
-  assert.equal(f.db.db.prepare('SELECT length(embedding) n FROM speaker_profiles WHERE id = ?').get(f.person.id).n, 0);
+  assert.equal(f.db.db.prepare('SELECT length(embedding) n FROM speaker_profiles WHERE id = ?').get(f.person.id).n, 2048);
+  assert.deepEqual(enrollment.play(f.db, store, candidate.id).wav, wav);
   assert.equal(enrollment.listCandidates(f.db, store, f.person.id).length, 0);
   assert.equal(enrollment.undo(f.db, decision.id).success, false);
 });
@@ -1095,7 +1097,7 @@ test('fresh install can delete its first recording before any enrolment action',
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
 });
 
-test('note FK deletion demotes a profile even when other approved meetings remain', async t => {
+test('note FK deletion preserves a profile and its person-owned approved meetings', async t => {
   const f = fixture(t);
   const first = f.note('one', 2), second = f.note('two');
   for (const candidate of enrollment.listCandidates(f.db, f.audio, f.person.id)) {
@@ -1106,12 +1108,13 @@ test('note FK deletion demotes a profile even when other approved meetings remai
   assert.equal(f.db.getSpeakerProfiles(true).length, 1);
   f.db.db.prepare('DELETE FROM notes WHERE id = ?').run(first.noteId);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 1);
-  assert.equal(f.db.getSpeakerProfiles(true).length, 0);
-  assert.equal(f.db.db.prepare('SELECT voice_usable FROM speaker_profiles WHERE id = ?').get(f.person.id).voice_usable, 0);
+  assert.equal(f.db.getSpeakerProfiles(true).length, 1);
+  assert.equal(f.db.db.prepare('SELECT voice_usable FROM speaker_profiles WHERE id = ?').get(f.person.id).voice_usable, 1);
+  assert.equal(enrollment.progress(f.db, f.person.id).approvedSpans, 3);
   assert.ok(f.db.db.prepare('SELECT 1 FROM notes WHERE id = ?').get(second.noteId));
 });
 
-test('audio deletion demotes a profile even when enough other samples remain', async t => {
+test('audio deletion preserves all four durable samples and profile eligibility', async t => {
   const f = fixture(t);
   const first = f.note('remove-one'); f.note('keep-two', 2); f.note('keep-three');
   for (const candidate of enrollment.listCandidates(f.db, f.audio, f.person.id)) {
@@ -1122,13 +1125,13 @@ test('audio deletion demotes a profile even when enough other samples remain', a
   assert.equal(f.db.getSpeakerProfiles(true).length, 1);
   assert.equal(enrollment.progress(f.db, f.person.id).approvedSpans, 4);
   enrollment.removeNoteEvidence(f.db.db, first.noteId);
-  assert.equal(enrollment.progress(f.db, f.person.id).approvedSpans, 3);
-  assert.equal(enrollment.progress(f.db, f.person.id).meetings, 2);
-  assert.equal(f.db.db.prepare('SELECT voice_usable FROM speaker_profiles WHERE id = ?').get(f.person.id).voice_usable, 0);
-  assert.equal(f.db.getSpeakerProfiles(true).length, 0);
+  assert.equal(enrollment.progress(f.db, f.person.id).approvedSpans, 4);
+  assert.equal(enrollment.progress(f.db, f.person.id).meetings, 3);
+  assert.equal(f.db.db.prepare('SELECT voice_usable FROM speaker_profiles WHERE id = ?').get(f.person.id).voice_usable, 1);
+  assert.equal(f.db.getSpeakerProfiles(true).length, 1);
 });
 
-test('hard note deletion scrubs enrollment actions and saved vectors', async t => {
+test('hard note deletion scrubs note-owned actions and preserves durable audio and vectors', async t => {
   const f = fixture(t);
   const { noteId } = f.note('gone');
   const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
@@ -1138,7 +1141,8 @@ test('hard note deletion scrubs enrollment actions and saved vectors', async t =
   assert.equal(f.db.hardDeleteNote(noteId).success, true);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_enrollment_actions').get().n, 0);
-  assert.equal(f.db.db.prepare('SELECT length(embedding) n FROM speaker_profiles WHERE id = ?').get(f.person.id).n, 0);
+  assert.equal(f.db.db.prepare('SELECT length(embedding) n FROM speaker_profiles WHERE id = ?').get(f.person.id).n, 2048);
+  assert.equal(enrollment.play(f.db, f.audio, candidate.id).state, 'available');
 });
 
 test('merging two approved voices preserves samples and flags the mixed profile', async t => {
@@ -1187,7 +1191,7 @@ test('merge and reset retain rejected candidate tombstones', async t => {
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_enrollment_candidates WHERE id = ?').get(candidate.id).n, 1);
 });
 
-test('merge does not reoffer transferred spans or restore a deleted survivor voice on undo', async t => {
+test('merge does not reoffer transferred spans and restores source ownership after recording deletion and undo', async t => {
   const f = fixture(t);
   const source = f.note('source');
   const survivor = f.db.createNamedSpeakerProfile('Bob');
@@ -1205,12 +1209,22 @@ test('merge does not reoffer transferred spans or restore a deleted survivor voi
   const merged = people.applyPersonAction(f.db, { type: 'merge', profileId: f.person.id, survivorId: survivor.id });
   assert.equal(merged.success, true);
   assert.equal(enrollment.listCandidates(f.db, f.audio, survivor.id).length, 0);
+  const clips = f.db.db.prepare('SELECT id, note_id, ciphertext FROM voice_exemplar_audio ORDER BY id').all();
+  assert.equal(clips.length, 2);
   enrollment.removeNoteEvidence(f.db.db, target.noteId);
   assert.equal(people.undoPersonAction(f.db, merged.id).success, true);
   const survivorProfile = f.db.db.prepare('SELECT length(embedding) n, sample_count FROM speaker_profiles WHERE id = ?').get(survivor.id);
-  assert.equal(survivorProfile.n, 0);
-  assert.equal(survivorProfile.sample_count, 0);
-  assert.equal(enrollment.listSamples(f.db, survivor.id).length, 0);
+  assert.equal(survivorProfile.n, 2048);
+  assert.equal(survivorProfile.sample_count, 1);
+  assert.equal(enrollment.listSamples(f.db, survivor.id).length, 1);
+  assert.equal(enrollment.listSamples(f.db, f.person.id).length, 1);
+  for (const clip of clips) {
+    const restored = f.db.db.prepare('SELECT profile_id, ciphertext FROM voice_exemplar_audio WHERE id = ?').get(clip.id);
+    assert.equal(restored.profile_id, clip.note_id === source.noteId ? f.person.id : survivor.id);
+    assert.deepEqual(restored.ciphertext, clip.ciphertext);
+  }
+  assert.equal(f.db.db.prepare('SELECT profile_id FROM voice_enrollment_actions WHERE note_id = ?').get(source.noteId).profile_id, f.person.id);
+  assert.equal(f.db.db.prepare("SELECT profile_id FROM speaker_global_actions WHERE kind = 'enrollment' AND note_id = ?").get(source.noteId).profile_id, f.person.id);
   assert.ok(f.db.db.prepare('SELECT id FROM notes WHERE id = ?').get(source.noteId));
 });
 

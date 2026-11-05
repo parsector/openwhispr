@@ -3966,6 +3966,8 @@ declare global {
       }>;
       meetingAudioUsage?: () => Promise<{
         usedBytes: number;
+        permanentAudioBytes: number;
+        permanentAudioCount: number;
         budgetBytes: number;
         days: 3 | 7 | 30;
         evictions: Array<{ noteId: number; title: string; at: number }>;
@@ -4321,7 +4323,7 @@ declare global {
       removeVoiceEnrollmentSample?: (id: string) => Promise<{ success: boolean; error?: string }>;
       playVoiceEnrollmentCandidate?: (
         id: string
-      ) => Promise<{ state: string; wav?: string; token?: string; expiresAt?: number }>;
+      ) => Promise<{ state: string; error?: string; wav?: string; token?: string; expiresAt?: number }>;
       completeVoiceEnrollmentCandidate?: (
         id: string,
         token: string

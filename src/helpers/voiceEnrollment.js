@@ -8,6 +8,11 @@ const debugLogger = require("./debugLogger");
 const { resolveMeetingAudioSpan } = require("./meetingAudioSpan.mjs");
 const enrollmentTiming = require("./voiceEnrollmentTiming");
 const exemplarAudio = require("./voiceExemplarAudio");
+const {
+  recordingIdentity,
+  overlapsRecording,
+  rememberRecording,
+} = require("./voiceRecordingIdentity");
 
 const RATE = 24000;
 const MODEL_RATE = 16000;
@@ -147,6 +152,25 @@ function samples(db, profileId) {
       .filter((sample) => !durable.some((item) => item.id === sample.id)),
   ];
 }
+function reviewedRow(db, profileId, note, row) {
+  return exemplarAudio.list(db, profileId).some((sample) => {
+    const sameNote = sample.note_id === note.id && sample.note_identity === note.client_note_id;
+    if (sameNote && JSON.parse(sample.row_ids).includes(row.id)) return true;
+    const span = row.audioSpan;
+    return (
+      span &&
+      overlapsRecording(
+        db,
+        sample,
+        note,
+        { recordingId: span.recordingId },
+        span.trackId,
+        span.startSample,
+        span.endSample
+      )
+    );
+  });
+}
 function state(db, profileId) {
   const all = samples(db, profileId);
   const good = all.filter((sample) => sample.embedding?.length === 2048 && clean(db, sample));
@@ -156,7 +180,7 @@ function state(db, profileId) {
       !left ||
       vectors.some((right, j) => j > i && (!right || cosine(left, right) < MIN_OWN_SIMILARITY))
   );
-  const meetings = new Set(good.map((sample) => sample.note_identity || sample.note_id)).size;
+  const meetings = new Set(good.map((sample) => recordingIdentity(db, sample))).size;
   // Graduation requires three approved, internally consistent spans from two
   // recordings. A later correction to any contributing row removes its sample.
   const requiresReview = !!db
@@ -228,7 +252,7 @@ function resolveProfile(db, profileId) {
     // no weight; an eight second span cannot drown out a short one.
     const grouped = new Map();
     result.good.forEach((sample, i) => {
-      const meeting = sample.note_identity || sample.note_id;
+      const meeting = recordingIdentity(db, sample);
       if (!grouped.has(meeting)) grouped.set(meeting, []);
       grouped.get(meeting).push(result.vectors[i]);
     });
@@ -339,6 +363,8 @@ function createEligibilityContext(database, store) {
   };
   function check(note, rows, row, profileId, hypothetical = false, factsOnly = false) {
     if (row.deleted) return { reason: "uncertain" };
+    if (!factsOnly && profileId != null && reviewedRow(db, profileId, note, row))
+      return { reason: "reviewed" };
     if (!factsOnly && profileId != null) {
       if (!approvedByProfile.has(profileId))
         approvedByProfile.set(profileId, samples(db, profileId).length);
@@ -357,6 +383,7 @@ function createEligibilityContext(database, store) {
       return { reason: "uncertain" };
     if (!statuses.has(note.id)) statuses.set(note.id, store.status(note.id));
     const status = statuses.get(note.id);
+    rememberRecording(db, note, status);
     if (!["complete", "incomplete"].includes(status.state) || status.bytes === 0)
       return { reason: "audio" };
     const resolved = resolve(note, rows, row, status);
@@ -412,12 +439,9 @@ function createEligibilityContext(database, store) {
     }
     const spanKey = [profileId, note.id, resolved.track, startSample, endSample];
     if (!factsOnly && profileId != null) {
-      const overlapsApproved = db
-        .prepare(
-          `SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ? AND track = ?
-          AND start_sample < ? AND end_sample > ?`
-        )
-        .get(profileId, note.id, resolved.track, endSample, startSample);
+      const overlapsApproved = samples(db, profileId).some((sample) =>
+        overlapsRecording(db, sample, note, status, resolved.track, startSample, endSample)
+      );
       if (
         overlapsApproved ||
         db
@@ -444,6 +468,7 @@ function createEligibilityContext(database, store) {
       ),
       profileId,
       noteId: note.id,
+      recordingId: status.recordingId ?? null,
       noteTitle: note.title,
       meetingDate: captureDate(note, status, startSample),
       rowIds: [row.id],
@@ -538,6 +563,7 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
     .all()) {
     const rows = readTranscriptDocument(note.transcript).rows;
     const status = store.status(note.id);
+    rememberRecording(db, note, status);
     const fingerprint = offerFingerprint(note, status);
     const facts = noteFacts(
       database,
@@ -551,15 +577,7 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
     );
     for (const row of rows) {
       if (row.deleted || !attributed(db, note.id, row, profileId)) continue;
-      if (
-        approvedSamples.some(
-          (sample) =>
-            sample.durable_audio &&
-            sample.note_id === note.id &&
-            sample.note_identity === note.client_note_id &&
-            JSON.parse(sample.row_ids).includes(row.id)
-        )
-      ) {
+      if (reviewedRow(db, profileId, note, row)) {
         reasons.reviewed++;
         continue;
       }
@@ -574,12 +592,17 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
           continue;
         }
         const reviewed =
-          db
-            .prepare(
-              `SELECT 1 FROM voice_exemplars WHERE profile_id = ?
-          AND note_id = ? AND track = ? AND start_sample < ? AND end_sample > ?`
+          approvedSamples.some((sample) =>
+            overlapsRecording(
+              db,
+              sample,
+              note,
+              status,
+              fact.track,
+              fact.startSample,
+              fact.endSample
             )
-            .get(profileId, note.id, fact.track, fact.endSample, fact.startSample) ||
+          ) ||
           db
             .prepare(
               `SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ?
@@ -604,6 +627,7 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
           ),
           profileId,
           noteId: note.id,
+          recordingId: status.recordingId ?? null,
           noteTitle: note.title,
           meetingDate: captureDate(note, status, fact.startSample),
           rowIds: [row.id],
@@ -649,18 +673,17 @@ function focusedOffer(database, store, id) {
         (item) => item.id === candidate.rowIds[0]
       );
       const approved = samples(db, candidate.profileId).length;
-      const reviewed = db
-        .prepare(
-          `SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ?
-        AND track = ? AND start_sample < ? AND end_sample > ?`
-        )
-        .get(
-          candidate.profileId,
-          candidate.noteId,
+      const reviewed = samples(db, candidate.profileId).some((sample) =>
+        overlapsRecording(
+          db,
+          sample,
+          note,
+          status,
           candidate.track,
-          candidate.endSample,
-          candidate.startSample
-        );
+          candidate.startSample,
+          candidate.endSample
+        )
+      );
       const rejected = db
         .prepare(
           `SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ?
@@ -965,7 +988,7 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
         statement = "INSERT INTO voice_exemplars";
         db.prepare(
           `INSERT INTO voice_exemplars (id, profile_id, note_id, track, start_sample, end_sample,
-        embedding, approved_at, row_ids, meeting_date) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`
+        embedding, approved_at, row_ids, meeting_date, recording_id) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)`
         ).run(
           id,
           candidate.profileId,
@@ -975,7 +998,8 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
           candidate.endSample,
           packed(embedding),
           JSON.stringify(candidate.rowIds),
-          candidate.meetingDate
+          candidate.meetingDate,
+          candidate.recordingId
         );
         exemplarAudio.save(db, candidate, audio.wav, ciphertext, packed(embedding));
         statement = "UPDATE speaker_profiles SET voice_needs_reapproval = 0 WHERE id = ?";
@@ -1066,6 +1090,11 @@ function undo(database, id) {
     const action = db.prepare("SELECT * FROM voice_enrollment_actions WHERE id = ?").get(id);
     if (!action) return { success: false, error: "action_missing" };
     if (action.choice === "approve") {
+      if (db.prepare("SELECT 1 FROM voice_exemplar_audio WHERE id = ?").get(action.candidate_id))
+        exemplarAudio.scrubVectorSnapshots(db, {
+          profileIds: [action.profile_id],
+          sampleIds: [action.candidate_id],
+        });
       db.prepare("DELETE FROM voice_exemplar_audio WHERE id = ?").run(action.candidate_id);
       db.prepare("DELETE FROM voice_exemplars WHERE id = ?").run(action.candidate_id);
     } else if (action.choice === "remove") {
@@ -1093,7 +1122,7 @@ function removeSample(database, sampleId) {
     const db = database.db;
     const durable = db
       .prepare(
-        `SELECT id, profile_id, note_id, track, start_sample, end_sample,
+        `SELECT id, profile_id, note_id, note_identity, track, start_sample, end_sample,
       embedding, approved_at, created_at, row_ids, meeting_date FROM voice_exemplar_audio WHERE id = ?`
       )
       .get(sampleId);
@@ -1101,7 +1130,8 @@ function removeSample(database, sampleId) {
       durable || db.prepare("SELECT * FROM voice_exemplars WHERE id = ?").get(sampleId);
     if (!sample) return { success: false, error: "sample_missing" };
     const actionId = randomUUID();
-    if (db.prepare("SELECT 1 FROM notes WHERE id = ?").get(sample.note_id))
+    const source = db.prepare("SELECT client_note_id FROM notes WHERE id = ?").get(sample.note_id);
+    if (source && (!durable || source.client_note_id === durable.note_identity))
       db.prepare(
         `INSERT OR IGNORE INTO voice_enrollment_candidates
       (id, profile_id, note_id, track, start_sample, end_sample, row_ids, meeting_date, rejected_at)
@@ -1126,7 +1156,7 @@ function removeSample(database, sampleId) {
       sampleId,
       sample.profile_id,
       sample.note_id,
-      JSON.stringify({ ...sample, embedding: sample.embedding.toString("base64") })
+      durable ? null : JSON.stringify({ ...sample, embedding: sample.embedding.toString("base64") })
     );
     rebuild(db, sample.profile_id);
     history.add(db, {
@@ -1136,6 +1166,11 @@ function removeSample(database, sampleId) {
       noteId: sample.note_id,
       label: `removed: ${JSON.parse(sample.row_ids || "[]").join(", ")}`,
     });
+    if (durable)
+      exemplarAudio.scrubVectorSnapshots(db, {
+        profileIds: [sample.profile_id],
+        sampleIds: [sample.id],
+      });
     if (durable)
       db.prepare(
         "UPDATE speaker_global_actions SET unavailable_reason = 'voice_data_cleared' WHERE id = ?"
@@ -1165,6 +1200,10 @@ function rowCorrected(db, noteId, rowIds, explicitMappingChange = false) {
     const touched = samples(db, profile_id).filter(
       (sample) =>
         sample.note_id === noteId &&
+        (!sample.durable_audio ||
+          sample.note_identity ===
+            db.prepare("SELECT client_note_id FROM notes WHERE id = ?").get(noteId)
+              ?.client_note_id) &&
         JSON.parse(sample.row_ids || "[]").some((id) => rowIds.includes(id)) &&
         (!sample.durable_audio ||
           explicitMappingChange ||
@@ -1249,6 +1288,9 @@ function snapshotEvidence(db, actionId, profileId = null, mergedInto = null) {
       audioOwnership: exemplarAudio
         .list(db, profileId)
         .map((sample) => ({ id: sample.id, profile_id: sample.profile_id })),
+      enrollmentActionOwnership: db
+        .prepare(`SELECT id, profile_id FROM voice_enrollment_actions${where}`)
+        .all(...args),
       derivedProfiles: [...new Set(exemplars.map((row) => row.profile_id))],
       mergedInto,
       survivorBefore: survivor && { ...survivor, embedding: survivor.embedding.toString("base64") },
@@ -1256,7 +1298,18 @@ function snapshotEvidence(db, actionId, profileId = null, mergedInto = null) {
   );
   return { exemplars: exemplars.length, candidates: candidates.length };
 }
+function transferEnrollmentActions(db, from, to) {
+  db.prepare(
+    `UPDATE speaker_global_actions SET profile_id = ? WHERE kind = 'enrollment'
+    AND id IN (SELECT id FROM voice_enrollment_actions WHERE profile_id = ?)`
+  ).run(to, from);
+  db.prepare("UPDATE voice_enrollment_actions SET profile_id = ? WHERE profile_id = ?").run(
+    to,
+    from
+  );
+}
 function removeEvidence(db, profileId = null, preserveRejections = false) {
+  if (profileId != null) exemplarAudio.scrubVectorSnapshots(db, { profileIds: [profileId] });
   for (const [id, session] of played)
     if (profileId == null || session.profileId === profileId) forgetPlayback(id);
   for (const table of ["voice_exemplar_audio", "voice_exemplars", "voice_enrollment_candidates"]) {
@@ -1283,8 +1336,18 @@ function restoreEvidence(db, actionId) {
     mergedInto,
     survivorBefore,
     audioOwnership = [],
+    enrollmentActionOwnership = [],
   } = JSON.parse(found.snapshot);
   const profiles = new Set(derivedProfiles);
+  for (const action of enrollmentActionOwnership) {
+    db.prepare("UPDATE voice_enrollment_actions SET profile_id = ? WHERE id = ?").run(
+      action.profile_id,
+      action.id
+    );
+    db.prepare(
+      "UPDATE speaker_global_actions SET profile_id = ? WHERE id = ? AND kind = 'enrollment'"
+    ).run(action.profile_id, action.id);
+  }
   for (const sample of audioOwnership) {
     if (!db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(sample.profile_id)) continue;
     db.prepare("UPDATE voice_exemplar_audio SET profile_id = ? WHERE id = ?").run(
@@ -1453,9 +1516,11 @@ module.exports = {
   rowCorrected,
   snapshotEvidence,
   removeEvidence,
+  transferEnrollmentActions,
   restoreEvidence,
   pruneSnapshots,
   removeNoteEvidence,
   calibration,
   attributionChangedRows,
+  reviewedRow,
 };

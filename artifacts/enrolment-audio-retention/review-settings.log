@@ -1,0 +1,16 @@
+✔ People and Review selects use the same shared control as microphone preferences (3.484048ms)
+✔ People headings keep Settings headers while row identities have primary weight (50.557053ms)
+(node:1289547) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a TabPanel hides its panel, and a nested one shows only while all are active (3611.733746ms)
+✔ the announcer is there from the start and says only what the check found (285.357687ms)
+✔ Settings' sections and sub-tabs use the shared TabPanel (1.74917ms)
+✔ each Speech-to-Text tab shows VAD only for its own local Whisper engine (102.048922ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5138.287586

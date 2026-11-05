@@ -2,6 +2,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
 const { buildCalibrationLabels } = require("./speakerCalibrationExport");
+const { recordingIdentity, overlapsRecording } = require("./voiceRecordingIdentity");
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const noteEmbeddingsFingerprint = (items) =>
@@ -280,7 +281,7 @@ function collectRows(database, audioStore, scope, budget) {
       (scope.kind !== "range" ||
         (sample.meeting_date?.slice(0, 10) >= scope.from &&
           sample.meeting_date?.slice(0, 10) <= scope.to)) &&
-      selectOrigin(sample.note_identity || sample.note_id)
+      selectOrigin(recordingIdentity(db, sample))
   );
   const where = scope.kind === "range" ? " AND date(created_at) BETWEEN date(?) AND date(?)" : "";
   const chosen = db
@@ -288,7 +289,16 @@ function collectRows(database, audioStore, scope, budget) {
       `SELECT id, client_note_id, transcript, speaker_action_log, created_at FROM notes WHERE note_type = 'meeting' AND deleted_at IS NULL AND transcript IS NOT NULL${where} ORDER BY created_at DESC LIMIT ?`
     )
     .all(...(scope.kind === "range" ? [scope.from, scope.to] : []), budget.notes)
-    .filter((note) => selectOrigin(note.client_note_id || note.id));
+    .filter((note) =>
+      selectOrigin(
+        recordingIdentity(
+          db,
+          { note_id: note.id, note_identity: note.client_note_id },
+          audioStore.status(note.id),
+          note
+        )
+      )
+    );
   const rows = [],
     exclusions = [],
     missingVectorDiagnostics = [],
@@ -351,9 +361,18 @@ function collectRows(database, audioStore, scope, budget) {
       if (
         exemplars.some(
           (sample) =>
-            sample.note_id === note.id &&
-            sample.note_identity === note.client_note_id &&
-            JSON.parse(sample.row_ids).includes(label.rowId)
+            (sample.note_id === note.id &&
+              sample.note_identity === note.client_note_id &&
+              JSON.parse(sample.row_ids).includes(label.rowId)) ||
+            overlapsRecording(
+              db,
+              sample,
+              note,
+              status,
+              label.track,
+              label.from * 24000,
+              label.to * 24000
+            )
         )
       )
         continue;

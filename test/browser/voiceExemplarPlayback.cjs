@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 
-test("person row plays a retained exemplar without loading its note or enrolment candidates", async (t) => {
+test("person row wires mocked exemplar WAV playback and preserves missing-key errors without loading notes", async (t) => {
   const root = path.join(__dirname, "../../src");
   const modulePath = path.join(root, "voice-exemplar-proof.tsx");
   const wav = Buffer.alloc(44 + 4800 * 2);
@@ -93,5 +93,19 @@ test("person row plays a retained exemplar without loading its note or enrolment
       });
     }
   }
+  await page.evaluate(() => {
+    window.electronAPI.playVoiceEnrollmentCandidate = async () => ({
+      state: "key_unavailable",
+      error: "exemplar_key_unavailable",
+    });
+  });
+  await row.getByRole("button", { name: "Listen", exact: true }).click();
+  await row
+    .getByRole("alert")
+    .filter({
+      hasText: "The saved clip cannot be played because its encryption key is unavailable.",
+    })
+    .waitFor();
+  assert.doesNotMatch(await row.getByRole("alert").textContent(), /No exemplar was saved/);
   assert.deepEqual(errors, []);
 });

@@ -172,11 +172,61 @@ test("exemplar survives re-diarisation, hard note deletion and note-id reuse", a
   f.database.db.prepare("UPDATE sqlite_sequence SET seq = 0 WHERE name = 'notes'").run();
   const replacement = f.database.saveNote("Replacement", "", "meeting");
   assert.equal((replacement.note || replacement).id, f.noteId);
+  f.store.begin(f.noteId);
+  const pcm = Buffer.alloc(RATE * 2 * 5);
+  for (let i = 0; i < pcm.length / 2; i++)
+    pcm.writeInt16LE(Math.round(10000 * Math.sin(i / 24)), i * 2);
+  f.store.append(f.noteId, "mic", pcm);
+  f.store.finish(f.noteId);
+  const replacementRow = {
+    id: "approved-row",
+    text: "A real replacement recording",
+    source: "mic",
+    speaker: "speaker_0",
+    speakerName: "Alex",
+    speakerLockSource: "user",
+    suggestedProfileId: f.person.id,
+    audioSpan: {
+      recordingId: f.store.status(f.noteId).recordingId,
+      trackId: "mic",
+      startSample: 0,
+      endSample: RATE * 4,
+    },
+  };
+  f.database.updateNote(f.noteId, {
+    transcript: JSON.stringify({ version: 2, rows: [replacementRow] }),
+  });
+  assert.equal(enrollment.listCandidates(f.database, f.store, f.person.id).length, 1);
+  const other = f.database.createNamedSpeakerProfile("Other");
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  assert.equal(
+    applySpeakerCorrection(f.database, null, {
+      type: "apply",
+      noteId: f.noteId,
+      id: "replacement-correction",
+      scope: "row",
+      rowIds: [replacementRow.id],
+      name: "Other",
+      profileId: other.id,
+    }).success,
+    true
+  );
+  enrollment.rowCorrected(f.database.db, f.noteId, [replacementRow.id], true);
+  assert.equal(
+    f.database.db.prepare("SELECT valid FROM voice_exemplar_audio WHERE id = ?").get(candidate.id)
+      .valid,
+    1
+  );
   f.restart();
   assert.deepEqual(enrollment.play(f.database, f.store, candidate.id).wav, playback.wav);
   assert.equal(enrollment.listSamples(f.database, f.person.id)[0].permanent, true);
   assert.equal(enrollment.progress(f.database, f.person.id).cleanSpans, 1);
   assert.equal(f.database.getSpeakerProfiles(true, { includeProvisional: true }).length, 1);
+  assert.equal(
+    f.database.db.prepare("SELECT display_name FROM speaker_profiles WHERE id = ?").get(other.id)
+      .display_name,
+    "Other"
+  );
 });
 
 test("playback, candidate resolution and calibration prefer approved exemplars to expired note audio", async (t) => {
@@ -283,6 +333,7 @@ test("approval copies the proven playback bytes without reading or re-encoding t
     true
   );
   const sample = f.database.db.prepare("SELECT * FROM voice_exemplar_audio").get();
+  assert.equal(sample.recording_id, f.store.status(f.noteId).recordingId);
   assert.deepEqual(f.encryption.decryptBytes(sample.ciphertext), playback.wav);
   assert.equal(sample.revision, candidate.revision);
   assert.equal(sample.profile_id, f.person.id);
@@ -299,8 +350,14 @@ test("opening the exemplar schema preserves the existing migration version and u
   const f = fixture(t);
   const version = f.database.db.pragma("user_version", { simple: true });
   const schema = require("../../src/helpers/voiceExemplarAudio");
+  f.database.db.exec("ALTER TABLE voice_exemplar_audio DROP COLUMN recording_id");
   schema.open(f.database.db);
   schema.repair(f.database.db);
+  assert.ok(
+    f.database.db
+      .pragma("table_info(voice_exemplar_audio)")
+      .some((column) => column.name === "recording_id")
+  );
   assert.equal(f.database.db.pragma("user_version", { simple: true }), version);
   assert.deepEqual(
     f.database.db.pragma("foreign_key_list(voice_exemplar_audio)").map((row) => row.table),
@@ -331,6 +388,98 @@ test("delete person removes exemplar ciphertext and vectors without an orphan bl
   );
   f.restart();
   assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+});
+
+test("mixed legacy and durable spans from one recording cannot graduate or split centroid votes", async (t) => {
+  const f = fixture(t);
+  const doc = JSON.parse(f.database.getNote(f.noteId).transcript);
+  doc.rows = [0, 5, 10].map((start, i) => ({
+    ...doc.rows[0],
+    id: `mixed-${i}`,
+    audioSpan: {
+      ...doc.rows[0].audioSpan,
+      startSample: start * RATE,
+      endSample: (start + 4) * RATE,
+    },
+  }));
+  f.database.updateNote(f.noteId, { transcript: JSON.stringify(doc) });
+  f.store.begin(f.noteId);
+  const pcm = Buffer.alloc(RATE * 2 * 15);
+  for (let i = 0; i < pcm.length / 2; i++)
+    pcm.writeInt16LE(Math.round(10000 * Math.sin(i / 24)), i * 2);
+  f.store.append(f.noteId, "mic", pcm);
+  f.store.finish(f.noteId);
+  const first = await f.approve();
+  f.database.db.prepare("DELETE FROM voice_exemplar_audio WHERE id = ?").run(first.candidate.id);
+  f.database.db
+    .prepare("UPDATE voice_exemplars SET recording_id = NULL WHERE id = ?")
+    .run(first.candidate.id);
+  f.extractor.extractEmbeddingFromSamples = async () =>
+    Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? 0.8 : i === 1 ? 0.6 : 0));
+  await f.approve();
+  await f.approve();
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(enrollment.progress(f.database, f.person.id)).filter(([key]) =>
+        ["cleanSpans", "meetings", "usable"].includes(key)
+      )
+    ),
+    { cleanSpans: 3, meetings: 1, usable: false }
+  );
+  f.addMeeting();
+  f.extractor.extractEmbeddingFromSamples = async () =>
+    Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? 1 : 0));
+  await f.approve();
+  assert.equal(enrollment.progress(f.database, f.person.id).usable, true);
+  const embedding = enrollment.resolveProfile(f.database.db, f.person.id).embedding;
+  const actual = new Float32Array(embedding.buffer, embedding.byteOffset, 512);
+  const norm = Math.hypot(2.6, 1.2);
+  const x = 2.6 / norm + 1,
+    y = 1.2 / norm;
+  assert.ok(Math.abs(actual[0] - x / Math.hypot(x, y)) < 1e-6);
+  assert.ok(Math.abs(actual[1] - y / Math.hypot(x, y)) < 1e-6);
+});
+
+test("durable-only intervals block resegmented eligibility, scanning, focused approval and calibration", async (t) => {
+  const f = fixture(t);
+  const doc = JSON.parse(f.database.getNote(f.noteId).transcript);
+  doc.rows.push({ ...doc.rows[0], id: "new-segment-id" });
+  f.database.updateNote(f.noteId, { transcript: JSON.stringify(doc) });
+  const candidates = enrollment.listCandidates(f.database, f.store, f.person.id);
+  const pending = candidates.find((item) => item.rowIds[0] === "new-segment-id");
+  const playback = enrollment.play(f.database, f.store, pending.id);
+  f.advance(1 / 8640);
+  assert.equal(enrollment.complete(f.database, f.store, pending.id, playback.token).success, true);
+  const approved = await f.approve();
+  f.database.db.prepare("DELETE FROM voice_exemplars WHERE id = ?").run(approved.candidate.id);
+  const note = f.database.getNote(f.noteId);
+  const check = enrollment
+    .createEligibilityContext(f.database, f.store)
+    .check(note, doc.rows, doc.rows[1], f.person.id);
+  assert.equal(check.reason, "reviewed");
+  assert.equal(enrollment.candidateReport(f.database, f.store, f.person.id).candidates.length, 0);
+  assert.equal(
+    (
+      await enrollment.decide(
+        f.database,
+        f.store,
+        f.extractor,
+        pending.id,
+        "approve",
+        playback.token
+      )
+    ).success,
+    false
+  );
+  const collected = require("../../src/helpers/speakerInAppCalibration").collectRows(
+    f.database,
+    f.store,
+    { kind: "all" },
+    { notes: 1, rows: 10 }
+  );
+  assert.equal(collected.rows.length, 1);
+  assert.equal(collected.rows[0].exemplarId, approved.candidate.id);
+  assert.equal(collected.reviewedCount, 1);
 });
 
 test("clear all voice data erases exemplar blobs and vector snapshots while preserving identity, labels and action log", async (t) => {
@@ -376,6 +525,235 @@ test("clear all voice data erases exemplar blobs and vector snapshots while pres
   );
   f.restart();
   assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  assert.equal(people.undoClearVoiceData(f.database, result.id).success, true);
+  assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  assert.equal(f.database.db.prepare("SELECT COUNT(*) AS n FROM voice_exemplars").get().n, 0);
+  assert.equal(
+    f.database.db.prepare("SELECT COUNT(*) AS n FROM note_speaker_embeddings").get().n,
+    0
+  );
+  assert.equal(
+    f.database.db.prepare("SELECT length(embedding) AS n FROM speaker_profiles").get().n,
+    0
+  );
+});
+
+test("reset then undo and older rename undo restore identity and mappings without erased biometrics", async (t) => {
+  const f = fixture(t);
+  const people = require("../../src/helpers/peopleActions");
+  await f.approve();
+  f.addMeeting();
+  await f.approve();
+  f.addMeeting();
+  await f.approve();
+  assert.equal(enrollment.progress(f.database, f.person.id).usable, true);
+  f.database.setSpeakerMapping(f.noteId, "speaker_0", f.person.id, "Alex");
+  f.database.db
+    .prepare(
+      "INSERT INTO note_speaker_embeddings (note_id, speaker_id, embedding) VALUES (?, ?, ?)"
+    )
+    .run(f.noteId, "speaker_0", Buffer.alloc(2048, 23));
+  const vector = f.database.db
+    .prepare("SELECT embedding FROM voice_exemplar_audio")
+    .get()
+    .embedding.toString("base64");
+  const other = f.database.createNamedSpeakerProfile("Unrelated");
+  f.database.db
+    .prepare("UPDATE speaker_profiles SET embedding = ?, sample_count = 1 WHERE id = ?")
+    .run(Buffer.alloc(2048, 19), other.id);
+  assert.equal(
+    people.applyPersonAction(f.database, {
+      type: "rename",
+      profileId: other.id,
+      name: "Unrelated renamed",
+    }).success,
+    true
+  );
+  const rename = people.applyPersonAction(f.database, {
+    type: "rename",
+    profileId: f.person.id,
+    name: "Alec",
+  });
+  assert.equal(rename.success, true);
+  const reset = people.applyPersonAction(f.database, { type: "reset", profileId: f.person.id });
+  assert.equal(reset.success, true);
+  f.restart();
+  assert.equal(people.undoPersonAction(f.database, reset.id).success, true);
+  assert.equal(
+    f.database.db.prepare("SELECT profile_id FROM speaker_mappings WHERE note_id = ?").get(f.noteId)
+      .profile_id,
+    f.person.id
+  );
+  assert.equal(people.undoPersonAction(f.database, rename.id).success, true);
+  assert.equal(
+    f.database.db.prepare("SELECT display_name FROM speaker_profiles WHERE id = ?").get(f.person.id)
+      .display_name,
+    "Alex"
+  );
+  assert.equal(
+    f.database.db
+      .prepare("SELECT length(embedding) AS n FROM speaker_profiles WHERE id = ?")
+      .get(f.person.id).n,
+    0
+  );
+  assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  assert.equal(f.database.getSpeakerProfiles(true).length, 0);
+  assert.equal(f.database.db.prepare("SELECT COUNT(*) AS n FROM voice_exemplars").get().n, 0);
+  assert.equal(
+    f.database.db.prepare("SELECT COUNT(*) AS n FROM note_speaker_embeddings").get().n,
+    0
+  );
+  assert.equal(
+    JSON.stringify(
+      f.database.db.prepare("SELECT snapshot FROM voice_sample_action_snapshots").all()
+    ).includes(vector),
+    false
+  );
+  assert.equal(
+    f.database.db
+      .prepare("SELECT embedding FROM speaker_profiles WHERE id = ?")
+      .get(other.id)
+      .embedding.equals(Buffer.alloc(2048, 19)),
+    true
+  );
+  assert.equal(
+    JSON.stringify(
+      f.database.db
+        .prepare("SELECT snapshot FROM person_identity_actions WHERE profile_id = ?")
+        .all(other.id)
+    ).includes(Buffer.alloc(2048, 19).toString("base64")),
+    true
+  );
+});
+
+test("irreversible sample removal scrubs its vector from older snapshots and cannot be undone", async (t) => {
+  const f = fixture(t);
+  const { candidate } = await f.approve();
+  const vector = f.database.db
+    .prepare("SELECT embedding FROM voice_exemplar_audio")
+    .get()
+    .embedding.toString("base64");
+  enrollment.snapshotEvidence(f.database.db, "older-sample-history", f.person.id);
+  const removed = enrollment.removeSample(f.database, candidate.id);
+  assert.equal(removed.success, true);
+  assert.equal(
+    f.database.db
+      .prepare("SELECT before_sample FROM voice_enrollment_actions WHERE id = ?")
+      .get(removed.id).before_sample,
+    null
+  );
+  assert.equal(
+    JSON.stringify(
+      f.database.db.prepare("SELECT snapshot FROM voice_sample_action_snapshots").all()
+    ).includes(vector),
+    false
+  );
+  assert.equal(enrollment.undo(f.database, removed.id).success, false);
+  enrollment.restoreEvidence(f.database.db, "older-sample-history");
+  assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  assert.equal(f.database.db.prepare("SELECT COUNT(*) AS n FROM voice_exemplars").get().n, 0);
+  f.restart();
+  assert.equal(
+    f.database.db
+      .prepare("SELECT length(embedding) AS n FROM speaker_profiles WHERE id = ?")
+      .get(f.person.id).n,
+    0
+  );
+});
+
+for (const removeBeforeDelete of [false, true]) {
+  test(`merge transfers enrollment history ownership and survivor deletion erases source historical vectors (remove first: ${removeBeforeDelete})`, async (t) => {
+    const f = fixture(t);
+    const { candidate } = await f.approve();
+    const people = require("../../src/helpers/peopleActions");
+    const vector = f.database.db
+      .prepare("SELECT embedding FROM voice_exemplar_audio")
+      .get()
+      .embedding.toString("base64");
+    const rename = people.applyPersonAction(f.database, {
+      type: "rename",
+      profileId: f.person.id,
+      name: "Alec",
+    });
+    assert.equal(rename.success, true);
+    const survivor = f.database.createNamedSpeakerProfile("Survivor");
+    const merged = people.applyPersonAction(f.database, {
+      type: "merge",
+      profileId: f.person.id,
+      survivorId: survivor.id,
+    });
+    assert.equal(merged.success, true);
+    assert.equal(
+      f.database.db
+        .prepare("SELECT profile_id FROM voice_enrollment_actions WHERE candidate_id = ?")
+        .get(candidate.id).profile_id,
+      survivor.id
+    );
+    assert.equal(
+      f.database.db
+        .prepare("SELECT profile_id FROM speaker_global_actions WHERE kind = 'enrollment'")
+        .get().profile_id,
+      survivor.id
+    );
+    if (removeBeforeDelete) {
+      const removed = enrollment.removeSample(f.database, candidate.id);
+      assert.equal(removed.success, true);
+    }
+    assert.equal(
+      people.applyPersonAction(f.database, { type: "delete", profileId: survivor.id }).success,
+      true
+    );
+    assert.equal(
+      f.database.db.prepare("SELECT COUNT(*) AS n FROM voice_enrollment_actions").get().n,
+      0
+    );
+    for (const table of ["voice_sample_action_snapshots", "person_identity_actions"])
+      assert.equal(
+        JSON.stringify(f.database.db.prepare(`SELECT snapshot FROM ${table}`).all()).includes(
+          vector
+        ),
+        false,
+        table
+      );
+    assert.equal(
+      JSON.stringify(f.database.db.prepare("SELECT speaker_action_log FROM notes").all()).includes(
+        vector
+      ),
+      false
+    );
+    f.restart();
+    assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  });
+}
+
+test("permanent ciphertext usage is separate from the recording budget and survives eviction and merge", async (t) => {
+  const f = fixture(t);
+  await f.approve();
+  const bytes = f.database.db
+    .prepare("SELECT length(ciphertext) AS n FROM voice_exemplar_audio")
+    .get().n;
+  assert.equal(f.store.usage().permanentAudioBytes, bytes);
+  assert.equal(f.store.usage().permanentAudioCount, 1);
+  const survivor = f.database.createNamedSpeakerProfile("Survivor");
+  assert.equal(
+    require("../../src/helpers/peopleActions").applyPersonAction(f.database, {
+      type: "merge",
+      profileId: f.person.id,
+      survivorId: survivor.id,
+    }).success,
+    true
+  );
+  f.store.policy.budgetBytes = 0;
+  f.store.enforce();
+  assert.equal(f.store.usage().usedBytes, 0);
+  assert.equal(f.store.usage().permanentAudioBytes, bytes);
+  f.restart();
+  assert.equal(f.store.usage().permanentAudioBytes, bytes);
+  const sample = f.database.getVoiceExemplarAudio()[0];
+  assert.equal(enrollment.play(f.database, f.store, sample.id).state, "available");
+  enrollment.removeSample(f.database, sample.id);
+  assert.equal(f.store.usage().permanentAudioBytes, 0);
+  assert.equal(f.store.usage().permanentAudioCount, 0);
 });
 
 test("orphan sweep on open removes an unowned encrypted exemplar blob", async (t) => {

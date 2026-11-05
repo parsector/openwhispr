@@ -1425,6 +1425,7 @@ class DatabaseManager {
         ["speaker_profiles", "voice_usable", "INTEGER NOT NULL DEFAULT 0"],
         ["voice_exemplars", "row_ids", "TEXT NOT NULL DEFAULT '[]'"],
         ["voice_exemplars", "meeting_date", "TEXT"],
+        ["voice_exemplars", "recording_id", "TEXT"],
         ["voice_enrollment_candidates", "row_ids", "TEXT NOT NULL DEFAULT '[]'"],
         ["voice_enrollment_candidates", "meeting_date", "TEXT"],
         ["voice_enrollment_candidates", "rejected_at", "TEXT"],

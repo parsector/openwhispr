@@ -693,6 +693,7 @@ function applyPersonAction(database, request) {
           survivor.id,
           current.id
         );
+        require("./voiceEnrollment").transferEnrollmentActions(db, current.id, survivor.id);
         db.prepare(
           "UPDATE voice_enrollment_candidates SET profile_id = ? WHERE profile_id = ?"
         ).run(survivor.id, current.id);
@@ -801,6 +802,7 @@ function applyPersonAction(database, request) {
           survivor.id,
           current.id
         );
+        require("./voiceEnrollment").transferEnrollmentActions(db, current.id, survivor.id);
         db.prepare("UPDATE person_attendance SET profile_id = ? WHERE profile_id = ?").run(
           survivor.id,
           current.id
@@ -860,6 +862,10 @@ function applyPersonAction(database, request) {
         "UPDATE speaker_profiles SET embedding = ?, sample_count = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
       ).run(Buffer.alloc(0), current.id);
       require("./voiceEnrollment").removeEvidence(db, current.id, true);
+      require("./voiceExemplarAudio").scrubVectorSnapshots(db, {
+        profileIds: [current.id],
+        noteEmbeddings: affected.flatMap((item) => item.embeddingRows),
+      });
     }
     history.add(db, { id, kind: request.type, profileId: current.id, label: current.display_name });
     return { success: true, id, ...preview, noteIds: affected.map((a) => a.note.id) };
@@ -1505,7 +1511,8 @@ function computeReviewNote(database, store, noteId, rulesVersion) {
       )
       .run(noteId, before, JSON.stringify(facts));
 }
-function reviewPersonReason(db, profileId, noteId, fact, counts) {
+function reviewPersonReason(db, profileId, note, row, fact, counts, store) {
+  const noteId = note.id;
   if (profileId == null) return null;
   if (!counts.has(profileId))
     counts.set(
@@ -1519,6 +1526,7 @@ function reviewPersonReason(db, profileId, noteId, fact, counts) {
         .get(profileId, profileId).count
     );
   if (counts.get(profileId) >= require("./voiceEnrollment").MAX_SAMPLES) return "limit";
+  if (require("./voiceEnrollment").reviewedRow(db, profileId, note, row)) return "reviewed";
   if (
     db
       .prepare(
@@ -1530,6 +1538,22 @@ function reviewPersonReason(db, profileId, noteId, fact, counts) {
   )
     return "reviewed";
   if (fact?.reason || !fact?.track) return null;
+  if (
+    require("./voiceExemplarAudio")
+      .list(db, profileId)
+      .some((sample) =>
+        require("./voiceRecordingIdentity").overlapsRecording(
+          db,
+          sample,
+          note,
+          store.status(noteId),
+          fact.track,
+          fact.startSample,
+          fact.endSample
+        )
+      )
+  )
+    return "reviewed";
   if (
     db
       .prepare(
@@ -1593,7 +1617,7 @@ function assembleReviewRows(database, selectedProfileId, includeAll, facts, stor
         : note.note_type !== "meeting"
           ? "audio"
           : store
-            ? reviewPersonReason(database.db, profileId, note.id, fact, counts) ||
+            ? reviewPersonReason(database.db, profileId, note, row, fact, counts, store) ||
               fact?.reason ||
               null
             : null;

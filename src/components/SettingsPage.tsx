@@ -1384,6 +1384,8 @@ export default function SettingsPage({
   }>({ fileCount: 0, totalBytes: 0 });
   const [meetingAudioUsage, setMeetingAudioUsage] = useState<{
     usedBytes: number;
+    permanentAudioBytes: number;
+    permanentAudioCount: number;
     budgetBytes: number;
     days: 3 | 7 | 30;
     evictions: Array<{ noteId: number; title: string; at: number }>;
@@ -3550,10 +3552,19 @@ EOF`,
                     <SettingsPanelRow>
                       <SettingsRow
                         label={t("meetingAudio.retention")}
-                        description={t("meetingAudio.storage", {
-                          used: (meetingAudioUsage.usedBytes / 1_000_000).toFixed(3),
-                          budget: (meetingAudioUsage.budgetBytes / 1_000_000).toFixed(3),
-                        })}
+                        description={
+                          t("meetingAudio.storage", {
+                            used: (meetingAudioUsage.usedBytes / 1_000_000).toFixed(3),
+                            budget: (meetingAudioUsage.budgetBytes / 1_000_000).toFixed(3),
+                          }) +
+                          " " +
+                          t("meetingAudio.permanentStorage", {
+                            used: (
+                              (meetingAudioUsage.permanentAudioBytes || 0) / 1_000_000
+                            ).toFixed(3),
+                            clips: meetingAudioUsage.permanentAudioCount || 0,
+                          })
+                        }
                       >
                         <select
                           value={meetingAudioUsage.days}

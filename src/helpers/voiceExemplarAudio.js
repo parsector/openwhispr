@@ -10,6 +10,7 @@ function open(db) {
       profile_id INTEGER NOT NULL REFERENCES speaker_profiles(id) ON DELETE CASCADE,
       note_id INTEGER NOT NULL,
       note_identity TEXT,
+      recording_id TEXT,
       note_title TEXT NOT NULL,
       row_ids TEXT NOT NULL,
       revision TEXT NOT NULL,
@@ -31,6 +32,13 @@ function open(db) {
     CREATE INDEX IF NOT EXISTS idx_voice_exemplar_audio_person_row
       ON voice_exemplar_audio(profile_id, note_id, row_ids, revision);
   `);
+  if (
+    !db
+      .prepare("PRAGMA table_info(voice_exemplar_audio)")
+      .all()
+      .some((column) => column.name === "recording_id")
+  )
+    db.exec("ALTER TABLE voice_exemplar_audio ADD COLUMN recording_id TEXT");
 }
 
 function repair(db) {
@@ -57,7 +65,7 @@ function sweepOrphans(db) {
 function list(db, profileId = null) {
   return db
     .prepare(
-      `SELECT id, profile_id, note_id, note_identity, note_title, row_ids,
+      `SELECT id, profile_id, note_id, note_identity, recording_id, note_title, row_ids,
     revision, track, start_sample, end_sample, duration_ms, byte_length, codec, sample_rate,
     meeting_date, approved_at, created_at, content_hash, embedding, valid, 1 AS durable_audio
     FROM voice_exemplar_audio${profileId == null ? "" : " WHERE profile_id = ?"}
@@ -82,15 +90,16 @@ function save(db, candidate, bytes, ciphertext, embedding) {
     .get(candidate.noteId);
   db.prepare(
     `INSERT INTO voice_exemplar_audio
-    (id, profile_id, note_id, note_identity, note_title, row_ids, revision, track, start_sample,
+    (id, profile_id, note_id, note_identity, recording_id, note_title, row_ids, revision, track, start_sample,
      end_sample, duration_ms, byte_length, codec, sample_rate, meeting_date,
      content_hash, ciphertext, embedding)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     candidate.id,
     candidate.profileId,
     candidate.noteId,
     identity?.client_note_id || null,
+    candidate.recordingId ?? null,
     candidate.noteTitle || "",
     JSON.stringify(candidate.rowIds),
     candidate.revision,
@@ -129,14 +138,59 @@ function play(db, store, id) {
   }
 }
 
-function scrubVectorSnapshots(db) {
-  function scrub(value) {
+function scrubVectorSnapshots(db, scope = null) {
+  const profileIds = new Set(scope?.profileIds || []);
+  const sampleIds = new Set(
+    scope?.sampleIds ||
+      (scope
+        ? list(db)
+            .filter((sample) => profileIds.has(sample.profile_id))
+            .map((sample) => sample.id)
+        : [])
+  );
+  const erasedEmbedding = (row) =>
+    !scope ||
+    (scope.noteEmbeddings || []).some(
+      (item) => item.note_id === row.note_id && item.speaker_id === row.speaker_id
+    );
+  const snapshotsExist = db
+    .prepare(
+      "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'voice_sample_action_snapshots'"
+    )
+    .get();
+  // A merged person's historical snapshots still carry their original owner.
+  // Follow sample ownership back so deleting the survivor erases those too.
+  if (scope && snapshotsExist)
+    for (const row of db.prepare("SELECT snapshot FROM voice_sample_action_snapshots").all())
+      for (const sample of JSON.parse(row.snapshot).audioOwnership || [])
+        if (sampleIds.has(sample.id)) profileIds.add(sample.profile_id);
+  function scrub(value, owner = null) {
     if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) scrub(item, owner);
+      return;
+    }
+    owner =
+      value.profile_id ??
+      value.profileId ??
+      ("sample_count" in value || "display_name" in value ? value.id : owner);
+    const affected = !scope || profileIds.has(owner);
     for (const key of Object.keys(value)) {
-      if (key === "embedding") value[key] = "";
-      else if (["embeddingBefore", "noteEmbeddings", "exemplars"].includes(key)) value[key] = [];
-      else if (key === "sample_count") value[key] = 0;
-      else scrub(value[key]);
+      if (key === "embedding" && (affected || sampleIds.has(value.id) || erasedEmbedding(value)))
+        value[key] = "";
+      else if (["embeddingBefore", "noteEmbeddings"].includes(key))
+        value[key] = affected ? [] : value[key].filter((row) => !erasedEmbedding(row));
+      else if (key === "exemplars")
+        value[key] = value[key].filter(
+          (row) =>
+            scope &&
+            !sampleIds.has(row.id) &&
+            !(scope.sampleIds == null && profileIds.has(row.profile_id))
+        );
+      else if (key === "sample_count" && affected) value[key] = 0;
+      else if (["voice_usable", "voice_needs_reapproval"].includes(key) && affected) value[key] = 0;
+      else if (key === "survivorBefore") scrub(value[key], value.mergedInto);
+      else scrub(value[key], owner);
     }
   }
   for (const table of [
@@ -147,9 +201,9 @@ function scrubVectorSnapshots(db) {
   ]) {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table))
       continue;
-    for (const row of db.prepare(`SELECT id, snapshot FROM ${table}`).all()) {
+    for (const row of db.prepare(`SELECT * FROM ${table}`).all()) {
       const snapshot = JSON.parse(row.snapshot);
-      scrub(snapshot);
+      scrub(snapshot, row.profile_id);
       db.prepare(`UPDATE ${table} SET snapshot = ? WHERE id = ?`).run(
         JSON.stringify(snapshot),
         row.id
@@ -171,11 +225,22 @@ function scrubVectorSnapshots(db) {
       note.id
     );
   }
-  db.prepare("UPDATE voice_enrollment_actions SET before_sample = NULL").run();
-  db.prepare(
-    `UPDATE speaker_global_actions SET unavailable_reason = 'voice_data_cleared'
-    WHERE kind = 'enrollment'`
-  ).run();
+  for (const action of db
+    .prepare("SELECT id, candidate_id, profile_id, before_sample FROM voice_enrollment_actions")
+    .all()) {
+    if (
+      scope &&
+      !sampleIds.has(action.candidate_id) &&
+      !(scope.sampleIds == null && profileIds.has(action.profile_id))
+    )
+      continue;
+    db.prepare("UPDATE voice_enrollment_actions SET before_sample = NULL WHERE id = ?").run(
+      action.id
+    );
+    db.prepare(
+      "UPDATE speaker_global_actions SET unavailable_reason = 'voice_data_cleared' WHERE id = ?"
+    ).run(action.id);
+  }
 }
 
 module.exports = { open, repair, list, seal, save, play, sweepOrphans, scrubVectorSnapshots };

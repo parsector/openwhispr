@@ -229,7 +229,7 @@ export default function PeoplePage({
   const [exemplarPlayback, setExemplarPlayback] = useState<{ id: string; url: string } | null>(
     null
   );
-  const [exemplarError, setExemplarError] = useState<string | null>(null);
+  const [exemplarError, setExemplarError] = useState<{ id: string; code: string } | null>(null);
   const exemplarRequest = useRef(0);
   useEffect(() => {
     if (
@@ -255,14 +255,15 @@ export default function PeoplePage({
     try {
       const result = await window.electronAPI.playVoiceEnrollmentCandidate?.(id);
       if (request !== exemplarRequest.current) return;
-      if (!result?.wav) throw Error("unavailable");
+      if (!result?.wav) throw Error(result?.error || "unavailable");
       const bytes = Uint8Array.from(atob(result.wav), (character) => character.charCodeAt(0));
       setExemplarPlayback({
         id,
         url: URL.createObjectURL(new Blob([bytes], { type: "audio/wav" })),
       });
-    } catch {
-      if (request === exemplarRequest.current) setExemplarError(id);
+    } catch (error) {
+      if (request === exemplarRequest.current)
+        setExemplarError({ id, code: error instanceof Error ? error.message : "unavailable" });
     }
   };
   const enrollmentPlayer = useRef<HTMLAudioElement | null>(null);
@@ -1854,8 +1855,14 @@ export default function PeoplePage({
                                   aria-label={t("people.approvedSamples")}
                                 />
                               )}
-                              {exemplarError === sample.id && (
-                                <span role="alert">{t("people.enrollmentErrors.unavailable")}</span>
+                              {exemplarError?.id === sample.id && (
+                                <span role="alert">
+                                  {t(
+                                    exemplarError.code === "exemplar_key_unavailable"
+                                      ? "people.exemplarPlaybackKeyUnavailable"
+                                      : "people.enrollmentErrors.unavailable"
+                                  )}
+                                </span>
                               )}
                             </div>
                           ))}
