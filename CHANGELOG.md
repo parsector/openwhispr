@@ -24,6 +24,8 @@ People no longer makes you wait, and enrolling a voice no longer re-reads your w
 - **One scan per approval**, reusing the span already decoded, and the list refreshes from the decision instead of rescanning.
 - **Indexes** added for the span, profile and meeting queries (idempotent, versioned migration).
 - The listening proof is unchanged: same token and sender, full duration elapsed, at least 75 % audible. The speed comes from not re-reading your history, never from skipping the listen.
+- **A failed save no longer costs you the listen.** Every approval failure now names its actual cause — audio unreadable, span gone, playback not verified, database busy, already approved — instead of "Could not save this change", in all 11 locales. If the write rolls back, your completed listen stays valid with its deadline shown, so you can retry without replaying the sample.
+- **A saved approval stays visible** even when the refresh afterwards fails; that failure is reported separately from the save.
 
 Each enrolment action now writes one debug timing line (scan, decode, embed, renderer refresh) so the remaining cost is measurable.
 
