@@ -213,6 +213,7 @@ function candidateId(profileId, noteId, rowId, span) {
 }
 function createEligibilityContext(database, store) {
   const db = database.db;
+  const resolveSpan = store.resolveMeetingAudioSpan || resolveMeetingAudioSpan;
   const statuses = new Map();
   const changedByNote = new Map();
   const resolvedByNote = new Map();
@@ -226,7 +227,7 @@ function createEligibilityContext(database, store) {
       resolvedByNote.set(note.id, spans);
     }
     if (!spans.has(row.id)) {
-      const own = resolveMeetingAudioSpan(
+      const own = resolveSpan(
         row,
         rows,
         status.recordingId ?? note.id,
@@ -253,7 +254,7 @@ function createEligibilityContext(database, store) {
         row.id,
         anchor === row
           ? own
-          : resolveMeetingAudioSpan(
+          : resolveSpan(
               anchor,
               rows,
               status.recordingId ?? note.id,
@@ -264,9 +265,9 @@ function createEligibilityContext(database, store) {
     }
     return spans.get(row.id);
   };
-  function check(note, rows, row, profileId, hypothetical = false) {
+  function check(note, rows, row, profileId, hypothetical = false, factsOnly = false) {
     if (row.deleted) return { reason: "uncertain" };
-    if (profileId != null) {
+    if (!factsOnly && profileId != null) {
       if (!approvedByProfile.has(profileId))
         approvedByProfile.set(
           profileId,
@@ -345,7 +346,7 @@ function createEligibilityContext(database, store) {
       if (echoBySpan.get(key)) return { reason: "overlap" };
     }
     const spanKey = [profileId, note.id, resolved.track, startSample, endSample];
-    if (profileId != null) {
+    if (!factsOnly && profileId != null) {
       const overlapsApproved = db
         .prepare(
           `SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ? AND track = ?
@@ -363,7 +364,7 @@ function createEligibilityContext(database, store) {
       )
         return { reason: "reviewed" };
     }
-    if (hypothetical) return { candidate: null };
+    if (hypothetical) return { candidate: null, track: resolved.track, startSample, endSample };
     const candidate = {
       id: candidateId(profileId, note.id, row.id, {
         trackId: resolved.track,
@@ -1029,6 +1030,7 @@ function removeNoteEvidence(db, noteId) {
   }
 }
 module.exports = {
+  MAX_SAMPLES,
   listCandidates,
   candidateReport,
   createEligibilityContext,

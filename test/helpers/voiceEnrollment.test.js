@@ -14,7 +14,7 @@ Module._load = function(request, parent, isMain) {
 process.env.NODE_ENV = 'test';
 const DatabaseManager = require('../../src/helpers/database');
 const enrollment = require('../../src/helpers/voiceEnrollment');
-const { listReviewRows } = require('../../src/helpers/peopleActions');
+const { listReviewRows, reviewRowsPage, REVIEW_RULES_VERSION } = require('../../src/helpers/peopleActions');
 
 test('all voice guard thresholds carry the same uncalibrated label', () => {
   assert.deepEqual(Object.values(enrollment.calibration).map(item => item.status),
@@ -190,6 +190,83 @@ function fixture(t) {
   };
   return { db, person, audio, extractor, vector, note, completeReview };
 }
+
+test('review cache recomputes only edited notes and keeps the person cap live', t => {
+  const f = fixture(t);
+  const one = f.note('one', 2).noteId;
+  const two = f.note('two', 2).noteId;
+  const original = require('../../src/helpers/meetingAudioSpan.mjs').resolveMeetingAudioSpan;
+  let resolved = 0;
+  f.audio.resolveMeetingAudioSpan = (...args) => { resolved++; return original(...args); };
+  const cold = listReviewRows(f.db, f.person.id, f.audio);
+  assert.ok(resolved >= 4);
+  resolved = 0;
+  assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio), cold);
+  assert.equal(resolved, 0, 'second open must perform zero span resolution');
+  const doc = JSON.parse(f.db.getNote(one).transcript);
+  doc.rows[0].text = 'edited';
+  f.db.updateNote(one, { transcript: JSON.stringify(doc) });
+  assert.deepEqual(reviewRowsPage(f.db, f.person.id, f.audio).pending, [one]);
+  listReviewRows(f.db, f.person.id, f.audio);
+  assert.ok(resolved > 0);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM review_row_cache').get().n, 2);
+  const insert = f.db.db.prepare(`INSERT INTO voice_exemplars
+    (id, profile_id, note_id, track, start_sample, end_sample, approved_at)
+    VALUES (?, ?, ?, 'mic', ?, ?, CURRENT_TIMESTAMP)`);
+  for (let index = 0; index < 20; index++)
+    insert.run(`limit-${index}`, f.person.id, two, 24000 * (100 + index), 24000 * (101 + index));
+  resolved = 0;
+  assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio).map(row => row.eligibilityReason),
+    ['limit', 'limit', 'limit', 'limit']);
+  assert.equal(resolved, 0, 'the live sample cap must not invalidate acoustic facts');
+  assert.equal(f.db.deleteNote(one).success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM review_row_cache WHERE note_id = ?').get(one).n, 0);
+});
+
+test('review cache invalidates for removed and expired audio and a rules-version bump', t => {
+  const f = fixture(t);
+  const one = f.note('one').noteId;
+  const two = f.note('two').noteId;
+  listReviewRows(f.db, f.person.id, f.audio);
+  f.audio.status = noteId => ({ state: noteId === one ? 'deleted' : 'complete' });
+  assert.deepEqual(reviewRowsPage(f.db, f.person.id, f.audio).pending, [one]);
+  listReviewRows(f.db, f.person.id, f.audio);
+  assert.equal(listReviewRows(f.db, f.person.id, f.audio).find(row => row.noteId === one).eligibilityReason, 'audio');
+  f.audio.status = noteId => ({ state: noteId === two ? 'expired' : 'deleted' });
+  assert.deepEqual(reviewRowsPage(f.db, f.person.id, f.audio).pending, [two]);
+  listReviewRows(f.db, f.person.id, f.audio);
+  assert.deepEqual(reviewRowsPage(f.db, f.person.id, f.audio, false, null, REVIEW_RULES_VERSION + 1).pending,
+    [one, two]);
+});
+
+test('twenty-recording review benchmark preserves ordering and grouped reasons on a warm open', t => {
+  const f = fixture(t);
+  for (let index = 0; index < 20; index++) {
+    const { noteId } = f.note(`note-${String(index).padStart(2, '0')}`);
+    const doc = JSON.parse(f.db.getNote(noteId).transcript);
+    doc.rows[0].uncertainty = { reason: index % 2 ? 'close_match' : 'overlapping_speech' };
+    f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  }
+  const original = require('../../src/helpers/meetingAudioSpan.mjs').resolveMeetingAudioSpan;
+  let resolved = 0;
+  f.audio.resolveMeetingAudioSpan = (...args) => { resolved++; return original(...args); };
+  const coldStart = performance.now();
+  const cold = listReviewRows(f.db, null, f.audio, true);
+  const coldMs = performance.now() - coldStart;
+  const coldResolutions = resolved;
+  resolved = 0;
+  const warmStart = performance.now();
+  const warm = listReviewRows(f.db, null, f.audio, true);
+  const warmMs = performance.now() - warmStart;
+  assert.deepEqual(warm, cold);
+  assert.equal(cold.length, 20);
+  assert.deepEqual(new Set(cold.map(row => row.reason)),
+    new Set(['close_match', 'overlapping_speech']));
+  assert.deepEqual(cold.map(row => row.noteId), [...cold.map(row => row.noteId)].sort((a, b) => b - a));
+  assert.ok(coldResolutions >= 20);
+  assert.equal(resolved, 0);
+  console.log(`review cache benchmark: cold ${coldResolutions} span resolutions / ${coldMs.toFixed(1)} ms; warm ${resolved} / ${warmMs.toFixed(1)} ms`);
+});
 
 test('fresh identity stays unenrolled; approval needs playback; rejection is durable', async t => {
   const f = fixture(t);
@@ -588,11 +665,39 @@ test('deleting real retained audio removes approved vectors and blocks their und
   const decision = await enrollment.decide(f.db, store, f.extractor, candidate.id, 'approve', token);
   assert.equal(decision.success, true);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 1);
+  listReviewRows(f.db, f.person.id, store);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM review_row_cache WHERE note_id = ?').get(noteId).n, 1);
   store.delete(noteId);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM review_row_cache WHERE note_id = ?').get(noteId).n, 0);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
   assert.equal(f.db.db.prepare('SELECT length(embedding) n FROM speaker_profiles WHERE id = ?').get(f.person.id).n, 0);
   assert.equal(enrollment.listCandidates(f.db, store, f.person.id).length, 0);
   assert.equal(enrollment.undo(f.db, decision.id).success, false);
+});
+
+test('retention expiry makes a persisted review fact stale before the audio sweep', t => {
+  const f = fixture(t);
+  const { noteId } = f.note('retention');
+  const { MeetingAudioStore, RATE } = require('../../src/helpers/meetingAudioStore');
+  const startedAt = Date.now();
+  let now = startedAt;
+  const store = new MeetingAudioStore(path.join(dir, 'review-retention'), { database: f.db,
+    now: () => now, encryption: { encryptBytes: bytes => bytes, decryptBytes: bytes => bytes },
+    codec: require('../lib/fakeAudioCodec') });
+  store.begin(noteId, startedAt);
+  store.append(noteId, 'mic', Buffer.alloc(RATE * 2 * 4), startedAt);
+  store.finish(noteId);
+  const doc = JSON.parse(f.db.getNote(noteId).transcript);
+  doc.rows[0].audioSpan.recordingId = store.status(noteId).recordingId;
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  listReviewRows(f.db, f.person.id, store);
+  assert.deepEqual(reviewRowsPage(f.db, f.person.id, store).pending, []);
+  now += 3 * 86400000;
+  assert.equal(store.status(noteId).state, 'expired');
+  assert.deepEqual(reviewRowsPage(f.db, f.person.id, store).pending, [noteId]);
+  assert.equal(listReviewRows(f.db, f.person.id, store)[0].eligibilityReason, 'audio');
+  store.purgeAll();
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM review_row_cache').get().n, 0);
 });
 
 test('deleting source audio scrubs older clear-voice embedding snapshots', t => {

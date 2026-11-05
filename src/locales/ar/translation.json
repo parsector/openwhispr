@@ -6369,6 +6369,7 @@
     "allPeople": "كل الأشخاص",
     "reviewEmpty": "لا توجد صفوف للمراجعة وفق هذه المرشحات.",
     "reviewEligibleOnly": "إظهار الصفوف المؤهلة لعينات الصوت فقط",
+    "reviewChecking": "جارٍ فحص التسجيل {{current}} من {{total}}",
     "reviewShowing": "عرض {{shown}} من {{total}}",
     "reviewExcluded": "أسباب استبعاد الصفوف",
     "unknown": "متحدث غير معروف",

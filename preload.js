@@ -658,6 +658,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
   undoPeopleMapping: (noteId) => ipcRenderer.invoke("people-undo-mapping", noteId),
   onPeopleChanged: registerListener("people-changed", (callback) => () => callback()),
   listPeopleReview: (profileId) => ipcRenderer.invoke("people-review", profileId),
+  listPeopleReviewPage: (noteId) => ipcRenderer.invoke("people-review-page", noteId),
   previewPersonAction: (request) => ipcRenderer.invoke("people-preview", request),
   speakerHistoryStatus: (noteId) => ipcRenderer.invoke("speaker-history-status", noteId),
   previewClearVoiceData: () => ipcRenderer.invoke("people-clear-voice-preview"),

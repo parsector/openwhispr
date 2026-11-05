@@ -6237,6 +6237,7 @@
     "allPeople": "Все люди",
     "reviewEmpty": "Нет строк для проверки с этими фильтрами.",
     "reviewEligibleOnly": "Показывать только строки, подходящие для голосовых образцов",
+    "reviewChecking": "Проверка записи {{current}} из {{total}}",
     "reviewShowing": "Показано {{shown}} из {{total}}",
     "reviewExcluded": "Причины исключения строк",
     "unknown": "Неизвестный говорящий",

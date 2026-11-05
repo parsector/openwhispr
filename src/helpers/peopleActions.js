@@ -1,4 +1,4 @@
-const { randomUUID } = require("node:crypto");
+const { randomUUID, createHash } = require("node:crypto");
 const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
 const {
   readSpeakerActionLog,
@@ -8,6 +8,10 @@ const {
 } = require("./speakerActionLog");
 const { isEventGuest } = require("./eventAttendees");
 const history = require("./speakerGlobalHistory");
+const debugLogger = require("./debugLogger");
+
+// Bump this when the span, duration, overlap, echo, or availability rules change.
+const REVIEW_RULES_VERSION = 1;
 
 const normalized = (value) =>
   String(value || "")
@@ -836,6 +840,7 @@ function applyPersonAction(database, request) {
           current.id
         );
     } else if (request.type === "reset") {
+      db.prepare("DELETE FROM review_row_cache").run();
       for (const item of affected)
         for (const row of item.embeddingRows)
           db.prepare(
@@ -1338,6 +1343,7 @@ function clearVoiceData(database, expected) {
     );
     db.prepare("UPDATE speaker_profiles SET embedding = ?, sample_count = 0").run(Buffer.alloc(0));
     require("./voiceEnrollment").removeEvidence(db);
+    db.prepare("DELETE FROM review_row_cache").run();
     db.prepare("DELETE FROM speaker_mappings").run();
     db.prepare("DELETE FROM speaker_run_mappings").run();
     db.prepare("DELETE FROM note_speaker_embeddings").run();
@@ -1405,21 +1411,131 @@ function undoClearVoiceData(database, id) {
     return { success: true };
   })();
 }
-function listReviewRows(database, selectedProfileId = null, store = null, includeAll = false) {
+function reviewFingerprint(note, store, rulesVersion = REVIEW_RULES_VERSION) {
+  const audio = note.note_type === "meeting" && store ? store.status(note.id) : null;
+  return createHash("sha256")
+    .update(JSON.stringify([rulesVersion, note.note_type, note.transcript, audio]))
+    .digest("hex");
+}
+function cachedReviewFacts(database, store, rulesVersion) {
+  const cached = new Map(
+    database.db
+      .prepare("SELECT note_id, transcript_hash, facts_json FROM review_row_cache")
+      .all()
+      .map((entry) => [entry.note_id, entry])
+  );
+  const facts = new Map();
+  const pending = [];
+  for (const note of notes(database.db)) {
+    const fingerprint = reviewFingerprint(note, store, rulesVersion);
+    const entry = cached.get(note.id);
+    if (!entry || entry.transcript_hash !== fingerprint) {
+      pending.push(note.id);
+      continue;
+    }
+    try {
+      facts.set(note.id, JSON.parse(entry.facts_json));
+    } catch {
+      pending.push(note.id);
+    }
+  }
+  return { facts, pending };
+}
+function computeReviewNote(database, store, noteId, rulesVersion) {
+  const note = database.db
+    .prepare(`SELECT ${NOTE_COLUMNS} FROM notes WHERE id = ? AND deleted_at IS NULL`)
+    .get(noteId);
+  if (!note) return;
+  const before = reviewFingerprint(note, store, rulesVersion);
+  const rows = readTranscriptDocument(note.transcript).rows;
+  const eligibility = require("./voiceEnrollment").createEligibilityContext(database, store);
+  // These are person-independent eligibility facts, never audio or biometric data.
+  const facts = rows.map((row, position) => {
+    if (!row.id || note.note_type !== "meeting")
+      return {
+        rowId: row.id,
+        position,
+        eligible: false,
+        reason: !row.id ? "resolution" : "audio",
+      };
+    const checked = eligibility.check(note, rows, row, null, true, true);
+    return {
+      rowId: row.id,
+      position,
+      eligible: !checked.reason,
+      reason: checked.reason || null,
+      ...(checked.track
+        ? {
+            track: checked.track,
+            startSample: checked.startSample,
+            endSample: checked.endSample,
+          }
+        : {}),
+    };
+  });
+  // Do not commit a result computed across an audio or transcript change.
+  const current = database.db
+    .prepare(`SELECT ${NOTE_COLUMNS} FROM notes WHERE id = ? AND deleted_at IS NULL`)
+    .get(noteId);
+  if (current && reviewFingerprint(current, store, rulesVersion) === before)
+    database.db
+      .prepare(
+        `INSERT INTO review_row_cache (note_id, transcript_hash, facts_json)
+      VALUES (?, ?, ?) ON CONFLICT(note_id) DO UPDATE SET
+      transcript_hash = excluded.transcript_hash, facts_json = excluded.facts_json,
+      computed_at = CURRENT_TIMESTAMP`
+      )
+      .run(noteId, before, JSON.stringify(facts));
+}
+function reviewPersonReason(db, profileId, noteId, fact, counts) {
+  if (profileId == null) return null;
+  if (!counts.has(profileId))
+    counts.set(
+      profileId,
+      db
+        .prepare(
+          `SELECT COUNT(*) AS count FROM voice_exemplars
+      WHERE profile_id = ? AND approved_at IS NOT NULL`
+        )
+        .get(profileId).count
+    );
+  if (counts.get(profileId) >= require("./voiceEnrollment").MAX_SAMPLES) return "limit";
+  if (fact?.reason || !fact?.track) return null;
+  if (
+    db
+      .prepare(
+        `SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ?
+    AND track = ? AND start_sample < ? AND end_sample > ?`
+      )
+      .get(profileId, noteId, fact.track, fact.endSample, fact.startSample)
+  )
+    return "reviewed";
+  if (
+    db
+      .prepare(
+        `SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ? AND note_id = ?
+    AND track = ? AND start_sample = ? AND end_sample = ?`
+      )
+      .get(profileId, noteId, fact.track, fact.startSample, fact.endSample)
+  )
+    return "reviewed";
+  return null;
+}
+function assembleReviewRows(database, selectedProfileId, includeAll, facts, store) {
   const result = [];
-  const eligibility = store
-    ? require("./voiceEnrollment").createEligibilityContext(database, store)
-    : null;
   const people = database.db
     .prepare("SELECT id, display_name AS displayName FROM speaker_profiles")
     .all();
   const mappingByNote = allMappings(database.db);
   const byName = new Map();
+  const counts = new Map();
   for (const p of people) {
     const key = normalized(p.displayName);
     byName.set(key, byName.has(key) ? null : p.id);
   }
   for (const note of notes(database.db)) {
+    if (store && !facts.has(note.id)) continue;
+    const noteFacts = facts.get(note.id);
     const map = mappingByNote.get(note.id) || [];
     const changedRows = new Set(
       readSpeakerActionLog(note)
@@ -1442,13 +1558,16 @@ function listReviewRows(database, selectedProfileId = null, store = null, includ
       const profileId = rowProfile(row, map) || byName.get(normalized(row.speakerName)) || null;
       if (selectedProfileId != null ? profileId !== selectedProfileId : !includeAll && !reason)
         continue;
-      // A review label is an explicit owner correction: it clears uncertainty and
-      // gives the row to this person. Check that prospective state without writing it.
+      const fact = noteFacts?.[position];
       const eligibilityReason = !row.id
         ? "resolution"
         : note.note_type !== "meeting"
           ? "audio"
-          : eligibility?.check(note, rows, row, profileId, true).reason || null;
+          : store
+            ? reviewPersonReason(database.db, profileId, note.id, fact, counts) ||
+              fact?.reason ||
+              null
+            : null;
       result.push({
         noteId: note.id,
         noteTitle: note.title,
@@ -1471,12 +1590,57 @@ function listReviewRows(database, selectedProfileId = null, store = null, includ
       b.position - a.position
   );
 }
+function reviewRowsPage(
+  database,
+  selectedProfileId = null,
+  store = null,
+  includeAll = false,
+  noteId = null,
+  rulesVersion = REVIEW_RULES_VERSION
+) {
+  const started = performance.now();
+  if (!store)
+    return {
+      rows: assembleReviewRows(database, selectedProfileId, includeAll, new Map(), null),
+      pending: [],
+      cached: 0,
+    };
+  let { facts, pending } = cachedReviewFacts(database, store, rulesVersion);
+  const cached = facts.size;
+  const cachedRows = [...facts.values()].reduce((count, rows) => count + rows.length, 0);
+  let recomputed = 0;
+  if (noteId != null && pending.includes(noteId)) {
+    computeReviewNote(database, store, noteId, rulesVersion);
+    recomputed = 1;
+    ({ facts, pending } = cachedReviewFacts(database, store, rulesVersion));
+  }
+  const rows = assembleReviewRows(database, selectedProfileId, includeAll, facts, store);
+  debugLogger.debug(
+    "Review rows cache",
+    {
+      rowsServedFromCache: cachedRows,
+      notesRecomputed: recomputed,
+      elapsedMs: Math.round(performance.now() - started),
+    },
+    "speaker"
+  );
+  return { rows, pending, cached };
+}
+function listReviewRows(database, selectedProfileId = null, store = null, includeAll = false) {
+  let page = reviewRowsPage(database, selectedProfileId, store, includeAll);
+  for (const noteId of page.pending)
+    page = reviewRowsPage(database, selectedProfileId, store, includeAll, noteId);
+  return page.rows;
+}
+
 module.exports = {
   listPeople,
   registerAttendees,
   registerContacts,
   backfillPeopleIdentities,
   listReviewRows,
+  reviewRowsPage,
+  REVIEW_RULES_VERSION,
   previewPersonAction,
   applyPersonAction,
   undoPersonAction,

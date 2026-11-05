@@ -14652,6 +14652,15 @@ class IPCHandlers {
         true
       )
     );
+    ipcMain.handle("people-review-page", (_event, noteId = null) =>
+      require("./peopleActions").reviewRowsPage(
+        this.databaseManager,
+        null,
+        this.meetingAudioStore,
+        true,
+        noteId
+      )
+    );
     ipcMain.handle("people-preview", (_event, request) =>
       require("./peopleActions").previewPersonAction(this.databaseManager, request)
     );
