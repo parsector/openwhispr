@@ -6011,6 +6011,10 @@
     "removeSample": "Retirer l’extrait",
     "enrollVoice": "Enregistrer la voix",
     "enrollmentIntro": "Écoutez tout l’extrait avant de l’approuver ou de le rejeter.",
+    "calibrationExemplars": "Extraits vocaux approuvés utilisés : {{samples}}. Leur audio et leurs vecteurs enregistrés sont utilisés sans reconstruction.",
+    "restoreMappings": "Rétablir les associations de locuteurs",
+    "exemplarRetention": "Cet extrait est conservé jusqu’à la suppression de la personne, indépendamment de la durée de conservation des enregistrements.",
+    "exemplarCapture": "{{seconds}} s · capturé le {{date}}",
     "enrollmentProgress": "Extraits nets : {{spans}} / 3 · enregistrements : {{meetings}} / 2",
     "voiceUsable": "Voix utilisable",
     "voiceProvisional": "Provisoire : suggestions uniquement",
@@ -6022,6 +6026,7 @@
     "ownerCorrected": "Attribué par vous",
     "listeningTimeLeft": "La confirmation d’écoute expire dans {{minutes}}:{{seconds}}.",
     "enrollmentErrors": {
+      "exemplar_key_unavailable": "La clé de chiffrement audio est indisponible. Aucun échantillon n’a été enregistré. Rétablissez l’accès à la clé et réessayez.",
       "poor_audio": "Cet audio ne convient pas comme échantillon vocal. Choisissez un autre passage.",
       "echo_audio": "Cet audio contient un écho de l’autre piste. Choisissez un autre passage.",
       "candidate_unavailable": "Ce candidat a changé ou a déjà été examiné. Actualisez la liste.",
@@ -6194,6 +6199,7 @@
     "undo": "Annuler la modification",
     "done": "{{action}} pour {{name}} : {{notes}} notes et {{segments}} segments mis à jour.",
     "errors": {
+      "voice_data_cleared": "Les données vocales ont été effacées et ne peuvent pas être restaurées.",
       "person_deleted": "La personne concernée par cette action a été supprimée.",
       "person_missing": "Cette personne n’existe plus. Actualisez la liste.",
       "survivor_missing": "Choisissez une personne à conserver.",

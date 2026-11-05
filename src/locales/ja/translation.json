@@ -5993,6 +5993,10 @@
     "removeSample": "サンプルを削除",
     "enrollVoice": "声を登録",
     "enrollmentIntro": "承認または拒否する前に、サンプル全体を聞いてください。",
+    "calibrationExemplars": "使用した承認済み音声クリップ：{{samples}}。保存された音声とベクトルを再構成せずに使用します。",
+    "restoreMappings": "話者の関連付けを復元",
+    "exemplarRetention": "このクリップは録音の保存期間に関係なく、その人物が削除されるまで保存されます。",
+    "exemplarCapture": "{{seconds}} 秒 · 録音日 {{date}}",
     "enrollmentProgress": "適切な区間: {{spans}} / 3 · 録音: {{meetings}} / 2",
     "voiceUsable": "声を使用可能",
     "voiceProvisional": "仮登録：候補の提示のみ",
@@ -6004,6 +6008,7 @@
     "ownerCorrected": "あなたが名前を付けました",
     "listeningTimeLeft": "視聴の確認は{{minutes}}:{{seconds}}後に期限切れになります。",
     "enrollmentErrors": {
+      "exemplar_key_unavailable": "音声の暗号化キーを利用できません。音声サンプルは保存されませんでした。キーへのアクセスを復元して再試行してください。",
       "poor_audio": "この音声は声のサンプルに適していません。別の区間を選んでください。",
       "echo_audio": "この音声には別のトラックのエコーが含まれています。別の区間を選んでください。",
       "candidate_unavailable": "この候補は変更されたか、すでに確認済みです。一覧を更新してください。",
@@ -6176,6 +6181,7 @@
     "undo": "元に戻す",
     "done": "{{name}} の{{action}}: {{notes}} 件のノートと {{segments}} 件の区間を更新しました。",
     "errors": {
+      "voice_data_cleared": "音声データは消去され、復元できません。",
       "person_deleted": "この操作の対象者は削除されました。",
       "person_missing": "この人物は存在しません。リストを更新してください。",
       "survivor_missing": "残す人物を選んでください。",

@@ -3995,6 +3995,7 @@ declare global {
             exactClusters: number;
             calibrationRows: number;
             storedRows: number;
+            exemplarRows?: number;
             reconstructedRows: number;
             reviewedCandidates: number;
             consideredRows: number;
@@ -4259,6 +4260,12 @@ declare global {
           hasVoice: boolean;
           legacyVoice: boolean;
           needsReapproval: boolean;
+          exemplars?: Array<{
+            id: string;
+            durationSeconds: number;
+            meetingDate: string;
+            createdAt: string;
+          }>;
           voiceProgress: {
             cleanSpans: number;
             meetings: number;
@@ -4307,6 +4314,8 @@ declare global {
           rowIds: string[];
           durationSeconds: number;
           odd: boolean;
+          createdAt?: string;
+          permanent?: boolean;
         }>
       >;
       removeVoiceEnrollmentSample?: (id: string) => Promise<{ success: boolean; error?: string }>;

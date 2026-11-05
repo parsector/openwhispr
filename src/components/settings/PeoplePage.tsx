@@ -226,6 +226,45 @@ export default function PeoplePage({
   );
   const [listeningNow, setListeningNow] = useState(() => Date.now());
   const [enrollmentError, setEnrollmentError] = useState("");
+  const [exemplarPlayback, setExemplarPlayback] = useState<{ id: string; url: string } | null>(
+    null
+  );
+  const [exemplarError, setExemplarError] = useState<string | null>(null);
+  const exemplarRequest = useRef(0);
+  useEffect(() => {
+    if (
+      exemplarPlayback &&
+      !people.some((person) =>
+        person.exemplars?.some((sample) => sample.id === exemplarPlayback.id)
+      )
+    ) {
+      exemplarRequest.current++;
+      setExemplarPlayback(null);
+    }
+  }, [people, exemplarPlayback]);
+  useEffect(
+    () => () => {
+      if (exemplarPlayback) URL.revokeObjectURL(exemplarPlayback.url);
+    },
+    [exemplarPlayback]
+  );
+  const playExemplar = async (id: string) => {
+    const request = ++exemplarRequest.current;
+    setExemplarError(null);
+    setExemplarPlayback(null);
+    try {
+      const result = await window.electronAPI.playVoiceEnrollmentCandidate?.(id);
+      if (request !== exemplarRequest.current) return;
+      if (!result?.wav) throw Error("unavailable");
+      const bytes = Uint8Array.from(atob(result.wav), (character) => character.charCodeAt(0));
+      setExemplarPlayback({
+        id,
+        url: URL.createObjectURL(new Blob([bytes], { type: "audio/wav" })),
+      });
+    } catch {
+      if (request === exemplarRequest.current) setExemplarError(id);
+    }
+  };
   const enrollmentPlayer = useRef<HTMLAudioElement | null>(null);
   const enrollmentUrl = useRef<string | null>(null);
   const enrollmentRequest = useRef(0);
@@ -464,6 +503,8 @@ export default function PeoplePage({
   }, [openEnrollment]);
   const playCandidate = async (candidate: EnrollmentCandidate) => {
     if (candidate.profileId !== enrollingId) return;
+    exemplarRequest.current++;
+    setExemplarPlayback(null);
     const request = enrollmentRequest.current;
     enrollmentPlayer.current?.pause();
     if (enrollmentUrl.current) URL.revokeObjectURL(enrollmentUrl.current);
@@ -1440,6 +1481,9 @@ export default function PeoplePage({
                                       <> · {t("people.ownerCorrected")}</>
                                     )}
                                   </p>
+                                  <p className="mt-1 max-w-prose text-xs text-muted-foreground">
+                                    {t("people.exemplarRetention")}
+                                  </p>
                                 </div>
                                 <div className="flex gap-2">
                                   <Button
@@ -1779,6 +1823,44 @@ export default function PeoplePage({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
+                      {!!p.exemplars?.length && (
+                        <div className="col-span-full space-y-2 text-xs text-muted-foreground">
+                          <p>{t("people.exemplarRetention")}</p>
+                          {p.exemplars.map((sample) => (
+                            <div key={sample.id} className="flex flex-wrap items-center gap-2">
+                              <span>
+                                {t("people.exemplarCapture", {
+                                  seconds: new Intl.NumberFormat(locale, {
+                                    maximumFractionDigits: 1,
+                                  }).format(sample.durationSeconds),
+                                  date: date(sample.meetingDate || sample.createdAt),
+                                })}
+                              </span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="secondary"
+                                disabled={listeningId !== null || working}
+                                onClick={() => void playExemplar(sample.id)}
+                              >
+                                {t("people.listen")}
+                              </Button>
+                              {exemplarPlayback?.id === sample.id && (
+                                <audio
+                                  controls
+                                  autoPlay
+                                  className="max-w-full dark:[color-scheme:dark]"
+                                  src={exemplarPlayback.url}
+                                  aria-label={t("people.approvedSamples")}
+                                />
+                              )}
+                              {exemplarError === sample.id && (
+                                <span role="alert">{t("people.enrollmentErrors.unavailable")}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {expandedId === p.id && (
                         <div
                           id={`person-detail-${p.id}`}
@@ -1911,7 +1993,9 @@ export default function PeoplePage({
                         disabled={working}
                         onClick={() => void undoHistory(action)}
                       >
-                        {t("people.undo")}
+                        {t(
+                          action.kind === "clear_voice" ? "people.restoreMappings" : "people.undo"
+                        )}
                       </Button>
                     )}
                   </li>
@@ -2062,6 +2146,13 @@ export default function PeoplePage({
                   {calibrationReport.evidence.machineClaims} {t("people.calibrationClaims")}
                 </p>
                 <p>{calibrationReport.evidence.coverage}</p>
+                {!!calibrationReport.evidence.exemplarRows && (
+                  <p>
+                    {t("people.calibrationExemplars", {
+                      samples: calibrationReport.evidence.exemplarRows,
+                    })}
+                  </p>
+                )}
                 <p>
                   Playback placed {calibrationReport.evidence.placementCounts.exact} exact and{" "}
                   {calibrationReport.evidence.placementCounts.approximate} approximate rows;{" "}
@@ -2221,6 +2312,9 @@ export default function PeoplePage({
                       mappings: clearReport.mappingCount,
                     })}
                   </p>
+                  <p className="mt-1 text-muted-foreground">
+                    {t("people.errors.voice_data_cleared")}
+                  </p>
                   {historyLoading ||
                   historyError ||
                   actionHistory.length === 0 ||
@@ -2232,7 +2326,7 @@ export default function PeoplePage({
                       disabled={working}
                       onClick={() => void undoClear()}
                     >
-                      {t("people.undo")}
+                      {t("people.restoreMappings")}
                     </Button>
                   ) : (
                     <p className="mt-2 text-muted-foreground">{t("people.errors.later_change")}</p>

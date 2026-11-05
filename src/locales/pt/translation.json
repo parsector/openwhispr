@@ -6011,6 +6011,10 @@
     "removeSample": "Remover amostra",
     "enrollVoice": "Cadastrar voz",
     "enrollmentIntro": "Ouça toda a amostra antes de aprová-la ou rejeitá-la.",
+    "calibrationExemplars": "Clipes de voz aprovados utilizados: {{samples}}. O áudio e os vetores guardados são utilizados sem reconstrução.",
+    "restoreMappings": "Restaurar associações de falantes",
+    "exemplarRetention": "Este clipe é guardado até a pessoa ser excluída, independentemente da retenção das gravações.",
+    "exemplarCapture": "{{seconds}} s · capturado em {{date}}",
     "enrollmentProgress": "Trechos limpos: {{spans}} / 3 · gravações: {{meetings}} / 2",
     "voiceUsable": "Voz utilizável",
     "voiceProvisional": "Provisória: apenas sugestões",
@@ -6022,6 +6026,7 @@
     "ownerCorrected": "Identificado por você",
     "listeningTimeLeft": "A confirmação de escuta expira em {{minutes}}:{{seconds}}.",
     "enrollmentErrors": {
+      "exemplar_key_unavailable": "A chave de encriptação do áudio está indisponível. Nenhuma amostra foi guardada. Restaure o acesso à chave e tente novamente.",
       "poor_audio": "Este áudio não serve como amostra de voz. Escolha outro trecho.",
       "echo_audio": "Este áudio contém eco da outra faixa. Escolha outro trecho.",
       "candidate_unavailable": "Este candidato mudou ou já foi analisado. Atualize a lista.",
@@ -6194,6 +6199,7 @@
     "undo": "Anular",
     "done": "{{action}} para {{name}}: {{notes}} notas e {{segments}} segmentos atualizados.",
     "errors": {
+      "voice_data_cleared": "Os dados de voz foram apagados e não podem ser restaurados.",
       "person_deleted": "A pessoa a que esta ação se referia foi excluída.",
       "person_missing": "Esta pessoa já não existe. Atualize a lista.",
       "survivor_missing": "Escolha uma pessoa para manter.",

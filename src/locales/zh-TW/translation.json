@@ -5993,6 +5993,10 @@
     "removeSample": "移除樣本",
     "enrollVoice": "登錄聲音",
     "enrollmentIntro": "核准或拒絕前請完整聽完樣本。",
+    "calibrationExemplars": "使用的已核准聲音樣本：{{samples}}。直接使用已儲存的音訊與向量，不進行重建。",
+    "restoreMappings": "還原說話者對應",
+    "exemplarRetention": "此片段會保留至刪除此人為止，不受錄音保留期限影響。",
+    "exemplarCapture": "{{seconds}} 秒 · 錄製於 {{date}}",
     "enrollmentProgress": "乾淨片段：{{spans}} / 3 · 錄音：{{meetings}} / 2",
     "voiceUsable": "聲音可用",
     "voiceProvisional": "暫定：僅供建議",
@@ -6004,6 +6008,7 @@
     "ownerCorrected": "由你標記",
     "listeningTimeLeft": "聆聽確認將在 {{minutes}}:{{seconds}} 後過期。",
     "enrollmentErrors": {
+      "exemplar_key_unavailable": "音訊加密金鑰無法使用。未儲存聲音樣本。請恢復金鑰存取權後再試。",
       "poor_audio": "這段音訊不適合作為聲音樣本。請選擇其他片段。",
       "echo_audio": "這段音訊包含另一音軌的回音。請選擇其他片段。",
       "candidate_unavailable": "此候選項已變更或已審核。請重新整理清單。",
@@ -6176,6 +6181,7 @@
     "undo": "復原",
     "done": "已為 {{name}} 執行{{action}}：更新了 {{notes}} 則筆記與 {{segments}} 個片段。",
     "errors": {
+      "voice_data_cleared": "聲音資料已清除，無法復原。",
       "person_deleted": "此操作所涉及的人物已遭刪除。",
       "person_missing": "此人物已不存在，請重新整理清單。",
       "survivor_missing": "請選擇要保留的人物。",

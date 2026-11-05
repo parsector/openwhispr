@@ -5993,6 +5993,10 @@
     "removeSample": "Remove sample",
     "enrollVoice": "Enrol voice",
     "enrollmentIntro": "Voice enrolment starts only when you choose a span. Listen to the whole sample before approving or rejecting it.",
+    "calibrationExemplars": "Approved exemplar clips used: {{samples}}. Their saved audio and vectors are used without reconstruction.",
+    "restoreMappings": "Restore speaker mappings",
+    "exemplarRetention": "This clip is kept until the person is deleted, independently of recording retention.",
+    "exemplarCapture": "{{seconds}} s · captured {{date}}",
     "enrollmentProgress": "Clean spans: {{spans}} / 3 · recordings: {{meetings}} / 2",
     "voiceUsable": "Voice usable",
     "voiceProvisional": "Provisional: suggestions only",
@@ -6004,6 +6008,7 @@
     "ownerCorrected": "Labelled by you",
     "listeningTimeLeft": "Listening confirmation expires in {{minutes}}:{{seconds}}.",
     "enrollmentErrors": {
+      "exemplar_key_unavailable": "The audio encryption key is unavailable. No exemplar was saved. Restore access to the key and try again.",
       "poor_audio": "This audio is unsuitable for a voice sample. Choose another span.",
       "echo_audio": "This audio echoes the other track. Choose another span.",
       "candidate_unavailable": "This candidate changed or was already reviewed. Refresh the list.",
@@ -6176,6 +6181,7 @@
     "undo": "Undo",
     "done": "{{action}} for {{name}}: {{notes}} notes and {{segments}} segments updated.",
     "errors": {
+      "voice_data_cleared": "Voice data was erased and cannot be restored.",
       "person_deleted": "The person this action referred to was deleted.",
       "person_missing": "This person no longer exists. Refresh the list.",
       "survivor_missing": "Choose a person to keep.",

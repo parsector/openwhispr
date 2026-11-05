@@ -6011,6 +6011,10 @@
     "removeSample": "Rimuovi campione",
     "enrollVoice": "Registra voce",
     "enrollmentIntro": "Ascolta tutto il campione prima di approvarlo o rifiutarlo.",
+    "calibrationExemplars": "Clip vocali approvate utilizzate: {{samples}}. L’audio e i vettori salvati vengono utilizzati senza ricostruzione.",
+    "restoreMappings": "Ripristina le associazioni dei parlanti",
+    "exemplarRetention": "Questa clip viene conservata fino all’eliminazione della persona, indipendentemente dalla durata di conservazione delle registrazioni.",
+    "exemplarCapture": "{{seconds}} s · acquisita il {{date}}",
     "enrollmentProgress": "Segmenti puliti: {{spans}} / 3 · registrazioni: {{meetings}} / 2",
     "voiceUsable": "Voce utilizzabile",
     "voiceProvisional": "Provvisoria: solo suggerimenti",
@@ -6022,6 +6026,7 @@
     "ownerCorrected": "Assegnato da te",
     "listeningTimeLeft": "La conferma di ascolto scade tra {{minutes}}:{{seconds}}.",
     "enrollmentErrors": {
+      "exemplar_key_unavailable": "La chiave di crittografia audio non è disponibile. Nessun campione è stato salvato. Ripristina l’accesso alla chiave e riprova.",
       "poor_audio": "Questo audio non è adatto come campione vocale. Scegli un altro segmento.",
       "echo_audio": "Questo audio contiene un’eco dell’altra traccia. Scegli un altro segmento.",
       "candidate_unavailable": "Questo candidato è cambiato o è già stato esaminato. Aggiorna l’elenco.",
@@ -6194,6 +6199,7 @@
     "undo": "Annulla modifica",
     "done": "{{action}} per {{name}}: aggiornate {{notes}} note e {{segments}} segmenti.",
     "errors": {
+      "voice_data_cleared": "I dati vocali sono stati cancellati e non possono essere ripristinati.",
       "person_deleted": "La persona a cui si riferiva questa azione è stata eliminata.",
       "person_missing": "Questa persona non esiste più. Aggiorna la lista.",
       "survivor_missing": "Scegli una persona da mantenere.",

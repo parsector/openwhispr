@@ -5993,6 +5993,10 @@
     "removeSample": "Aufnahme entfernen",
     "enrollVoice": "Stimme einlernen",
     "enrollmentIntro": "Hören Sie die gesamte Aufnahme an, bevor Sie sie bestätigen oder ablehnen.",
+    "calibrationExemplars": "Verwendete bestätigte Stimmbeispiele: {{samples}}. Ihre gespeicherten Audiodaten und Vektoren werden ohne Rekonstruktion verwendet.",
+    "restoreMappings": "Sprecherzuordnungen wiederherstellen",
+    "exemplarRetention": "Dieser Clip wird bis zum Löschen der Person aufbewahrt, unabhängig von der Aufbewahrungsdauer der Aufnahmen.",
+    "exemplarCapture": "{{seconds}} s · aufgenommen am {{date}}",
     "enrollmentProgress": "Saubere Spannen: {{spans}} / 3 · Aufnahmen: {{meetings}} / 2",
     "voiceUsable": "Stimme verwendbar",
     "voiceProvisional": "Vorläufig: nur Vorschläge",
@@ -6004,6 +6008,7 @@
     "ownerCorrected": "Von dir zugeordnet",
     "listeningTimeLeft": "Hörbestätigung läuft in {{minutes}}:{{seconds}} ab.",
     "enrollmentErrors": {
+      "exemplar_key_unavailable": "Der Schlüssel zur Audioverschlüsselung ist nicht verfügbar. Es wurde kein Stimmbeispiel gespeichert. Stellen Sie den Schlüsselzugriff wieder her und versuchen Sie es erneut.",
       "poor_audio": "Dieses Audio eignet sich nicht als Stimmprobe. Wählen Sie einen anderen Abschnitt.",
       "echo_audio": "Dieses Audio enthält ein Echo der anderen Spur. Wählen Sie einen anderen Abschnitt.",
       "candidate_unavailable": "Dieser Kandidat wurde geändert oder bereits geprüft. Aktualisieren Sie die Liste.",
@@ -6176,6 +6181,7 @@
     "undo": "Rückgängig",
     "done": "{{action}} für {{name}}: {{notes}} Notizen und {{segments}} Abschnitte aktualisiert.",
     "errors": {
+      "voice_data_cleared": "Die Stimmdaten wurden gelöscht und können nicht wiederhergestellt werden.",
       "person_deleted": "Die Person, auf die sich diese Aktion bezog, wurde gelöscht.",
       "person_missing": "Diese Person existiert nicht mehr. Liste aktualisieren.",
       "survivor_missing": "Wählen Sie eine Person aus.",

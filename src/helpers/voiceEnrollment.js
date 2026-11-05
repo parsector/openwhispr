@@ -7,6 +7,7 @@ const history = require("./speakerGlobalHistory");
 const debugLogger = require("./debugLogger");
 const { resolveMeetingAudioSpan } = require("./meetingAudioSpan.mjs");
 const enrollmentTiming = require("./voiceEnrollmentTiming");
+const exemplarAudio = require("./voiceExemplarAudio");
 
 const RATE = 24000;
 const MODEL_RATE = 16000;
@@ -68,7 +69,9 @@ function stopObserving(session) {
   }
 }
 function forgetPlayback(id) {
-  stopObserving(played.get(id));
+  const session = played.get(id);
+  stopObserving(session);
+  clearTimeout(session?.expiryTimer);
   played.delete(id);
 }
 
@@ -121,6 +124,7 @@ function attributed(db, noteId, row, profileId) {
     .get(noteId, row.speaker, profileId);
 }
 function clean(db, sample) {
+  if (sample.durable_audio) return sample.valid !== 0;
   const rows = rowsFor(db, sample.note_id);
   const ids = JSON.parse(sample.row_ids || "[]");
   return (
@@ -132,11 +136,16 @@ function clean(db, sample) {
   );
 }
 function samples(db, profileId) {
-  return db
-    .prepare(
-      "SELECT * FROM voice_exemplars WHERE profile_id = ? AND approved_at IS NOT NULL ORDER BY approved_at, id"
-    )
-    .all(profileId);
+  const durable = exemplarAudio.list(db, profileId);
+  return [
+    ...durable,
+    ...db
+      .prepare(
+        "SELECT * FROM voice_exemplars WHERE profile_id = ? AND approved_at IS NOT NULL ORDER BY approved_at, id"
+      )
+      .all(profileId)
+      .filter((sample) => !durable.some((item) => item.id === sample.id)),
+  ];
 }
 function state(db, profileId) {
   const all = samples(db, profileId);
@@ -147,7 +156,7 @@ function state(db, profileId) {
       !left ||
       vectors.some((right, j) => j > i && (!right || cosine(left, right) < MIN_OWN_SIMILARITY))
   );
-  const meetings = new Set(good.map((sample) => sample.note_id)).size;
+  const meetings = new Set(good.map((sample) => sample.note_identity || sample.note_id)).size;
   // Graduation requires three approved, internally consistent spans from two
   // recordings. A later correction to any contributing row removes its sample.
   const requiresReview = !!db
@@ -200,14 +209,18 @@ function listSamples(database, profileId) {
     id: sample.id,
     profileId,
     noteId: sample.note_id,
-    noteTitle: db.prepare("SELECT title FROM notes WHERE id = ?").get(sample.note_id)?.title || "",
+    noteTitle:
+      sample.note_title ??
+      (db.prepare("SELECT title FROM notes WHERE id = ?").get(sample.note_id)?.title || ""),
     rowIds: JSON.parse(sample.row_ids || "[]"),
     meetingDate: sample.meeting_date,
+    createdAt: sample.created_at,
+    permanent: !!sample.durable_audio,
     durationSeconds: (sample.end_sample - sample.start_sample) / RATE,
     odd: !clean(db, sample) || (conflict && (vectors.length <= 2 || averages[i] === worst)),
   }));
 }
-function rebuild(db, profileId) {
+function resolveProfile(db, profileId) {
   const result = state(db, profileId);
   let embedding = Buffer.alloc(0);
   if (result.vectors.length && result.good.length === result.approvedSpans) {
@@ -215,8 +228,9 @@ function rebuild(db, profileId) {
     // no weight; an eight second span cannot drown out a short one.
     const grouped = new Map();
     result.good.forEach((sample, i) => {
-      if (!grouped.has(sample.note_id)) grouped.set(sample.note_id, []);
-      grouped.get(sample.note_id).push(result.vectors[i]);
+      const meeting = sample.note_identity || sample.note_id;
+      if (!grouped.has(meeting)) grouped.set(meeting, []);
+      grouped.get(meeting).push(result.vectors[i]);
     });
     const meetingVectors = [...grouped.values()].map((items) =>
       unit(
@@ -234,6 +248,10 @@ function rebuild(db, profileId) {
     );
     if (centroid) embedding = packed(centroid);
   }
+  return { result, embedding };
+}
+function rebuild(db, profileId) {
+  const { result, embedding } = resolveProfile(db, profileId);
   db.prepare(
     "UPDATE speaker_profiles SET embedding = ?, sample_count = ?, voice_usable = ?, voice_needs_reapproval = ? WHERE id = ?"
   ).run(
@@ -245,12 +263,25 @@ function rebuild(db, profileId) {
   );
   return result;
 }
-function candidateId(profileId, noteId, rowId, span) {
+function candidateId(profileId, noteId, rowId, span, noteIdentity = null) {
   return createHash("sha256")
     .update(
-      JSON.stringify([profileId, noteId, rowId, span.trackId, span.startSample, span.endSample])
+      JSON.stringify([
+        profileId,
+        noteId,
+        noteIdentity,
+        rowId,
+        span.trackId,
+        span.startSample,
+        span.endSample,
+      ])
     )
     .digest("hex");
+}
+function captureDate(note, status, startSample) {
+  return Number.isFinite(status.startedAt)
+    ? new Date(status.startedAt + (startSample / RATE) * 1000).toISOString()
+    : note.created_at;
 }
 function createEligibilityContext(database, store) {
   const db = database.db;
@@ -310,14 +341,7 @@ function createEligibilityContext(database, store) {
     if (row.deleted) return { reason: "uncertain" };
     if (!factsOnly && profileId != null) {
       if (!approvedByProfile.has(profileId))
-        approvedByProfile.set(
-          profileId,
-          db
-            .prepare(
-              "SELECT COUNT(*) AS count FROM voice_exemplars WHERE profile_id = ? AND approved_at IS NOT NULL"
-            )
-            .get(profileId).count
-        );
+        approvedByProfile.set(profileId, samples(db, profileId).length);
       if (approvedByProfile.get(profileId) >= MAX_SAMPLES) return { reason: "limit" };
     }
     if (!changedByNote.has(note.id)) changedByNote.set(note.id, changedRows(note));
@@ -407,15 +431,21 @@ function createEligibilityContext(database, store) {
     }
     if (hypothetical) return { candidate: null, track: resolved.track, startSample, endSample };
     const candidate = {
-      id: candidateId(profileId, note.id, row.id, {
-        trackId: resolved.track,
-        startSample,
-        endSample,
-      }),
+      id: candidateId(
+        profileId,
+        note.id,
+        row.id,
+        {
+          trackId: resolved.track,
+          startSample,
+          endSample,
+        },
+        note.client_note_id
+      ),
       profileId,
       noteId: note.id,
       noteTitle: note.title,
-      meetingDate: note.created_at,
+      meetingDate: captureDate(note, status, startSample),
       rowIds: [row.id],
       track: resolved.track,
       startSample,
@@ -493,7 +523,8 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
   };
   if (!db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(profileId))
     return { candidates: [], reasons };
-  const approved = samples(db, profileId).length;
+  const approvedSamples = samples(db, profileId);
+  const approved = approvedSamples.length;
   if (approved >= MAX_SAMPLES) {
     reasons.limit = approved;
     return { candidates: [], reasons };
@@ -502,7 +533,7 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
   const eligibility = createEligibilityContext(database, store);
   for (const note of db
     .prepare(
-      "SELECT id, title, created_at, transcript, speaker_action_log, speaker_label_undo FROM notes WHERE note_type = 'meeting' AND deleted_at IS NULL"
+      "SELECT id, client_note_id, title, created_at, transcript, speaker_action_log, speaker_label_undo FROM notes WHERE note_type = 'meeting' AND deleted_at IS NULL"
     )
     .all()) {
     const rows = readTranscriptDocument(note.transcript).rows;
@@ -520,6 +551,18 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
     );
     for (const row of rows) {
       if (row.deleted || !attributed(db, note.id, row, profileId)) continue;
+      if (
+        approvedSamples.some(
+          (sample) =>
+            sample.durable_audio &&
+            sample.note_id === note.id &&
+            sample.note_identity === note.client_note_id &&
+            JSON.parse(sample.row_ids).includes(row.id)
+        )
+      ) {
+        reasons.reviewed++;
+        continue;
+      }
       const fact = facts.get(row.id);
       if (fact.reason) reasons[fact.reason]++;
       else {
@@ -548,15 +591,21 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
           continue;
         }
         const candidate = {
-          id: candidateId(profileId, note.id, row.id, {
-            trackId: fact.track,
-            startSample: fact.startSample,
-            endSample: fact.endSample,
-          }),
+          id: candidateId(
+            profileId,
+            note.id,
+            row.id,
+            {
+              trackId: fact.track,
+              startSample: fact.startSample,
+              endSample: fact.endSample,
+            },
+            note.client_note_id
+          ),
           profileId,
           noteId: note.id,
           noteTitle: note.title,
-          meetingDate: note.created_at,
+          meetingDate: captureDate(note, status, fact.startSample),
           rowIds: [row.id],
           ...fact,
         };
@@ -585,7 +634,7 @@ function focusedOffer(database, store, id) {
     const candidate = saved.candidate;
     const note = db
       .prepare(
-        `SELECT id, title, created_at, transcript, speaker_action_log,
+        `SELECT id, client_note_id, title, created_at, transcript, speaker_action_log,
       speaker_label_undo FROM notes WHERE id = ? AND note_type = 'meeting' AND deleted_at IS NULL`
       )
       .get(candidate.noteId);
@@ -599,12 +648,7 @@ function focusedOffer(database, store, id) {
       const row = readTranscriptDocument(note.transcript).rows.find(
         (item) => item.id === candidate.rowIds[0]
       );
-      const approved = db
-        .prepare(
-          `SELECT COUNT(*) AS count FROM voice_exemplars
-        WHERE profile_id = ? AND approved_at IS NOT NULL`
-        )
-        .get(candidate.profileId).count;
+      const approved = samples(db, candidate.profileId).length;
       const reviewed = db
         .prepare(
           `SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ?
@@ -670,6 +714,8 @@ function locate(database, store, id) {
 }
 function play(database, store, id, sender = null) {
   forgetPlayback(id);
+  const exemplar = exemplarAudio.play(database.db, store, id);
+  if (exemplar) return exemplar;
   const candidate = locate(database, store, id);
   if (!candidate) return { state: "unavailable" };
   const audio = store.span(
@@ -683,6 +729,7 @@ function play(database, store, id, sender = null) {
   const now = (store.now || Date.now)();
   const durationMs = Math.ceil(candidate.durationSeconds * 1000);
   const session = {
+    wav: Buffer.from(audio.wav),
     token,
     revision: candidate.revision,
     noteId: candidate.noteId,
@@ -708,6 +755,8 @@ function play(database, store, id, sender = null) {
     sender.on("audio-state-changed", session.audioListener);
   }
   played.set(id, session);
+  session.expiryTimer = setTimeout(() => forgetPlayback(id), 10 * 60 * 1000);
+  session.expiryTimer.unref?.();
   return { state: "available", wav: audio.wav, token, candidate, expiresAt: session.expires };
 }
 function complete(database, store, id, token, sender = null) {
@@ -746,6 +795,7 @@ function missingCandidateReason(database, store, id, playback) {
   )
     return "person_or_meeting_changed";
   const rows = rowsFor(db, playback.noteId);
+  if (store.status(playback.noteId).state === "key_unavailable") return "exemplar_key_unavailable";
   const recordingId = store.status(playback.noteId).recordingId ?? playback.noteId;
   if (
     playback.rowIds.some((rowId) => {
@@ -880,14 +930,9 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
       playback,
       "recheck candidate and recording"
     );
-  const audio = store.span(
-    candidate.noteId,
-    candidate.track,
-    candidate.startSample / RATE,
-    candidate.endSample / RATE
-  );
-  if (audio.state !== "available" || audio.partial)
-    return decisionFailure("audio_unavailable", id, playback, "read candidate audio span");
+  // Keep exactly the bytes that earned the playback proof, without a second
+  // decode or encode (or a race against a changed recording).
+  const audio = { wav: playback.wav };
   if (choice === "approve") {
     if (
       isEchoSpan(
@@ -910,6 +955,7 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
     return decisionFailure("poor_audio", id, playback, "check audio suitability");
   let statement = "BEGIN voice enrollment decision";
   try {
+    const ciphertext = choice === "approve" ? exemplarAudio.seal(store, audio.wav) : null;
     const result = database.db.transaction(() => {
       if (!focusedOffer(database, store, id))
         return { success: false, error: "candidate_unavailable" };
@@ -931,6 +977,7 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
           JSON.stringify(candidate.rowIds),
           candidate.meetingDate
         );
+        exemplarAudio.save(db, candidate, audio.wav, ciphertext, packed(embedding));
         statement = "UPDATE speaker_profiles SET voice_needs_reapproval = 0 WHERE id = ?";
         db.prepare("UPDATE speaker_profiles SET voice_needs_reapproval = 0 WHERE id = ?").run(
           candidate.profileId
@@ -983,11 +1030,13 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
   } catch (cause) {
     const sqliteCode = cause?.code || "";
     const error =
-      sqliteCode.startsWith("SQLITE_BUSY") || sqliteCode.startsWith("SQLITE_LOCKED")
-        ? "database_busy"
-        : sqliteCode.startsWith("SQLITE_CONSTRAINT") && sqliteCode !== "SQLITE_CONSTRAINT_TRIGGER"
-          ? "constraint_failed"
-          : "persistence_failed";
+      sqliteCode === "exemplar_key_unavailable"
+        ? sqliteCode
+        : sqliteCode.startsWith("SQLITE_BUSY") || sqliteCode.startsWith("SQLITE_LOCKED")
+          ? "database_busy"
+          : sqliteCode.startsWith("SQLITE_CONSTRAINT") && sqliteCode !== "SQLITE_CONSTRAINT_TRIGGER"
+            ? "constraint_failed"
+            : "persistence_failed";
     debugLogger.warn(
       "Voice enrollment decision failed",
       JSON.stringify({
@@ -1016,9 +1065,10 @@ function undo(database, id) {
       return { success: false, error: "later_change" };
     const action = db.prepare("SELECT * FROM voice_enrollment_actions WHERE id = ?").get(id);
     if (!action) return { success: false, error: "action_missing" };
-    if (action.choice === "approve")
+    if (action.choice === "approve") {
+      db.prepare("DELETE FROM voice_exemplar_audio WHERE id = ?").run(action.candidate_id);
       db.prepare("DELETE FROM voice_exemplars WHERE id = ?").run(action.candidate_id);
-    else if (action.choice === "remove") {
+    } else if (action.choice === "remove") {
       const sample = JSON.parse(action.before_sample);
       const columns = Object.keys(sample);
       db.prepare(
@@ -1041,24 +1091,33 @@ function undo(database, id) {
 function removeSample(database, sampleId) {
   return database.db.transaction(() => {
     const db = database.db;
-    const sample = db.prepare("SELECT * FROM voice_exemplars WHERE id = ?").get(sampleId);
+    const durable = db
+      .prepare(
+        `SELECT id, profile_id, note_id, track, start_sample, end_sample,
+      embedding, approved_at, created_at, row_ids, meeting_date FROM voice_exemplar_audio WHERE id = ?`
+      )
+      .get(sampleId);
+    const sample =
+      durable || db.prepare("SELECT * FROM voice_exemplars WHERE id = ?").get(sampleId);
     if (!sample) return { success: false, error: "sample_missing" };
     const actionId = randomUUID();
-    db.prepare(
-      `INSERT OR IGNORE INTO voice_enrollment_candidates
+    if (db.prepare("SELECT 1 FROM notes WHERE id = ?").get(sample.note_id))
+      db.prepare(
+        `INSERT OR IGNORE INTO voice_enrollment_candidates
       (id, profile_id, note_id, track, start_sample, end_sample, row_ids, meeting_date, rejected_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`
-    ).run(
-      sample.id,
-      sample.profile_id,
-      sample.note_id,
-      sample.track,
-      sample.start_sample,
-      sample.end_sample,
-      sample.row_ids,
-      sample.meeting_date
-    );
+      ).run(
+        sample.id,
+        sample.profile_id,
+        sample.note_id,
+        sample.track,
+        sample.start_sample,
+        sample.end_sample,
+        sample.row_ids,
+        sample.meeting_date
+      );
     db.prepare("DELETE FROM voice_exemplars WHERE id = ?").run(sampleId);
+    db.prepare("DELETE FROM voice_exemplar_audio WHERE id = ?").run(sampleId);
     db.prepare(
       `INSERT INTO voice_enrollment_actions
       (id, candidate_id, profile_id, note_id, choice, before_sample) VALUES (?, ?, ?, ?, 'remove', ?)`
@@ -1077,10 +1136,14 @@ function removeSample(database, sampleId) {
       noteId: sample.note_id,
       label: `removed: ${JSON.parse(sample.row_ids || "[]").join(", ")}`,
     });
+    if (durable)
+      db.prepare(
+        "UPDATE speaker_global_actions SET unavailable_reason = 'voice_data_cleared' WHERE id = ?"
+      ).run(actionId);
     return { success: true, id: actionId };
   })();
 }
-function rowCorrected(db, noteId, rowIds) {
+function rowCorrected(db, noteId, rowIds, explicitMappingChange = false) {
   if (
     !rowIds.length ||
     typeof db?.prepare !== "function" ||
@@ -1090,17 +1153,35 @@ function rowCorrected(db, noteId, rowIds) {
   )
     return;
   const affected = db
-    .prepare(`SELECT DISTINCT profile_id FROM voice_exemplars WHERE note_id = ?`)
-    .all(noteId);
+    .prepare(
+      `SELECT profile_id FROM voice_exemplars WHERE note_id = ?
+      UNION SELECT profile_id FROM voice_exemplar_audio WHERE note_id = ?`
+    )
+    .all(noteId, noteId);
   for (const { profile_id } of affected) {
+    const profileName = db
+      .prepare("SELECT display_name FROM speaker_profiles WHERE id = ?")
+      .get(profile_id)?.display_name;
     const touched = samples(db, profile_id).filter(
       (sample) =>
         sample.note_id === noteId &&
-        JSON.parse(sample.row_ids || "[]").some((id) => rowIds.includes(id))
+        JSON.parse(sample.row_ids || "[]").some((id) => rowIds.includes(id)) &&
+        (!sample.durable_audio ||
+          explicitMappingChange ||
+          rowsFor(db, noteId).some(
+            (row) =>
+              JSON.parse(sample.row_ids).includes(row.id) &&
+              row.speakerLockSource === "user" &&
+              (!attributed(db, noteId, row, profile_id) ||
+                (row.speakerName && row.speakerName !== profileName))
+          ))
     );
     if (touched.length) {
-      for (const sample of touched)
+      for (const sample of touched) {
+        if (sample.durable_audio)
+          db.prepare("UPDATE voice_exemplar_audio SET valid = 0 WHERE id = ?").run(sample.id);
         db.prepare("DELETE FROM voice_exemplars WHERE id = ?").run(sample.id);
+      }
       db.prepare(
         "UPDATE speaker_profiles SET voice_usable = 0, voice_needs_reapproval = 1 WHERE id = ?"
       ).run(profile_id);
@@ -1165,6 +1246,9 @@ function snapshotEvidence(db, actionId, profileId = null, mergedInto = null) {
     JSON.stringify({
       exemplars,
       candidates,
+      audioOwnership: exemplarAudio
+        .list(db, profileId)
+        .map((sample) => ({ id: sample.id, profile_id: sample.profile_id })),
       derivedProfiles: [...new Set(exemplars.map((row) => row.profile_id))],
       mergedInto,
       survivorBefore: survivor && { ...survivor, embedding: survivor.embedding.toString("base64") },
@@ -1173,7 +1257,9 @@ function snapshotEvidence(db, actionId, profileId = null, mergedInto = null) {
   return { exemplars: exemplars.length, candidates: candidates.length };
 }
 function removeEvidence(db, profileId = null, preserveRejections = false) {
-  for (const table of ["voice_exemplars", "voice_enrollment_candidates"]) {
+  for (const [id, session] of played)
+    if (profileId == null || session.profileId === profileId) forgetPlayback(id);
+  for (const table of ["voice_exemplar_audio", "voice_exemplars", "voice_enrollment_candidates"]) {
     if (table === "voice_enrollment_candidates" && preserveRejections) continue;
     const where = profileId == null ? "" : " WHERE profile_id = ?";
     db.prepare(`DELETE FROM ${table}${where}`).run(...(profileId == null ? [] : [profileId]));
@@ -1196,8 +1282,17 @@ function restoreEvidence(db, actionId) {
     derivedProfiles = [],
     mergedInto,
     survivorBefore,
+    audioOwnership = [],
   } = JSON.parse(found.snapshot);
   const profiles = new Set(derivedProfiles);
+  for (const sample of audioOwnership) {
+    if (!db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(sample.profile_id)) continue;
+    db.prepare("UPDATE voice_exemplar_audio SET profile_id = ? WHERE id = ?").run(
+      sample.profile_id,
+      sample.id
+    );
+    profiles.add(sample.profile_id);
+  }
   const sourceDeleted = (noteId) =>
     !!db
       .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='meeting_audio_tombstones'")
@@ -1333,6 +1428,7 @@ function removeNoteEvidence(db, noteId) {
   db.prepare("DELETE FROM voice_exemplars WHERE note_id = ?").run(noteId);
   for (const profileId of affected) {
     rebuild(db, profileId);
+    if (exemplarAudio.list(db, profileId).length) continue;
     db.prepare("UPDATE speaker_profiles SET voice_needs_reapproval = 1 WHERE id = ?").run(
       profileId
     );
@@ -1351,6 +1447,7 @@ module.exports = {
   playbackContext,
   progress,
   rebuild,
+  resolveProfile,
   undo,
   removeSample,
   rowCorrected,

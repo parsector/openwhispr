@@ -424,6 +424,7 @@ function listPeople(database) {
   }
   return profiles.map((p) => {
     const hit = usage.get(p.id);
+    const voiceSamples = require("./voiceEnrollment").listSamples(database, p.id);
     return {
       id: p.id,
       displayName: p.display_name,
@@ -437,11 +438,9 @@ function listPeople(database) {
       sampleCount: p.sample_count || 0,
       hasVoice: !!p.embedding?.length && p.sample_count > 0,
       needsReapproval: p.voice_needs_reapproval === 1,
-      legacyVoice:
-        !!p.embedding?.length &&
-        p.sample_count > 0 &&
-        !db.prepare("SELECT 1 FROM voice_exemplars WHERE profile_id = ? LIMIT 1").get(p.id),
+      legacyVoice: !!p.embedding?.length && p.sample_count > 0 && !voiceSamples.length,
       voiceProgress: require("./voiceEnrollment").progress(database, p.id),
+      exemplars: voiceSamples.filter((sample) => sample.permanent),
       usedOnce: hit.notes.size === 1,
       duplicates: duplicates.get(p.id),
     };
@@ -686,6 +685,10 @@ function applyPersonAction(database, request) {
           survivor.id,
           current.id
         );
+        db.prepare("UPDATE voice_exemplar_audio SET profile_id = ? WHERE profile_id = ?").run(
+          survivor.id,
+          current.id
+        );
         db.prepare("UPDATE voice_exemplars SET profile_id = ? WHERE profile_id = ?").run(
           survivor.id,
           current.id
@@ -794,6 +797,10 @@ function applyPersonAction(database, request) {
       ).run(nextName, current.id);
     if (request.type === "merge" || request.type === "delete") {
       if (request.type === "merge") {
+        db.prepare("UPDATE voice_exemplar_audio SET profile_id = ? WHERE profile_id = ?").run(
+          survivor.id,
+          current.id
+        );
         db.prepare("UPDATE person_attendance SET profile_id = ? WHERE profile_id = ?").run(
           survivor.id,
           current.id
@@ -1251,8 +1258,10 @@ function deletePerson(database, built) {
     current.id
   );
   require("./voiceEnrollment").pruneSnapshots(db, "profile_id", current.id);
+  require("./voiceEnrollment").removeEvidence(db, current.id);
   db.prepare("DELETE FROM voice_enrollment_actions WHERE profile_id = ?").run(current.id);
   db.prepare("DELETE FROM speaker_profiles WHERE id = ?").run(current.id);
+  require("./voiceExemplarAudio").sweepOrphans(db);
   history.add(db, {
     id: randomUUID(),
     kind: "delete",
@@ -1275,7 +1284,12 @@ function previewClearVoiceData(database) {
   const noteEmbeddingCount = db
     .prepare("SELECT COUNT(*) AS n FROM note_speaker_embeddings")
     .get().n;
-  const sampleCount = db.prepare("SELECT COUNT(*) AS n FROM voice_exemplars").get().n;
+  const sampleCount = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM (
+    SELECT id FROM voice_exemplars UNION SELECT id FROM voice_exemplar_audio)`
+    )
+    .get().n;
   const candidateCount = db
     .prepare("SELECT COUNT(*) AS n FROM voice_enrollment_candidates")
     .get().n;
@@ -1349,6 +1363,8 @@ function clearVoiceData(database, expected) {
     db.prepare("DELETE FROM speaker_mappings").run();
     db.prepare("DELETE FROM speaker_run_mappings").run();
     db.prepare("DELETE FROM note_speaker_embeddings").run();
+    require("./voiceExemplarAudio").scrubVectorSnapshots(db);
+    require("./voiceExemplarAudio").sweepOrphans(db);
     history.add(db, { id, kind: "clear_voice", label: "All people" });
     return { ...preview, id, noteIds };
   })();
@@ -1496,12 +1512,23 @@ function reviewPersonReason(db, profileId, noteId, fact, counts) {
       profileId,
       db
         .prepare(
-          `SELECT COUNT(*) AS count FROM voice_exemplars
-      WHERE profile_id = ? AND approved_at IS NOT NULL`
+          `SELECT COUNT(*) AS count FROM (
+            SELECT id FROM voice_exemplars WHERE profile_id = ? AND approved_at IS NOT NULL
+            UNION SELECT id FROM voice_exemplar_audio WHERE profile_id = ?)`
         )
-        .get(profileId).count
+        .get(profileId, profileId).count
     );
   if (counts.get(profileId) >= require("./voiceEnrollment").MAX_SAMPLES) return "limit";
+  if (
+    db
+      .prepare(
+        `SELECT row_ids FROM voice_exemplar_audio WHERE profile_id = ? AND note_id = ?
+    AND note_identity = (SELECT client_note_id FROM notes WHERE id = ?)`
+      )
+      .all(profileId, noteId, noteId)
+      .some((sample) => JSON.parse(sample.row_ids).includes(fact?.rowId))
+  )
+    return "reviewed";
   if (fact?.reason || !fact?.track) return null;
   if (
     db

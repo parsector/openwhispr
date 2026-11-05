@@ -194,7 +194,7 @@ function fixture(t) {
   let reviewClock = Date.now();
   wav.write('RIFF');
   for (let i = 0; i < 24000 * 4; i++) wav.writeInt16LE(Math.round(10000 * Math.sin(i / 24)), 44 + i * 2);
-  const audio = { now: () => reviewClock, status: () => ({ state: 'complete' }), span: () => ({ state: 'available',
+  const audio = { encryption: require('../lib/fakeAudioEncryption'), now: () => reviewClock, status: () => ({ state: 'complete' }), span: () => ({ state: 'available',
     wav, partial: false }) };
   const vector = (x, y = 0) => Float32Array.from({ length: 512 }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };

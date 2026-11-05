@@ -5993,6 +5993,10 @@
     "removeSample": "移除样本",
     "enrollVoice": "录入声音",
     "enrollmentIntro": "批准或拒绝前请完整听完样本。",
+    "calibrationExemplars": "使用的已批准声音样本：{{samples}}。直接使用已保存的音频和向量，不进行重建。",
+    "restoreMappings": "恢复说话者映射",
+    "exemplarRetention": "此片段将保留至删除此人为止，不受录音保留期限影响。",
+    "exemplarCapture": "{{seconds}} 秒 · 录制于 {{date}}",
     "enrollmentProgress": "干净片段：{{spans}} / 3 · 录音：{{meetings}} / 2",
     "voiceUsable": "声音可用",
     "voiceProvisional": "暂定：仅供建议",
@@ -6004,6 +6008,7 @@
     "ownerCorrected": "由你标记",
     "listeningTimeLeft": "收听确认将在 {{minutes}}:{{seconds}} 后过期。",
     "enrollmentErrors": {
+      "exemplar_key_unavailable": "音频加密密钥不可用。未保存声音样本。请恢复密钥访问权限后重试。",
       "poor_audio": "这段音频不适合作为声音样本。请选择其他片段。",
       "echo_audio": "这段音频包含另一音轨的回声。请选择其他片段。",
       "candidate_unavailable": "此候选项已更改或已审核。请刷新列表。",
@@ -6176,6 +6181,7 @@
     "undo": "撤销",
     "done": "已对 {{name}} 执行{{action}}：更新了 {{notes}} 条笔记和 {{segments}} 个片段。",
     "errors": {
+      "voice_data_cleared": "声音数据已清除，无法恢复。",
       "person_deleted": "此操作所涉及的人员已被删除。",
       "person_missing": "此人物已不存在，请刷新列表。",
       "survivor_missing": "请选择要保留的人物。",
