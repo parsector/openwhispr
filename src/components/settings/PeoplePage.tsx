@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FocusScope } from "@radix-ui/react-focus-scope";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
@@ -101,6 +101,9 @@ export default function PeoplePage({
   const reviewReturn = useRef(savedReviewReturn());
   const peopleReturn = useRef(savedPeopleReturn());
   const reviewScroll = useRef<HTMLDivElement>(null);
+  const reviewFocus = useRef<{ element: HTMLButtonElement; key: string; index: number } | null>(
+    null
+  );
   const [reviewOpen, setReviewOpen] = useState(!!reviewReturn.current);
   const rootRef = useRef<HTMLDivElement>(null);
   const reviewTrigger = useRef<HTMLButtonElement>(null);
@@ -265,6 +268,23 @@ export default function PeoplePage({
     });
     return () => cancelAnimationFrame(frame);
   }, [reviewOpen, loading, reviewLoading, reviewError, reviewLoaded]);
+  useLayoutEffect(() => {
+    // A refreshed page can remove the focused cached row before the browser paints.
+    const previous = reviewFocus.current;
+    reviewFocus.current = null;
+    if (!previous || !reviewOpen || !reviewScroll.current) return;
+    if (previous.element.isConnected && document.activeElement === previous.element) return;
+    if (document.activeElement !== document.body && document.activeElement !== previous.element)
+      return;
+    const buttons = [
+      ...reviewScroll.current.querySelectorAll<HTMLButtonElement>("[data-review-row-key]"),
+    ];
+    const target =
+      buttons.find((button) => button.dataset.reviewRowKey === previous.key) ||
+      buttons[Math.min(previous.index, buttons.length - 1)] ||
+      reviewScroll.current.querySelector<HTMLButtonElement>('button[role="combobox"]');
+    target?.focus({ preventScroll: true });
+  }, [review, reviewOpen]);
   useEffect(() => {
     if (!selected) return;
     const target = kind === "merge" ? survivorTrigger.current : actionCancel.current;
@@ -576,6 +596,21 @@ export default function PeoplePage({
   useEffect(() => {
     if (!reviewOpen || loading || error) return;
     let alive = true;
+    const replaceReview = (rows: Review[]) => {
+      const active = document.activeElement;
+      const buttons = [
+        ...(reviewScroll.current?.querySelectorAll<HTMLButtonElement>("[data-review-row-key]") ||
+          []),
+      ];
+      if (active instanceof HTMLButtonElement && buttons.includes(active)) {
+        reviewFocus.current = {
+          element: active,
+          key: active.dataset.reviewRowKey || "",
+          index: buttons.indexOf(active),
+        };
+      }
+      setReview(rows);
+    };
     setReviewLoading(true);
     setReviewLoaded(false);
     setReviewError(false);
@@ -585,7 +620,7 @@ export default function PeoplePage({
       if (loadPage) {
         let page = await loadPage(null);
         if (!alive) return;
-        setReview(page.rows);
+        replaceReview(page.rows);
         const pending = page.pending;
         setReviewProgress(pending.length ? { current: 0, total: pending.length } : null);
         for (const [index, noteId] of pending.entries()) {
@@ -594,13 +629,13 @@ export default function PeoplePage({
           if (!alive) return;
           page = await loadPage(noteId);
           if (!alive) return;
-          setReview(page.rows);
+          replaceReview(page.rows);
           setReviewProgress({ current: index + 1, total: pending.length });
         }
       } else {
         if (!window.electronAPI.listPeopleReview) throw Error("unavailable");
         const rows = await window.electronAPI.listPeopleReview(null);
-        if (alive) setReview(rows);
+        if (alive) replaceReview(rows);
       }
     };
     void load()
@@ -1021,7 +1056,14 @@ export default function PeoplePage({
             ariaLabel={t("people.title")}
             wrap
           />
-          <Button ref={reviewTrigger} variant="secondary" onClick={() => setReviewOpen(true)}>
+          <Button
+            ref={reviewTrigger}
+            type="button"
+            variant="secondary"
+            aria-haspopup="dialog"
+            aria-expanded={reviewOpen}
+            onClick={() => setReviewOpen(true)}
+          >
             <ClipboardCheck className="size-4" />
             {t("people.tabs.review")}
           </Button>
@@ -2395,6 +2437,7 @@ export default function PeoplePage({
                   <Button
                     type="button"
                     variant="outline"
+                    data-review-row-key={`${r.noteId}:${r.rowId}`}
                     disabled={!onOpenNote}
                     onClick={() => {
                       savePeopleReturn();
