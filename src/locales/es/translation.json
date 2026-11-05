@@ -6085,7 +6085,6 @@
       "independent_sessions": "La evaluación debe usar sesiones de grabación independientes del ajuste.",
       "positive_coverage": "La evaluación necesita ejemplos positivos de personas registradas.",
       "negative_coverage": "La evaluación necesita ejemplos negativos de personas no registradas o desconocidas.",
-      "declared_targets": "El propietario debe fijar antes los objetivos de precisión y cobertura de nombres correctos.",
       "nonempty_accepted_set": "El candidato y la evaluación deben aceptar nombres; rechazar todo no permite una recomendación.",
       "correct_name_coverage": "No se ha demostrado la cobertura mínima de nombres correctos.",
       "precision": "No se ha demostrado la precisión requerida."

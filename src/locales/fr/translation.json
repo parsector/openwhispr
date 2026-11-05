@@ -6085,7 +6085,6 @@
       "independent_sessions": "L’évaluation doit utiliser des sessions indépendantes du réglage.",
       "positive_coverage": "L’évaluation exige des exemples positifs de personnes enregistrées.",
       "negative_coverage": "L’évaluation exige des exemples négatifs de personnes non enregistrées ou inconnues.",
-      "declared_targets": "Le propriétaire doit fixer à l’avance les objectifs de précision et de couverture des noms corrects.",
       "nonempty_accepted_set": "Le candidat et l’évaluation doivent accepter des noms ; le refus systématique ne peut pas être admis.",
       "correct_name_coverage": "Couverture minimale des noms corrects non démontrée.",
       "precision": "Précision requise non démontrée."

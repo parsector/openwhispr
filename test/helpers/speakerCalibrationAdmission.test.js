@@ -18,7 +18,7 @@ function rejects(input, criterion) {
   return report;
 }
 
-test("independent production holdout with declared targets supports a recommendation", () => {
+test("independent production holdout with owner targets supports a recommendation", () => {
   const report = buildReport(recommendationFixture());
   assert.equal(report.resultType, "supported_recommendation");
   assert.deepEqual(report.recommended, { similarityFloor: 0.75, runnerUpMargin: 0.1 });
@@ -61,6 +61,12 @@ test("empty accepted holdout cannot qualify regardless of the tuning winner", ()
   const report = rejects(input, "nonempty_accepted_set");
   assert.equal(report.validation.accepted, 0);
   assert.equal(report.validation.precision, null);
+  assert.equal(report.validation.checks.precision, false);
+  assert.deepEqual(report.failedCriteria, [
+    "nonempty_accepted_set",
+    "correct_name_coverage",
+    "precision",
+  ]);
 });
 
 test("different notes from the same recording session cannot form an independent holdout", () => {
@@ -119,13 +125,67 @@ test("correct-name coverage and precision are separate admission requirements", 
   assert.equal(precisionReport.validation.precision, 2 / 3);
 });
 
-test("unset product targets prevent admission rather than inventing goals", () => {
+test("default admission policy uses the owner's product targets", () => {
   const input = recommendationFixture();
   delete input.policy;
-  const report = rejects(input, "declared_targets");
+  const report = buildReport(input);
+  assert.equal(report.resultType, "supported_recommendation");
   assert.deepEqual(report.policy, RECOMMENDATION_POLICY);
-  assert.equal(report.policy.minimumCorrectNameCoverage, null);
-  assert.equal(report.policy.minimumPrecision, null);
+  assert.equal(report.policy.minimumCorrectNameCoverage, 0.7);
+  assert.equal(report.policy.minimumPrecision, 0.9);
+});
+
+for (const [right, admitted] of [
+  [89, false],
+  [90, true],
+]) {
+  test(`precision ${(right / 100).toFixed(2)} is ${admitted ? "admitted" : "rejected"} with all other criteria satisfied`, () => {
+    const input = recommendationFixture();
+    input.validationEvidence.observations = Array.from({ length: 100 }, (_, i) => ({
+      recordingSessionId: "holdout-boundary",
+      truePerson: i < right ? "Ada" : null,
+      predictedPerson: "Ada",
+    }));
+    const report = buildReport(input);
+    assert.equal(report.validation.precision, right / 100);
+    assert.equal(report.validation.correctNameCoverage, 1);
+    assert.deepEqual(report.failedCriteria, admitted ? [] : ["precision"]);
+    assert.equal(report.resultType, admitted ? "supported_recommendation" : "diagnostic_only");
+    assert.equal(hasSupportedAdmission(report), admitted);
+  });
+}
+
+for (const [right, admitted] of [
+  [69, false],
+  [70, true],
+]) {
+  test(`correct-name coverage ${(right / 100).toFixed(2)} is ${admitted ? "admitted" : "rejected"} with all other criteria satisfied`, () => {
+    const input = recommendationFixture();
+    input.validationEvidence.observations = [
+      ...Array.from({ length: 100 }, (_, i) => ({
+        recordingSessionId: "holdout-boundary",
+        truePerson: "Ada",
+        predictedPerson: i < right ? "Ada" : null,
+      })),
+      { recordingSessionId: "holdout-negative", truePerson: null, predictedPerson: null },
+    ];
+    const report = buildReport(input);
+    assert.equal(report.validation.correctNameCoverage, right / 100);
+    assert.equal(report.validation.precision, 1);
+    assert.deepEqual(report.failedCriteria, admitted ? [] : ["correct_name_coverage"]);
+    assert.equal(report.resultType, admitted ? "supported_recommendation" : "diagnostic_only");
+    assert.equal(hasSupportedAdmission(report), admitted);
+  });
+}
+
+test("product admission targets remain configurable", () => {
+  const input = recommendationFixture();
+  input.validationEvidence.observations[0].predictedPerson = null;
+  input.policy.minimumCorrectNameCoverage = 0.5;
+  const report = buildReport(input);
+  assert.equal(report.resultType, "supported_recommendation");
+  assert.equal(report.policy.minimumCorrectNameCoverage, 0.5);
+  assert.equal(hasSupportedAdmission(report), true);
 });
 
 test("each existing evidence minimum and fingerprint failure names itself", () => {

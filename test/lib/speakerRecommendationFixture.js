@@ -1,7 +1,7 @@
 const { createHash } = require("node:crypto");
 const { RECOMMENDATION_POLICY } = require("../../src/helpers/speakerCalibrationPolicy");
 
-// Illustrative test targets and production observations, never product defaults.
+// Illustrative production observations evaluated against the product admission policy.
 function recommendationFixture() {
   const profiles = [
     { id: 1, name: "Ada", vector: [1, 0] },
@@ -22,7 +22,7 @@ function recommendationFixture() {
     profiles,
     scope: { kind: "all" },
     modelFingerprint: "b".repeat(64),
-    policy: { ...RECOMMENDATION_POLICY, minimumCorrectNameCoverage: 0.8, minimumPrecision: 0.95 },
+    policy: { ...RECOMMENDATION_POLICY },
     validationEvidence: {
       source: "production-decisions",
       modelFingerprint: "b".repeat(64),

@@ -6067,7 +6067,6 @@
       "independent_sessions": "Die Prüfung muss Aufnahmesitzungen unabhängig von der Abstimmung nutzen.",
       "positive_coverage": "Die Prüfung benötigt positive Beispiele registrierter Personen.",
       "negative_coverage": "Die Prüfung benötigt negative Beispiele nicht registrierter oder unbekannter Personen.",
-      "declared_targets": "Der Eigentümer muss Ziele für Präzision und korrekte Namensabdeckung vorab festlegen.",
       "nonempty_accepted_set": "Kandidat und Prüfung müssen Namen akzeptieren; vollständige Ablehnung ist unzulässig.",
       "correct_name_coverage": "Mindestabdeckung korrekter Namen nicht nachgewiesen.",
       "precision": "Erforderliche Präzision nicht nachgewiesen."

@@ -6067,7 +6067,6 @@
       "independent_sessions": "検証には調整から独立した録音セッションが必要です。",
       "positive_coverage": "検証には登録済み人物の正例が必要です。",
       "negative_coverage": "検証には未登録または不明な人物の負例が必要です。",
-      "declared_targets": "所有者が適合率と正しい名前のカバー率の目標を事前に定める必要があります。",
       "nonempty_accepted_set": "候補と検証の両方で名前を採用する必要があります。全件拒否は推奨になりません。",
       "correct_name_coverage": "正しい名前の最低カバー率が実証されていません。",
       "precision": "必要な適合率が実証されていません。"

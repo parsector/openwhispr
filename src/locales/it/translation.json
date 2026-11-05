@@ -6085,7 +6085,6 @@
       "independent_sessions": "La valutazione deve usare sessioni di registrazione indipendenti dalla regolazione.",
       "positive_coverage": "La valutazione richiede esempi positivi di persone registrate.",
       "negative_coverage": "La valutazione richiede esempi negativi di persone non registrate o sconosciute.",
-      "declared_targets": "Il proprietario deve dichiarare prima gli obiettivi di precisione e copertura dei nomi corretti.",
       "nonempty_accepted_set": "Il candidato e la valutazione devono accettare nomi; il rifiuto universale non è ammissibile.",
       "correct_name_coverage": "Copertura minima dei nomi corretti non dimostrata.",
       "precision": "Precisione richiesta non dimostrata."

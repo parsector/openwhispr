@@ -6,10 +6,10 @@ const RECOMMENDATION_POLICY = Object.freeze({
   minimumProfiles: 2,
   minimumMachineClaims: 10,
   minimumAnalysisRows: 12,
-  // Product targets must be declared by the owner before evaluation, in (0, 1].
-  // Unset targets deliberately prevent recommendations. Test targets are fixtures only.
-  minimumCorrectNameCoverage: null,
-  minimumPrecision: null,
+  // Product targets set by the owner (2026-11-05), not statistically derived.
+  // Configurable through the admission policy; valid targets are in (0, 1].
+  minimumCorrectNameCoverage: 0.7,
+  minimumPrecision: 0.9,
 });
 
 const fingerprint = (value) => /^[a-f0-9]{64}$/.test(value || "");
@@ -30,7 +30,6 @@ const ADMISSION_CRITERIA = Object.freeze([
   "independent_sessions",
   "positive_coverage",
   "negative_coverage",
-  "declared_targets",
   "nonempty_accepted_set",
   "correct_name_coverage",
   "precision",
@@ -114,7 +113,6 @@ function admitRecommendation({
       evaluationSessions.every((id) => !tuningSessions.includes(id)),
     positive_coverage: positives > 0,
     negative_coverage: negatives > 0,
-    declared_targets: target(policy.minimumCorrectNameCoverage) && target(policy.minimumPrecision),
     nonempty_accepted_set: analysis.winner.right + analysis.winner.wrong > 0 && accepted > 0,
     correct_name_coverage:
       target(policy.minimumCorrectNameCoverage) &&

@@ -6067,7 +6067,6 @@
       "independent_sessions": "評估必須使用與調整參數獨立的錄音工作階段。",
       "positive_coverage": "評估需要已註冊人員的正例。",
       "negative_coverage": "評估需要未註冊或未知人員的負例。",
-      "declared_targets": "擁有者必須預先宣告精確率和正確姓名涵蓋率目標。",
       "nonempty_accepted_set": "候選設定和評估都必須接受姓名；全部拒絕無法獲准。",
       "correct_name_coverage": "尚未證實最低正確姓名涵蓋率。",
       "precision": "尚未證實所需精確率。"

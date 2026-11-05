@@ -6067,7 +6067,6 @@
       "independent_sessions": "评估必须使用与调参独立的录音会话。",
       "positive_coverage": "评估需要已注册人员的正例。",
       "negative_coverage": "评估需要未注册或未知人员的负例。",
-      "declared_targets": "所有者必须预先声明精确率和正确姓名覆盖率目标。",
       "nonempty_accepted_set": "候选设置和评估都必须接受姓名；全部拒绝不能获得准入。",
       "correct_name_coverage": "尚未证实最低正确姓名覆盖率。",
       "precision": "尚未证实所需精确率。"

@@ -6067,7 +6067,6 @@
       "independent_sessions": "Evaluation must use recording sessions independent of tuning.",
       "positive_coverage": "Evaluation needs positive examples of enrolled people.",
       "negative_coverage": "Evaluation needs negative examples of unenrolled or unknown people.",
-      "declared_targets": "The owner must predeclare precision and correct-name coverage targets.",
       "nonempty_accepted_set": "The selected candidate and evaluation must accept names; universal refusal cannot qualify.",
       "correct_name_coverage": "Minimum correct-name coverage not demonstrated.",
       "precision": "Required precision not demonstrated."

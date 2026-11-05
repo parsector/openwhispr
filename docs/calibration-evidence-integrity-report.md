@@ -49,7 +49,6 @@ All thresholds are named in `src/helpers/speakerCalibrationPolicy.js:2`. Every f
 | `independent_sessions` | Explicit recording-session identities for all tuning/evaluation examples; no shared session. Different notes from one session do not qualify. | `src/helpers/speakerCalibrationPolicy.js:110` |
 | `positive_coverage` | Holdout includes enrolled people. | `src/helpers/speakerCalibrationPolicy.js:115` |
 | `negative_coverage` | Holdout includes unenrolled or unknown people. | `src/helpers/speakerCalibrationPolicy.js:116` |
-| `declared_targets` | Owner-declared coverage and precision targets in (0, 1]. | `src/helpers/speakerCalibrationPolicy.js:117` |
 | `nonempty_accepted_set` | Both the sweep winner and holdout accept names. | `src/helpers/speakerCalibrationPolicy.js:118` |
 | `correct_name_coverage` | Correct accepted names / enrolled positive examples meets the declared minimum. | `src/helpers/speakerCalibrationPolicy.js:119` |
 | `precision` | Correct accepted names / all accepted names meets the declared minimum. False accepts on negatives count against precision. | `src/helpers/speakerCalibrationPolicy.js:122` |
@@ -114,7 +113,7 @@ Selected real pass output covering the required regressions:
 ✔ all-refusal evidence is diagnostic_only with no recommendation
 ✔ tied profiles never report calibrated
 ✔ one machine claim fails the existing minimum even with an independent holdout
-✔ independent production holdout with declared targets supports a recommendation
+✔ independent production holdout with owner targets supports a recommendation
 ✔ exactly one reconstructed diagnostic sweep is produced
 ✔ universal refusal cannot qualify even when independent validation would pass
 ✔ empty accepted holdout cannot qualify regardless of the tuning winner
@@ -122,7 +121,7 @@ Selected real pass output covering the required regressions:
 ✔ production parity requires production decisions at the frozen candidate and fingerprints
 ✔ independent evaluation requires both enrolled positives and unenrolled negatives
 ✔ correct-name coverage and precision are separate admission requirements
-✔ unset product targets prevent admission rather than inventing goals
+✔ default admission policy uses the owner's product targets
 ✔ completion cause renders its own message: diarization skipped
 ✔ completion cause renders its own message: diarization failed
 ✔ completion cause renders its own message: extraction failed
@@ -169,7 +168,7 @@ The Impeccable detector returned `[]`. Browser inspection used the rendered repo
 
 ## Intentional limits
 
-`minimumCorrectNameCoverage` and `minimumPrecision` remain `null` for the owner to set before evaluation. The illustrative fixture targets 0.8 and 0.95 are test inputs only. Acquisition of independent production observations and verified session provenance remains later work, so the current in-app job cannot issue a supported recommendation. No evidence-snapshot schema, shared production decision module or profile-check experiment was added.
+The owner set `minimumCorrectNameCoverage` to 0.70 and `minimumPrecision` to 0.90 on 2026-11-05. These configurable product targets are not statistically derived; the holdout fixture uses the same policy defaults. Acquisition of independent production observations and verified session provenance remains later work, so the current in-app job cannot issue a supported recommendation. No evidence-snapshot schema, shared production decision module or profile-check experiment was added.
 
 Recognition math, the sweep objective, normalization, all four threshold defaults, retention and enrollment storage were left unchanged. Legacy applied runtime settings were preserved. Display derives from counters rather than redefining `had_speaker_embeddings`.
 
