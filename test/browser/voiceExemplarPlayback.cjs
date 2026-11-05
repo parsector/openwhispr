@@ -77,14 +77,20 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   await row.getByText("Recovered legacy samples: 1.", { exact: false }).waitFor();
   const unavailable = page.locator('[data-person-row="2"]');
   await unavailable.getByText("Voice unavailable", { exact: true }).waitFor();
-  await unavailable.getByText(/Sources are protected for seven days/).waitFor();
-  await unavailable.getByText(/approvals are marked unrecoverable, never removed/).waitFor();
+  await unavailable
+    .getByText(
+      /Sources are protected for seven days from when approvals enter the recovery queue, including approvals still waiting to be processed/
+    )
+    .waitFor();
+  await unavailable
+    .getByText(/approvals are marked unrecoverable\. Approval records remain unless you erase them/)
+    .waitFor();
   await unavailable
     .getByText(/permanently ineligible for recognition and recording diversity/)
     .waitFor();
   await row
     .getByText(
-      "This clip is kept until you erase it by deleting the person, clearing all voice data, resetting their voice, removing the sample, or undoing its approval. Recording retention, eviction, note deletion, re-diarisation and app restart never erase it."
+      "Recording retention, eviction, note deletion, re-diarisation and app restart do not remove this clip. You can erase it by deleting the person, clearing all voice data, resetting their voice, removing the sample or undoing its approval. Evidence retained after a failed recovery is also erased when its seven-day hold expires."
     )
     .waitFor();
   assert.match(await row.textContent(), /3.5 s/);
