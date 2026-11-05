@@ -285,7 +285,7 @@ test('listing, repeated play, complete and approve resolve a span only during th
   assert.equal(resolved, listingResolutions);
 });
 
-test('voice query indexes migrate an existing database without changing results', t => {
+test('voice query indexes exist on a fresh database and return after a version 3 upgrade', t => {
   const f = fixture(t);
   const { noteId } = f.note('migration');
   const sql = [
@@ -301,13 +301,16 @@ test('voice query indexes migrate an existing database without changing results'
   const indexNames = ['idx_notes_meeting_live', 'idx_voice_exemplars_profile_approved',
     'idx_voice_exemplars_overlap', 'idx_voice_candidates_overlap',
     'idx_speaker_mappings_profile', 'idx_speaker_run_mappings_profile'];
+  for (const name of indexNames)
+    assert.ok(f.db.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?")
+      .get(name));
   for (const name of indexNames) f.db.db.exec(`DROP INDEX ${name}`);
-  f.db.db.pragma('user_version = 5');
+  f.db.db.pragma('user_version = 3');
   const before = sql.map((query, i) => f.db.db.prepare(query).all(...args[i]));
   f.db.db.close();
   const reopened = new DatabaseManager();
   f.db.db = reopened.db;
-  assert.equal(f.db.db.pragma('user_version', { simple: true }), 6);
+  assert.equal(f.db.db.pragma('user_version', { simple: true }), 5);
   assert.deepEqual(sql.map((query, i) => f.db.db.prepare(query).all(...args[i])), before);
   for (const name of indexNames)
     assert.ok(f.db.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?")
