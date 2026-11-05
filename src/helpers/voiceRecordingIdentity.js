@@ -22,9 +22,34 @@ function open(db) {
     recovery_attempts INTEGER NOT NULL DEFAULT 0,
     recovery_next_at INTEGER NOT NULL DEFAULT 0,
     recovery_recording_id TEXT,
+    recovery_content_hash TEXT,
+    recovery_state TEXT,
+    recovery_reason TEXT,
     CHECK ((state = 'resolved' AND recording_id IS NOT NULL) OR
            (state != 'resolved' AND recording_id IS NULL))
   )`);
+  const columns = new Set(
+    db
+      .prepare("PRAGMA table_info(voice_evidence_provenance)")
+      .all()
+      .map((c) => c.name)
+  );
+  for (const name of ["recovery_content_hash", "recovery_state", "recovery_reason"])
+    if (!columns.has(name))
+      db.exec(`ALTER TABLE voice_evidence_provenance ADD COLUMN ${name} TEXT`);
+}
+
+function validSource(manifest, sample) {
+  return Boolean(
+    manifest &&
+    manifest.noteId === sample.note_id &&
+    (!sample.note_identity || manifest.noteIdentity === sample.note_identity) &&
+    ["complete", "incomplete"].includes(manifest.status) &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      manifest.recordingId || ""
+    ) &&
+    Object.values(manifest.tracks || {}).some((track) => track.chunks?.length > 0)
+  );
 }
 
 function classifyEvidence(db, sample, { store = null, record = false, unavailable = null } = {}) {
@@ -46,16 +71,7 @@ function classifyEvidence(db, sample, { store = null, record = false, unavailabl
   if (record || !sample.id) {
     const manifest = store?.recordingProvenance?.(sample.note_id);
     if (unavailable) result = { state: "unrecoverable", reason: unavailable };
-    else if (
-      manifest &&
-      manifest.noteId === sample.note_id &&
-      (!sample.note_identity || manifest.noteIdentity === sample.note_identity) &&
-      ["complete", "incomplete"].includes(manifest.status) &&
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-        manifest.recordingId || ""
-      ) &&
-      Object.values(manifest.tracks || {}).some((track) => track.chunks?.length > 0)
-    )
+    else if (validSource(manifest, sample))
       result = { state: "resolved", recordingId: manifest.recordingId };
   }
   if (record && sample.id)
@@ -95,4 +111,4 @@ function overlapsRecording(db, sample, note, store, track, start, end) {
   );
 }
 
-module.exports = { open, classifyEvidence, overlapsRecording };
+module.exports = { open, classifyEvidence, overlapsRecording, validSource };

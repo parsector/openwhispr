@@ -112,3 +112,27 @@ test("upgrading the provenance check preserves classifications and accepts recov
     reason: "decoder_timeout",
   });
 });
+
+test("fifth run: migration preserves fourth-run identity pins and retry budgets", (t) => {
+  const db = new Database(":memory:");
+  t.after(() => db.close());
+  db.exec(`CREATE TABLE speaker_profiles (id INTEGER PRIMARY KEY);
+    CREATE TABLE voice_evidence_provenance (
+      sample_id TEXT PRIMARY KEY, profile_id INTEGER,
+      state TEXT CHECK (state IN ('resolved', 'pending_recovery', 'unrecoverable', 'recovery_failed')),
+      recording_id TEXT, reason TEXT, recovery_attempts INTEGER DEFAULT 0,
+      recovery_next_at INTEGER DEFAULT 0, recovery_recording_id TEXT);
+    INSERT INTO voice_evidence_provenance VALUES ('pending', NULL, 'pending_recovery', NULL, 'audio_key_unavailable', 2, 123456, 'pinned');
+    INSERT INTO voice_evidence_provenance VALUES ('resolved', NULL, 'resolved', 'genuine', NULL, 0, 0, NULL)`);
+  const before = db.prepare("SELECT * FROM voice_evidence_provenance ORDER BY sample_id").all();
+  open(db);
+  open(db);
+  const after = db.prepare("SELECT * FROM voice_evidence_provenance ORDER BY sample_id").all();
+  for (let i = 0; i < before.length; i++) {
+    const { recovery_content_hash, recovery_state, recovery_reason, ...original } = after[i];
+    assert.deepEqual(original, before[i]);
+    assert.equal(recovery_content_hash, null);
+    assert.equal(recovery_state, null);
+    assert.equal(recovery_reason, null);
+  }
+});

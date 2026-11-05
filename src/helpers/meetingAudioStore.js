@@ -1,9 +1,9 @@
 const fs = require("fs");
 const path = require("path");
-const { randomUUID } = require("crypto");
+const { randomUUID, createHash } = require("crypto");
 const { spawnSync, execFile } = require("child_process");
 const { getFFmpegPath } = require("./ffmpegUtils");
-const { encryptBytes, decryptBytes } = require("./secretCrypto");
+const { encryptBytes, decryptBytes, refreshAudioKey } = require("./secretCrypto");
 const enrollmentTiming = require("./voiceEnrollmentTiming");
 
 const RATE = 24000;
@@ -11,6 +11,15 @@ const CHUNK_SAMPLES = RATE * 5;
 const DEFAULT_BUDGET = 2 * 1024 * 1024 * 1024;
 const TRACKS = ["mic", "system"];
 const CODEC_TIMEOUT_MS = 5000;
+
+function statIfPresent(file) {
+  try {
+    return fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
 
 function audioFailure(error) {
   if (error.code === "audio_corrupt") return { state: "corrupt", reason: "audio_corrupt" };
@@ -167,7 +176,7 @@ class MeetingAudioStore {
     {
       database = null,
       now = Date.now,
-      encryption = { encryptBytes, decryptBytes },
+      encryption = { encryptBytes, decryptBytes, refreshAudioKey },
       codec = defaultCodec,
       onEvicted = null,
       onChanged = null,
@@ -579,15 +588,30 @@ class MeetingAudioStore {
     return result;
   }
 
-  recordingProvenance(noteId) {
+  recordingProvenance(noteId, sample = null) {
     const manifest = this._manifest(noteId, true);
     if (!manifest || !["complete", "incomplete"].includes(manifest.status)) return null;
     const chunks = TRACKS.flatMap((track) => manifest.tracks?.[track]?.chunks || []);
-    if (
-      !chunks.length ||
-      !chunks.some((chunk) => fs.existsSync(this._chunkFile(noteId, chunk.file)))
-    )
+    if (!chunks.some((chunk) => statIfPresent(this._chunkFile(noteId, chunk.file))?.isFile()))
       return null;
+    if (sample) {
+      // Pin the encrypted source chunks for this bounded (<=120 s) approval,
+      // including their timing metadata, before any async decode can run.
+      const hash = createHash("sha256");
+      hash.update(
+        JSON.stringify([manifest.noteId, manifest.noteIdentity, manifest.recordingId, sample.track])
+      );
+      for (const chunk of manifest.tracks?.[sample.track]?.chunks || []) {
+        if (
+          chunk.startSample >= sample.end_sample ||
+          chunk.startSample + chunk.sampleCount <= sample.start_sample
+        )
+          continue;
+        hash.update(JSON.stringify(chunk));
+        hash.update(fs.readFileSync(this._chunkFile(noteId, chunk.file)));
+      }
+      return { ...manifest, contentHash: hash.digest("hex") };
+    }
     return manifest;
   }
 

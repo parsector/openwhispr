@@ -326,7 +326,7 @@ test("fourth run: retry budget persists across restart and ends as recovery_fail
   );
 });
 
-test("fourth run: retries preserve a classified identity and reject replacement audio", async (t) => {
+test("fifth run: retries preserve a classified identity and reject replacement audio", async (t) => {
   const { f, candidate } = await legacyFixture(t, {
     codec: {
       ...codec,
@@ -348,7 +348,7 @@ test("fourth run: retries preserve a classified identity and reject replacement 
       "SELECT state, recovery_recording_id FROM voice_evidence_provenance WHERE sample_id = ?"
     )
     .get(candidate.id);
-  assert.equal(saved.state, "pending_recovery");
+  assert.equal(saved.state, "resolved");
   assert.equal(saved.recovery_recording_id, prior);
   const file = path.join(directory, "recordings", String(f.noteId), "manifest.json");
   const manifest = JSON.parse(fs.readFileSync(file));
@@ -356,11 +356,242 @@ test("fourth run: retries preserve a classified identity and reject replacement 
   fs.writeFileSync(file, JSON.stringify(manifest));
   await f.store.legacyRecovery.done;
   assert.deepEqual(classifyEvidence(f.database.db, sample), {
-    state: "unrecoverable",
-    reason: "recording_identity_mismatch",
+    state: "resolved",
+    recordingId: prior,
+  });
+  const final = f.database.db
+    .prepare(
+      "SELECT recovery_state, recovery_reason FROM voice_evidence_provenance WHERE sample_id = ?"
+    )
+    .get(candidate.id);
+  assert.deepEqual(final, {
+    recovery_state: "recovery_failed",
+    recovery_reason: "recording_identity_mismatch",
   });
   assert.equal(f.database.getVoiceExemplarAudio().length, 0);
 });
+
+for (const [replacement, restart] of [
+  ["identity", false],
+  ["identity", true],
+  ["content", false],
+]) {
+  test(`fifth run: unclassified retry refuses replaced source ${replacement} (restart=${restart})`, async (t) => {
+    let attempts = 0;
+    let pinnedBeforeDecode = false;
+    const { f, candidate } = await legacyFixture(t, {
+      codec: {
+        ...codec,
+        decodeAsync: async (bytes) => {
+          const pin = f.database.db
+            .prepare(
+              "SELECT recovery_recording_id, recovery_content_hash FROM voice_evidence_provenance WHERE sample_id = ?"
+            )
+            .get(candidate.id);
+          pinnedBeforeDecode = Boolean(
+            pin?.recovery_recording_id && /^[a-f0-9]{64}$/.test(pin.recovery_content_hash)
+          );
+          if (++attempts === 1) throw Error("decoder busy");
+          return codec.decode(bytes);
+        },
+      },
+      recovery: { retryBaseMs: 30, yieldMs: 1 },
+    });
+    const original = f.store._manifest(f.noteId);
+    f.restart();
+    while (!f.store.legacyRecovery.failures.length)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    const saved = f.database.db
+      .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id = ?")
+      .get(candidate.id);
+    // Change the source before asserting, so the original bug also exercises
+    // the actual retry and proves it saves replacement bytes as resolved.
+    if (replacement === "identity") {
+      const file = path.join(directory, "recordings", String(f.noteId), "manifest.json");
+      fs.writeFileSync(file, JSON.stringify({ ...original, recordingId: crypto.randomUUID() }));
+    } else {
+      const file = path.join(
+        directory,
+        "recordings",
+        String(f.noteId),
+        original.tracks.mic.chunks[0].file
+      );
+      const packed = f.encryption.decryptBytes(fs.readFileSync(file));
+      packed[packed.length - 1] ^= 1;
+      fs.writeFileSync(file, f.encryption.encryptBytes(packed));
+    }
+    if (restart) f.restart();
+    await f.store.legacyRecovery.done;
+    const final = f.database.db
+      .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id = ?")
+      .get(candidate.id);
+    assert.equal(final.state, "recovery_failed");
+    assert.equal(
+      final.reason,
+      `recording_${replacement === "identity" ? "identity" : "content"}_mismatch`
+    );
+    assert.equal(saved.recovery_recording_id, original.recordingId);
+    assert.match(saved.recovery_content_hash, /^[a-f0-9]{64}$/);
+    assert.equal(attempts, 1);
+    assert.equal(pinnedBeforeDecode, true);
+    assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+    t.diagnostic(
+      `replaced source ${replacement}: restart=${restart} state=${final.state} reason=${final.reason} decodeAttempts=${attempts} clips=0 pinnedBeforeDecode=true`
+    );
+  });
+}
+
+test("fifth run: resolved classification survives three temporary failures and restart", async (t) => {
+  const { f, candidate } = await legacyFixture(t, {
+    codec: {
+      ...codec,
+      decodeAsync: async () => {
+        throw Error("decoder busy");
+      },
+    },
+    recovery: { retryBaseMs: 1, yieldMs: 1 },
+  });
+  const { classifyEvidence } = require("../../src/helpers/voiceRecordingIdentity");
+  const sample = f.database.db
+    .prepare("SELECT * FROM voice_exemplars WHERE id = ?")
+    .get(candidate.id);
+  const prior = classifyEvidence(f.database.db, sample, { store: f.store, record: true });
+  f.advance(30);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  const saved = f.database.db
+    .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id = ?")
+    .get(candidate.id);
+  assert.deepEqual(classifyEvidence(f.database.db, sample), prior);
+  assert.equal(saved.recovery_attempts, 3);
+  assert.equal(saved.recovery_state, "recovery_failed");
+  assert.equal(saved.recovery_reason, "decoder_error");
+  assert.equal(enrollment.progress(f.database, f.person.id).recoveryFailed, 1);
+  assert.equal(f.store.legacyRecovery.protects(f.noteId), false);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  assert.equal(f.store.legacyRecovery.attempted, 0);
+  assert.deepEqual(classifyEvidence(f.database.db, sample), prior);
+  t.diagnostic(
+    `resolved survives: classification=${saved.state} recordingIdPreserved=true conversion=${saved.recovery_state} attempts=${saved.recovery_attempts} restartAttempts=0 retention=${f.store._manifest(f.noteId).status}`
+  );
+});
+
+for (const code of ["EACCES", "EBUSY", "ENOENT"]) {
+  test(`fifth run: source stat ${code} preserves its IO classification`, async (t) => {
+    const { f, candidate } = await legacyFixture(t, { recovery: { retryBaseMs: 1, yieldMs: 1 } });
+    const file = path.join(
+      directory,
+      "recordings",
+      String(f.noteId),
+      f.store._manifest(f.noteId).tracks.mic.chunks[0].file
+    );
+    f.restart();
+    const stat = fs.lstatSync;
+    const exists = fs.existsSync;
+    let failed = false;
+    // Real loss exercises native ENOENT. For temporary failures, model the
+    // existsSync contract: native stat errors become false.
+    if (code === "ENOENT") fs.unlinkSync(file);
+    fs.existsSync = function (target) {
+      if (target === file && !failed && code !== "ENOENT") return false;
+      return exists.call(this, target);
+    };
+    fs.lstatSync = function (target, ...args) {
+      if (target === file && !failed && code !== "ENOENT") {
+        failed = true;
+        throw Object.assign(Error("injected source stat failure"), { code });
+      }
+      return stat.call(this, target, ...args);
+    };
+    t.after(() => {
+      fs.lstatSync = stat;
+      fs.existsSync = exists;
+    });
+    await f.store.legacyRecovery.done;
+    const saved = f.database.db
+      .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id = ?")
+      .get(candidate.id);
+    if (code === "ENOENT") {
+      assert.equal(saved.state, "unrecoverable");
+      assert.equal(f.store.legacyRecovery.attempted, 1);
+      assert.equal(f.store.legacyRecovery.recovered, 0);
+    } else {
+      assert.equal(failed, true);
+      assert.equal(f.store.legacyRecovery.failures[0].reason, code);
+      assert.equal(f.store.legacyRecovery.attempted, 2);
+      assert.equal(f.store.legacyRecovery.recovered, 1);
+    }
+    assert.equal(f.store.legacyRecovery.protects(f.noteId), false);
+    t.diagnostic(
+      `source stat ${code}: state=${saved.state} attempted=${f.store.legacyRecovery.attempted} recovered=${f.store.legacyRecovery.recovered} retryReason=${f.store.legacyRecovery.failures[0]?.reason || "none"} protected=false`
+    );
+  });
+}
+
+for (const safeStorageAvailable of [false, true]) {
+  test(`fifth run: cached keychain fallback refreshes on retry (safeStorage=${safeStorageAvailable})`, async (t) => {
+    const { f } = await legacyFixture(t, { recovery: { retryBaseMs: 30, yieldMs: 1 } });
+    const key = crypto.randomBytes(32);
+    const chunk = f.store._manifest(f.noteId).tracks.mic.chunks[0];
+    const file = path.join(directory, "recordings", String(f.noteId), chunk.file);
+    const plaintext = f.encryption.decryptBytes(fs.readFileSync(file));
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    fs.writeFileSync(
+      file,
+      Buffer.concat([iv, cipher.update(plaintext), cipher.final(), cipher.getAuthTag()])
+    );
+    let unlocked = false;
+    let reads = 0;
+    let writes = 0;
+    const originalLoad = Module._load;
+    Module._load = function (request, ...args) {
+      if (request === "electron")
+        return {
+          app: { getPath: () => directory },
+          safeStorage: { isEncryptionAvailable: () => safeStorageAvailable },
+        };
+      if (request === "@napi-rs/keyring")
+        return {
+          Entry: class {
+            getPassword() {
+              reads++;
+              if (!unlocked) throw Error("locked");
+              return key.toString("base64");
+            }
+            setPassword() {
+              writes++;
+            }
+          },
+        };
+      return originalLoad.call(this, request, ...args);
+    };
+    t.after(() => {
+      Module._load = originalLoad;
+    });
+    const modulePath = require.resolve("../../src/helpers/secretCrypto");
+    delete require.cache[modulePath];
+    const secrets = require(modulePath);
+    Object.assign(f.encryption, secrets);
+    f.restart();
+    while (!f.store.legacyRecovery.failures.length)
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    assert.equal(f.store.legacyRecovery.failures[0].reason, "audio_key_unavailable");
+    assert.equal(reads, 1);
+    unlocked = true;
+    // Ordinary reads still use the cached fallback until the bounded retry.
+    assert.throws(() => secrets.decryptBytes(Buffer.alloc(64)), { code: "audio_key_unavailable" });
+    assert.equal(reads, 1);
+    await f.store.legacyRecovery.done;
+    assert.equal(f.store.legacyRecovery.recovered, 1);
+    assert.equal(reads, 2);
+    assert.equal(writes, 0);
+    t.diagnostic(
+      `keychain unlock: safeStorage=${safeStorageAvailable} before=audio_key_unavailable readsBefore=1 readsAfter=${reads} recovered=${f.store.legacyRecovery.recovered} keyWrites=${writes}`
+    );
+  });
+}
 
 test("fourth run: valid-key ciphertext corruption is terminal and releases retention", async (t) => {
   const { f, candidate } = await legacyFixture(t);

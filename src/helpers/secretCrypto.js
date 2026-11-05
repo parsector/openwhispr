@@ -47,7 +47,7 @@ function _loadMasterKeyBackup() {
   }
 }
 
-function _initKeychain() {
+function _initKeychain(allowCreate = true) {
   let Entry;
   try {
     ({ Entry } = require("@napi-rs/keyring"));
@@ -67,7 +67,8 @@ function _initKeychain() {
     } else {
       if (fs.existsSync(_backupPath())) {
         if (!_loadMasterKeyBackup()) throw new Error("Existing master key backup is unreadable");
-      } else masterKey = crypto.randomBytes(KEY_LEN);
+      } else if (allowCreate) masterKey = crypto.randomBytes(KEY_LEN);
+      else return false;
       entry.setPassword(masterKey.toString("base64"));
       // Write a backup only for a newly generated key. Never replace the
       // existing backup after a Keychain read failure or missing entry.
@@ -84,9 +85,9 @@ function _initKeychain() {
   }
 }
 
-function _ensureInit() {
+function _ensureInit(allowCreate = true) {
   if (mode) return;
-  if (_initKeychain()) {
+  if (_initKeychain(allowCreate)) {
     mode = "keychain";
     return;
   }
@@ -96,6 +97,14 @@ function _ensureInit() {
     return;
   }
   mode = safeStorage.isEncryptionAvailable() ? "safeStorage" : "unavailable";
+}
+
+// Called once per scheduled key-related recovery retry. Ordinary reads keep
+// their cached backend; refresh never generates a replacement recording key.
+function refreshAudioKey() {
+  if (mode === "keychain" && masterKey) return;
+  mode = null;
+  _ensureInit(false);
 }
 
 function isAvailable() {
@@ -144,7 +153,12 @@ function decrypt(blob) {
 function encryptBytes(bytes) {
   _ensureInit();
   if (mode !== "keychain" || !masterKey) {
-    throw new Error("Audio encryption key is unavailable in the OS credential store");
+    throw Object.assign(
+      new Error("Audio encryption key is unavailable in the OS credential store"),
+      {
+        code: "audio_key_unavailable",
+      }
+    );
   }
   const iv = crypto.randomBytes(IV_LEN);
   const cipher = crypto.createCipheriv(ALGO, masterKey, iv);
@@ -189,4 +203,12 @@ function clearDeviceKey() {
   }
 }
 
-module.exports = { encrypt, decrypt, isAvailable, encryptBytes, decryptBytes, clearDeviceKey };
+module.exports = {
+  encrypt,
+  decrypt,
+  isAvailable,
+  encryptBytes,
+  decryptBytes,
+  refreshAudioKey,
+  clearDeviceKey,
+};

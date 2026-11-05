@@ -215,12 +215,12 @@ function provenanceCounts(db, profileId) {
     pendingRecovery: 0,
     recoveryFailed: db
       .prepare(
-        "SELECT count(*) AS n FROM voice_evidence_provenance WHERE profile_id = ? AND state = 'recovery_failed'"
+        "SELECT count(*) AS n FROM voice_evidence_provenance WHERE profile_id = ? AND (state = 'recovery_failed' OR recovery_state = 'recovery_failed')"
       )
       .get(profileId).n,
     unrecoverable: db
       .prepare(
-        "SELECT count(*) AS n FROM voice_evidence_provenance WHERE profile_id = ? AND state = 'unrecoverable'"
+        "SELECT count(*) AS n FROM voice_evidence_provenance WHERE profile_id = ? AND (state = 'unrecoverable' OR recovery_state = 'unrecoverable')"
       )
       .get(profileId).n,
     legacyRecovered: exemplarAudio
