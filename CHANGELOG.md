@@ -9,13 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.13.1] - 2026-11-04
 
-People no longer makes you wait, and reviewing rows only costs what has changed.
+People no longer makes you wait, and enrolling a voice no longer re-reads your whole history.
 
 ### People
 
 - **Opening People is instant again.** The eligibility pass no longer runs on navigation; nothing is computed until you press Review rows.
 - **Review rows opens on what it already knows.** Eligibility is cached per recording, so a second visit does no span work at all — only recordings that are new, edited, or whose audio changed are checked, one at a time, with visible progress.
 - **Keyboard focus survives the refresh.** The trigger is reachable as soon as the page renders, and focus stays on the row you were on when live results replace the cached ones. Escape returns you to the trigger.
+
+### Voices
+
+- **Enrolment acts on the span you picked.** Play, listen-complete and approve used to re-run candidate discovery across every profile and every recording, decoding audio for every eligible span on the way. They now validate the selected candidate by revision and decode only its audio: the 45-minute fixture went from 541 span decodes per play to 1, and from 1,082 per approval to 2.
+- **Eligibility and echo verdicts are cached per recording**, invalidated when the transcript, the audio or the rules change, so opening the panel does not re-check unchanged notes.
+- **One scan per approval**, reusing the span already decoded, and the list refreshes from the decision instead of rescanning.
+- **Indexes** added for the span, profile and meeting queries (idempotent, versioned migration).
+- The listening proof is unchanged: same token and sender, full duration elapsed, at least 75 % audible. The speed comes from not re-reading your history, never from skipping the listen.
+
+Each enrolment action now writes one debug timing line (scan, decode, embed, renderer refresh) so the remaining cost is measurable.
 
 Measured on a 20-recording fixture: cold 81 ms, warm 4 ms.
 
