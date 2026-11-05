@@ -592,11 +592,13 @@ class MeetingAudioStore {
     const manifest = this._manifest(noteId, true);
     if (!manifest || !["complete", "incomplete"].includes(manifest.status)) return null;
     const chunks = TRACKS.flatMap((track) => manifest.tracks?.[track]?.chunks || []);
-    if (!chunks.some((chunk) => statIfPresent(this._chunkFile(noteId, chunk.file))?.isFile()))
-      return null;
+    const indexed = chunks.some((chunk) =>
+      statIfPresent(this._chunkFile(noteId, chunk.file))?.isFile()
+    );
+    if (!indexed && !this._ownedChunks(noteId).length) return null;
     if (sample) {
-      // Pin the encrypted source chunks for this bounded (<=120 s) approval,
-      // including their timing metadata, before any async decode can run.
+      // Diagnostic snapshot only: repair, re-encryption and chunking may change
+      // this hash while the decoded approved PCM stays identical.
       const hash = createHash("sha256");
       hash.update(
         JSON.stringify([manifest.noteId, manifest.noteIdentity, manifest.recordingId, sample.track])
@@ -610,9 +612,9 @@ class MeetingAudioStore {
         hash.update(JSON.stringify(chunk));
         hash.update(fs.readFileSync(this._chunkFile(noteId, chunk.file)));
       }
-      return { ...manifest, contentHash: hash.digest("hex") };
+      return { ...manifest, hasSourceAudio: true, contentHash: hash.digest("hex") };
     }
-    return manifest;
+    return { ...manifest, hasSourceAudio: true };
   }
 
   // Cheap listing check: validate the retained chunk coverage without decoding
@@ -700,8 +702,24 @@ class MeetingAudioStore {
     )
       return { state: manifest.status };
     const state = manifest.tracks?.[track];
-    if (!state?.chunks?.length)
+    if (!state?.chunks?.length) {
+      // A locked key can leave every durable chunk unindexed. Probe an owned
+      // orphan so key refresh remains possible; absence of an index is not loss.
+      const orphan = this._ownedChunks(noteId).find((file) =>
+        path.basename(file).startsWith(`${track}-`)
+      );
+      if (orphan) {
+        try {
+          this.encryption.decryptBytes(fs.readFileSync(orphan));
+        } catch (error) {
+          return error.code === "audio_key_unavailable" || !error.code
+            ? { state: "key_unavailable", reason: "audio_key_unavailable" }
+            : audioFailure(error);
+        }
+        return { state: "temporary_failure", reason: "audio_index_incomplete" };
+      }
       return { state: manifest.status === "recording" ? "not_flushed" : "unavailable" };
+    }
     const start = Math.max(0, Math.round(startSeconds * RATE));
     const requestedEnd = Math.round(endSeconds * RATE);
     const end = Math.min(requestedEnd, state.sampleCount);

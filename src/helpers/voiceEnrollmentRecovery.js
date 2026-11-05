@@ -1,5 +1,10 @@
 const exemplarAudio = require("./voiceExemplarAudio");
-const { classifyEvidence, validSource } = require("./voiceRecordingIdentity");
+const {
+  classifyEvidence,
+  validSource,
+  pcmIdentity,
+  pinAudio,
+} = require("./voiceRecordingIdentity");
 const debugLogger = require("./debugLogger");
 
 // A small page of IDs, never a library of WAVs or ciphertext. Backoff and
@@ -10,6 +15,7 @@ const sources = `SELECT e.id, e.note_id, e.profile_id, 0 AS durable_audio FROM v
 const pending = `(p.state IS NULL OR p.state = 'pending_recovery' OR
   (p.state = 'resolved' AND s.durable_audio = 0 AND
     COALESCE(p.recovery_state, 'pending_recovery') = 'pending_recovery'))`;
+const EVIDENCE_HOLD_MS = 7 * 86400000;
 
 function start(
   database,
@@ -22,6 +28,20 @@ function start(
   yieldMs = Math.max(1, Math.min(1000, yieldMs || 10));
   retryBaseMs = Math.max(1, Math.min(60000, retryBaseMs || 1000));
   const db = database.db;
+  // One fixed grace period per approval, including approvals not yet paged.
+  // Neither process restarts nor retries renew this retention exception.
+  db.prepare(
+    `INSERT OR IGNORE INTO voice_evidence_provenance (sample_id, profile_id, state)
+    SELECT s.id, s.profile_id, 'pending_recovery' FROM (${sources}) s
+    WHERE s.durable_audio=0`
+  ).run();
+  db.prepare(
+    `UPDATE voice_evidence_provenance SET recovery_expires_at=?
+    WHERE recovery_expires_at IS NULL AND sample_id IN
+      (SELECT s.id FROM (${sources}) s WHERE s.durable_audio=0)
+    AND (state IN ('pending_recovery', 'recovery_failed') OR
+      (state='resolved' AND COALESCE(recovery_state, 'pending_recovery') IN ('pending_recovery', 'recovery_failed')))`
+  ).run(store.now() + EVIDENCE_HOLD_MS);
   const abort = new AbortController();
   const released = new Set();
   let cancelled = false;
@@ -70,12 +90,38 @@ function start(
     },
     protects: {
       value: (noteId) => {
-        if (cancelled || finished) return false;
+        // Protection is persisted evidence policy, independent of queue lifetime.
+        // Record loss before permitting retention to remove any source bytes.
+        db.prepare(
+          `UPDATE voice_evidence_provenance SET
+          state=CASE WHEN state='resolved' THEN state ELSE 'unrecoverable' END,
+          reason=COALESCE(reason, 'evidence_retention_expired'),
+          recovery_state='unrecoverable', recovery_reason='evidence_retention_expired'
+          WHERE recovery_expires_at <= ? AND sample_id IN
+            (SELECT s.id FROM (${sources}) s WHERE s.note_id=? AND s.durable_audio=0)
+          AND (state IN ('pending_recovery', 'recovery_failed') OR
+            (state='resolved' AND COALESCE(recovery_state, 'pending_recovery') IN ('pending_recovery', 'recovery_failed')))`
+        ).run(store.now(), noteId);
+        // A repaired source remains available for owner inspection through the
+        // same fixed deadline, even after a verified clip has been secured.
+        if (
+          db
+            .prepare(
+              `SELECT 1 FROM (${sources}) s
+          JOIN voice_evidence_provenance p ON p.sample_id=s.id
+          WHERE s.note_id=? AND p.recovery_state='recovered'
+            AND p.recovery_reason='source_repaired' AND p.recovery_expires_at>?
+          LIMIT 1`
+            )
+            .get(noteId, store.now())
+        )
+          return true;
         for (const sample of db
           .prepare(
             `SELECT s.id
       FROM (${sources}) s LEFT JOIN voice_evidence_provenance p ON p.sample_id = s.id
-      WHERE s.note_id = ? AND ${pending}`
+      WHERE s.note_id = ? AND s.durable_audio=0 AND (${pending} OR
+        p.state='recovery_failed' OR p.recovery_state='recovery_failed')`
           )
           .iterate(noteId)) {
           if (!released.has(sample.id)) return true;
@@ -188,8 +234,12 @@ function start(
     )
       store.encryption.refreshAudioKey?.();
     const source = store.recordingProvenance(sample.note_id, sample);
-    if (!source || sample.embedding?.length !== 2048) {
+    if (!source) {
       terminal(sample, "legacy_audio_unavailable");
+      return;
+    }
+    if (sample.embedding?.length !== 2048) {
+      terminal(sample, "legacy_embedding_unavailable", true);
       return;
     }
     if (!validSource(source, sample) || (recordedId && source.recordingId !== recordedId)) {
@@ -197,23 +247,41 @@ function start(
       return;
     }
     if (
-      provenance?.recovery_content_hash &&
-      source.contentHash !== provenance.recovery_content_hash
+      provenance?.recovery_track != null &&
+      (provenance.recovery_track !== sample.track ||
+        provenance.recovery_start_sample !== sample.start_sample ||
+        provenance.recovery_end_sample !== sample.end_sample ||
+        (provenance.recovery_note_identity &&
+          provenance.recovery_note_identity !== source.noteIdentity))
     ) {
-      terminal(sample, "recording_content_mismatch", true);
+      terminal(sample, "approved_span_mismatch", true);
       return;
     }
     // Persist before decoding even when no classification existed on entry.
-    // First attempts and retries are bound to the same authenticated bytes.
+    // Disk hashes are diagnostic only. The approved PCM is verified after decode.
     db.prepare(
       `INSERT INTO voice_evidence_provenance
-      (sample_id, profile_id, state, recovery_recording_id, recovery_content_hash, recovery_state)
-      VALUES (?, ?, 'pending_recovery', ?, ?, 'pending_recovery')
+      (sample_id, profile_id, state, recovery_recording_id, recovery_content_hash, recovery_state,
+        recovery_track, recovery_start_sample, recovery_end_sample, recovery_note_identity)
+      VALUES (?, ?, 'pending_recovery', ?, ?, 'pending_recovery', ?, ?, ?, ?)
       ON CONFLICT(sample_id) DO UPDATE SET
       recovery_recording_id=COALESCE(voice_evidence_provenance.recovery_recording_id, excluded.recovery_recording_id),
       recovery_content_hash=COALESCE(voice_evidence_provenance.recovery_content_hash, excluded.recovery_content_hash),
+      recovery_track=COALESCE(voice_evidence_provenance.recovery_track, excluded.recovery_track),
+      recovery_start_sample=COALESCE(voice_evidence_provenance.recovery_start_sample, excluded.recovery_start_sample),
+      recovery_end_sample=COALESCE(voice_evidence_provenance.recovery_end_sample, excluded.recovery_end_sample),
+      recovery_note_identity=COALESCE(voice_evidence_provenance.recovery_note_identity, excluded.recovery_note_identity),
       recovery_state='pending_recovery'`
-    ).run(sample.id, sample.profile_id, source.recordingId, source.contentHash);
+    ).run(
+      sample.id,
+      sample.profile_id,
+      source.recordingId,
+      source.contentHash,
+      sample.track,
+      sample.start_sample,
+      sample.end_sample,
+      source.noteIdentity || null
+    );
     const audio = await store.spanAsync(
       sample.note_id,
       sample.track,
@@ -250,18 +318,26 @@ function start(
       terminal(sample, "recording_identity_mismatch", true);
       return;
     }
-    if (liveSource.contentHash !== source.contentHash) {
-      terminal(sample, "recording_content_mismatch", true);
-      return;
-    }
     if (["key_unavailable", "temporary_failure", "not_flushed"].includes(audio.state)) {
       retry(sample, audio.reason || audio.state);
       return;
     }
     if (audio.state !== "available" || audio.partial) {
-      terminal(sample, audio.reason || "legacy_audio_unavailable");
+      // Incomplete indexes, corrupt chunks and repairable gaps are failures,
+      // never permission to discard still-owned evidence.
+      retry(sample, audio.reason || "legacy_audio_unavailable");
       return;
     }
+    const pcmHash = pcmIdentity(audio.wav);
+    if (provenance?.recovery_pcm_hash && pcmHash !== provenance.recovery_pcm_hash) {
+      terminal(sample, "audio_content_mismatch", true);
+      return;
+    }
+    // Historical approvals cannot supply a hash of audio never saved. Establish
+    // their baseline only from a complete decode, before encryption.
+    pinAudio(db, sample, source, audio.wav, pcmHash);
+    const repaired =
+      (provenance?.recovery_content_hash || source.contentHash) !== liveSource.contentHash;
     let ciphertext;
     try {
       ciphertext = exemplarAudio.seal(store, audio.wav);
@@ -277,6 +353,7 @@ function start(
           id: sample.id,
           profileId: sample.profile_id,
           noteId: sample.note_id,
+          recordingId: source.recordingId,
           noteTitle: note?.title || "",
           rowIds: JSON.parse(sample.row_ids),
           revision: "legacy-approval",
@@ -295,8 +372,8 @@ function start(
       ).run(sample.approved_at, sample.created_at, sample.id);
       const current = classifyEvidence(db, sample, { store, record: true });
       db.prepare(
-        "UPDATE voice_evidence_provenance SET recovery_state='recovered', recovery_reason=NULL WHERE sample_id=?"
-      ).run(sample.id);
+        "UPDATE voice_evidence_provenance SET recovery_state='recovered', recovery_reason=? WHERE sample_id=?"
+      ).run(repaired ? "source_repaired" : null, sample.id);
       if (current.state === "resolved") report.resolved++;
       else released.add(sample.id); // Clip bytes no longer depend on the source.
     })();
@@ -340,7 +417,8 @@ function start(
         await recover(item);
       } catch (error) {
         if (!cancelled) {
-          if (error.code === "ENOENT") terminal(item, "audio_missing");
+          if (error.code === "ENOENT" && !store._ownedChunks(item.note_id).length)
+            terminal(item, "audio_missing");
           else retry(item, error.code || "recovery_io_error");
         }
       }
@@ -364,4 +442,4 @@ function start(
   return report;
 }
 
-module.exports = { start };
+module.exports = { start, EVIDENCE_HOLD_MS };

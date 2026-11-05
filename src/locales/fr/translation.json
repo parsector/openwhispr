@@ -6017,7 +6017,7 @@
     "voiceUnavailable": "Voix indisponible",
     "legacyRecovered": "Anciens échantillons récupérés : {{count}}.",
     "legacyRecoveryDisclosure": "Les anciens échantillons récupérés comptent normalement. Les échantillons dont l’audio a déjà expiré ne peuvent pas être récupérés et sont définitivement exclus de la reconnaissance et du calcul de diversité des enregistrements. Un nouvel enrôlement peut être nécessaire. Les échantillons sans identité réelle d’enregistrement restent indisponibles jusqu’à leur récupération.",
-    "legacyRecoveryFailed": "La récupération s’est arrêtée après plusieurs échecs. Supprimez les échantillons indisponibles et enregistrez-en de nouveaux.",
+    "legacyRecoveryFailed": "Certains enregistrements approuvés n’ont pas pu être vérifiés ou récupérés. Les sources sont protégées pendant sept jours à partir de la première tentative de récupération. Ensuite, les approbations sont marquées comme irrécupérables, jamais supprimées. Vérifiez ces échantillons et enregistrez de nouveaux extraits.",
     "exemplarPlaybackKeyUnavailable": "Le clip enregistré ne peut pas être lu car sa clé de chiffrement est indisponible. Restaurez la clé d’origine pour l’écouter.",
     "exemplarCapture": "{{seconds}} s · capturé le {{date}}",
     "enrollmentProgress": "Extraits nets : {{spans}} / 3 · enregistrements : {{meetings}} / 2",

@@ -129,10 +129,49 @@ test("fifth run: migration preserves fourth-run identity pins and retry budgets"
   open(db);
   const after = db.prepare("SELECT * FROM voice_evidence_provenance ORDER BY sample_id").all();
   for (let i = 0; i < before.length; i++) {
-    const { recovery_content_hash, recovery_state, recovery_reason, ...original } = after[i];
-    assert.deepEqual(original, before[i]);
-    assert.equal(recovery_content_hash, null);
-    assert.equal(recovery_state, null);
-    assert.equal(recovery_reason, null);
+    for (const [name, value] of Object.entries(after[i]))
+      assert.equal(value, Object.hasOwn(before[i], name) ? before[i][name] : null, name);
   }
+});
+
+test("sixth run: migration reopens disk-hash refusals once and preserves PCM pins and expiry", (t) => {
+  const { db } = fixture(t);
+  for (const column of [
+    "recovery_pcm_hash",
+    "recovery_track",
+    "recovery_start_sample",
+    "recovery_end_sample",
+    "recovery_note_identity",
+    "recovery_codec",
+    "recovery_sample_rate",
+    "recovery_duration_ms",
+    "recovery_expires_at",
+  ])
+    db.exec(`ALTER TABLE voice_evidence_provenance DROP COLUMN ${column}`);
+  db.prepare(
+    `INSERT INTO voice_evidence_provenance
+    (sample_id, state, reason, recovery_state, recovery_reason, recovery_recording_id, recovery_content_hash, recovery_attempts)
+    VALUES ('old-refusal', 'recovery_failed', 'recording_content_mismatch', 'recovery_failed',
+      'recording_content_mismatch', ?, 'diagnostic-only', 3)`
+  ).run(uuid);
+  open(db);
+  const reopened = db
+    .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id='old-refusal'")
+    .get();
+  assert.equal(reopened.state, "pending_recovery");
+  assert.equal(reopened.recovery_attempts, 0);
+  assert.equal(reopened.recovery_recording_id, uuid);
+  assert.equal(reopened.recovery_content_hash, "diagnostic-only");
+  db.prepare(
+    `UPDATE voice_evidence_provenance SET recovery_pcm_hash='approved-pcm',
+    recovery_expires_at=12345, recovery_attempts=1 WHERE sample_id='old-refusal'`
+  ).run();
+  const pinned = db
+    .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id='old-refusal'")
+    .get();
+  open(db);
+  assert.deepEqual(
+    db.prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id='old-refusal'").get(),
+    pinned
+  );
 });

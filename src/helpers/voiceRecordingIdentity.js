@@ -1,3 +1,5 @@
+const { createHash } = require("node:crypto");
+
 // Provenance belongs to an approval, independently of notes and undo snapshots.
 // Only approval and startup recovery record it. Readers never repair it from
 // cached recording_id columns, status IDs, sibling samples or transcript spans.
@@ -37,6 +39,76 @@ function open(db) {
   for (const name of ["recovery_content_hash", "recovery_state", "recovery_reason"])
     if (!columns.has(name))
       db.exec(`ALTER TABLE voice_evidence_provenance ADD COLUMN ${name} TEXT`);
+  db.transaction(() => {
+    for (const [name, type] of Object.entries({
+      recovery_pcm_hash: "TEXT",
+      recovery_track: "TEXT",
+      recovery_start_sample: "INTEGER",
+      recovery_end_sample: "INTEGER",
+      recovery_note_identity: "TEXT",
+      recovery_codec: "TEXT",
+      recovery_sample_rate: "INTEGER",
+      recovery_duration_ms: "INTEGER",
+      recovery_expires_at: "INTEGER",
+    }))
+      if (!columns.has(name))
+        db.exec(`ALTER TABLE voice_evidence_provenance ADD COLUMN ${name} ${type}`);
+    // A disk-byte mismatch was never evidence of different audio. Retry these
+    // historical refusals once under PCM verification; do not reset other budgets.
+    if (!columns.has("recovery_pcm_hash"))
+      db.exec(`UPDATE voice_evidence_provenance SET
+      state=CASE WHEN state='resolved' THEN state ELSE 'pending_recovery' END,
+      reason=CASE WHEN state='resolved' THEN reason ELSE NULL END,
+      recovery_state='pending_recovery', recovery_reason=NULL,
+      recovery_attempts=0, recovery_next_at=0
+      WHERE reason='recording_content_mismatch' OR recovery_reason='recording_content_mismatch'`);
+  })();
+}
+
+// The store emits canonical mono s16le/24 kHz WAVs. Hash only their PCM data,
+// never the container header, source codec, chunk boundaries or encryption.
+function pcmIdentity(bytes) {
+  if (
+    bytes.length < 44 ||
+    bytes.toString("ascii", 0, 4) !== "RIFF" ||
+    bytes.toString("ascii", 8, 16) !== "WAVEfmt " ||
+    bytes.readUInt32LE(16) !== 16 ||
+    bytes.readUInt16LE(20) !== 1 ||
+    bytes.readUInt16LE(22) !== 1 ||
+    bytes.readUInt32LE(24) !== 24000 ||
+    bytes.readUInt16LE(34) !== 16 ||
+    bytes.toString("ascii", 36, 40) !== "data" ||
+    bytes.readUInt32LE(40) !== bytes.length - 44 ||
+    (bytes.length - 44) % 2
+  )
+    throw new Error("Expected canonical enrollment PCM WAV");
+  return createHash("sha256").update(bytes.subarray(44)).digest("hex");
+}
+
+function pinAudio(db, sample, source, bytes, hash = pcmIdentity(bytes)) {
+  db.prepare(
+    `UPDATE voice_evidence_provenance SET
+    recovery_pcm_hash=COALESCE(recovery_pcm_hash, ?),
+    recovery_recording_id=COALESCE(recovery_recording_id, ?),
+    recovery_track=COALESCE(recovery_track, ?),
+    recovery_start_sample=COALESCE(recovery_start_sample, ?),
+    recovery_end_sample=COALESCE(recovery_end_sample, ?),
+    recovery_note_identity=COALESCE(recovery_note_identity, ?),
+    recovery_codec=COALESCE(recovery_codec, ?),
+    recovery_sample_rate=COALESCE(recovery_sample_rate, 24000),
+    recovery_duration_ms=COALESCE(recovery_duration_ms, ?)
+    WHERE sample_id=?`
+  ).run(
+    hash,
+    source.recordingId,
+    sample.track,
+    sample.start_sample,
+    sample.end_sample,
+    source.noteIdentity || null,
+    source.tracks?.[sample.track]?.codec || "audio/ogg; codecs=opus",
+    (bytes.length - 44) / 48,
+    sample.id
+  );
 }
 
 function validSource(manifest, sample) {
@@ -48,7 +120,8 @@ function validSource(manifest, sample) {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       manifest.recordingId || ""
     ) &&
-    Object.values(manifest.tracks || {}).some((track) => track.chunks?.length > 0)
+    (manifest.hasSourceAudio === true ||
+      Object.values(manifest.tracks || {}).some((track) => track.chunks?.length > 0))
   );
 }
 
@@ -111,4 +184,4 @@ function overlapsRecording(db, sample, note, store, track, start, end) {
   );
 }
 
-module.exports = { open, classifyEvidence, overlapsRecording, validSource };
+module.exports = { open, classifyEvidence, overlapsRecording, validSource, pcmIdentity, pinAudio };

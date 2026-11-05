@@ -6017,7 +6017,7 @@
     "voiceUnavailable": "Voz indisponível",
     "legacyRecovered": "Amostras antigas recuperadas: {{count}}.",
     "legacyRecoveryDisclosure": "As amostras antigas recuperadas contam normalmente. As amostras cujo áudio já expirou não podem ser recuperadas e ficam permanentemente inelegíveis para reconhecimento e diversidade de gravações. Poderá ser necessário voltar a registar a voz. As amostras à espera de uma identidade de gravação real permanecem indisponíveis até à recuperação.",
-    "legacyRecoveryFailed": "A recuperação parou após falhas repetidas. Remove as amostras indisponíveis e regista novas.",
+    "legacyRecoveryFailed": "Não foi possível verificar ou recuperar parte do áudio aprovado. As fontes ficam protegidas durante sete dias a partir da primeira tentativa de recuperação. Depois, as aprovações são marcadas como irrecuperáveis, nunca eliminadas. Revê estas amostras e regista novo áudio.",
     "exemplarPlaybackKeyUnavailable": "Não é possível reproduzir o clipe salvo porque a chave de criptografia está indisponível. Restaure a chave original para ouvir.",
     "exemplarCapture": "{{seconds}} s · capturado em {{date}}",
     "enrollmentProgress": "Trechos limpos: {{spans}} / 3 · gravações: {{meetings}} / 2",

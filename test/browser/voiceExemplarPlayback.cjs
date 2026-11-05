@@ -77,7 +77,8 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   await row.getByText("Recovered legacy samples: 1.", { exact: false }).waitFor();
   const unavailable = page.locator('[data-person-row="2"]');
   await unavailable.getByText("Voice unavailable", { exact: true }).waitFor();
-  await unavailable.getByText(/Recovery stopped after repeated failures/).waitFor();
+  await unavailable.getByText(/Sources are protected for seven days/).waitFor();
+  await unavailable.getByText(/approvals are marked unrecoverable, never removed/).waitFor();
   await unavailable
     .getByText(/permanently ineligible for recognition and recording diversity/)
     .waitFor();

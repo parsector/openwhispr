@@ -8,7 +8,7 @@ const debugLogger = require("./debugLogger");
 const { resolveMeetingAudioSpan } = require("./meetingAudioSpan.mjs");
 const enrollmentTiming = require("./voiceEnrollmentTiming");
 const exemplarAudio = require("./voiceExemplarAudio");
-const { classifyEvidence, overlapsRecording } = require("./voiceRecordingIdentity");
+const { classifyEvidence, overlapsRecording, pinAudio } = require("./voiceRecordingIdentity");
 
 const RATE = 24000;
 const MODEL_RATE = 16000;
@@ -1035,6 +1035,12 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
           db.prepare("SELECT * FROM voice_exemplar_audio WHERE id = ?").get(id),
           { store, record: true }
         );
+        const sample = db.prepare("SELECT * FROM voice_exemplar_audio WHERE id=?").get(id);
+        const source = store.recordingProvenance(candidate.noteId, sample);
+        pinAudio(db, sample, source, audio.wav);
+        db.prepare(
+          "UPDATE voice_evidence_provenance SET recovery_content_hash=? WHERE sample_id=?"
+        ).run(source.contentHash || null, id);
         statement = "UPDATE speaker_profiles SET voice_needs_reapproval = 0 WHERE id = ?";
         db.prepare("UPDATE speaker_profiles SET voice_needs_reapproval = 0 WHERE id = ?").run(
           candidate.profileId
@@ -1509,12 +1515,16 @@ function pruneSnapshots(db, field, id) {
 }
 function removeNoteEvidence(db, noteId) {
   for (const sample of db.prepare("SELECT * FROM voice_exemplars WHERE note_id = ?").all(noteId)) {
-    const evidence = classifyEvidence(db, sample);
-    if (
-      evidence.state === "pending_recovery" &&
-      !db.prepare("SELECT 1 FROM voice_exemplar_audio WHERE id = ?").get(sample.id)
-    )
+    if (!db.prepare("SELECT 1 FROM voice_exemplar_audio WHERE id = ?").get(sample.id)) {
       classifyEvidence(db, sample, { record: true, unavailable: "legacy_audio_unavailable" });
+      db.prepare(
+        `UPDATE voice_evidence_provenance SET
+        recovery_state='unrecoverable',
+        recovery_reason=CASE WHEN recovery_reason='evidence_retention_expired'
+          THEN recovery_reason ELSE 'legacy_audio_unavailable' END
+        WHERE sample_id=?`
+      ).run(sample.id);
+    }
   }
   const affected = new Set(
     db
@@ -1549,7 +1559,12 @@ function removeNoteEvidence(db, noteId) {
     ).run(noteId);
   db.prepare("DELETE FROM voice_enrollment_actions WHERE note_id = ?").run(noteId);
   db.prepare("DELETE FROM voice_enrollment_candidates WHERE note_id = ?").run(noteId);
-  db.prepare("DELETE FROM voice_exemplars WHERE note_id = ?").run(noteId);
+  // Source retention must never erase an approval whose audio could not be
+  // recovered. Keep its consent, bounds and visible loss classification.
+  db.prepare(
+    `DELETE FROM voice_exemplars WHERE note_id = ? AND EXISTS
+    (SELECT 1 FROM voice_exemplar_audio a WHERE a.id=voice_exemplars.id)`
+  ).run(noteId);
   for (const profileId of affected) {
     rebuild(db, profileId);
     if (exemplarAudio.list(db, profileId).length) continue;

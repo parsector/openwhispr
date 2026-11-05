@@ -151,6 +151,279 @@ async function legacyFixture(t, options = {}) {
   return { f, ...approved };
 }
 
+// Preserve the approval-time identity while simulating a lost durable clip.
+async function waitForRecoveryFailure(f, t) {
+  const deadline = Date.now() + 3000;
+  while (!f.store.legacyRecovery.failures.length) {
+    t.signal.throwIfAborted();
+    assert.equal(f.store.legacyRecovery.recoveryFailed, 0, "recovery terminated before a retry");
+    assert.ok(Date.now() < deadline, "recovery did not report its retry");
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}
+
+async function sixthFixture(t, options = {}) {
+  const f = fixture(t, { recovery: { retryBaseMs: 30, yieldMs: 1 }, ...options });
+  const { candidate, playback } = await f.approve();
+  f.advance(30); // Source retention is already overdue before recovery begins.
+  f.database.db.exec(`DELETE FROM voice_exemplar_audio;
+    UPDATE voice_evidence_provenance SET state='pending_recovery', recording_id=NULL`);
+  f.restart();
+  f.store.spanAsync = async () => ({ state: "temporary_failure", reason: "decoder_error" });
+  await waitForRecoveryFailure(f, t);
+  f.store.cancelRecovery();
+  return { f, candidate, playback };
+}
+
+function rewriteChunks(f, transform, audioCodec = codec) {
+  const dir = path.join(directory, "recordings", String(f.noteId));
+  const manifest = f.store._manifest(f.noteId);
+  const chunks = manifest.tracks.mic.chunks;
+  const original = chunks.map((chunk) => {
+    const bytes = f.encryption.decryptBytes(fs.readFileSync(path.join(dir, chunk.file)));
+    const length = bytes.readUInt32LE(0);
+    return audioCodec.decode(bytes.subarray(4 + length));
+  });
+  const parts = transform(Buffer.concat(original));
+  for (const chunk of chunks) fs.unlinkSync(path.join(dir, chunk.file));
+  let startSample = 0;
+  manifest.tracks.mic.chunks = parts.map((pcm, index) => {
+    const entry = {
+      ...chunks[0],
+      file: `mic-${String(index).padStart(7, "0")}.owac`,
+      startSample,
+      sampleCount: pcm.length / 2,
+    };
+    startSample += entry.sampleCount;
+    const header = Buffer.from(JSON.stringify(entry));
+    const size = Buffer.alloc(4);
+    size.writeUInt32LE(header.length);
+    // Alter the encoded representation too; fake codec ignores its padding.
+    const packed = Buffer.concat([size, header, audioCodec.encode(pcm)]);
+    const ciphertext = f.encryption.encryptBytes(packed);
+    fs.writeFileSync(path.join(dir, entry.file), ciphertext);
+    return { ...entry, byteLength: ciphertext.length };
+  });
+  manifest.tracks.mic.sampleCount = startSample;
+  fs.writeFileSync(path.join(dir, "manifest.json"), JSON.stringify(manifest));
+}
+
+for (const change of [
+  "locked orphan repair",
+  "locked fully unindexed repair",
+  "reencrypted",
+  "rechunked/reencoded",
+  "changed audio outside approved span",
+  "different PCM",
+]) {
+  test(`sixth run: ${change}`, async (t) => {
+    const { f, candidate, playback } = await sixthFixture(t);
+    const approvedPcm = playback.wav.subarray(44);
+    const originalId = f.store._manifest(f.noteId).recordingId;
+    if (change === "reencrypted") {
+      const chunk = f.store._manifest(f.noteId).tracks.mic.chunks[0];
+      const file = path.join(directory, "recordings", String(f.noteId), chunk.file);
+      fs.writeFileSync(
+        file,
+        f.encryption.encryptBytes(f.encryption.decryptBytes(fs.readFileSync(file)))
+      );
+    } else if (!change.startsWith("locked")) {
+      rewriteChunks(f, (pcm) => {
+        if (change === "different PCM") pcm[RATE * 2] ^= 127;
+        if (change === "changed audio outside approved span") {
+          assert.ok(candidate.startSample * 2 > 200);
+          pcm[200] ^= 127;
+        }
+        return [pcm.subarray(0, RATE * 2), pcm.subarray(RATE * 2)];
+      });
+    } else {
+      rewriteChunks(f, (pcm) => [pcm.subarray(0, RATE * 2), pcm.subarray(RATE * 2)]);
+      const file = path.join(directory, "recordings", String(f.noteId), "manifest.json");
+      const manifest = JSON.parse(fs.readFileSync(file));
+      manifest.tracks.mic.chunks.pop(); // A genuine durable orphan, absent from the index.
+      if (change === "locked fully unindexed repair") manifest.tracks.mic.chunks = [];
+      fs.writeFileSync(file, JSON.stringify(manifest));
+      const decrypt = f.encryption.decryptBytes;
+      f.encryption.decryptBytes = () => {
+        throw Object.assign(Error("locked"), { code: "audio_key_unavailable" });
+      };
+      f.restart();
+      await waitForRecoveryFailure(f, t);
+      assert.equal(
+        f.store._manifest(f.noteId).tracks.mic.chunks.length,
+        change === "locked fully unindexed repair" ? 0 : 1
+      );
+      assert.equal(f.store.enforce().removed.length, 0);
+      f.encryption.decryptBytes = decrypt;
+    }
+    f.restart();
+    await f.store.legacyRecovery.done;
+    const saved = f.database.db
+      .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id=?")
+      .get(candidate.id);
+    const chunks = f.store._manifest(f.noteId).tracks.mic.chunks.length;
+    const legacy = !!f.database.db
+      .prepare("SELECT 1 FROM voice_exemplars WHERE id=?")
+      .get(candidate.id);
+    const sameRecording = f.store._manifest(f.noteId).recordingId === originalId;
+    if (change === "different PCM") {
+      assert.equal(saved.state, "recovery_failed");
+      assert.equal(saved.recovery_reason, "audio_content_mismatch");
+      assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+      f.advance(4);
+      assert.equal(f.store.enforce().removed.length, 0);
+    } else {
+      const recovered = enrollment.play(f.database, f.store, candidate.id);
+      assert.equal(recovered.state, "available");
+      assert.deepEqual(recovered.wav.subarray(44), approvedPcm);
+      assert.equal(saved.state, "resolved");
+      assert.equal(f.store.legacyRecovery.recovered, 1);
+      assert.equal(saved.recovery_reason, "source_repaired");
+    }
+    assert.equal(sameRecording, true);
+    assert.ok(chunks > 0);
+    assert.equal(legacy, true);
+    t.diagnostic(
+      `sixth ${change}: sameRecording=${sameRecording} pcmEqual=${change !== "different PCM"} state=${saved.state} reason=${saved.recovery_reason} recovered=${f.store.legacyRecovery.recovered} sourceChunks=${chunks} legacyApproval=retained deletions=0`
+    );
+  });
+}
+
+test("sixth run: failed evidence has a fixed expiry and approval survives retention", async (t) => {
+  const { f, candidate } = await sixthFixture(t);
+  rewriteChunks(f, (pcm) => {
+    pcm[RATE * 2] ^= 127;
+    return [pcm];
+  });
+  f.restart();
+  await f.store.legacyRecovery.done;
+  f.advance(4);
+  assert.equal(f.store.enforce().removed.length, 0);
+  const deadline = f.database.db
+    .prepare("SELECT recovery_expires_at FROM voice_evidence_provenance WHERE sample_id=?")
+    .get(candidate.id).recovery_expires_at;
+  f.restart();
+  await f.store.legacyRecovery.done;
+  assert.equal(f.store.enforce().removed.length, 0);
+  assert.equal(
+    f.database.db
+      .prepare("SELECT recovery_expires_at FROM voice_evidence_provenance WHERE sample_id=?")
+      .get(candidate.id).recovery_expires_at,
+    deadline
+  );
+  f.advance(4);
+  assert.equal(f.store.enforce().removed.length, 1);
+  const saved = f.database.db
+    .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id=?")
+    .get(candidate.id);
+  assert.equal(saved.state, "unrecoverable");
+  assert.equal(saved.recovery_reason, "evidence_retention_expired");
+  assert.ok(f.database.db.prepare("SELECT 1 FROM voice_exemplars WHERE id=?").get(candidate.id));
+  assert.equal(enrollment.progress(f.database, f.person.id).unrecoverable, 1);
+  t.diagnostic(
+    `sixth failed retention: day4=retained restartDeadlineUnchanged=true day8=${f.store._manifest(f.noteId).status} state=${saved.state} reason=${saved.recovery_reason} legacyApproval=retained`
+  );
+});
+
+test("sixth run: changed approval bounds refuse recovery without erasing evidence", async (t) => {
+  const { f, candidate } = await sixthFixture(t);
+  f.database.db
+    .prepare("UPDATE voice_exemplars SET start_sample=start_sample+1 WHERE id=?")
+    .run(candidate.id);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  const saved = f.database.db
+    .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id=?")
+    .get(candidate.id);
+  assert.equal(saved.state, "recovery_failed");
+  assert.equal(saved.recovery_reason, "approved_span_mismatch");
+  assert.equal(f.store.enforce().removed.length, 0);
+  assert.ok(f.database.db.prepare("SELECT 1 FROM voice_exemplars WHERE id=?").get(candidate.id));
+  assert.ok(f.store._manifest(f.noteId).tracks.mic.chunks.length);
+});
+
+test("sixth run: a missing legacy vector does not release audio evidence", async (t) => {
+  const { f, candidate } = await sixthFixture(t);
+  f.database.db.prepare("UPDATE voice_exemplars SET embedding=x'' WHERE id=?").run(candidate.id);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  const saved = f.database.db
+    .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id=?")
+    .get(candidate.id);
+  assert.equal(saved.state, "recovery_failed");
+  assert.equal(saved.recovery_reason, "legacy_embedding_unavailable");
+  assert.equal(f.store.enforce().removed.length, 0);
+  assert.ok(f.database.db.prepare("SELECT 1 FROM voice_exemplars WHERE id=?").get(candidate.id));
+  assert.ok(f.store._manifest(f.noteId).tracks.mic.chunks.length);
+});
+
+test("sixth run: healthy resolved evidence is unchanged", async (t) => {
+  const f = fixture(t);
+  const { candidate, playback } = await f.approve();
+  const before = f.database.db
+    .prepare("SELECT * FROM voice_exemplar_audio WHERE id=?")
+    .get(candidate.id);
+  f.advance(30);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  assert.deepEqual(
+    f.database.db.prepare("SELECT * FROM voice_exemplar_audio WHERE id=?").get(candidate.id),
+    before
+  );
+  assert.deepEqual(enrollment.play(f.database, f.store, candidate.id).wav, playback.wav);
+  assert.equal(enrollment.listSamples(f.database, f.person.id)[0].provenance, "resolved");
+  t.diagnostic(
+    "sixth healthy resolved: durableRowUnchanged=true pcmEqual=true state=resolved source=expired clips=1"
+  );
+});
+
+test("sixth run: real Opus to FLAC reencoding and rechunking preserves approved PCM", async (t) => {
+  const { defaultCodec } = require("../../src/helpers/meetingAudioStore");
+  const { getFFmpegPath } = require("../../src/helpers/ffmpegUtils");
+  const { execFileSync } = require("node:child_process");
+  const { f, candidate, playback } = await sixthFixture(t, { codec: defaultCodec });
+  rewriteChunks(f, (pcm) => [pcm.subarray(0, RATE * 2), pcm.subarray(RATE * 2)], {
+    decode: defaultCodec.decode,
+    encode: (pcm) =>
+      execFileSync(
+        getFFmpegPath(),
+        [
+          "-hide_banner",
+          "-loglevel",
+          "error",
+          "-f",
+          "s16le",
+          "-ar",
+          "24000",
+          "-ac",
+          "1",
+          "-i",
+          "pipe:0",
+          "-c:a",
+          "flac",
+          "-f",
+          "ogg",
+          "pipe:1",
+        ],
+        { input: pcm, timeout: 5000, maxBuffer: 8 * 1024 * 1024 }
+      ),
+  });
+  f.restart();
+  await f.store.legacyRecovery.done;
+  const recovered = enrollment.play(f.database, f.store, candidate.id);
+  assert.equal(recovered.state, "available");
+  assert.deepEqual(recovered.wav.subarray(44), playback.wav.subarray(44));
+  const saved = f.database.db
+    .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id=?")
+    .get(candidate.id);
+  assert.equal(saved.recovery_reason, "source_repaired");
+  assert.equal(f.store._manifest(f.noteId).tracks.mic.chunks.length, 2);
+  assert.equal(f.store.enforce().removed.length, 0);
+  t.diagnostic(
+    "sixth real ffmpeg: Opus→Ogg/FLAC chunks=1→2 pcmEqual=true state=resolved reason=source_repaired source=retained"
+  );
+});
+
 test("fourth run: constructor returns with recovery queued and yields between capped passes", async (t) => {
   const { f, candidate } = await legacyFixture(t, { recovery: { passLimit: 2, yieldMs: 1 } });
   for (let i = 0; i < 4; i++)
@@ -317,12 +590,13 @@ test("fourth run: retry budget persists across restart and ends as recovery_fail
   assert.equal(saved.state, "recovery_failed");
   assert.equal(saved.recovery_attempts, 3);
   assert.equal(enrollment.progress(f.database, f.person.id).recoveryFailed, 1);
-  assert.equal(f.store._manifest(f.noteId).status, "expired");
+  assert.equal(f.store._manifest(f.noteId).status, "complete");
+  assert.equal(f.store.legacyRecovery.protects(f.noteId), true);
   f.restart();
   await f.store.legacyRecovery.done;
   assert.equal(f.store.legacyRecovery.attempted, 0);
   t.diagnostic(
-    `budget exhausted: state=${saved.state} attempts=${saved.recovery_attempts} reason=${saved.reason} restartAttempts=0 retention=expired`
+    `budget exhausted: state=${saved.state} attempts=${saved.recovery_attempts} reason=${saved.reason} restartAttempts=0 retention=protected`
   );
 });
 
@@ -391,13 +665,21 @@ for (const [replacement, restart] of [
           pinnedBeforeDecode = Boolean(
             pin?.recovery_recording_id && /^[a-f0-9]{64}$/.test(pin.recovery_content_hash)
           );
-          if (++attempts === 1) throw Error("decoder busy");
+          if (++attempts === 1 && replacement === "identity") throw Error("decoder busy");
           return codec.decode(bytes);
         },
       },
       recovery: { retryBaseMs: 30, yieldMs: 1 },
     });
     const original = f.store._manifest(f.noteId);
+    if (replacement === "content") {
+      const encrypt = f.encryption.encryptBytes;
+      let calls = 0;
+      f.encryption.encryptBytes = (bytes) => {
+        if (++calls === 1) throw Error("temporarily unable to seal clip");
+        return encrypt(bytes);
+      };
+    }
     f.restart();
     while (!f.store.legacyRecovery.failures.length)
       await new Promise((resolve) => setTimeout(resolve, 1));
@@ -410,15 +692,11 @@ for (const [replacement, restart] of [
       const file = path.join(directory, "recordings", String(f.noteId), "manifest.json");
       fs.writeFileSync(file, JSON.stringify({ ...original, recordingId: crypto.randomUUID() }));
     } else {
-      const file = path.join(
-        directory,
-        "recordings",
-        String(f.noteId),
-        original.tracks.mic.chunks[0].file
-      );
-      const packed = f.encryption.decryptBytes(fs.readFileSync(file));
-      packed[packed.length - 1] ^= 1;
-      fs.writeFileSync(file, f.encryption.encryptBytes(packed));
+      assert.match(saved.recovery_pcm_hash, /^[a-f0-9]{64}$/);
+      rewriteChunks(f, (pcm) => {
+        pcm[RATE * 2] ^= 127;
+        return [pcm];
+      });
     }
     if (restart) f.restart();
     await f.store.legacyRecovery.done;
@@ -428,11 +706,11 @@ for (const [replacement, restart] of [
     assert.equal(final.state, "recovery_failed");
     assert.equal(
       final.reason,
-      `recording_${replacement === "identity" ? "identity" : "content"}_mismatch`
+      replacement === "identity" ? "recording_identity_mismatch" : "audio_content_mismatch"
     );
     assert.equal(saved.recovery_recording_id, original.recordingId);
     assert.match(saved.recovery_content_hash, /^[a-f0-9]{64}$/);
-    assert.equal(attempts, 1);
+    assert.equal(attempts, replacement === "identity" ? 1 : 2);
     assert.equal(pinnedBeforeDecode, true);
     assert.equal(f.database.getVoiceExemplarAudio().length, 0);
     t.diagnostic(
@@ -467,7 +745,7 @@ test("fifth run: resolved classification survives three temporary failures and r
   assert.equal(saved.recovery_state, "recovery_failed");
   assert.equal(saved.recovery_reason, "decoder_error");
   assert.equal(enrollment.progress(f.database, f.person.id).recoveryFailed, 1);
-  assert.equal(f.store.legacyRecovery.protects(f.noteId), false);
+  assert.equal(f.store.legacyRecovery.protects(f.noteId), true);
   f.restart();
   await f.store.legacyRecovery.done;
   assert.equal(f.store.legacyRecovery.attempted, 0);
@@ -593,8 +871,8 @@ for (const safeStorageAvailable of [false, true]) {
   });
 }
 
-test("fourth run: valid-key ciphertext corruption is terminal and releases retention", async (t) => {
-  const { f, candidate } = await legacyFixture(t);
+test("fourth run: valid-key ciphertext corruption retains evidence through the fixed hold", async (t) => {
+  const { f, candidate } = await legacyFixture(t, { recovery: { retryBaseMs: 1, yieldMs: 1 } });
   const chunk = f.store._manifest(f.noteId).tracks.mic.chunks[0];
   const file = path.join(directory, "recordings", String(f.noteId), chunk.file);
   const bytes = fs.readFileSync(file);
@@ -606,16 +884,16 @@ test("fourth run: valid-key ciphertext corruption is terminal and releases reten
   const saved = f.database.db
     .prepare("SELECT state, reason FROM voice_evidence_provenance WHERE sample_id = ?")
     .get(candidate.id);
-  assert.deepEqual(saved, { state: "unrecoverable", reason: "audio_corrupt" });
+  assert.deepEqual(saved, { state: "recovery_failed", reason: "audio_corrupt" });
   assert.equal(f.store.legacyRecovery.deferredNotes.length, 0);
-  assert.equal(f.store._manifest(f.noteId).status, "expired");
-  assert.equal(fs.existsSync(file), false);
+  assert.equal(f.store._manifest(f.noteId).status, "complete");
+  assert.equal(fs.existsSync(file), true);
   f.restart();
   await f.store.legacyRecovery.done;
   assert.equal(f.store.legacyRecovery.attempted, 0);
   assert.equal(enrollment.progress(f.database, f.person.id).pendingRecovery, 0);
   t.diagnostic(
-    `corrupt ciphertext + valid key: ${JSON.stringify(saved)} deferred=0 retention=expired chunkExists=false`
+    `corrupt ciphertext + valid key: ${JSON.stringify(saved)} deferred=0 retention=protected chunkExists=true`
   );
 });
 
@@ -677,8 +955,8 @@ test("fourth run: a permanently missing key exhausts honestly and never creates 
     recovery_attempts: 3,
   });
   assert.equal(f.database.getVoiceExemplarAudio().length, 0);
-  assert.equal(f.store._manifest(f.noteId).status, "expired");
-  t.diagnostic(`missing key budget: ${JSON.stringify(saved)} clips=0 retention=expired`);
+  assert.equal(f.store._manifest(f.noteId).status, "complete");
+  t.diagnostic(`missing key budget: ${JSON.stringify(saved)} clips=0 retention=protected`);
 });
 
 test("fourth run: cancellation aborts an active decoder and queued work can resume", async (t) => {
