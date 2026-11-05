@@ -4321,7 +4321,16 @@ declare global {
         id: string,
         choice: "approve" | "reject",
         token: string
-      ) => Promise<{ success: boolean; error?: string }>;
+      ) => Promise<{
+        success: boolean;
+        error?: string;
+        removedCandidateId?: string;
+        timingId?: string;
+        offers?: Awaited<
+          ReturnType<NonNullable<Window["electronAPI"]["listVoiceEnrollmentCandidates"]>>
+        >;
+      }>;
+      reportVoiceEnrollmentRefresh?: (timingId: string, milliseconds: number) => Promise<void>;
       undoVoiceEnrollmentAction?: (id: string) => Promise<{ success: boolean; error?: string }>;
       listPeopleActions?: () => Promise<
         Array<{

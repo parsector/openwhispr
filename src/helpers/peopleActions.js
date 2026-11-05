@@ -841,6 +841,7 @@ function applyPersonAction(database, request) {
         );
     } else if (request.type === "reset") {
       db.prepare("DELETE FROM review_row_cache").run();
+      db.prepare("DELETE FROM voice_enrollment_fact_cache").run();
       for (const item of affected)
         for (const row of item.embeddingRows)
           db.prepare(
@@ -1344,6 +1345,7 @@ function clearVoiceData(database, expected) {
     db.prepare("UPDATE speaker_profiles SET embedding = ?, sample_count = 0").run(Buffer.alloc(0));
     require("./voiceEnrollment").removeEvidence(db);
     db.prepare("DELETE FROM review_row_cache").run();
+    db.prepare("DELETE FROM voice_enrollment_fact_cache").run();
     db.prepare("DELETE FROM speaker_mappings").run();
     db.prepare("DELETE FROM speaker_run_mappings").run();
     db.prepare("DELETE FROM note_speaker_embeddings").run();
