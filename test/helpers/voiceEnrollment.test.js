@@ -238,6 +238,25 @@ test('enrolment facts cache invalidates for edits, audio loss, expiry and rules 
   assert.ok(resolved > 0);
 });
 
+test('listing, repeated play, complete and approve resolve a span only during the listing', async t => {
+  const f = fixture(t);
+  f.note('single-scan');
+  const original = require('../../src/helpers/meetingAudioSpan.mjs').resolveMeetingAudioSpan;
+  let resolved = 0;
+  f.audio.resolveMeetingAudioSpan = (...args) => { resolved++; return original(...args); };
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const listingResolutions = resolved;
+  assert.ok(listingResolutions > 0);
+  const first = enrollment.play(f.db, f.audio, candidate.id);
+  assert.equal(first.state, 'available');
+  const second = enrollment.play(f.db, f.audio, candidate.id);
+  assert.equal(second.state, 'available');
+  f.completeReview(candidate.id, second.token);
+  assert.equal((await enrollment.decide(f.db, f.audio, f.extractor,
+    candidate.id, 'approve', second.token)).success, true);
+  assert.equal(resolved, listingResolutions);
+});
+
 test('review cache recomputes only edited notes and keeps the person cap live', t => {
   const f = fixture(t);
   const one = f.note('one', 2).noteId;

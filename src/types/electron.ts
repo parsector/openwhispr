@@ -4321,7 +4321,7 @@ declare global {
         id: string,
         choice: "approve" | "reject",
         token: string
-      ) => Promise<{ success: boolean; error?: string }>;
+      ) => Promise<{ success: boolean; error?: string; removedCandidateId?: string }>;
       undoVoiceEnrollmentAction?: (id: string) => Promise<{ success: boolean; error?: string }>;
       listPeopleActions?: () => Promise<
         Array<{

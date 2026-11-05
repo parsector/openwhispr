@@ -510,23 +510,16 @@ export default function PeoplePage({
       if (!result?.success) throw Error(result?.error || "unavailable");
       if (request !== enrollmentRequest.current) return;
       setListened(null);
-      const [offers, samples] = await Promise.all([
-        window.electronAPI.listVoiceEnrollmentCandidates?.(candidate.profileId),
-        window.electronAPI.listVoiceEnrollmentSamples?.(candidate.profileId),
-      ]);
+      const samples = await window.electronAPI.listVoiceEnrollmentSamples?.(candidate.profileId);
       if (request !== enrollmentRequest.current) return;
-      setCandidates(offers?.candidates || []);
-      setEnrollmentReasons(
-        offers?.reasons || {
-          short: 0,
-          long: 0,
-          audio: 0,
-          overlap: 0,
-          uncertain: 0,
-          reviewed: 0,
-          limit: 0,
-          resolution: 0,
-        }
+      const capped = choice === "approve" && (samples?.length || 0) >= 20;
+      setCandidates((current) =>
+        capped ? [] : current.filter((item) => item.id !== result.removedCandidateId)
+      );
+      setEnrollmentReasons((current) =>
+        capped
+          ? { ...current, limit: samples?.length || 20 }
+          : { ...current, reviewed: current.reviewed + 1 }
       );
       setEnrollmentSamples(samples || []);
       await refresh();

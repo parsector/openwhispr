@@ -504,7 +504,7 @@ function candidateReport(database, store, profileId, rulesVersion = ENROLLMENT_R
 function listCandidates(database, store, profileId) {
   return candidateReport(database, store, profileId).candidates;
 }
-function locate(database, store, id) {
+function focusedOffer(database, store, id) {
   const db = database.db;
   const existing = db.prepare("SELECT * FROM voice_enrollment_candidates WHERE id = ?").get(id);
   if (existing) return null;
@@ -514,7 +514,9 @@ function locate(database, store, id) {
     const note = db.prepare(`SELECT id, title, created_at, transcript, speaker_action_log,
       speaker_label_undo FROM notes WHERE id = ? AND note_type = 'meeting' AND deleted_at IS NULL`)
       .get(candidate.noteId);
-    if (note && offerFingerprint(note, store.status(note.id)) === saved.fingerprint) {
+    const status = note && store.status(note.id);
+    if (note && ["complete", "incomplete"].includes(status.state) && status.bytes !== 0 &&
+        offerFingerprint(note, status) === saved.fingerprint) {
       const row = readTranscriptDocument(note.transcript).rows.find(item => item.id === candidate.rowIds[0]);
       const approved = db.prepare(`SELECT COUNT(*) AS count FROM voice_exemplars
         WHERE profile_id = ? AND approved_at IS NOT NULL`).get(candidate.profileId).count;
@@ -533,6 +535,14 @@ function locate(database, store, id) {
     }
     offers(database).delete(id);
   }
+  return null;
+}
+function locate(database, store, id) {
+  const found = focusedOffer(database, store, id);
+  if (found) return found;
+  const db = database.db;
+  if (db.prepare("SELECT 1 FROM voice_enrollment_candidates WHERE id = ?").get(id))
+    return null;
   // A fresh scan rechecks attribution, correction and retention at action time.
   for (const { id: profileId } of db.prepare("SELECT id FROM speaker_profiles").all()) {
     const found = listCandidates(database, store, profileId).find(
@@ -732,7 +742,8 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
   const embedding = choice === "approve" ? await embed(audio.wav, extractor) : null;
   if (choice === "approve" && !embedding) return { success: false, error: "poor_audio" };
   return database.db.transaction(() => {
-    if (!locate(database, store, id)) return { success: false, error: "candidate_unavailable" };
+    if (!focusedOffer(database, store, id))
+      return { success: false, error: "candidate_unavailable" };
     const db = database.db;
     const actionId = randomUUID();
     if (choice === "approve") {
@@ -779,7 +790,8 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
       noteId: candidate.noteId,
       label: `${choice}: ${candidate.rowIds.join(", ")}`,
     });
-    return { success: true, id: actionId, progress: progress(database, candidate.profileId) };
+    return { success: true, id: actionId, removedCandidateId: id,
+      progress: progress(database, candidate.profileId) };
   })();
 }
 function undo(database, id) {
