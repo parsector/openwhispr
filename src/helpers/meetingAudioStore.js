@@ -4,6 +4,7 @@ const { randomUUID } = require("crypto");
 const { spawnSync } = require("child_process");
 const { getFFmpegPath } = require("./ffmpegUtils");
 const { encryptBytes, decryptBytes } = require("./secretCrypto");
+const enrollmentTiming = require("./voiceEnrollmentTiming");
 
 const RATE = 24000;
 const CHUNK_SAMPLES = RATE * 5;
@@ -542,6 +543,18 @@ class MeetingAudioStore {
   }
 
   span(noteId, track, startSeconds, endSeconds) {
+    const start = enrollmentTiming.now();
+    const metrics = enrollmentTiming.current?.();
+    const beforeDecode = metrics?.ffmpeg_decode_ms || 0;
+    try {
+      return this._span(noteId, track, startSeconds, endSeconds);
+    } finally {
+      const decoded = (metrics?.ffmpeg_decode_ms || 0) - beforeDecode;
+      enrollmentTiming.span(Math.max(0, enrollmentTiming.now() - start - decoded));
+    }
+  }
+
+  _span(noteId, track, startSeconds, endSeconds) {
     this._noteId(noteId);
     if (
       !TRACKS.includes(track) ||
@@ -595,7 +608,12 @@ class MeetingAudioStore {
         return { state: "key_unavailable" };
       }
       try {
-        decoded = this.codec.decode(unpack(plaintext).ogg);
+        const decodeStart = enrollmentTiming.now();
+        try {
+          decoded = this.codec.decode(unpack(plaintext).ogg);
+        } finally {
+          enrollmentTiming.decoded(enrollmentTiming.now() - decodeStart);
+        }
       } catch {
         return { state: "unavailable" };
       }
@@ -729,7 +747,13 @@ class MeetingAudioStore {
         .get()
     )
       this.database.db.prepare("DELETE FROM review_row_cache").run();
-    if (this.database?.db?.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_enrollment_fact_cache'").get())
+    if (
+      this.database?.db
+        ?.prepare(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_enrollment_fact_cache'"
+        )
+        .get()
+    )
       this.database.db.prepare("DELETE FROM voice_enrollment_fact_cache").run();
     for (const noteId of noteIds) this.onChanged?.({ noteId, state: "deleted" });
   }
@@ -741,7 +765,13 @@ class MeetingAudioStore {
       db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_row_cache'").get()
     )
       db.prepare("DELETE FROM review_row_cache WHERE note_id = ?").run(noteId);
-    if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_enrollment_fact_cache'").get())
+    if (
+      db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_enrollment_fact_cache'"
+        )
+        .get()
+    )
       db.prepare("DELETE FROM voice_enrollment_fact_cache WHERE note_id = ?").run(noteId);
     const table = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='voice_exemplars'")

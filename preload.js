@@ -653,6 +653,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("voice-enrollment-complete", id, token),
   decideVoiceEnrollmentCandidate: (id, choice, token) =>
     ipcRenderer.invoke("voice-enrollment-decide", id, choice, token),
+  reportVoiceEnrollmentRefresh: (timingId, milliseconds) =>
+    ipcRenderer.invoke("voice-enrollment-renderer-refresh", timingId, milliseconds),
   undoVoiceEnrollmentAction: (id) => ipcRenderer.invoke("voice-enrollment-undo", id),
   listPeopleActions: () => ipcRenderer.invoke("people-action-history"),
   undoPeopleMapping: (noteId) => ipcRenderer.invoke("people-undo-mapping", noteId),

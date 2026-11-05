@@ -14547,84 +14547,117 @@ class IPCHandlers {
     ipcMain.handle("people-list", () =>
       require("./peopleActions").listPeople(this.databaseManager)
     );
-    ipcMain.handle("voice-enrollment-candidates", (_event, profileId) =>
-      require("./voiceEnrollment").candidateReport(
-        this.databaseManager,
-        this.meetingAudioStore,
-        profileId
+    const enrollmentTiming = require("./voiceEnrollmentTiming");
+    const timedEnrollment =
+      (action, handler, deferRefresh = false) =>
+      (...args) =>
+        enrollmentTiming.run(action, () => handler(...args), deferRefresh);
+    ipcMain.handle(
+      "voice-enrollment-candidates",
+      timedEnrollment("candidates", (_event, profileId) =>
+        require("./voiceEnrollment").candidateReport(
+          this.databaseManager,
+          this.meetingAudioStore,
+          profileId
+        )
       )
     );
-    ipcMain.handle("voice-enrollment-samples", (_event, profileId) =>
-      require("./voiceEnrollment").listSamples(this.databaseManager, profileId)
-    );
-    ipcMain.handle("voice-enrollment-remove", (_event, sampleId) => {
-      const result = require("./voiceEnrollment").removeSample(this.databaseManager, sampleId);
-      if (result.success) {
-        liveSpeakerIdentifier.invalidateAnchor();
-        this.notifyVectorChanges();
-        broadcastToWindows("people-changed");
-        if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
-          broadcastToWindows("meeting-speaker-evidence-changed", {
-            noteId: this._activeMeetingNoteId,
-            runId: liveSpeakerIdentifier.activeRunId,
-          });
-      }
-      return result;
-    });
-    ipcMain.handle("voice-enrollment-play", (event, id) => {
-      const result = require("./voiceEnrollment").play(
-        this.databaseManager,
-        this.meetingAudioStore,
-        id,
-        event.sender
-      );
-      return result.wav ? { ...result, wav: result.wav.toString("base64") } : result;
-    });
-    ipcMain.handle("voice-enrollment-complete", (event, id, token) =>
-      require("./voiceEnrollment").complete(
-        this.databaseManager,
-        this.meetingAudioStore,
-        id,
-        token,
-        event.sender
+    ipcMain.handle(
+      "voice-enrollment-samples",
+      timedEnrollment("samples", (_event, profileId) =>
+        require("./voiceEnrollment").listSamples(this.databaseManager, profileId)
       )
     );
-    ipcMain.handle("voice-enrollment-decide", async (event, id, choice, token) => {
-      const result = await require("./voiceEnrollment").decide(
-        this.databaseManager,
-        this.meetingAudioStore,
-        require("./speakerEmbeddings"),
-        id,
-        choice,
-        token,
-        event.sender
-      );
-      if (result.success) {
-        liveSpeakerIdentifier.invalidateAnchor();
-        this.notifyVectorChanges();
-        broadcastToWindows("people-changed");
-        if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
-          broadcastToWindows("meeting-speaker-evidence-changed", {
-            noteId: this._activeMeetingNoteId,
-            runId: liveSpeakerIdentifier.activeRunId,
-          });
-      }
-      return result;
-    });
-    ipcMain.handle("voice-enrollment-undo", (_event, id) => {
-      const result = require("./voiceEnrollment").undo(this.databaseManager, id);
-      if (result.success) {
-        liveSpeakerIdentifier.invalidateAnchor();
-        this.notifyVectorChanges();
-        broadcastToWindows("people-changed");
-        if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
-          broadcastToWindows("meeting-speaker-evidence-changed", {
-            noteId: this._activeMeetingNoteId,
-            runId: liveSpeakerIdentifier.activeRunId,
-          });
-      }
-      return result;
-    });
+    ipcMain.handle(
+      "voice-enrollment-remove",
+      timedEnrollment("remove", (_event, sampleId) => {
+        const result = require("./voiceEnrollment").removeSample(this.databaseManager, sampleId);
+        if (result.success) {
+          liveSpeakerIdentifier.invalidateAnchor();
+          this.notifyVectorChanges();
+          broadcastToWindows("people-changed");
+          if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
+            broadcastToWindows("meeting-speaker-evidence-changed", {
+              noteId: this._activeMeetingNoteId,
+              runId: liveSpeakerIdentifier.activeRunId,
+            });
+        }
+        return result;
+      })
+    );
+    ipcMain.handle(
+      "voice-enrollment-play",
+      timedEnrollment("play", (event, id) => {
+        const result = require("./voiceEnrollment").play(
+          this.databaseManager,
+          this.meetingAudioStore,
+          id,
+          event.sender
+        );
+        return result.wav ? { ...result, wav: result.wav.toString("base64") } : result;
+      })
+    );
+    ipcMain.handle(
+      "voice-enrollment-complete",
+      timedEnrollment("complete", (event, id, token) =>
+        require("./voiceEnrollment").complete(
+          this.databaseManager,
+          this.meetingAudioStore,
+          id,
+          token,
+          event.sender
+        )
+      )
+    );
+    ipcMain.handle(
+      "voice-enrollment-decide",
+      timedEnrollment(
+        "decide",
+        async (event, id, choice, token) => {
+          const result = await require("./voiceEnrollment").decide(
+            this.databaseManager,
+            this.meetingAudioStore,
+            require("./speakerEmbeddings"),
+            id,
+            choice,
+            token,
+            event.sender
+          );
+          if (result.success) {
+            liveSpeakerIdentifier.invalidateAnchor();
+            this.notifyVectorChanges();
+            broadcastToWindows("people-changed");
+            if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
+              broadcastToWindows("meeting-speaker-evidence-changed", {
+                noteId: this._activeMeetingNoteId,
+                runId: liveSpeakerIdentifier.activeRunId,
+              });
+          }
+          return result;
+        },
+        true
+      )
+    );
+    ipcMain.handle(
+      "voice-enrollment-undo",
+      timedEnrollment("undo", (_event, id) => {
+        const result = require("./voiceEnrollment").undo(this.databaseManager, id);
+        if (result.success) {
+          liveSpeakerIdentifier.invalidateAnchor();
+          this.notifyVectorChanges();
+          broadcastToWindows("people-changed");
+          if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
+            broadcastToWindows("meeting-speaker-evidence-changed", {
+              noteId: this._activeMeetingNoteId,
+              runId: liveSpeakerIdentifier.activeRunId,
+            });
+        }
+        return result;
+      })
+    );
+    ipcMain.handle("voice-enrollment-renderer-refresh", (_event, timingId, milliseconds) =>
+      enrollmentTiming.rendererRefresh(timingId, milliseconds)
+    );
     ipcMain.handle("people-action-history", () =>
       require("./peopleActions").listPeopleActions(this.databaseManager)
     );

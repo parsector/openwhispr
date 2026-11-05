@@ -14,11 +14,36 @@ Module._load = function(request, parent, isMain) {
 process.env.NODE_ENV = 'test';
 const DatabaseManager = require('../../src/helpers/database');
 const enrollment = require('../../src/helpers/voiceEnrollment');
+const enrollmentTiming = require('../../src/helpers/voiceEnrollmentTiming');
 const { listReviewRows, reviewRowsPage, REVIEW_RULES_VERSION } = require('../../src/helpers/peopleActions');
 
 test('all voice guard thresholds carry the same uncalibrated label', () => {
   assert.deepEqual(Object.values(enrollment.calibration).map(item => item.status),
     ['uncalibrated', 'uncalibrated', 'uncalibrated', 'uncalibrated']);
+});
+
+test('decision timing emits one structured debug line after renderer refresh', async t => {
+  const logger = require('../../src/helpers/debugLogger');
+  const original = logger.debug;
+  const lines = [];
+  logger.debug = message => lines.push(JSON.parse(message));
+  t.after(() => { logger.debug = original; });
+  const result = await enrollmentTiming.run('decide', async () => {
+    enrollmentTiming.candidateCount(1);
+    enrollmentTiming.decoded(12);
+    return { success: true };
+  }, true);
+  assert.equal(lines.length, 0);
+  enrollmentTiming.rendererRefresh(result.timingId, 7);
+  assert.equal(lines.length, 1);
+  assert.deepEqual(Object.keys(lines[0]).sort(), [
+    'event', 'action', 'total_ms', 'candidate_scan_ms', 'echo_decode_ms',
+    'span_read_ms', 'ffmpeg_decode_ms', 'embed_ms', 'renderer_refresh_ms',
+    'candidate_count', 'decode_count',
+  ].sort());
+  assert.equal(lines[0].renderer_refresh_ms, 7);
+  assert.equal(lines[0].event, 'voice_enrollment_ipc_timing');
+  assert.equal(lines[0].decode_count, 1);
 });
 
 test('review eligibility matches enrolment after owner labels, and changes when audio expires', async t => {
@@ -232,6 +257,9 @@ test('enrolment facts cache invalidates for edits, audio loss, expiry and rules 
   assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.audio, 1);
   f.audio.status = () => ({ state: 'complete' });
   enrollment.candidateReport(f.db, f.audio, f.person.id);
+  f.audio.spanAvailable = () => false;
+  assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.audio, 1);
+  f.audio.spanAvailable = () => true;
   resolved = 0;
   enrollment.candidateReport(f.db, f.audio, f.person.id,
     enrollment.ENROLLMENT_RULES_VERSION + 1);
@@ -701,7 +729,10 @@ test('overlapping rows cannot count the same audio twice', async t => {
   assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.short, 1);
   const { token } = enrollment.play(f.db, f.audio, candidate.id);
   f.completeReview(candidate.id, token);
-  assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token)).success, true);
+  const decision = await enrollment.decide(f.db, f.audio, f.extractor,
+    candidate.id, 'approve', token);
+  assert.equal(decision.success, true);
+  assert.equal(decision.offers.candidates.length, 0);
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
   assert.equal(enrollment.play(f.db, f.audio, candidate.id).state, 'unavailable');
 });
@@ -710,15 +741,18 @@ test('reset and clear voice data remove approved samples; deleted audio cannot l
   const f = fixture(t);
   f.note('one');
   const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_enrollment_fact_cache').get().n, 1);
   const { token } = enrollment.play(f.db, f.audio, candidate.id);
   f.completeReview(candidate.id, token);
   await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token);
   const people = require('../../src/helpers/peopleActions');
   assert.equal(people.applyPersonAction(f.db, { type: 'reset', profileId: f.person.id }).success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_enrollment_fact_cache').get().n, 0);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
   f.audio.status = () => ({ state: 'deleted', bytes: 0 });
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
   assert.equal(people.clearVoiceData(f.db, people.previewClearVoiceData(f.db)).success, true);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_enrollment_fact_cache').get().n, 0);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
 });
 

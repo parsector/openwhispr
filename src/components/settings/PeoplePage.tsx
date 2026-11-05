@@ -508,21 +508,20 @@ export default function PeoplePage({
         listened.token
       );
       if (!result?.success) throw Error(result?.error || "unavailable");
+      const rendererRefreshStart = performance.now();
       if (request !== enrollmentRequest.current) return;
       setListened(null);
       const samples = await window.electronAPI.listVoiceEnrollmentSamples?.(candidate.profileId);
       if (request !== enrollmentRequest.current) return;
-      const capped = choice === "approve" && (samples?.length || 0) >= 20;
-      setCandidates((current) =>
-        capped ? [] : current.filter((item) => item.id !== result.removedCandidateId)
-      );
-      setEnrollmentReasons((current) =>
-        capped
-          ? { ...current, limit: samples?.length || 20 }
-          : { ...current, reviewed: current.reviewed + 1 }
-      );
+      setCandidates(result.offers?.candidates || []);
+      if (result.offers?.reasons) setEnrollmentReasons(result.offers.reasons);
       setEnrollmentSamples(samples || []);
       await refresh();
+      if (result.timingId)
+        void window.electronAPI.reportVoiceEnrollmentRefresh?.(
+          result.timingId,
+          performance.now() - rendererRefreshStart
+        );
     } catch (cause) {
       if (request === enrollmentRequest.current)
         setEnrollmentError(String(cause instanceof Error ? cause.message : cause));

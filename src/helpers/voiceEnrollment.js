@@ -5,6 +5,7 @@ const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
 const history = require("./speakerGlobalHistory");
 const { resolveMeetingAudioSpan } = require("./meetingAudioSpan.mjs");
+const enrollmentTiming = require("./voiceEnrollmentTiming");
 
 const RATE = 24000;
 const MODEL_RATE = 16000;
@@ -28,20 +29,35 @@ function offers(database) {
 }
 function offerFingerprint(note, status) {
   return createHash("sha256")
-    .update(JSON.stringify([note.id, note.transcript, note.speaker_action_log,
-      note.speaker_label_undo, status]))
+    .update(
+      JSON.stringify([
+        note.id,
+        note.transcript,
+        note.speaker_action_log,
+        note.speaker_label_undo,
+        status,
+      ])
+    )
     .digest("hex");
 }
 function factFingerprint(note, status, rulesVersion) {
   return createHash("sha256")
-    .update(JSON.stringify([rulesVersion, note.id, note.transcript, note.speaker_action_log,
-      note.speaker_label_undo, status]))
+    .update(
+      JSON.stringify([
+        rulesVersion,
+        note.id,
+        note.transcript,
+        note.speaker_action_log,
+        note.speaker_label_undo,
+        status,
+      ])
+    )
     .digest("hex");
 }
-function rememberOffer(database, store, note, candidate) {
+function rememberOffer(database, candidate, fingerprint) {
   offers(database).set(candidate.id, {
     candidate,
-    fingerprint: offerFingerprint(note, store.status(note.id)),
+    fingerprint,
   });
 }
 function stopObserving(session) {
@@ -425,27 +441,44 @@ function createEligibilityContext(database, store) {
   }
   return { check };
 }
-function noteFacts(database, store, note, rows, eligibility, rulesVersion) {
+function noteFacts(database, store, note, rows, eligibility, rulesVersion, profileId, status) {
   const db = database.db;
-  const fingerprint = factFingerprint(note, store.status(note.id), rulesVersion);
-  const cached = db.prepare(`SELECT fingerprint, facts_json FROM voice_enrollment_fact_cache
-    WHERE note_id = ?`).get(note.id);
-  if (cached?.fingerprint === fingerprint) return new Map(JSON.parse(cached.facts_json));
-  const facts = rows.map(row => {
+  const fingerprint = factFingerprint(note, status, rulesVersion);
+  const cached = db
+    .prepare(
+      `SELECT fingerprint, facts_json FROM voice_enrollment_fact_cache
+    WHERE note_id = ?`
+    )
+    .get(note.id);
+  const facts = new Map(cached?.fingerprint === fingerprint ? JSON.parse(cached.facts_json) : []);
+  let changed = cached?.fingerprint !== fingerprint;
+  for (const row of rows) {
+    if (row.deleted || !attributed(db, note.id, row, profileId) || facts.has(row.id)) continue;
     const result = eligibility.check(note, rows, row, null, false, true);
-    if (result.reason) return [row.id, { reason: result.reason }];
-    const { track, startSample, endSample, durationSeconds, revision, everCorrected } =
-      result.candidate;
-    return [row.id, { track, startSample, endSample, durationSeconds,
-      revision, everCorrected }];
-  });
-  db.prepare(`INSERT INTO voice_enrollment_fact_cache (note_id, fingerprint, facts_json)
-    VALUES (?, ?, ?) ON CONFLICT(note_id) DO UPDATE SET fingerprint = excluded.fingerprint,
-    facts_json = excluded.facts_json, computed_at = CURRENT_TIMESTAMP`)
-    .run(note.id, fingerprint, JSON.stringify(facts));
-  return new Map(facts);
+    if (result.reason) facts.set(row.id, { reason: result.reason });
+    else {
+      const { track, startSample, endSample, durationSeconds, revision, everCorrected } =
+        result.candidate;
+      facts.set(row.id, {
+        track,
+        startSample,
+        endSample,
+        durationSeconds,
+        revision,
+        everCorrected,
+      });
+    }
+    changed = true;
+  }
+  if (changed)
+    db.prepare(
+      `INSERT INTO voice_enrollment_fact_cache (note_id, fingerprint, facts_json)
+      VALUES (?, ?, ?) ON CONFLICT(note_id) DO UPDATE SET fingerprint = excluded.fingerprint,
+      facts_json = excluded.facts_json, computed_at = CURRENT_TIMESTAMP`
+    ).run(note.id, fingerprint, JSON.stringify([...facts]));
+  return facts;
 }
-function candidateReport(database, store, profileId, rulesVersion = ENROLLMENT_RULES_VERSION) {
+function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLMENT_RULES_VERSION) {
   const db = database.db;
   const reasons = {
     short: 0,
@@ -472,34 +505,72 @@ function candidateReport(database, store, profileId, rulesVersion = ENROLLMENT_R
     )
     .all()) {
     const rows = readTranscriptDocument(note.transcript).rows;
-    const facts = noteFacts(database, store, note, rows, eligibility, rulesVersion);
+    const status = store.status(note.id);
+    const fingerprint = offerFingerprint(note, status);
+    const facts = noteFacts(
+      database,
+      store,
+      note,
+      rows,
+      eligibility,
+      rulesVersion,
+      profileId,
+      status
+    );
     for (const row of rows) {
       if (row.deleted || !attributed(db, note.id, row, profileId)) continue;
       const fact = facts.get(row.id);
       if (fact.reason) reasons[fact.reason]++;
       else {
-        const reviewed = db.prepare(`SELECT 1 FROM voice_exemplars WHERE profile_id = ?
-          AND note_id = ? AND track = ? AND start_sample < ? AND end_sample > ?`)
-          .get(profileId, note.id, fact.track, fact.endSample, fact.startSample) ||
-          db.prepare(`SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ?
-          AND note_id = ? AND track = ? AND start_sample = ? AND end_sample = ?`)
+        if (
+          store.spanAvailable &&
+          !store.spanAvailable(note.id, fact.track, fact.startSample, fact.endSample)
+        ) {
+          reasons.audio++;
+          continue;
+        }
+        const reviewed =
+          db
+            .prepare(
+              `SELECT 1 FROM voice_exemplars WHERE profile_id = ?
+          AND note_id = ? AND track = ? AND start_sample < ? AND end_sample > ?`
+            )
+            .get(profileId, note.id, fact.track, fact.endSample, fact.startSample) ||
+          db
+            .prepare(
+              `SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ?
+          AND note_id = ? AND track = ? AND start_sample = ? AND end_sample = ?`
+            )
             .get(profileId, note.id, fact.track, fact.startSample, fact.endSample);
         if (reviewed) {
           reasons.reviewed++;
           continue;
         }
         const candidate = {
-          id: candidateId(profileId, note.id, row.id, { trackId: fact.track,
-            startSample: fact.startSample, endSample: fact.endSample }),
-          profileId, noteId: note.id, noteTitle: note.title,
-          meetingDate: note.created_at, rowIds: [row.id], ...fact,
+          id: candidateId(profileId, note.id, row.id, {
+            trackId: fact.track,
+            startSample: fact.startSample,
+            endSample: fact.endSample,
+          }),
+          profileId,
+          noteId: note.id,
+          noteTitle: note.title,
+          meetingDate: note.created_at,
+          rowIds: [row.id],
+          ...fact,
         };
         offered.push(candidate);
-        rememberOffer(database, store, note, candidate);
+        rememberOffer(database, candidate, fingerprint);
       }
     }
   }
+  enrollmentTiming.candidateCount(offered.length);
   return { candidates: offered, reasons };
+}
+function candidateReport(database, store, profileId, rulesVersion = ENROLLMENT_RULES_VERSION) {
+  return enrollmentTiming.measure("candidate_scan_ms", () =>
+    candidateReportImpl(database, store, profileId, rulesVersion)
+  );
 }
 function listCandidates(database, store, profileId) {
   return candidateReport(database, store, profileId).candidates;
@@ -511,27 +582,69 @@ function focusedOffer(database, store, id) {
   const saved = offers(database).get(id);
   if (saved) {
     const candidate = saved.candidate;
-    const note = db.prepare(`SELECT id, title, created_at, transcript, speaker_action_log,
-      speaker_label_undo FROM notes WHERE id = ? AND note_type = 'meeting' AND deleted_at IS NULL`)
+    const note = db
+      .prepare(
+        `SELECT id, title, created_at, transcript, speaker_action_log,
+      speaker_label_undo FROM notes WHERE id = ? AND note_type = 'meeting' AND deleted_at IS NULL`
+      )
       .get(candidate.noteId);
     const status = note && store.status(note.id);
-    if (note && ["complete", "incomplete"].includes(status.state) && status.bytes !== 0 &&
-        offerFingerprint(note, status) === saved.fingerprint) {
-      const row = readTranscriptDocument(note.transcript).rows.find(item => item.id === candidate.rowIds[0]);
-      const approved = db.prepare(`SELECT COUNT(*) AS count FROM voice_exemplars
-        WHERE profile_id = ? AND approved_at IS NOT NULL`).get(candidate.profileId).count;
-      const reviewed = db.prepare(`SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ?
-        AND track = ? AND start_sample < ? AND end_sample > ?`).get(candidate.profileId,
-        candidate.noteId, candidate.track, candidate.endSample, candidate.startSample);
-      const rejected = db.prepare(`SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ?
-        AND note_id = ? AND track = ? AND start_sample = ? AND end_sample = ?`)
-        .get(candidate.profileId, candidate.noteId, candidate.track,
-          candidate.startSample, candidate.endSample);
-      if (row && !row.deleted && attributed(db, note.id, row, candidate.profileId) &&
-          approved < MAX_SAMPLES && !reviewed && !rejected &&
-          db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(candidate.profileId) &&
-          (!store.spanAvailable || store.spanAvailable(candidate.noteId, candidate.track,
-            candidate.startSample, candidate.endSample))) return candidate;
+    if (
+      note &&
+      ["complete", "incomplete"].includes(status.state) &&
+      status.bytes !== 0 &&
+      offerFingerprint(note, status) === saved.fingerprint
+    ) {
+      const row = readTranscriptDocument(note.transcript).rows.find(
+        (item) => item.id === candidate.rowIds[0]
+      );
+      const approved = db
+        .prepare(
+          `SELECT COUNT(*) AS count FROM voice_exemplars
+        WHERE profile_id = ? AND approved_at IS NOT NULL`
+        )
+        .get(candidate.profileId).count;
+      const reviewed = db
+        .prepare(
+          `SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ?
+        AND track = ? AND start_sample < ? AND end_sample > ?`
+        )
+        .get(
+          candidate.profileId,
+          candidate.noteId,
+          candidate.track,
+          candidate.endSample,
+          candidate.startSample
+        );
+      const rejected = db
+        .prepare(
+          `SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ?
+        AND note_id = ? AND track = ? AND start_sample = ? AND end_sample = ?`
+        )
+        .get(
+          candidate.profileId,
+          candidate.noteId,
+          candidate.track,
+          candidate.startSample,
+          candidate.endSample
+        );
+      if (
+        row &&
+        !row.deleted &&
+        attributed(db, note.id, row, candidate.profileId) &&
+        approved < MAX_SAMPLES &&
+        !reviewed &&
+        !rejected &&
+        db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(candidate.profileId) &&
+        (!store.spanAvailable ||
+          store.spanAvailable(
+            candidate.noteId,
+            candidate.track,
+            candidate.startSample,
+            candidate.endSample
+          ))
+      )
+        return candidate;
     }
     offers(database).delete(id);
   }
@@ -539,10 +652,12 @@ function focusedOffer(database, store, id) {
 }
 function locate(database, store, id) {
   const found = focusedOffer(database, store, id);
-  if (found) return found;
+  if (found) {
+    enrollmentTiming.candidateCount(1);
+    return found;
+  }
   const db = database.db;
-  if (db.prepare("SELECT 1 FROM voice_enrollment_candidates WHERE id = ?").get(id))
-    return null;
+  if (db.prepare("SELECT 1 FROM voice_enrollment_candidates WHERE id = ?").get(id)) return null;
   // A fresh scan rechecks attribution, correction and retention at action time.
   for (const { id: profileId } of db.prepare("SELECT id FROM speaker_profiles").all()) {
     const found = listCandidates(database, store, profileId).find(
@@ -681,7 +796,7 @@ function echoLike(wav, other) {
   }
   return left > 0 && right > 0 && dot / Math.sqrt(left * right) > calibration.echoCorrelation.value;
 }
-function isEchoSpan(
+function isEchoSpanImpl(
   store,
   noteId,
   track,
@@ -701,6 +816,9 @@ function isEchoSpan(
   return (
     current.state === "available" && other.state === "available" && echoLike(current.wav, other.wav)
   );
+}
+function isEchoSpan(...args) {
+  return enrollmentTiming.measure("echo_decode_ms", () => isEchoSpanImpl(...args));
 }
 async function decide(database, store, extractor, id, choice, token, sender = null) {
   const playback = played.get(id);
@@ -739,9 +857,12 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
     )
       return { success: false, error: "echo_audio" };
   }
-  const embedding = choice === "approve" ? await embed(audio.wav, extractor) : null;
+  const embedding =
+    choice === "approve"
+      ? await enrollmentTiming.measureAsync("embed_ms", () => embed(audio.wav, extractor))
+      : null;
   if (choice === "approve" && !embedding) return { success: false, error: "poor_audio" };
-  return database.db.transaction(() => {
+  const result = database.db.transaction(() => {
     if (!focusedOffer(database, store, id))
       return { success: false, error: "candidate_unavailable" };
     const db = database.db;
@@ -790,9 +911,15 @@ async function decide(database, store, extractor, id, choice, token, sender = nu
       noteId: candidate.noteId,
       label: `${choice}: ${candidate.rowIds.join(", ")}`,
     });
-    return { success: true, id: actionId, removedCandidateId: id,
-      progress: progress(database, candidate.profileId) };
+    return {
+      success: true,
+      id: actionId,
+      removedCandidateId: id,
+      progress: progress(database, candidate.profileId),
+    };
   })();
+  if (result.success) result.offers = candidateReport(database, store, candidate.profileId);
+  return result;
 }
 function undo(database, id) {
   return database.db.transaction(() => {
