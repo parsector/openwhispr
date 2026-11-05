@@ -6,6 +6,13 @@ This document provides comprehensive technical details about the OpenWhispr proj
 
 Keep responses focused, brief, and concise. Keep disclaimers and caveats short, and spend most of the response on the main answer. When asked to explain something, give a high-level summary unless an in-depth explanation is specifically requested.
 
+## Code Navigation (codegraph)
+
+- A local code graph exists at `.codegraph/codegraph.db` (not committed here — 195 MB, over GitHub's per-file limit; rebuild with `codegraph init -y`, ~10 min).
+- Prefer it over symbol grepping: `/opt/data/.npm-global/bin/codegraph status | query <Symbol> | explore "<question>" | node <symbol> | callers | callees | impact | affected`.
+- Run `codegraph sync` after editing sources, before trusting `impact` / `callers` / `affected`.
+- Skill: `$CODEX_HOME/skills/codegraph/SKILL.md`.
+
 ## Project Overview
 
 OpenWhispr is an Electron-based desktop dictation application that uses whisper.cpp for speech-to-text transcription. It supports both local (privacy-focused) and cloud (OpenAI API) processing modes.
