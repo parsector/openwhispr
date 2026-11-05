@@ -6135,6 +6135,7 @@
     "allPeople": "Alle Personen",
     "reviewEmpty": "Für diese Filter gibt es keine zu prüfenden Zeilen.",
     "reviewEligibleOnly": "Nur Zeilen anzeigen, die als Stimmproben geeignet sind",
+    "reviewChecking": "Prüfe Aufnahme {{current}} von {{total}}",
     "reviewShowing": "{{shown}} von {{total}} angezeigt",
     "reviewExcluded": "Gründe für ausgeschlossene Zeilen",
     "unknown": "Unbekannter Sprecher",

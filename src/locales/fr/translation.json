@@ -6153,6 +6153,7 @@
     "allPeople": "Toutes les personnes",
     "reviewEmpty": "Aucune ligne à vérifier pour ces filtres.",
     "reviewEligibleOnly": "Afficher uniquement les lignes admissibles aux échantillons vocaux",
+    "reviewChecking": "Vérification de {{current}} enregistrements sur {{total}}",
     "reviewShowing": "{{shown}} sur {{total}} affichées",
     "reviewExcluded": "Pourquoi des lignes sont exclues",
     "unknown": "Locuteur inconnu",

@@ -1316,6 +1316,23 @@ class DatabaseManager {
           FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
         )
       `);
+      // Eligibility facts contain no embeddings, audio bytes, or other biometric data.
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS review_row_cache (
+          note_id INTEGER PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,
+          transcript_hash TEXT NOT NULL,
+          facts_json TEXT NOT NULL,
+          computed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TRIGGER IF NOT EXISTS review_cache_note_changed
+        AFTER UPDATE OF transcript, note_type, deleted_at ON notes BEGIN
+          DELETE FROM review_row_cache WHERE note_id = NEW.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS review_cache_note_deleted
+        AFTER DELETE ON notes BEGIN
+          DELETE FROM review_row_cache WHERE note_id = OLD.id;
+        END;
+      `);
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS note_speaker_completion (
           note_id INTEGER PRIMARY KEY REFERENCES notes(id) ON DELETE CASCADE,

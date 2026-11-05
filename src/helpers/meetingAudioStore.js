@@ -484,6 +484,15 @@ class MeetingAudioStore {
       recordingId: manifest.recordingId ?? noteId,
       keep: manifest.keep,
     };
+    if (
+      !manifest.keep &&
+      ["complete", "incomplete"].includes(manifest.status) &&
+      this.now() >= manifest.startedAt + manifest.retentionDays * 86400000
+    ) {
+      result.state = "expired";
+      result.bytes = 0;
+      return result;
+    }
     const first = TRACKS.flatMap((track) => manifest.tracks?.[track]?.chunks || [])[0];
     if (first) {
       let file;
@@ -714,12 +723,22 @@ class MeetingAudioStore {
       for (const track of TRACKS) session.pending[track]?.fill(0);
     this.active.clear();
     fs.rmSync(this.root, { recursive: true, force: true });
+    if (
+      this.database?.db
+        ?.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_row_cache'")
+        .get()
+    )
+      this.database.db.prepare("DELETE FROM review_row_cache").run();
     for (const noteId of noteIds) this.onChanged?.({ noteId, state: "deleted" });
   }
 
   _removeDerivedVoice(noteId) {
     const db = this.database?.db;
     if (!db) return;
+    if (
+      db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_row_cache'").get()
+    )
+      db.prepare("DELETE FROM review_row_cache WHERE note_id = ?").run(noteId);
     const table = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='voice_exemplars'")
       .get();

@@ -4353,6 +4353,11 @@ declare global {
           position: number;
         }>
       >;
+      listPeopleReviewPage?: (noteId?: number | null) => Promise<{
+        rows: Awaited<ReturnType<NonNullable<Window["electronAPI"]["listPeopleReview"]>>>;
+        pending: number[];
+        cached: number;
+      }>;
       previewPersonAction?: (request: {
         type: "rename" | "merge" | "delete" | "reset";
         profileId: number;

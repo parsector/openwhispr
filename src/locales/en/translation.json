@@ -6135,6 +6135,7 @@
     "allPeople": "All people",
     "reviewEmpty": "No rows need review for these filters.",
     "reviewEligibleOnly": "Only show rows eligible for voice samples",
+    "reviewChecking": "Checking {{current}} of {{total}} recordings",
     "reviewShowing": "Showing {{shown}} of {{total}}",
     "reviewExcluded": "Why rows are excluded",
     "unknown": "Unknown speaker",

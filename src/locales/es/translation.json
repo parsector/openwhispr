@@ -6153,6 +6153,7 @@
     "allPeople": "Todas las personas",
     "reviewEmpty": "No hay filas para revisar con estos filtros.",
     "reviewEligibleOnly": "Mostrar solo filas aptas para muestras de voz",
+    "reviewChecking": "Comprobando {{current}} de {{total}} grabaciones",
     "reviewShowing": "Se muestran {{shown}} de {{total}}",
     "reviewExcluded": "Motivos de exclusión",
     "unknown": "Hablante desconocido",

@@ -146,6 +146,9 @@ export default function PeoplePage({
   const [calibrationUndoId, setCalibrationUndoId] = useState<string | null>(null);
   const [review, setReview] = useState<Review[]>([]);
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewProgress, setReviewProgress] = useState<{ current: number; total: number } | null>(
+    null
+  );
   const [reviewLoaded, setReviewLoaded] = useState(false);
   const [reviewError, setReviewError] = useState(false);
   const [reviewReload, setReviewReload] = useState(0);
@@ -576,17 +579,31 @@ export default function PeoplePage({
     setReviewLoading(true);
     setReviewLoaded(false);
     setReviewError(false);
-    const load = window.electronAPI.listPeopleReview;
-    if (!load) {
-      setReviewError(true);
-      setReviewLoading(false);
-      setReviewLoaded(true);
-      return;
-    }
-    void load(null)
-      .then((rows) => {
+    setReviewProgress(null);
+    const load = async () => {
+      const loadPage = window.electronAPI.listPeopleReviewPage;
+      if (loadPage) {
+        let page = await loadPage(null);
+        if (!alive) return;
+        setReview(page.rows);
+        const pending = page.pending;
+        setReviewProgress(pending.length ? { current: 0, total: pending.length } : null);
+        for (const [index, noteId] of pending.entries()) {
+          // Let the dialog paint the cached rows and each progress update.
+          await new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+          if (!alive) return;
+          page = await loadPage(noteId);
+          if (!alive) return;
+          setReview(page.rows);
+          setReviewProgress({ current: index + 1, total: pending.length });
+        }
+      } else {
+        if (!window.electronAPI.listPeopleReview) throw Error("unavailable");
+        const rows = await window.electronAPI.listPeopleReview(null);
         if (alive) setReview(rows);
-      })
+      }
+    };
+    void load()
       .catch(() => {
         if (alive) setReviewError(true);
       })
@@ -594,6 +611,7 @@ export default function PeoplePage({
         if (alive) {
           setReviewLoading(false);
           setReviewLoaded(true);
+          setReviewProgress(null);
         }
       });
     return () => {
@@ -2249,7 +2267,12 @@ export default function PeoplePage({
           >
             {reviewLoading && (
               <p role="status" className="text-sm text-muted-foreground">
-                {t("people.loading")}
+                {reviewProgress
+                  ? t("people.reviewChecking", {
+                      current: reviewProgress.current,
+                      total: reviewProgress.total,
+                    })
+                  : t("people.loading")}
               </p>
             )}
             {reviewError && (
@@ -2304,7 +2327,7 @@ export default function PeoplePage({
                 </SelectContent>
               </Select>
             </div>
-            {!reviewLoading && !reviewError && (
+            {!reviewError && (
               <div className="space-y-1 text-sm">
                 <label className="flex items-center gap-2">
                   <input

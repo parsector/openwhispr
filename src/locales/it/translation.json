@@ -6153,6 +6153,7 @@
     "allPeople": "Tutte le persone",
     "reviewEmpty": "Nessuna riga da rivedere con questi filtri.",
     "reviewEligibleOnly": "Mostra solo le righe idonee ai campioni vocali",
+    "reviewChecking": "Controllo {{current}} di {{total}} registrazioni",
     "reviewShowing": "Visualizzazione di {{shown}} su {{total}}",
     "reviewExcluded": "Motivi di esclusione",
     "unknown": "Parlante sconosciuto",
