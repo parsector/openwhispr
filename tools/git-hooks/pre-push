@@ -1,0 +1,67 @@
+#!/bin/sh
+# Refresh the CodeGraph index before pushing to GitHub.
+#
+# - Runs `codegraph sync` in the repo root (incremental).
+# - Compares Files/Nodes/Edges before and after. `sync` rewrites the DB even when
+#   nothing changed, so an unchanged graph has that touch discarded and the tree
+#   stays clean.
+# - If the graph really changed AND the DB is tracked in this repo, the hook
+#   commits just that file and stops the push: git resolved the refs before the
+#   hook ran, so the new commit can only travel on the next push. Re-run
+#   `git push` and it goes.
+# - Untracked DBs (openwhispr) are refreshed in place, never committed.
+# - A graph failure never blocks a push unless CODEGRAPH_HOOK_STRICT=1 - the
+#   index is tooling, not source.
+# - CODEGRAPH_SKIP=1 skips the hook. Repos without .codegraph pass through.
+
+[ "$CODEGRAPH_SKIP" = "1" ] && exit 0
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+cd "$root" || exit 0
+[ -d .codegraph ] || exit 0
+
+CG=/opt/data/.npm-global/bin/codegraph
+[ -x "$CG" ] || CG=$(command -v codegraph 2>/dev/null)
+if [ -z "$CG" ]; then
+  echo "codegraph: binary not found - skipping index refresh" >&2
+  exit 0
+fi
+
+counts() {
+  "$CG" status "$root" 2>/dev/null | tr -d ',' \
+    | awk '/^  (Files|Nodes|Edges):/{printf "%s=%s ", $1, $2}'
+}
+
+tracked=0
+git ls-files --error-unmatch .codegraph/codegraph.db >/dev/null 2>&1 && tracked=1
+
+before=$(counts)
+echo "codegraph: refreshing index before push..." >&2
+log="${TMPDIR:-/opt/data/cache/scratch}/codegraph-hook.log"
+mkdir -p "$(dirname "$log")" 2>/dev/null
+if ! timeout 900 "$CG" sync "$root" >"$log" 2>&1; then
+  echo "codegraph: sync failed (log: $log) - push proceeds with the previous index" >&2
+  [ "$CODEGRAPH_HOOK_STRICT" = "1" ] && exit 1
+  exit 0
+fi
+after=$(counts)
+
+if [ -n "$before" ] && [ "$before" = "$after" ]; then
+  if [ "$tracked" = "1" ]; then
+    git checkout -- .codegraph/codegraph.db 2>/dev/null
+  fi
+  echo "codegraph: index already current" >&2
+  exit 0
+fi
+
+if [ "$tracked" = "1" ]; then
+  git add .codegraph/codegraph.db || exit 0
+  if git commit -q -m "chore(codegraph): refresh index before push" -- .codegraph/codegraph.db; then
+    echo "codegraph: index changed ($before -> $after) and was committed." >&2
+    echo "codegraph: re-run 'git push' so the refreshed graph travels with it." >&2
+    exit 1
+  fi
+fi
+
+echo "codegraph: index refreshed in place (DB not tracked)" >&2
+exit 0

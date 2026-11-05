@@ -11,6 +11,7 @@ Keep responses focused, brief, and concise. Keep disclaimers and caveats short, 
 - A local code graph exists at `.codegraph/codegraph.db` (not committed here — 195 MB, over GitHub's per-file limit; rebuild with `codegraph init -y`, ~10 min).
 - Prefer it over symbol grepping: `/opt/data/.npm-global/bin/codegraph status | query <Symbol> | explore "<question>" | node <symbol> | callers | callees | impact | affected`.
 - Run `codegraph sync` after editing sources, before trusting `impact` / `callers` / `affected`.
+- Pre-push hook (`tools/git-hooks/pre-push`) runs `codegraph sync` before every push and never blocks one. `CODEGRAPH_SKIP=1` bypasses it.
 - Skill: `$CODEX_HOME/skills/codegraph/SKILL.md`.
 
 ## Project Overview
