@@ -108,14 +108,14 @@ test('review and enrolment use the whole shared span, echo guard, and sample cap
   delete doc.rows[0].recordingId;
   f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
 
-  f.audio.status = () => ({ state: 'complete', tracks: {
+  f.audio.status = () => ({ state: 'complete', recordingId: f.recordingId(noteId), tracks: {
     mic: { chunks: [{ startSample: 0, sampleCount: 5 * 24000 }] },
     system: { chunks: [{ startSample: 0, sampleCount: 5 * 24000 }] },
   } });
   assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio).map(row => row.eligibilityReason), ['overlap', 'overlap']);
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
 
-  f.audio.status = () => ({ state: 'complete' });
+  f.audio.status = () => ({ state: 'complete', recordingId: f.recordingId(noteId) });
   const insert = f.db.db.prepare(`INSERT INTO voice_exemplars
     (id, profile_id, note_id, track, start_sample, end_sample, approved_at)
     VALUES (?, ?, ?, 'mic', ?, ?, CURRENT_TIMESTAMP)`);
@@ -195,16 +195,19 @@ function fixture(t) {
   let reviewClock = Date.now();
   wav.write('RIFF');
   for (let i = 0; i < 24000 * 4; i++) wav.writeInt16LE(Math.round(10000 * Math.sin(i / 24)), 44 + i * 2);
-  const audio = { encryption: require('../lib/fakeAudioEncryption'), now: () => reviewClock, status: () => ({ state: 'complete' }), span: () => ({ state: 'available',
+  const recordingIds = new Map();
+  const audio = { encryption: require('../lib/fakeAudioEncryption'), now: () => reviewClock, status: id => ({ state: 'complete', recordingId: recordingIds.get(id) }), span: () => ({ state: 'available',
     wav, partial: false }) };
   const vector = (x, y = 0) => Float32Array.from({ length: 512 }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };
   const note = (suffix, count = 1) => {
     const saved = db.saveNote(`Meeting ${suffix}`, '', 'meeting');
     const noteId = (saved.note || saved).id;
+    const recordingId = require('node:crypto').randomUUID();
+    recordingIds.set(noteId, recordingId);
     const rows = Array.from({ length: count }, (_, i) => ({ id: `${suffix}-${i}`, source: 'mic', speaker: 'speaker_0',
       speakerName: 'Alex', speakerLockSource: 'user', suggestedProfileId: person.id,
-      audioSpan: { recordingId: noteId, trackId: 'mic', startSample: i * 24000 * 5,
+      audioSpan: { recordingId, trackId: 'mic', startSample: i * 24000 * 5,
         endSample: (i * 5 + 4) * 24000 } }));
     db.updateNote(noteId, { transcript: JSON.stringify({ version: 2, rows }) });
     return { noteId, rows };
@@ -214,7 +217,7 @@ function fixture(t) {
     store.now = audio.now;
     assert.equal(enrollment.complete(db, store, candidateId, token).success, true);
   };
-  return { db, person, audio, extractor, vector, note, completeReview };
+  return { db, person, audio, extractor, vector, note, completeReview, recordingId: id => recordingIds.get(id) };
 }
 
 test('focused candidate agrees with the scan and falls back after a revision change', t => {
@@ -256,7 +259,7 @@ test('enrolment facts cache invalidates for edits, audio loss, expiry and rules 
   assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.audio, 1);
   f.audio.status = () => ({ state: 'expired', bytes: 0 });
   assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.audio, 1);
-  f.audio.status = () => ({ state: 'complete' });
+  f.audio.status = () => ({ state: 'complete', recordingId: f.recordingId(noteId) });
   enrollment.candidateReport(f.db, f.audio, f.person.id);
   f.audio.spanAvailable = () => false;
   assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.audio, 1);
@@ -355,11 +358,11 @@ test('review cache invalidates for removed and expired audio and a rules-version
   const one = f.note('one').noteId;
   const two = f.note('two').noteId;
   listReviewRows(f.db, f.person.id, f.audio);
-  f.audio.status = noteId => ({ state: noteId === one ? 'deleted' : 'complete' });
+  f.audio.status = noteId => ({ state: noteId === one ? 'deleted' : 'complete', recordingId: f.recordingId(noteId) });
   assert.deepEqual(reviewRowsPage(f.db, f.person.id, f.audio).pending, [one]);
   listReviewRows(f.db, f.person.id, f.audio);
   assert.equal(listReviewRows(f.db, f.person.id, f.audio).find(row => row.noteId === one).eligibilityReason, 'audio');
-  f.audio.status = noteId => ({ state: noteId === two ? 'expired' : 'deleted' });
+  f.audio.status = noteId => ({ state: noteId === two ? 'expired' : 'deleted', recordingId: f.recordingId(noteId) });
   assert.deepEqual(reviewRowsPage(f.db, f.person.id, f.audio).pending, [two]);
   listReviewRows(f.db, f.person.id, f.audio);
   assert.deepEqual(reviewRowsPage(f.db, f.person.id, f.audio, false, null, REVIEW_RULES_VERSION + 1).pending,
@@ -519,7 +522,7 @@ test("empty enrolment reports short, expired, and two-person rows separately", (
     f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
   }
   f.audio.status = (id) =>
-    id === expired.noteId ? { state: "expired", bytes: 0 } : { state: "complete" };
+    id === expired.noteId ? { state: "expired", bytes: 0 } : { state: "complete", recordingId: f.recordingId(id) };
   const report = enrollment.candidateReport(f.db, f.audio, f.person.id);
   assert.deepEqual(report.candidates, []);
   assert.deepEqual(report.reasons, {
@@ -763,7 +766,7 @@ test("echo from the other track refuses approval", async (t) => {
   let otherReads = 0;
   f.audio.status = () => ({
     state: "complete",
-    recordingId: noteId,
+    recordingId: f.recordingId(noteId),
     tracks: {
       // Chunk larger than span+margin keeps the candidate revision stable.
       mic: { chunks: [{ startSample: 0, sampleCount: 24000 * 10 }] },
@@ -1097,6 +1100,16 @@ test('fresh install can delete its first recording before any enrolment action',
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
 });
 
+function assertRecordingDiversityRequired(f) {
+  f.db.db.exec("UPDATE voice_exemplars SET recording_id = 'same-recording'; UPDATE voice_exemplar_audio SET recording_id = 'same-recording'");
+  assert.equal(enrollment.progress(f.db, f.person.id).meetings, 1);
+  assert.equal(enrollment.progress(f.db, f.person.id).usable, false);
+  f.db.db.exec("UPDATE voice_exemplars SET recording_id = NULL; UPDATE voice_exemplar_audio SET recording_id = NULL; UPDATE notes SET transcript = replace(transcript, 'recordingId', 'unknownRecordingId')");
+  assert.equal(enrollment.progress(f.db, f.person.id).meetings, 0);
+  assert.equal(enrollment.progress(f.db, f.person.id).usable, false);
+  assert.equal(enrollment.resolveProfile(f.db.db, f.person.id).embedding.length, 0);
+}
+
 test('note FK deletion preserves a profile and its person-owned approved meetings', async t => {
   const f = fixture(t);
   const first = f.note('one', 2), second = f.note('two');
@@ -1105,13 +1118,18 @@ test('note FK deletion preserves a profile and its person-owned approved meeting
     f.completeReview(candidate.id, token);
     assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token)).success, true);
   }
+  assert.equal(enrollment.progress(f.db, f.person.id).meetings, 2);
+  assert.equal(new Set(f.db.db.prepare('SELECT recording_id FROM voice_exemplar_audio').all().map(row => row.recording_id)).size, 2);
   assert.equal(f.db.getSpeakerProfiles(true).length, 1);
   f.db.db.prepare('DELETE FROM notes WHERE id = ?').run(first.noteId);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 1);
   assert.equal(f.db.getSpeakerProfiles(true).length, 1);
   assert.equal(f.db.db.prepare('SELECT voice_usable FROM speaker_profiles WHERE id = ?').get(f.person.id).voice_usable, 1);
   assert.equal(enrollment.progress(f.db, f.person.id).approvedSpans, 3);
+  assert.equal(enrollment.progress(f.db, f.person.id).meetings, 2);
+  assert.equal(enrollment.progress(f.db, f.person.id).usable, true);
   assert.ok(f.db.db.prepare('SELECT 1 FROM notes WHERE id = ?').get(second.noteId));
+  assertRecordingDiversityRequired(f);
 });
 
 test('audio deletion preserves all four durable samples and profile eligibility', async t => {
@@ -1122,13 +1140,16 @@ test('audio deletion preserves all four durable samples and profile eligibility'
     f.completeReview(candidate.id, token);
     assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token)).success, true);
   }
+  assert.equal(new Set(f.db.db.prepare('SELECT recording_id FROM voice_exemplar_audio').all().map(row => row.recording_id)).size, 3);
   assert.equal(f.db.getSpeakerProfiles(true).length, 1);
   assert.equal(enrollment.progress(f.db, f.person.id).approvedSpans, 4);
   enrollment.removeNoteEvidence(f.db.db, first.noteId);
   assert.equal(enrollment.progress(f.db, f.person.id).approvedSpans, 4);
   assert.equal(enrollment.progress(f.db, f.person.id).meetings, 3);
+  assert.equal(enrollment.progress(f.db, f.person.id).usable, true);
   assert.equal(f.db.db.prepare('SELECT voice_usable FROM speaker_profiles WHERE id = ?').get(f.person.id).voice_usable, 1);
   assert.equal(f.db.getSpeakerProfiles(true).length, 1);
+  assertRecordingDiversityRequired(f);
 });
 
 test('hard note deletion scrubs note-owned actions and preserves durable audio and vectors', async t => {

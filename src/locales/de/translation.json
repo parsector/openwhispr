@@ -5995,7 +5995,7 @@
     "enrollmentIntro": "Hören Sie die gesamte Aufnahme an, bevor Sie sie bestätigen oder ablehnen.",
     "calibrationExemplars": "Verwendete bestätigte Stimmbeispiele: {{samples}}. Ihre gespeicherten Audiodaten und Vektoren werden ohne Rekonstruktion verwendet.",
     "restoreMappings": "Sprecherzuordnungen wiederherstellen",
-    "exemplarRetention": "Dieser Clip wird bis zum Löschen der Person aufbewahrt, unabhängig von der Aufbewahrungsdauer der Aufnahmen.",
+    "exemplarRetention": "Dieser Clip bleibt gespeichert, bis du ihn löschst: durch Löschen der Person, Löschen aller Stimmdaten, Zurücksetzen ihrer Stimme, Entfernen der Probe oder Rückgängigmachen der Freigabe. Aufbewahrungsfristen, Speicherbereinigung von Aufnahmen, Löschen von Notizen, erneute Sprechertrennung und App-Neustarts löschen ihn nie.",
     "exemplarPlaybackKeyUnavailable": "Der gespeicherte Clip kann nicht abgespielt werden, da sein Verschlüsselungsschlüssel fehlt. Stelle zum Anhören den ursprünglichen Schlüssel wieder her.",
     "exemplarCapture": "{{seconds}} s · aufgenommen am {{date}}",
     "enrollmentProgress": "Saubere Spannen: {{spans}} / 3 · Aufnahmen: {{meetings}} / 2",

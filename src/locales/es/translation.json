@@ -6013,7 +6013,7 @@
     "enrollmentIntro": "Escucha la muestra completa antes de aprobarla o rechazarla.",
     "calibrationExemplars": "Clips de voz aprobados utilizados: {{samples}}. Se usan el audio y los vectores guardados sin reconstrucción.",
     "restoreMappings": "Restaurar asignaciones de hablantes",
-    "exemplarRetention": "Este clip se conserva hasta que se elimine a la persona, independientemente de la retención de las grabaciones.",
+    "exemplarRetention": "Este clip se conserva hasta que lo borres al eliminar a la persona, borrar todos los datos de voz, restablecer su voz, quitar la muestra o deshacer su aprobación. La retención o expulsión de grabaciones, la eliminación de notas, la nueva separación de hablantes y el reinicio de la aplicación nunca lo borran.",
     "exemplarPlaybackKeyUnavailable": "No se puede reproducir el clip guardado porque su clave de cifrado no está disponible. Restaura la clave original para escucharlo.",
     "exemplarCapture": "{{seconds}} s · capturado el {{date}}",
     "enrollmentProgress": "Fragmentos limpios: {{spans}} / 3 · grabaciones: {{meetings}} / 2",

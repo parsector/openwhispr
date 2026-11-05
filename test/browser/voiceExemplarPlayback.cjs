@@ -70,7 +70,7 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   const row = page.locator('[data-person-row="1"]');
   await row
     .getByText(
-      "This clip is kept until the person is deleted, independently of recording retention."
+      "This clip is kept until you erase it by deleting the person, clearing all voice data, resetting their voice, removing the sample, or undoing its approval. Recording retention, eviction, note deletion, re-diarisation and app restart never erase it."
     )
     .waitFor();
   assert.match(await row.textContent(), /3.5 s/);

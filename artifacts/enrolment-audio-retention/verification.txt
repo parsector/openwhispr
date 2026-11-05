@@ -1,164 +1,106 @@
-Enrolment exemplar retention — review fixes
+Enrolment exemplar retention — second fix run
 Branch: fix/enrolment-audio-retention
-Review base: c42ba9e09c52e05476ee79a188c5231709703c44
-Work order: /opt/data/dev/apps/_briefs/openwhispr-enrolment-audio-review-fixes.md
+Base: 1498665b8
+Re-review: /opt/data/dev/apps/_briefs/openwhispr-enrolment-audio-rereview-fixes.md
 
-This supersedes the previous completion statement. All six requested fixes are applied and the required checks pass. All eight originally failing tests were updated; none were deleted. Four additional reset assertions were updated to the same irreversible-erasure contract. No required fix remains open.
+This replaces the previous completion report. Its completion and historical-erasure claims were incorrect: the independent re-review reproduced three remaining defects. This run reproduced those failures before fixing them (second-baseline.log: 5 tests, 0 pass, 5 fail). The statements below describe the proved scope of this run.
 
-1. P1 — recording identity and interval deduplication
-Changed: src/helpers/voiceRecordingIdentity.js:5,32,53; src/helpers/voiceExemplarAudio.js:13,102; src/helpers/database.js:1428; src/helpers/voiceEnrollment.js:183,255,366,442,580,595,676,1002; src/helpers/speakerInAppCalibration.js:284,364; src/helpers/peopleActions.js:1529,1541.
-Both approval stores persist the actual recording UUID from audio-store status. Legacy provenance is resolved through retained recording metadata/current original-note provenance, and upgraded when the audio store supplies its UUID. Immutable client note identity provides a common fallback when UUID provenance is absent. Numeric reused note IDs cannot join unrelated durable evidence. Graduation and equal-per-recording centroid votes use the same resolver. Eligibility, candidate scans, focused approval, review rows and calibration suppress overlapping durable recording intervals, including new segment row IDs.
-Proof: test/helpers/voiceRecordingIdentity.test.js:10,50,62 (SQLite :memory:); test/helpers/voiceExemplarAudio.test.js:393 (mixed legacy/durable, cleanSpans=3, meetings=1, usable=false, then exact equal-recording centroid check); :443 (durable-only overlap, eligibility, scan, already-listened focused approval rejection, calibration counts one exemplar). Existing overlap/no-reoffer tests survive.
+1. P1 — unknown recording provenance
+Changed: src/helpers/voiceRecordingIdentity.js:29,36; src/helpers/voiceEnrollment.js:183,257,269.
+Unresolved identity is null. It contributes no recording count or centroid vote; an entirely unresolved set produces no profile vector. Overlap checks still suppress overlapping evidence within the same original note, without treating unresolved identities on different notes as the same recording.
+Tests: test/helpers/voiceRecordingIdentity.test.js:50; test/helpers/voiceExemplarAudio.test.js:393; test/helpers/voiceEnrollment.test.js:198,1103,1113,1135.
+The shared enrollment fixture now supplies distinct recording UUIDs in status and transcript spans. Both graduation tests assert distinct stored recording IDs, continued graduation after deletion, failure with a single shared recording, and failure/no vector with unresolved provenance. The mixed-evidence test also verifies exact equal-per-recording weighting and that unresolved evidence gets no vote alongside a known recording.
 
-2. P1 — reset/undo cannot restore erased biometrics
-Changed: src/helpers/voiceExemplarAudio.js:141; src/helpers/voiceEnrollment.js:1312; src/helpers/peopleActions.js:865.
-Reset erases live samples and scrubs the affected profile, sample and note-vector snapshots from earlier history and the new reset snapshot. Identity and mapping history remains restorable. Scrubbing follows original sample ownership through merge history and preserves unrelated people and their snapshots. Undo never reconstructs missing ciphertext.
-Proof: test/helpers/voiceExemplarAudio.test.js:541 starts with three approved recordings and a graduated profile, resets, restarts, undoes reset and an older rename, then requires zero durable audio, legacy vectors, note vectors and matchable profiles; mappings/name return and unrelated live/historical vectors survive. :485 now also performs clear-all -> restart -> undo and requires continued erasure. test/helpers/peopleActions.test.js:462,479,499,586,601 cover mapping-only and no-note reset undo.
+Real in-memory probe output (second-memory-probes.log):
+mixed legacy+durable: {"cleanSpans":3,"meetings":1,"usable":false}
+unknown provenance: {"identities":[null,null],"cleanSpans":3,"meetings":0,"usable":false,"vectorBytes":0}
 
-3. P2 — correction invalidation belongs to the original note identity
-Changed: src/helpers/voiceEnrollment.js:1203.
-Durable correction invalidation compares client note identity before interpreting numeric note/row IDs, including explicit mapping changes.
-Proof: test/helpers/voiceExemplarAudio.test.js:160 now creates a real replacement note with recorded audio and the reused original row ID. Its audio can be offered independently; an actual user correction plus explicit mapping invalidation leaves the original exemplar valid and its clean-span count unchanged through restart. Retained bytes are unchanged.
+2. P1 — legacy merge ancestry survives vector erasure
+Changed: src/helpers/voiceExemplarAudio.js:191.
+Profile-wide erasure follows historical source-to-survivor person links in both person_identity_actions and note action logs, repeatedly through merge ancestry, independently of durable clip IDs. These owner IDs feed the existing vector scrubber; identity and mapping snapshots remain available.
+Tests: test/helpers/voiceExemplarAudio.test.js:471 exercises both zero-note identity merges and note/mapping merges, reset, restart, undo reset, undo merge. Both require restored Alex identity, zero vector bytes/sample_count, and restored mapping where applicable. Existing unrelated-person preservation tests also pass.
+Removed the vacuous durable-count-zero assertion from test/helpers/peopleActions.test.js:473; that fixture never creates durable audio. The real durable clear-all fixture remains in voiceExemplarAudio.test.js.
 
-4. P2 — irreversible removal leaves no historical vector; merge transfers action ownership
-Changed: src/helpers/voiceEnrollment.js:1093,1159,1169,1291,1301,1342; src/helpers/voiceExemplarAudio.js:141; src/helpers/peopleActions.js:696,805.
-Durable removal stores NULL before_sample, scrubs older vector snapshots and disables biometric undo. Approval undo also scrubs the irreversibly removed sample. Both merge paths transfer enrollment action and global-history ownership alongside live evidence; undo restores source ownership. Historical source vector snapshots are scrubbed when the merged survivor's evidence is erased.
-Proof: test/helpers/voiceExemplarAudio.test.js:629 removes a durable sample, verifies NULL/no historical vector, rejects undo and proves an older snapshot cannot restore it after restart. :664 runs both direct survivor deletion and removal-before-survivor-deletion, checking transferred enrollment/global ownership and absence of original vectors from surviving history. test/helpers/voiceEnrollment.test.js:1194 proves merge -> recording deletion -> undo retains survivor ciphertext/vector, restores source ciphertext/action ownership, and never reoffers transferred spans.
+Real in-memory probe output (second-memory-probes.log):
+legacy merge/reset/undo/undo: {"merge":true,"reset":true,"undoReset":true,"undoMerge":true,"display_name":"Alex","vectorBytes":0,"sample_count":0,"mappingRestored":true}
 
-5. P2 — playback preserves exemplar_key_unavailable with playback-specific wording
-Changed: src/components/settings/PeoplePage.tsx:232,258,264,1858; src/types/electron.ts:4326; src/locales/en/translation.json:5999 and corresponding keys in all 11 locales.
-The person row retains the backend error code and displays a saved-clip playback/key message. The approval failure message remains specific to an unsuccessful save.
-Proof: test/browser/voiceExemplarPlayback.cjs:96 injects the actual IPC response shape, clicks Listen and requires the playback-specific key message, excluding "No exemplar was saved". test/components/peopleEnrollmentMessages.test.js:36 verifies distinct copy and storage interpolations in every locale; translation coverage passes. test/helpers/voiceExemplarAudio.test.js:769 covers the backend missing-key response (current test title: "missing encryption key fails approval closed with exemplar_key_unavailable and no plaintext write").
+3. P2 — startup repair of old irreversible removals
+Changed: src/helpers/voiceExemplarAudio.js:52.
+Startup transactionally finds removal actions with before_sample still present and global history explicitly marked voice_data_cleared, then scrubs that sample and its affected older vector snapshots. This targets the c42ba9e09 irreversible-removal shape; it does not indiscriminately erase reversible legacy removals.
+Seeded database test: test/helpers/voiceExemplarAudio.test.js:521 removes both newer recording_id columns, seeds the old before_sample selection/encoding and an older raw-vector snapshot, then opens a new DatabaseManager. It requires NULL before_sample, no removed vector in older history, blocked irreversible undo, no restoration from the old snapshot, a successful reversible legacy undo, and a second restart with the repaired value still NULL.
 
-6. P2 — permanent audio usage is visible and separate from recording eviction
-Changed: src/helpers/meetingAudioStore.js:845,853; src/components/SettingsPage.tsx:1387,3555; src/types/electron.ts:3969; src/locales/en/translation.json:6235 and all other locales.
-Usage reports separate ciphertext bytes and clip count. Settings displays them alongside the recording budget. Only recording bytes participate in eviction; permanent clips remain person-owned.
-Proof: test/helpers/voiceExemplarAudio.test.js:729 checks exact ciphertext-byte accounting, ownership merge, zero-budget recording eviction, restart, retained playback and accounting returning to zero after sample removal. Existing meetingAudioStore budget/eviction tests pass.
+Real startup probe output (second-focused.log and second-repair.log):
+legacy startup repair: {"removedVectorRetained":false,"historicalVectorRetained":false,"liveDurableSamples":0}
 
-Eight formerly failing tests — exact replaced assertions and preserved invariants
-1. test/helpers/peopleActions.test.js:462,473
-   Old: note_speaker_embeddings count after clear/undo == 1.
-   New: == 0; also durable audio count == 0 and profile embedding length == 0.
-   Kept: clear removes note embeddings; undo succeeds, restores original speaker mapping and preserves the Alex identity/label.
-2. test/helpers/voiceEnrollment.test.js:49,89
-   Old: expired approved review-0/review-4 eligibility == "audio".
-   New: both == "reviewed"; unapproved expired review-3 == "audio".
-   Kept: owner labelling produces the same eligible set as enrolment, distinct exclusion reasons, and expiry produces no new candidates.
-3. test/helpers/voiceEnrollment.test.js:956,973
-   Old: approved playback state == "unavailable".
-   New: == "available".
-   Kept: overlapping audio is not counted/offered twice, including zero candidates returned by the decision and next scan. Added durable-only/resegmented/mixed-origin coverage in fix 1.
-4. test/helpers/voiceEnrollment.test.js:1007,1038
-   Old: profile embedding length after recording deletion == 0.
-   New: == 2048; saved playback bytes equal the originally heard WAV.
-   Kept: recording-owned review cache is emptied, legacy note-owned exemplars disappear, no new candidates appear, and the retired recording-owned enrollment action cannot undo deletion.
-5. test/helpers/voiceEnrollment.test.js:1100,1111
-   Old: matchable profiles count == 0 and voice_usable == 0 after note FK deletion.
-   New: both == 1 and approvedSpans == 3.
-   Kept: note FK cascade deletes its legacy rows and the other meeting still exists.
-6. test/helpers/voiceEnrollment.test.js:1117,1128
-   Old: approvedSpans == 3, meetings == 2, voice_usable == 0, matchable profiles == 0.
-   New: respectively 4, 3, 1, 1.
-   Kept: the original four-sample, three-recording setup and eligibility checks.
-7. test/helpers/voiceEnrollment.test.js:1134,1144
-   Old: profile embedding length after hard note deletion == 0.
-   New: == 2048; durable playback remains available.
-   Kept: note-owned legacy exemplars and enrollment actions are deleted.
-8. test/helpers/voiceEnrollment.test.js:1194,1217
-   Old: survivor embedding length/sample_count/sample-list length after recording deletion and merge undo == 0/0/0.
-   New: == 2048/1/1; source sample-list length == 1.
-   Kept: transferred spans are never reoffered and the source note survives. Added byte-for-byte ciphertext preservation, per-clip owner restoration, and enrollment/global action-owner restoration.
+Owner-visible contract
+src/locales/en/translation.json:5998 and the corresponding key in all 11 locales; docs/voice-exemplar-retention.md:3:
+"This clip is kept until you erase it by deleting the person, clearing all voice data, resetting their voice, removing the sample, or undoing its approval. Recording retention, eviction, note deletion, re-diarisation and app restart never erase it."
+This includes the existing approval-undo, sample-removal and reset paths in voiceEnrollment.js. Browser assertions now require this exact wording. Screenshots at 1440/412 widths in light/dark themes were regenerated; the browser test checks horizontal fit at both widths.
 
-Additional obsolete reset assertions updated, not deleted
-- peopleActions.test.js:479,495: undo restores 1 unrelated note embedding, formerly 3. Soft-deleted note ownership/erasure remains covered; deleting Alex still leaves Sam's embedding.
-- peopleActions.test.js:499,511: name-only reset undo leaves 0 note embeddings, formerly 1; unique-name ownership and successful undo remain.
-- peopleActions.test.js:586,598: reset undo sample_count remains 0, formerly 1; name/labels remain and the original mapping returns.
-- peopleActions.test.js:601,610: no-note reset undo hasVoice remains false, formerly true; Solo's identity and successful undo remain.
+Verification — exact commands, actual results
+All commands ran in the assigned worktree. Logs are under artifacts/enrolment-audio-retention/. Trailing whitespace in captured baseline/build output was removed for git diff checks.
 
-Final verification commands and real outputs (all exit 0)
-Working directory: /opt/data/dev/worktrees/openwhispr-enrolment-audio
-Logs below are in artifacts/enrolment-audio-retention/.
+$ node artifacts/enrolment-audio-retention/second-memory-probes.cjs
+second-memory-probes.log: exit 0; the three real outputs are pasted above. Uses real DatabaseManager/person/enrollment modules with SQLite opens redirected to :memory:.
 
-$ npm run lint
-review-lint.log: eslint . --max-warnings=0 && cd src && eslint . --max-warnings=0; exit 0, no warnings/errors.
+$ node --import tsx --test test/helpers/voiceExemplarAudio.test.js test/helpers/voiceEnrollment.test.js test/helpers/voiceRecordingIdentity.test.js test/helpers/meetingAudioStore.test.js test/helpers/peopleActions.test.js test/helpers/speakerInAppCalibration.test.js test/components/peopleEnrollmentDecision.test.js test/components/peopleEnrollmentMessages.test.js
+second-focused.log: tests 159; pass 159; fail 0; cancelled 0; skipped 0; todo 0. Includes the seeded legacy-shape startup repair and both strengthened graduation tests.
 
-$ node --import tsx --test test/helpers/voiceExemplarAudio.test.js test/helpers/voiceEnrollment.test.js test/helpers/meetingAudioStore.test.js test/helpers/peopleActions.test.js test/helpers/speakerInAppCalibration.test.js test/components/peopleEnrollmentDecision.test.js test/components/peopleEnrollmentMessages.test.js
-final-focused.log: tests 153; pass 153; fail 0; cancelled 0; skipped 0; todo 0.
-This is the original report's exact seven-file focused set, rerun after the fixes and final regression strengthening. Original report: 146 tests, 138 pass, 8 fail; seven new regression cases bring it to 153.
-
-$ node --test test/helpers/voiceRecordingIdentity.test.js
-final-identity.log: tests 3; pass 3; fail 0; cancelled 0; skipped 0; todo 0.
-Expanded focused command including this helper also passed 156/156 (review-focused.log).
-
-$ node --import tsx --test test/helpers/speakerCorrectionTransaction.test.js test/helpers/speakerEmbeddingsLifecycle.test.js test/helpers/speakerEmbeddingsClusterCentroids.test.js test/helpers/secretCryptoBackup.test.js test/components/peopleEnrollmentMessages.test.js
-final-additional.log: tests 50; pass 50; fail 0; cancelled 0; skipped 0; todo 0.
-This is the original report's additional focused set.
-
-$ node --import tsx --test test/components/settingsConnectionCheck.test.js test/components/settingsVadGate.test.js test/components/peopleSelectCheck.test.js
-review-settings.log: tests 6; pass 6; fail 0; cancelled 0; skipped 0; todo 0.
+$ node --import tsx --test test/helpers/speakerCorrectionTransaction.test.js test/helpers/speakerEmbeddingsLifecycle.test.js test/helpers/speakerEmbeddingsClusterCentroids.test.js test/helpers/secretCryptoBackup.test.js
+second-additional.log: tests 39; pass 39; fail 0; cancelled 0; skipped 0; todo 0.
 
 $ node --test test/locales/translationCoverage.test.js
-final-translations.log: tests 9; pass 9; fail 0; cancelled 0; skipped 0; todo 0.
+second-translations.log: tests 9; pass 9; fail 0; cancelled 0; skipped 0; todo 0.
 
 $ node --test test/browser/voiceExemplarPlayback.cjs
-final-browser.log: tests 1; pass 1; fail 0; cancelled 0; skipped 0; todo 0.
-Test title explicitly says mocked exemplar WAV playback and missing-key errors.
+second-browser.log: tests 1; pass 1; fail 0; cancelled 0; skipped 0; todo 0. Checks mock WAV metadata readiness, renderer playback/key-error wiring, corrected contract text and responsive fit.
+
+$ npm run lint
+second-lint.log: eslint . --max-warnings=0 && cd src && eslint . --max-warnings=0; exit 0, no diagnostics.
 
 $ node_modules/.bin/tsc --noEmit --project src/tsconfig.json
-review-types.log: no diagnostics; exit 0.
+second-types.log: exit 0, no diagnostics.
 
 $ npm run build:renderer
-final-build.log: built in 13.79s; exit 0. Vite reports its >500 kB chunk-size warning.
-Renderer output: src/dist/ (ignored build output).
+second-build.log: built in 11.35s; exit 0. Vite reports its >500 kB chunk-size warning. Output is ignored src/dist/.
 
 $ git diff --check
 exit 0, no output.
 
-The above suites total 222 test executions, zero failures/skips. The enrollment-message suite intentionally appears in both original commands; this is not a count of distinct tests.
-Baseline reproduction: review-baseline.log, exact original voiceEnrollment + peopleActions command, 96 tests / 88 pass / the eight review-listed failures.
+The focused, additional, translation and browser commands above total 208 test executions, zero failures/skips. Earlier red runs and the separately rerun probe/repair subsets are not included in this count. The final focused run includes the final strengthened migration assertions.
 
-Verification limits
-- Legacy approvals are not backfilled into durable audio. New approvals save their proven playback bytes; previously deleted legacy source audio is not recovered.
-- Physical erasure from SQLite free pages/WAL/backups is unverified. Tests verify logical removal of live ciphertext/vector rows and affected historical vector snapshots.
-- The browser test injects a mock WAV and checks readyState >= 1 plus renderer error wording. It proves renderer wiring, not encrypted end-to-end playback through Electron IPC and actual audio output. Separate helper tests exercise real SQLite/filesystem persistence, injected AES-GCM encryption/decryption and restart, with a fixture audio codec.
-- Native/system-keychain recovery and the production codec were not exercised by these fixture tests. No production data, process, deployment or release was touched.
+Limits and unverified behavior
+- Legacy approvals are not backfilled into durable audio. Previously deleted source audio is not recovered.
+- The historical repair is proved for retained removal history explicitly marked irreversible, including the seeded pre-recording_id schema. Recovery of erasure intent after the identifying history itself has been pruned is not proved.
+- Logical erasure is proved for the live rows and affected historical snapshots exercised by these tests, including legacy merge/reset undo. This is not a claim of physical erasure from SQLite free pages, WAL files or backups; that remains unverified.
+- The browser uses a mock WAV and checks readyState >= 1 and renderer messages. It proves renderer wiring, not encrypted end-to-end playback through Electron IPC or actual audio output. Helper tests separately exercise SQLite/filesystem persistence, injected AES-GCM encryption/decryption and restart with a fixture codec.
+- Native/system-keychain recovery and the production codec were not exercised. Non-English copy passed key/interpolation coverage; native-speaker linguistic review was not performed.
+- No production data/process, deployment or release was touched. No push or PR was requested or performed.
 
-Artifacts
-- This corrected verification.txt supersedes the original report.
-- final-focused.log, final-identity.log, final-additional.log, final-translations.log, final-browser.log, final-build.log.
-- review-lint.log, review-types.log, review-settings.log, review-baseline.log.
-- 1440-light.png, 1440-dark.png, 412-light.png, 412-dark.png: renderer playback fixtures, not encrypted end-to-end evidence.
-
-Changed files — new-side diff ranges relative to c42ba9e09
-src/components/SettingsPage.tsx: 1387-1388, 3555-3567
-src/components/settings/PeoplePage.tsx: 232, 258, 264-266, 1858-1865
-src/helpers/database.js: 1428
-src/helpers/meetingAudioStore.js: 845-850, 853-854
-src/helpers/peopleActions.js: 696, 805, 865-868, 1514-1515, 1529, 1541-1556, 1620
-src/helpers/speakerInAppCalibration.js: 5, 284, 292-301, 364-375
-src/helpers/voiceEnrollment.js: 11-15, 155-173, 183, 255, 366-367, 386, 442-444, 471, 566, 580, 595-603, 605, 630, 676-681, 683-686, 991, 1001-1002, 1093-1097, 1125, 1133-1134, 1159, 1169-1173, 1203-1206, 1291-1293, 1301-1310, 1312, 1339, 1342-1350, 1519, 1525
-src/helpers/voiceExemplarAudio.js: 13, 35-41, 68, 93, 96, 102, 141-167, 169-177, 179-193, 204, 206, 228-243
-src/locales/ar/translation.json: 6233, 6469
-src/locales/de/translation.json: 5999, 6235
-src/locales/en/translation.json: 5999, 6235
-src/locales/es/translation.json: 6017, 6253
-src/locales/fr/translation.json: 6017, 6253
-src/locales/it/translation.json: 6017, 6253
-src/locales/ja/translation.json: 5999, 6235
-src/locales/pt/translation.json: 6017, 6253
-src/locales/ru/translation.json: 6101, 6337
-src/locales/zh-CN/translation.json: 5999, 6235
-src/locales/zh-TW/translation.json: 5999, 6235
-src/types/electron.ts: 3969-3970, 4326
-test/browser/voiceExemplarPlayback.cjs: 7, 96-109
-test/components/peopleEnrollmentMessages.test.js: 36-42
-test/helpers/peopleActions.test.js: 462, 473-477, 495, 511, 598-599, 610-611
-test/helpers/voiceEnrollment.test.js: 89-91, 973, 1007, 1038-1039, 1100, 1111-1113, 1117, 1128-1131, 1134, 1144-1145, 1194, 1212-1213, 1217-1227
-test/helpers/voiceExemplarAudio.test.js: 175-219, 225-229, 336, 353, 356-360, 393-484, 528-756
-src/helpers/voiceRecordingIdentity.js: 1-65 (new)
-test/helpers/voiceRecordingIdentity.test.js: 1-92 (new)
+Changed files — new-side diff ranges relative to 1498665b8
+src/helpers/voiceEnrollment.js: 183-184, 257, 269-276
+src/helpers/voiceExemplarAudio.js: 52-74, 185-186, 191-229
+src/helpers/voiceRecordingIdentity.js: 3-4, 29, 36-42, 47-48
+src/locales/ar/translation.json: 6232
+src/locales/de/translation.json: 5998
+src/locales/en/translation.json: 5998
+src/locales/es/translation.json: 6016
+src/locales/fr/translation.json: 6016
+src/locales/it/translation.json: 6016
+src/locales/ja/translation.json: 5998
+src/locales/pt/translation.json: 6016
+src/locales/ru/translation.json: 6100
+src/locales/zh-CN/translation.json: 5998
+src/locales/zh-TW/translation.json: 5998
+test/browser/voiceExemplarPlayback.cjs: 73
+test/helpers/peopleActions.test.js: 473
+test/helpers/voiceEnrollment.test.js: 111, 118, 198-199, 206-207, 210, 220, 262, 361, 365, 525, 769, 1103-1112, 1121-1122, 1129-1130, 1132, 1143, 1149, 1152
+test/helpers/voiceExemplarAudio.test.js: 429-431, 444-594
+test/helpers/voiceRecordingIdentity.test.js: 50, 56-59, 61-66
+docs/voice-exemplar-retention.md: 1-11 (new)
+artifacts/enrolment-audio-retention/second-memory-probes.cjs: 1-129 (new)
 artifacts/enrolment-audio-retention/verification.txt: replaced report
-artifacts/enrolment-audio-retention/1440-light.png: regenerated browser fixture screenshot
-Artifact logs: new files containing the command outputs listed above, with trailing whitespace removed for git diff checks.
+artifacts/enrolment-audio-retention/{1440,412}-{light,dark}.png: regenerated renderer fixtures
+second-*.log artifacts: command output logs described above; earlier first-run logs remain historical evidence, not this run's verification.
 
-Post-commit git status --porcelain is checked and reported in the final response.
+Post-commit git status --porcelain is reported in the final response.

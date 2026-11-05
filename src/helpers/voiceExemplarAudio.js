@@ -49,6 +49,29 @@ function repair(db) {
     END;
   `);
   sweepOrphans(db);
+  // c42ba9e09 made durable removals irreversible but retained before_sample and
+  // older vector snapshots. Repair only removals explicitly marked as erased;
+  // reversible legacy-vector removals retain their undo data.
+  if (
+    !db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'speaker_global_actions'"
+      )
+      .get()
+  )
+    return;
+  db.transaction(() => {
+    const removals = db
+      .prepare(
+        `SELECT a.candidate_id, a.profile_id
+      FROM voice_enrollment_actions a JOIN speaker_global_actions h ON h.id = a.id
+      WHERE a.choice = 'remove' AND a.before_sample IS NOT NULL
+        AND h.unavailable_reason = 'voice_data_cleared'`
+      )
+      .all();
+    for (const row of removals)
+      scrubVectorSnapshots(db, { profileIds: [row.profile_id], sampleIds: [row.candidate_id] });
+  })();
 }
 
 function sweepOrphans(db) {
@@ -159,11 +182,51 @@ function scrubVectorSnapshots(db, scope = null) {
     )
     .get();
   // A merged person's historical snapshots still carry their original owner.
-  // Follow sample ownership back so deleting the survivor erases those too.
+  // Clip links cover individual removals; person merge links also cover legacy
+  // profiles with no durable clip, including chains of merges in either UI path.
   if (scope && snapshotsExist)
     for (const row of db.prepare("SELECT snapshot FROM voice_sample_action_snapshots").all())
       for (const sample of JSON.parse(row.snapshot).audioOwnership || [])
         if (sampleIds.has(sample.id)) profileIds.add(sample.profile_id);
+  if (scope && scope.sampleIds == null) {
+    const merges = [];
+    if (
+      db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'person_identity_actions'"
+        )
+        .get()
+    )
+      merges.push(
+        ...db
+          .prepare(
+            "SELECT profile_id AS source, survivor_id AS survivor FROM person_identity_actions WHERE action = 'merge'"
+          )
+          .all()
+      );
+    for (const note of db
+      .prepare("SELECT speaker_action_log FROM notes WHERE speaker_action_log IS NOT NULL")
+      .all()) {
+      let log;
+      try {
+        log = require("./speakerActionLog").readSpeakerActionLog(note);
+      } catch {
+        continue;
+      }
+      for (const action of Array.isArray(log.actions) ? log.actions : [])
+        if (action.kind === "person" && action.action === "merge")
+          merges.push({ source: action.profileId, survivor: action.survivorId });
+    }
+    let changed;
+    do {
+      changed = false;
+      for (const merge of merges)
+        if (profileIds.has(merge.survivor) && !profileIds.has(merge.source)) {
+          profileIds.add(merge.source);
+          changed = true;
+        }
+    } while (changed);
+  }
   function scrub(value, owner = null) {
     if (!value || typeof value !== "object") return;
     if (Array.isArray(value)) {

@@ -5995,7 +5995,7 @@
     "enrollmentIntro": "Voice enrolment starts only when you choose a span. Listen to the whole sample before approving or rejecting it.",
     "calibrationExemplars": "Approved exemplar clips used: {{samples}}. Their saved audio and vectors are used without reconstruction.",
     "restoreMappings": "Restore speaker mappings",
-    "exemplarRetention": "This clip is kept until the person is deleted, independently of recording retention.",
+    "exemplarRetention": "This clip is kept until you erase it by deleting the person, clearing all voice data, resetting their voice, removing the sample, or undoing its approval. Recording retention, eviction, note deletion, re-diarisation and app restart never erase it.",
     "exemplarPlaybackKeyUnavailable": "The saved clip cannot be played because its encryption key is unavailable. Restore the original key to listen.",
     "exemplarCapture": "{{seconds}} s · captured {{date}}",
     "enrollmentProgress": "Clean spans: {{spans}} / 3 · recordings: {{meetings}} / 2",

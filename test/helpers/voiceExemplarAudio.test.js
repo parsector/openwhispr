@@ -426,6 +426,9 @@ test("mixed legacy and durable spans from one recording cannot graduate or split
     ),
     { cleanSpans: 3, meetings: 1, usable: false }
   );
+  t.diagnostic(
+    `mixed legacy+durable: ${JSON.stringify(enrollment.progress(f.database, f.person.id))}`
+  );
   f.addMeeting();
   f.extractor.extractEmbeddingFromSamples = async () =>
     Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? 1 : 0));
@@ -438,6 +441,157 @@ test("mixed legacy and durable spans from one recording cannot graduate or split
     y = 1.2 / norm;
   assert.ok(Math.abs(actual[0] - x / Math.hypot(x, y)) < 1e-6);
   assert.ok(Math.abs(actual[1] - y / Math.hypot(x, y)) < 1e-6);
+
+  // Remove every source of recording provenance, including the sibling lookup.
+  f.database.db.exec(`UPDATE voice_exemplars SET recording_id = NULL;
+    UPDATE voice_exemplar_audio SET recording_id = NULL;
+    UPDATE notes SET transcript = replace(transcript, 'recordingId', 'unknownRecordingId');`);
+  const unknown = enrollment.progress(f.database, f.person.id);
+  t.diagnostic(
+    `unknown provenance: ${JSON.stringify({ ...unknown, vectorBytes: enrollment.resolveProfile(f.database.db, f.person.id).embedding.length })}`
+  );
+  assert.equal(unknown.meetings, 0);
+  assert.equal(unknown.usable, false);
+  assert.equal(enrollment.resolveProfile(f.database.db, f.person.id).embedding.length, 0);
+  // Unresolved samples also get no centroid vote alongside a known recording.
+  const known = f.database.db
+    .prepare("SELECT id FROM voice_exemplar_audio WHERE note_id != ?")
+    .get(f.noteId);
+  f.database.db
+    .prepare("UPDATE voice_exemplar_audio SET recording_id = 'known-recording' WHERE id = ?")
+    .run(known.id);
+  const knownVector = f.database.db
+    .prepare("SELECT embedding FROM voice_exemplar_audio WHERE id = ?")
+    .get(known.id).embedding;
+  assert.deepEqual(enrollment.resolveProfile(f.database.db, f.person.id).embedding, knownVector);
+  assert.equal(enrollment.progress(f.database, f.person.id).meetings, 1);
+});
+
+for (const mapped of [false, true]) {
+  test(`legacy merge ancestry is erased through reset and both undos (mapped=${mapped})`, (t) => {
+    const f = fixture(t);
+    const people = require("../../src/helpers/peopleActions");
+    const db = f.database.db;
+    const vector = Buffer.alloc(2048, 29);
+    db.prepare("UPDATE speaker_profiles SET embedding = ?, sample_count = 1 WHERE id = ?").run(
+      vector,
+      f.person.id
+    );
+    if (mapped) f.database.setSpeakerMapping(f.noteId, "speaker_0", f.person.id, "Alex");
+    else f.database.updateNote(f.noteId, { transcript: null });
+    const survivor = f.database.createNamedSpeakerProfile("Survivor");
+    const merge = people.applyPersonAction(f.database, {
+      type: "merge",
+      profileId: f.person.id,
+      survivorId: survivor.id,
+    });
+    assert.equal(merge.success, true, merge.error);
+    const reset = people.applyPersonAction(f.database, { type: "reset", profileId: survivor.id });
+    assert.equal(reset.success, true, reset.error);
+    f.restart();
+    const undoReset = people.undoPersonAction(f.database, reset.id);
+    const undoMerge = people.undoPersonAction(f.database, merge.id);
+    const restored = f.database.db
+      .prepare(
+        "SELECT display_name, length(embedding) AS vectorBytes, sample_count FROM speaker_profiles WHERE id = ?"
+      )
+      .get(f.person.id);
+    t.diagnostic(
+      `legacy merge/reset/undo/undo: ${JSON.stringify({ mapped, merge: merge.success, reset: reset.success, undoReset: undoReset.success, undoMerge: undoMerge.success, ...restored })}`
+    );
+    assert.equal(undoReset.success, true, undoReset.error);
+    assert.equal(undoMerge.success, true, undoMerge.error);
+    assert.deepEqual(restored, { display_name: "Alex", vectorBytes: 0, sample_count: 0 });
+    if (mapped)
+      assert.equal(
+        f.database.db
+          .prepare("SELECT profile_id FROM speaker_mappings WHERE note_id = ?")
+          .get(f.noteId).profile_id,
+        f.person.id
+      );
+    assert.equal(
+      f.database.db
+        .prepare("SELECT length(embedding) AS n FROM speaker_profiles WHERE id = ?")
+        .get(survivor.id).n,
+      0
+    );
+  });
+}
+
+test("startup repairs c42ba9e09 irreversible removal snapshots and preserves reversible legacy removal", async (t) => {
+  const f = fixture(t);
+  const { candidate } = await f.approve();
+  const db = f.database.db;
+  const sample = db
+    .prepare(
+      `SELECT id, profile_id, note_id, track, start_sample, end_sample,
+    embedding, approved_at, created_at, row_ids, meeting_date
+    FROM voice_exemplar_audio WHERE id = ?`
+    )
+    .get(candidate.id);
+  const before = JSON.stringify({ ...sample, embedding: sample.embedding.toString("base64") });
+  enrollment.snapshotEvidence(db, "legacy-history", f.person.id);
+  const snapshot = db
+    .prepare("SELECT snapshot FROM voice_sample_action_snapshots WHERE id = 'legacy-history'")
+    .get().snapshot;
+  const removed = enrollment.removeSample(f.database, candidate.id);
+  assert.equal(removed.success, true);
+  // Seed the actual old shape: no clip, a raw before_sample vector, unavailable undo,
+  // and older history still containing the removed vector. Also omit the newer column.
+  db.prepare("UPDATE voice_enrollment_actions SET before_sample = ? WHERE id = ?").run(
+    before,
+    removed.id
+  );
+  db.prepare(
+    "UPDATE voice_sample_action_snapshots SET snapshot = ? WHERE id = 'legacy-history'"
+  ).run(snapshot);
+  db.exec("ALTER TABLE voice_exemplar_audio DROP COLUMN recording_id");
+  db.exec("ALTER TABLE voice_exemplars DROP COLUMN recording_id");
+  const reversibleBefore = JSON.stringify({ ...JSON.parse(before), id: "other-sample" });
+  db.prepare(
+    "INSERT INTO voice_enrollment_actions (id, candidate_id, profile_id, note_id, choice, before_sample) VALUES ('reversible-legacy', 'other-sample', ?, ?, 'remove', ?)"
+  ).run(f.person.id, f.noteId, reversibleBefore);
+  require("../../src/helpers/speakerGlobalHistory").add(db, {
+    id: "reversible-legacy",
+    kind: "enrollment",
+    profileId: f.person.id,
+    noteId: f.noteId,
+  });
+  f.restart();
+  const repaired = f.database.db
+    .prepare("SELECT before_sample FROM voice_enrollment_actions WHERE id = ?")
+    .get(removed.id).before_sample;
+  const history = f.database.db
+    .prepare("SELECT snapshot FROM voice_sample_action_snapshots WHERE id = 'legacy-history'")
+    .get().snapshot;
+  t.diagnostic(
+    `legacy startup repair: ${JSON.stringify({ removedVectorRetained: repaired !== null, historicalVectorRetained: history.includes(sample.embedding.toString("base64")), liveDurableSamples: f.database.getVoiceExemplarAudio().length })}`
+  );
+  assert.equal(repaired, null);
+  assert.equal(history.includes(sample.embedding.toString("base64")), false);
+  assert.equal(
+    f.database.db
+      .prepare("SELECT before_sample FROM voice_enrollment_actions WHERE id = 'reversible-legacy'")
+      .get().before_sample,
+    reversibleBefore
+  );
+  assert.equal(enrollment.undo(f.database, removed.id).success, false);
+  enrollment.restoreEvidence(f.database.db, "legacy-history");
+  assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  assert.equal(f.database.db.prepare("SELECT count(*) AS n FROM voice_exemplars").get().n, 0);
+  assert.equal(enrollment.undo(f.database, "reversible-legacy").success, true);
+  assert.deepEqual(
+    f.database.db.prepare("SELECT embedding FROM voice_exemplars WHERE id = 'other-sample'").get()
+      .embedding,
+    sample.embedding
+  );
+  f.restart();
+  assert.equal(
+    f.database.db
+      .prepare("SELECT before_sample FROM voice_enrollment_actions WHERE id = ?")
+      .get(removed.id).before_sample,
+    null
+  );
 });
 
 test("durable-only intervals block resegmented eligibility, scanning, focused approval and calibration", async (t) => {

@@ -180,7 +180,8 @@ function state(db, profileId) {
       !left ||
       vectors.some((right, j) => j > i && (!right || cosine(left, right) < MIN_OWN_SIMILARITY))
   );
-  const meetings = new Set(good.map((sample) => recordingIdentity(db, sample))).size;
+  const meetings = new Set(good.map((sample) => recordingIdentity(db, sample)).filter(Boolean))
+    .size;
   // Graduation requires three approved, internally consistent spans from two
   // recordings. A later correction to any contributing row removes its sample.
   const requiresReview = !!db
@@ -253,6 +254,7 @@ function resolveProfile(db, profileId) {
     const grouped = new Map();
     result.good.forEach((sample, i) => {
       const meeting = recordingIdentity(db, sample);
+      if (meeting === null) return;
       if (!grouped.has(meeting)) grouped.set(meeting, []);
       grouped.get(meeting).push(result.vectors[i]);
     });
@@ -264,12 +266,14 @@ function resolveProfile(db, profileId) {
         )
       )
     );
-    const centroid = unit(
-      Float32Array.from(
-        { length: 512 },
-        (_, i) => meetingVectors.reduce((sum, item) => sum + item[i], 0) / meetingVectors.length
-      )
-    );
+    const centroid =
+      meetingVectors.length &&
+      unit(
+        Float32Array.from(
+          { length: 512 },
+          (_, i) => meetingVectors.reduce((sum, item) => sum + item[i], 0) / meetingVectors.length
+        )
+      );
     if (centroid) embedding = packed(centroid);
   }
   return { result, embedding };

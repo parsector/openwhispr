@@ -6013,7 +6013,7 @@
     "enrollmentIntro": "Ascolta tutto il campione prima di approvarlo o rifiutarlo.",
     "calibrationExemplars": "Clip vocali approvate utilizzate: {{samples}}. L’audio e i vettori salvati vengono utilizzati senza ricostruzione.",
     "restoreMappings": "Ripristina le associazioni dei parlanti",
-    "exemplarRetention": "Questa clip viene conservata fino all’eliminazione della persona, indipendentemente dalla durata di conservazione delle registrazioni.",
+    "exemplarRetention": "Questa clip viene conservata finché non la cancelli eliminando la persona, cancellando tutti i dati vocali, reimpostando la sua voce, rimuovendo il campione o annullando la sua approvazione. La conservazione o la rimozione automatica delle registrazioni, l’eliminazione delle note, una nuova separazione dei parlanti e il riavvio dell’app non la cancellano mai.",
     "exemplarPlaybackKeyUnavailable": "La clip salvata non può essere riprodotta perché la chiave di crittografia non è disponibile. Ripristina la chiave originale per ascoltarla.",
     "exemplarCapture": "{{seconds}} s · acquisita il {{date}}",
     "enrollmentProgress": "Segmenti puliti: {{spans}} / 3 · registrazioni: {{meetings}} / 2",

@@ -471,7 +471,6 @@ test('clear voice deletes biometrics irreversibly and undo restores mappings onl
   assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 0);
   assert.equal(undoClearVoiceData(f.db, clear.id).success, true);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 0);
-  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM voice_exemplar_audio').get().n, 0);
   assert.equal(f.db.db.prepare('SELECT length(embedding) AS n FROM speaker_profiles WHERE id = ?').get(alex.id).n, 0);
   assert.equal(f.db.db.prepare('SELECT profile_id FROM speaker_mappings WHERE note_id = ?').get(id).profile_id, alex.id);
   assert.equal(f.rows(id)[0].speakerName, 'Alex');

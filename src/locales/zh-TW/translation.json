@@ -5995,7 +5995,7 @@
     "enrollmentIntro": "核准或拒絕前請完整聽完樣本。",
     "calibrationExemplars": "使用的已核准聲音樣本：{{samples}}。直接使用已儲存的音訊與向量，不進行重建。",
     "restoreMappings": "還原說話者對應",
-    "exemplarRetention": "此片段會保留至刪除此人為止，不受錄音保留期限影響。",
+    "exemplarRetention": "此片段會一直保留，直到您透過刪除此人、清除所有語音資料、重設此人的聲音、移除此樣本或復原其核准來將其刪除。錄音保留期限、容量清理、筆記刪除、重新進行說話者分離和應用程式重新啟動都不會將其刪除。",
     "exemplarPlaybackKeyUnavailable": "加密金鑰無法使用，因此無法播放已儲存的片段。請還原原始金鑰以聆聽。",
     "exemplarCapture": "{{seconds}} 秒 · 錄製於 {{date}}",
     "enrollmentProgress": "乾淨片段：{{spans}} / 3 · 錄音：{{meetings}} / 2",

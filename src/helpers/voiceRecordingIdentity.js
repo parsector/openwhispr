@@ -1,7 +1,7 @@
 const { readTranscriptDocument } = require("./transcriptDocument");
 
-// Numeric note IDs can be reused. Prefer the recording UUID, then the immutable
-// client note ID for evidence predating recording UUIDs.
+// Numeric note IDs can be reused, and a note is not proof of a distinct recording.
+// Unresolved provenance is explicit and cannot establish recording diversity.
 function recordingIdentity(db, sample, status = null, currentNote = null) {
   if (sample.recording_id) return `recording:${sample.recording_id}`;
   const note =
@@ -26,27 +26,26 @@ function recordingIdentity(db, sample, status = null, currentNote = null) {
     );
     if (ids.size === 1) return `recording:${[...ids][0]}`;
   }
-  return `note:${sample.note_identity || (sameNote && note.client_note_id) || sample.note_id}`;
+  return null;
 }
 
 function overlapsRecording(db, sample, note, status, track, start, end) {
   const sameNote =
     sample.note_id === note.id &&
     (!sample.note_identity || sample.note_identity === note.client_note_id);
+  const sampleRecording = recordingIdentity(db, sample, sameNote ? status : null);
+  const currentRecording = recordingIdentity(
+    db,
+    { note_id: note.id, note_identity: note.client_note_id },
+    status,
+    note
+  );
   return (
     sample.track === track &&
     sample.start_sample < end &&
     sample.end_sample > start &&
-    recordingIdentity(db, sample, sameNote ? status : null) ===
-      recordingIdentity(
-        db,
-        {
-          note_id: note.id,
-          note_identity: note.client_note_id,
-        },
-        status,
-        note
-      )
+    ((sampleRecording !== null && sampleRecording === currentRecording) ||
+      (sampleRecording === null && currentRecording === null && sameNote))
   );
 }
 

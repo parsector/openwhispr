@@ -1,0 +1,50 @@
+[WARN][secretCrypto] OS keychain unavailable — falling back to safeStorage { error: 'locked', platform: 'linux' }
+[INFO][secretCrypto] recovered master key from safeStorage backup {}
+✔ an unreadable or missing Keychain entry recovers the existing backup without replacing it (289.888974ms)
+✔ device erasure removes the Keychain key and its on-disk backup (77.076318ms)
+✔ splitting a cluster keeps row ids and locks, gives a new number, and undoes in order (218.675304ms)
+✔ atomic correction merges a live row appended while IPC waits (4.557699ms)
+✔ failed persistence leaves mapping transcript and identifier unchanged (2.520647ms)
+✔ map undo and another identification cannot revive name or profile (2.330475ms)
+✔ undo restores from the ordered action log when transcript rows carry no history (2.215848ms)
+✔ only post-final corrections record the changed-after-final marker (1.261781ms)
+✔ migrating a current-tip note keeps every undo action without duplicating row events (53.344845ms)
+✔ legacy split and recognition events order with cloud adoption without losing either action (6.131863ms)
+✔ migrated row-only correction names its affected row for transcript history (4.858414ms)
+✔ older correction on different target waits for newest action (4.849956ms)
+✔ older correction on same cluster target is refused (2.715485ms)
+✔ cluster undo restores only its run mapping (4.06856ms)
+✔ same-target undo uses event order when the clock moves backward (1.654375ms)
+✔ an early correction survives 55 later corrections to other rows (381.57641ms)
+✔ a cloud label change preserves the local event and label without conflict (2.614274ms)
+✔ owner can correct a 650-row cluster and undo it from one indexed event (82.931383ms)
+✔ owner can correct a 500-row selection without filling first-event history (12.960827ms)
+✔ an oversized action rejects without changing the transcript or action log (183.829301ms)
+✔ undoing an old run never replaces the active run cache with its historical name (0.978566ms)
+[WARN] speaker-embeddings cluster voice unavailable { speaker: 'speaker_a', error: 'onnx worker request timeout' }
+✔ each cluster's voice comes from its three longest segments of 1.5 s or more (83.468938ms)
+✔ short voiced turns are concatenated into one cluster vector (4.080519ms)
+✔ concatenated silent turns do not become a speaker vector (7.902032ms)
+✔ only the audio each voice uses is read, never the whole WAV (33.365758ms)
+✔ a segment longer than 8 s is embedded from its last 8 s (51.153206ms)
+✔ a cluster whose voice fails leaves the other clusters' voices intact (40.486104ms)
+✔ a cancel between clusters stops before the next cluster (75.333566ms)
+✔ a cancelled upload stops before extracting voices (1.449328ms)
+✔ an extract arms an idle unload that releases the speaker session, then the worker (136.014887ms)
+✔ each extract restarts the idle window (230.763734ms)
+✔ extracts queued together leave a single idle timer (316.740484ms)
+✔ a failed extract still arms the idle unload (63.542352ms)
+✔ an extract in flight holds off the idle unload until it finishes (487.820715ms)
+✔ a segment too short to embed neither loads the model nor arms the timer (6.426746ms)
+✔ unload waits for an in-flight extract and a racing extract reloads after release (226.98743ms)
+✔ worker serializes speaker unload behind in-flight native inference (295.924293ms)
+✔ reloads after the shared worker restarts (484.951809ms)
+✔ a failed idle unload is logged and the next extract still reloads (233.868896ms)
+ℹ tests 39
+ℹ suites 0
+ℹ pass 39
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5495.393738

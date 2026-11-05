@@ -47,15 +47,23 @@ test("legacy and durable evidence resolve the real recording UUID without trusti
   );
 });
 
-test("pre-UUID legacy and durable evidence share immutable note identity", (t) => {
+test("missing recording provenance is explicitly unresolved, even across immutable note identities", (t) => {
   const db = new Database(":memory:");
   t.after(() => db.close());
   db.exec(`CREATE TABLE notes (id INTEGER, client_note_id TEXT, transcript TEXT);
     CREATE TABLE voice_exemplar_audio (note_identity TEXT, recording_id TEXT);
     INSERT INTO notes VALUES (1, 'note-uuid', NULL);`);
+  assert.equal(recordingIdentity(db, { note_id: 1 }), null);
+  assert.equal(recordingIdentity(db, { note_id: 1, note_identity: "note-uuid" }), null);
+  assert.equal(recordingIdentity(db, { note_id: 2, note_identity: "other-note" }), null);
+  const span = { note_id: 1, track: "mic", start_sample: 10, end_sample: 20 };
   assert.equal(
-    recordingIdentity(db, { note_id: 1 }),
-    recordingIdentity(db, { note_id: 1, note_identity: "note-uuid" })
+    overlapsRecording(db, span, { id: 2, client_note_id: "other-note" }, {}, "mic", 12, 18),
+    false
+  );
+  assert.equal(
+    overlapsRecording(db, span, { id: 1, client_note_id: "note-uuid" }, {}, "mic", 12, 18),
+    true
   );
 });
 
