@@ -209,6 +209,35 @@ test('focused candidate agrees with the scan and falls back after a revision cha
   assert.ok(resolved > 0, 'revision mismatch must use the authoritative scan');
 });
 
+test('enrolment facts cache invalidates for edits, audio loss, expiry and rules changes', t => {
+  const f = fixture(t);
+  const { noteId } = f.note('cached');
+  const original = require('../../src/helpers/meetingAudioSpan.mjs').resolveMeetingAudioSpan;
+  let resolved = 0;
+  f.audio.resolveMeetingAudioSpan = (...args) => { resolved++; return original(...args); };
+  const cold = enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.ok(resolved > 0);
+  resolved = 0;
+  assert.deepEqual(enrollment.candidateReport(f.db, f.audio, f.person.id), cold);
+  assert.equal(resolved, 0);
+  const doc = JSON.parse(f.db.getNote(noteId).transcript);
+  doc.rows[0].text = 'edited';
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.ok(resolved > 0);
+  resolved = 0;
+  f.audio.status = () => ({ state: 'deleted', bytes: 0 });
+  assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.audio, 1);
+  f.audio.status = () => ({ state: 'expired', bytes: 0 });
+  assert.equal(enrollment.candidateReport(f.db, f.audio, f.person.id).reasons.audio, 1);
+  f.audio.status = () => ({ state: 'complete' });
+  enrollment.candidateReport(f.db, f.audio, f.person.id);
+  resolved = 0;
+  enrollment.candidateReport(f.db, f.audio, f.person.id,
+    enrollment.ENROLLMENT_RULES_VERSION + 1);
+  assert.ok(resolved > 0);
+});
+
 test('review cache recomputes only edited notes and keeps the person cap live', t => {
   const f = fixture(t);
   const one = f.note('one', 2).noteId;

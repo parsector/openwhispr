@@ -729,6 +729,8 @@ class MeetingAudioStore {
         .get()
     )
       this.database.db.prepare("DELETE FROM review_row_cache").run();
+    if (this.database?.db?.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_enrollment_fact_cache'").get())
+      this.database.db.prepare("DELETE FROM voice_enrollment_fact_cache").run();
     for (const noteId of noteIds) this.onChanged?.({ noteId, state: "deleted" });
   }
 
@@ -739,6 +741,8 @@ class MeetingAudioStore {
       db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_row_cache'").get()
     )
       db.prepare("DELETE FROM review_row_cache WHERE note_id = ?").run(noteId);
+    if (db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_enrollment_fact_cache'").get())
+      db.prepare("DELETE FROM voice_enrollment_fact_cache WHERE note_id = ?").run(noteId);
     const table = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='voice_exemplars'")
       .get();

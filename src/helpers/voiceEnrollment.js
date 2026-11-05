@@ -11,6 +11,7 @@ const MODEL_RATE = 16000;
 const MIN_SPANS = 3;
 const MIN_MEETINGS = 2;
 const MAX_SAMPLES = 20;
+const ENROLLMENT_RULES_VERSION = 1;
 // These are uncalibrated guards, not thresholds measured on owner-labelled audio.
 const calibration = Object.freeze({
   ownSimilarity: { value: 0.65, status: "uncalibrated" },
@@ -28,6 +29,12 @@ function offers(database) {
 function offerFingerprint(note, status) {
   return createHash("sha256")
     .update(JSON.stringify([note.id, note.transcript, note.speaker_action_log,
+      note.speaker_label_undo, status]))
+    .digest("hex");
+}
+function factFingerprint(note, status, rulesVersion) {
+  return createHash("sha256")
+    .update(JSON.stringify([rulesVersion, note.id, note.transcript, note.speaker_action_log,
       note.speaker_label_undo, status]))
     .digest("hex");
 }
@@ -418,7 +425,27 @@ function createEligibilityContext(database, store) {
   }
   return { check };
 }
-function candidateReport(database, store, profileId) {
+function noteFacts(database, store, note, rows, eligibility, rulesVersion) {
+  const db = database.db;
+  const fingerprint = factFingerprint(note, store.status(note.id), rulesVersion);
+  const cached = db.prepare(`SELECT fingerprint, facts_json FROM voice_enrollment_fact_cache
+    WHERE note_id = ?`).get(note.id);
+  if (cached?.fingerprint === fingerprint) return new Map(JSON.parse(cached.facts_json));
+  const facts = rows.map(row => {
+    const result = eligibility.check(note, rows, row, null, false, true);
+    if (result.reason) return [row.id, { reason: result.reason }];
+    const { track, startSample, endSample, durationSeconds, revision, everCorrected } =
+      result.candidate;
+    return [row.id, { track, startSample, endSample, durationSeconds,
+      revision, everCorrected }];
+  });
+  db.prepare(`INSERT INTO voice_enrollment_fact_cache (note_id, fingerprint, facts_json)
+    VALUES (?, ?, ?) ON CONFLICT(note_id) DO UPDATE SET fingerprint = excluded.fingerprint,
+    facts_json = excluded.facts_json, computed_at = CURRENT_TIMESTAMP`)
+    .run(note.id, fingerprint, JSON.stringify(facts));
+  return new Map(facts);
+}
+function candidateReport(database, store, profileId, rulesVersion = ENROLLMENT_RULES_VERSION) {
   const db = database.db;
   const reasons = {
     short: 0,
@@ -445,13 +472,30 @@ function candidateReport(database, store, profileId) {
     )
     .all()) {
     const rows = readTranscriptDocument(note.transcript).rows;
+    const facts = noteFacts(database, store, note, rows, eligibility, rulesVersion);
     for (const row of rows) {
       if (row.deleted || !attributed(db, note.id, row, profileId)) continue;
-      const result = eligibility.check(note, rows, row, profileId);
-      if (result.reason) reasons[result.reason]++;
+      const fact = facts.get(row.id);
+      if (fact.reason) reasons[fact.reason]++;
       else {
-        offered.push(result.candidate);
-        rememberOffer(database, store, note, result.candidate);
+        const reviewed = db.prepare(`SELECT 1 FROM voice_exemplars WHERE profile_id = ?
+          AND note_id = ? AND track = ? AND start_sample < ? AND end_sample > ?`)
+          .get(profileId, note.id, fact.track, fact.endSample, fact.startSample) ||
+          db.prepare(`SELECT 1 FROM voice_enrollment_candidates WHERE profile_id = ?
+          AND note_id = ? AND track = ? AND start_sample = ? AND end_sample = ?`)
+            .get(profileId, note.id, fact.track, fact.startSample, fact.endSample);
+        if (reviewed) {
+          reasons.reviewed++;
+          continue;
+        }
+        const candidate = {
+          id: candidateId(profileId, note.id, row.id, { trackId: fact.track,
+            startSample: fact.startSample, endSample: fact.endSample }),
+          profileId, noteId: note.id, noteTitle: note.title,
+          meetingDate: note.created_at, rowIds: [row.id], ...fact,
+        };
+        offered.push(candidate);
+        rememberOffer(database, store, note, candidate);
       }
     }
   }
@@ -1076,6 +1120,7 @@ function removeNoteEvidence(db, noteId) {
 }
 module.exports = {
   MAX_SAMPLES,
+  ENROLLMENT_RULES_VERSION,
   listCandidates,
   candidateReport,
   createEligibilityContext,
