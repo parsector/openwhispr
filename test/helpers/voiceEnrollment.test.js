@@ -191,6 +191,24 @@ function fixture(t) {
   return { db, person, audio, extractor, vector, note, completeReview };
 }
 
+test('focused candidate agrees with the scan and falls back after a revision change', t => {
+  const f = fixture(t);
+  const { noteId } = f.note('focused');
+  const original = require('../../src/helpers/meetingAudioSpan.mjs').resolveMeetingAudioSpan;
+  let resolved = 0;
+  f.audio.resolveMeetingAudioSpan = (...args) => { resolved++; return original(...args); };
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  assert.ok(resolved > 0);
+  resolved = 0;
+  assert.deepEqual(enrollment.play(f.db, f.audio, candidate.id).candidate, candidate);
+  assert.equal(resolved, 0);
+  const doc = JSON.parse(f.db.getNote(noteId).transcript);
+  doc.rows[0].text = 'revised';
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  enrollment.play(f.db, f.audio, candidate.id);
+  assert.ok(resolved > 0, 'revision mismatch must use the authoritative scan');
+});
+
 test('review cache recomputes only edited notes and keeps the person cap live', t => {
   const f = fixture(t);
   const one = f.note('one', 2).noteId;
