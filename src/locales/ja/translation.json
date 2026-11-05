@@ -5999,6 +5999,7 @@
     "voiceUnavailable": "音声を利用できません",
     "legacyRecovered": "復元した旧サンプル：{{count}}。",
     "legacyRecoveryDisclosure": "復元した旧サンプルは通常どおりカウントされます。音声の保存期限がすでに切れたサンプルは復元できず、認識や録音の多様性の計算には永久に使用できません。音声の再登録が必要になる場合があります。実際の録音IDを確認できていないサンプルは、復元されるまで利用できません。",
+    "legacyRecoveryFailed": "復元に繰り返し失敗したため、復元を停止しました。利用できないサンプルを削除し、新しいサンプルを登録してください。",
     "exemplarPlaybackKeyUnavailable": "暗号化キーが利用できないため、保存済みクリップを再生できません。元のキーを復元してお聴きください。",
     "exemplarCapture": "{{seconds}} 秒 · 録音日 {{date}}",
     "enrollmentProgress": "適切な区間: {{spans}} / 3 · 録音: {{meetings}} / 2",

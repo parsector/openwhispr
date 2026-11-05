@@ -87,3 +87,28 @@ test("overlap uses classified provenance; unresolved same-note intervals still s
     false
   );
 });
+
+test("upgrading the provenance check preserves classifications and accepts recovery_failed", (t) => {
+  const db = new Database(":memory:");
+  t.after(() => db.close());
+  db.exec(`CREATE TABLE speaker_profiles (id INTEGER PRIMARY KEY);
+    CREATE TABLE voice_evidence_provenance (
+      sample_id TEXT PRIMARY KEY, profile_id INTEGER REFERENCES speaker_profiles(id) ON DELETE CASCADE,
+      state TEXT NOT NULL CHECK (state IN ('resolved', 'pending_recovery', 'unrecoverable')),
+      recording_id TEXT, reason TEXT);
+    INSERT INTO voice_evidence_provenance VALUES ('old', NULL, 'resolved', 'genuine', NULL)`);
+  open(db);
+  open(db);
+  assert.deepEqual(classifyEvidence(db, { id: "old" }), {
+    state: "resolved",
+    recordingId: "genuine",
+  });
+  db.prepare(
+    `INSERT INTO voice_evidence_provenance (sample_id, state, reason, recovery_attempts)
+    VALUES ('failed', 'recovery_failed', 'decoder_timeout', 3)`
+  ).run();
+  assert.deepEqual(classifyEvidence(db, { id: "failed" }, { record: true }), {
+    state: "recovery_failed",
+    reason: "decoder_timeout",
+  });
+});

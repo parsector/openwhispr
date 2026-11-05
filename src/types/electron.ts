@@ -4270,6 +4270,7 @@ declare global {
           }>;
           voiceProgress: {
             pendingRecovery?: number;
+            recoveryFailed?: number;
             unrecoverable?: number;
             legacyRecovered?: number;
             cleanSpans: number;
@@ -4326,7 +4327,13 @@ declare global {
       removeVoiceEnrollmentSample?: (id: string) => Promise<{ success: boolean; error?: string }>;
       playVoiceEnrollmentCandidate?: (
         id: string
-      ) => Promise<{ state: string; error?: string; wav?: string; token?: string; expiresAt?: number }>;
+      ) => Promise<{
+        state: string;
+        error?: string;
+        wav?: string;
+        token?: string;
+        expiresAt?: number;
+      }>;
       completeVoiceEnrollmentCandidate?: (
         id: string,
         token: string

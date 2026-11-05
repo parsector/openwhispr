@@ -154,12 +154,21 @@ function encryptBytes(bytes) {
 function decryptBytes(blob) {
   _ensureInit();
   if (mode !== "keychain" || !masterKey) {
-    throw new Error("Audio encryption key is unavailable in the OS credential store");
+    throw Object.assign(
+      new Error("Audio encryption key is unavailable in the OS credential store"),
+      { code: "audio_key_unavailable" }
+    );
   }
-  if (blob.length < IV_LEN + TAG_LEN) throw new Error("Encrypted audio chunk is truncated");
-  const decipher = crypto.createDecipheriv(ALGO, masterKey, blob.subarray(0, IV_LEN));
-  decipher.setAuthTag(blob.subarray(blob.length - TAG_LEN));
-  return Buffer.concat([decipher.update(blob.subarray(IV_LEN, -TAG_LEN)), decipher.final()]);
+  try {
+    if (blob.length < IV_LEN + TAG_LEN) throw new Error("Encrypted audio chunk is truncated");
+    const decipher = crypto.createDecipheriv(ALGO, masterKey, blob.subarray(0, IV_LEN));
+    decipher.setAuthTag(blob.subarray(blob.length - TAG_LEN));
+    return Buffer.concat([decipher.update(blob.subarray(IV_LEN, -TAG_LEN)), decipher.final()]);
+  } catch (cause) {
+    throw Object.assign(new Error("Encrypted audio authentication failed", { cause }), {
+      code: "audio_corrupt",
+    });
+  }
 }
 
 function clearDeviceKey() {

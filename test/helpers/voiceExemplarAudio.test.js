@@ -20,7 +20,7 @@ const enrollment = require("../../src/helpers/voiceEnrollment");
 const { MeetingAudioStore, RATE } = require("../../src/helpers/meetingAudioStore");
 const codec = require("../lib/fakeAudioCodec");
 
-function fixture(t) {
+function fixture(t, options = {}) {
   directory = fs.mkdtempSync(path.join(os.tmpdir(), "exemplar-"));
   const root = directory;
   let database = new DatabaseManager();
@@ -33,9 +33,13 @@ function fixture(t) {
       return Buffer.concat([iv, cipher.update(bytes), cipher.final(), cipher.getAuthTag()]);
     },
     decryptBytes(bytes) {
-      const cipher = crypto.createDecipheriv("aes-256-gcm", key, bytes.subarray(0, 12));
-      cipher.setAuthTag(bytes.subarray(-16));
-      return Buffer.concat([cipher.update(bytes.subarray(12, -16)), cipher.final()]);
+      try {
+        const cipher = crypto.createDecipheriv("aes-256-gcm", key, bytes.subarray(0, 12));
+        cipher.setAuthTag(bytes.subarray(-16));
+        return Buffer.concat([cipher.update(bytes.subarray(12, -16)), cipher.final()]);
+      } catch (cause) {
+        throw Object.assign(Error("authentication failed", { cause }), { code: "audio_corrupt" });
+      }
     },
   };
   const makeStore = () =>
@@ -43,6 +47,7 @@ function fixture(t) {
       database,
       encryption,
       codec,
+      ...options,
       now: () => clock,
     });
   let store = makeStore();
@@ -80,6 +85,7 @@ function fixture(t) {
       Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? 1 : 0)),
   };
   t.after(() => {
+    store.cancelRecovery?.();
     database.db.close();
     fs.rmSync(root, { recursive: true, force: true });
   });
@@ -111,6 +117,7 @@ function fixture(t) {
       clock += days * 86400000;
     },
     restart() {
+      store.cancelRecovery?.();
       database.db.close();
       database = new DatabaseManager();
       store = makeStore();
@@ -136,6 +143,378 @@ function fixture(t) {
     },
   };
 }
+
+async function legacyFixture(t, options = {}) {
+  const f = fixture(t, options);
+  const approved = await f.approve();
+  f.database.db.exec("DELETE FROM voice_exemplar_audio; DELETE FROM voice_evidence_provenance");
+  return { f, ...approved };
+}
+
+test("fourth run: constructor returns with recovery queued and yields between capped passes", async (t) => {
+  const { f, candidate } = await legacyFixture(t, { recovery: { passLimit: 2, yieldMs: 1 } });
+  for (let i = 0; i < 4; i++)
+    f.database.db
+      .prepare(
+        `INSERT INTO voice_exemplars
+    (id, profile_id, note_id, row_ids, track, start_sample, end_sample, embedding, approved_at)
+    SELECT ?, profile_id, note_id, row_ids, track, start_sample, end_sample, embedding, approved_at
+    FROM voice_exemplars WHERE id = ?`
+      )
+      .run(`queued-${i}`, candidate.id);
+  f.advance(30);
+  f.restart();
+  assert.equal(
+    f.database.getVoiceExemplarAudio().length,
+    0,
+    "startup must complete before decoding"
+  );
+  assert.equal(f.store.enforce().removed.length, 0, "all queued sources must be protected");
+  assert.equal(
+    f.store.status(f.noteId).state,
+    "complete",
+    "pending sources are still retained past their original deadline"
+  );
+  assert.ok(f.store.usage().usedBytes > 0, "protected bytes must count against the disk budget");
+  t.diagnostic(
+    `startup complete: queued=5 clips=0 protected=${f.store.legacyRecovery.deferredNotes.length}`
+  );
+  let heartbeats = 0;
+  const heartbeat = setInterval(() => heartbeats++, 0);
+  await f.store.legacyRecovery.done;
+  clearInterval(heartbeat);
+  assert.equal(f.database.getVoiceExemplarAudio().length, 5);
+  assert.ok(heartbeats >= 4);
+  assert.ok(f.store.legacyRecovery.maxPassItems <= 2);
+  assert.equal(f.store.legacyRecovery.deferredNotes.length, 0);
+  assert.equal(f.store._manifest(f.noteId).status, "expired");
+  t.diagnostic(
+    `bounded completion: recovered=5 passes=${f.store.legacyRecovery.passes} maxPassItems=${f.store.legacyRecovery.maxPassItems} heartbeats=${heartbeats}`
+  );
+});
+
+test("fourth run: decoder timeout retries and succeeds without re-review", async (t) => {
+  let attempts = 0;
+  const production = require("../../src/helpers/meetingAudioStore").defaultCodec;
+  const { f, candidate, playback } = await legacyFixture(t, {
+    codec: {
+      ...production,
+      decodeAsync: (bytes, options) =>
+        production.decodeAsync(bytes, {
+          ...options,
+          timeout: ++attempts === 1 ? 1 : 5000,
+        }),
+    },
+    recovery: { retryBaseMs: 1, yieldMs: 1 },
+  });
+  f.advance(30);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  assert.equal(attempts, 2);
+  assert.equal(f.store.legacyRecovery.recovered, 1);
+  assert.deepEqual(enrollment.play(f.database, f.store, candidate.id).wav, playback.wav);
+  assert.equal(enrollment.progress(f.database, f.person.id).unrecoverable, 0);
+  t.diagnostic(
+    `decoder-timeout then success: realProcessTimeout=true attempts=${attempts} recovered=1 bytesEqual=true unrecoverable=0`
+  );
+});
+
+for (const code of ["ENOENT", "EBUSY", "EAGAIN"]) {
+  test(`fourth run: decoder ${code} is temporary and retries`, async (t) => {
+    let attempts = 0;
+    const { f } = await legacyFixture(t, {
+      codec: {
+        ...codec,
+        decodeAsync: async (bytes) => {
+          if (++attempts === 1) throw Object.assign(Error("decoder unavailable"), { code });
+          return codec.decode(bytes);
+        },
+      },
+      recovery: { retryBaseMs: 1, yieldMs: 1 },
+    });
+    f.restart();
+    await f.store.legacyRecovery.done;
+    assert.equal(attempts, 2);
+    assert.equal(f.store.legacyRecovery.recovered, 1);
+    assert.equal(f.store.legacyRecovery.unrecoverable, 0);
+  });
+}
+
+for (const kind of ["chunk", "manifest"]) {
+  test(`fourth run: transient ${kind} IO is retried instead of classified as missing audio`, async (t) => {
+    const { f } = await legacyFixture(t, { recovery: { retryBaseMs: 1, yieldMs: 1 } });
+    const file = path.join(
+      directory,
+      "recordings",
+      String(f.noteId),
+      kind === "manifest" ? "manifest.json" : f.store._manifest(f.noteId).tracks.mic.chunks[0].file
+    );
+    f.restart();
+    const read = fs.readFileSync;
+    let failed = false;
+    fs.readFileSync = function (target, ...args) {
+      if (target === file && !failed) {
+        failed = true;
+        throw Object.assign(Error("transient read failure"), { code: "EIO" });
+      }
+      return read.call(this, target, ...args);
+    };
+    t.after(() => {
+      fs.readFileSync = read;
+    });
+    await f.store.legacyRecovery.done;
+    assert.equal(failed, true);
+    assert.equal(f.store.legacyRecovery.recovered, 1);
+    assert.equal(f.store.legacyRecovery.failures[0].reason, "EIO");
+  });
+}
+
+test("fourth run: eviction protects later pages and releases each completed source", async (t) => {
+  const { f } = await legacyFixture(t, { recovery: { passLimit: 1, yieldMs: 1 } });
+  f.addMeeting();
+  const other = await f.approve();
+  f.database.db.exec("DELETE FROM voice_exemplar_audio; DELETE FROM voice_evidence_provenance");
+  f.restart();
+  f.store.policy.budgetBytes = 1;
+  assert.equal(f.store.enforce().removed.length, 0);
+  assert.deepEqual(
+    f.store.legacyRecovery.deferredNotes.sort(),
+    [f.noteId, other.candidate.noteId].sort()
+  );
+  while (f.store.legacyRecovery.recovered < 1)
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  assert.equal(f.store.legacyRecovery.deferredNotes.length, 1);
+  assert.equal(
+    f.store.enforce().removed.length,
+    1,
+    "finished source is immediately evictable while next page stays protected"
+  );
+  await f.store.legacyRecovery.done;
+  assert.equal(f.store.legacyRecovery.recovered, 2);
+  assert.equal(f.store._manifest(f.noteId).status, "evicted");
+  assert.equal(f.store._manifest(other.candidate.noteId).status, "evicted");
+  t.diagnostic(
+    "eviction protection: queuedSources=2 evicted=0; after first classification: protected=1 evictable=1; recovered=2"
+  );
+});
+
+test("fourth run: retry budget persists across restart and ends as recovery_failed", async (t) => {
+  const { f, candidate } = await legacyFixture(t, {
+    codec: {
+      ...codec,
+      decodeAsync: async () => {
+        throw Error("decoder broken");
+      },
+    },
+    recovery: { maxAttempts: 3, retryBaseMs: 1, yieldMs: 1 },
+  });
+  f.advance(30);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  const saved = f.database.db
+    .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id = ?")
+    .get(candidate.id);
+  assert.equal(saved.state, "recovery_failed");
+  assert.equal(saved.recovery_attempts, 3);
+  assert.equal(enrollment.progress(f.database, f.person.id).recoveryFailed, 1);
+  assert.equal(f.store._manifest(f.noteId).status, "expired");
+  f.restart();
+  await f.store.legacyRecovery.done;
+  assert.equal(f.store.legacyRecovery.attempted, 0);
+  t.diagnostic(
+    `budget exhausted: state=${saved.state} attempts=${saved.recovery_attempts} reason=${saved.reason} restartAttempts=0 retention=expired`
+  );
+});
+
+test("fourth run: retries preserve a classified identity and reject replacement audio", async (t) => {
+  const { f, candidate } = await legacyFixture(t, {
+    codec: {
+      ...codec,
+      decodeAsync: async () => {
+        throw Error("decoder busy");
+      },
+    },
+    recovery: { retryBaseMs: 30, yieldMs: 1 },
+  });
+  const db = f.database.db;
+  const { classifyEvidence } = require("../../src/helpers/voiceRecordingIdentity");
+  const sample = db.prepare("SELECT * FROM voice_exemplars WHERE id = ?").get(candidate.id);
+  const prior = classifyEvidence(db, sample, { store: f.store, record: true }).recordingId;
+  f.restart();
+  while (!f.store.legacyRecovery.failures.length)
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  const saved = f.database.db
+    .prepare(
+      "SELECT state, recovery_recording_id FROM voice_evidence_provenance WHERE sample_id = ?"
+    )
+    .get(candidate.id);
+  assert.equal(saved.state, "pending_recovery");
+  assert.equal(saved.recovery_recording_id, prior);
+  const file = path.join(directory, "recordings", String(f.noteId), "manifest.json");
+  const manifest = JSON.parse(fs.readFileSync(file));
+  manifest.recordingId = crypto.randomUUID();
+  fs.writeFileSync(file, JSON.stringify(manifest));
+  await f.store.legacyRecovery.done;
+  assert.deepEqual(classifyEvidence(f.database.db, sample), {
+    state: "unrecoverable",
+    reason: "recording_identity_mismatch",
+  });
+  assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+});
+
+test("fourth run: valid-key ciphertext corruption is terminal and releases retention", async (t) => {
+  const { f, candidate } = await legacyFixture(t);
+  const chunk = f.store._manifest(f.noteId).tracks.mic.chunks[0];
+  const file = path.join(directory, "recordings", String(f.noteId), chunk.file);
+  const bytes = fs.readFileSync(file);
+  bytes[20] ^= 1;
+  fs.writeFileSync(file, bytes);
+  f.advance(30);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  const saved = f.database.db
+    .prepare("SELECT state, reason FROM voice_evidence_provenance WHERE sample_id = ?")
+    .get(candidate.id);
+  assert.deepEqual(saved, { state: "unrecoverable", reason: "audio_corrupt" });
+  assert.equal(f.store.legacyRecovery.deferredNotes.length, 0);
+  assert.equal(f.store._manifest(f.noteId).status, "expired");
+  assert.equal(fs.existsSync(file), false);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  assert.equal(f.store.legacyRecovery.attempted, 0);
+  assert.equal(enrollment.progress(f.database, f.person.id).pendingRecovery, 0);
+  t.diagnostic(
+    `corrupt ciphertext + valid key: ${JSON.stringify(saved)} deferred=0 retention=expired chunkExists=false`
+  );
+});
+
+test("fourth run: missing key stays pending and protected, then retries after unlock", async (t) => {
+  const { f, candidate } = await legacyFixture(t, { recovery: { retryBaseMs: 30, yieldMs: 1 } });
+  const decrypt = f.encryption.decryptBytes;
+  f.encryption.decryptBytes = () => {
+    throw Object.assign(Error("locked"), { code: "audio_key_unavailable" });
+  };
+  f.advance(30);
+  f.restart();
+  while (!f.store.legacyRecovery.failures.length)
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  const saved = f.database.db
+    .prepare(
+      "SELECT state, reason, recovery_attempts, recovery_next_at FROM voice_evidence_provenance WHERE sample_id = ?"
+    )
+    .get(candidate.id);
+  assert.equal(saved.state, "pending_recovery");
+  assert.equal(saved.reason, "audio_key_unavailable");
+  assert.equal(saved.recovery_attempts, 1);
+  assert.equal(f.store.enforce().removed.length, 0);
+  assert.equal(f.store._manifest(f.noteId).status, "complete");
+  assert.equal(f.database.getSpeakerProfiles(true).length, 0);
+  t.diagnostic(
+    `missing key: state=${saved.state} attempts=1 deferred=1 retained=complete recognitionProfiles=0`
+  );
+  f.restart(); // Backoff and spent attempts survive a restart.
+  assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  assert.equal(
+    f.database.db
+      .prepare("SELECT recovery_next_at FROM voice_evidence_provenance WHERE sample_id = ?")
+      .get(candidate.id).recovery_next_at,
+    saved.recovery_next_at
+  );
+  f.encryption.decryptBytes = decrypt;
+  await f.store.legacyRecovery.done;
+  assert.equal(f.store.legacyRecovery.recovered, 1);
+  assert.equal(f.store.legacyRecovery.deferredNotes.length, 0);
+  t.diagnostic("key unlocked: persistedBackoff=true recovered=1 deferred=0");
+});
+
+test("fourth run: a permanently missing key exhausts honestly and never creates a clip", async (t) => {
+  const { f, candidate } = await legacyFixture(t, { recovery: { retryBaseMs: 1, yieldMs: 1 } });
+  f.encryption.decryptBytes = () => {
+    throw Object.assign(Error("locked"), { code: "audio_key_unavailable" });
+  };
+  f.advance(30);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  const saved = f.database.db
+    .prepare(
+      "SELECT state, reason, recovery_attempts FROM voice_evidence_provenance WHERE sample_id = ?"
+    )
+    .get(candidate.id);
+  assert.deepEqual(saved, {
+    state: "recovery_failed",
+    reason: "audio_key_unavailable",
+    recovery_attempts: 3,
+  });
+  assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  assert.equal(f.store._manifest(f.noteId).status, "expired");
+  t.diagnostic(`missing key budget: ${JSON.stringify(saved)} clips=0 retention=expired`);
+});
+
+test("fourth run: cancellation aborts an active decoder and queued work can resume", async (t) => {
+  let started;
+  const entered = new Promise((resolve) => {
+    started = resolve;
+  });
+  let aborted = false;
+  let stall = true;
+  const { f } = await legacyFixture(t, {
+    codec: {
+      ...codec,
+      decodeAsync: (bytes, { signal }) => {
+        if (!stall) return Promise.resolve(codec.decode(bytes));
+        started();
+        return new Promise((_, reject) =>
+          signal.addEventListener(
+            "abort",
+            () => {
+              aborted = true;
+              reject(Object.assign(Error("cancelled"), { code: "ABORT_ERR" }));
+            },
+            { once: true }
+          )
+        );
+      },
+    },
+  });
+  f.restart();
+  await entered;
+  const queue = f.store.legacyRecovery;
+  f.store.cancelRecovery();
+  await queue.done;
+  assert.equal(aborted, true);
+  assert.equal(queue.deferredNotes.length, 0);
+  assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  stall = false;
+  f.restart();
+  await f.store.legacyRecovery.done;
+  assert.equal(f.store.legacyRecovery.recovered, 1);
+  t.diagnostic("cancel: decoderAborted=true clips=0; resume: recovered=1");
+});
+
+test("fourth run: revoking approval during decoding cannot resurrect its clip", async (t) => {
+  let entered, finishDecode;
+  const started = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const { f, candidate } = await legacyFixture(t, {
+    codec: {
+      ...codec,
+      decodeAsync: (bytes) => {
+        entered();
+        return new Promise((resolve) => {
+          finishDecode = () => resolve(codec.decode(bytes));
+        });
+      },
+    },
+  });
+  f.restart();
+  await started;
+  f.database.db.prepare("DELETE FROM voice_exemplars WHERE id = ?").run(candidate.id);
+  finishDecode();
+  await f.store.legacyRecovery.done;
+  assert.equal(f.database.getVoiceExemplarAudio().length, 0);
+  assert.equal(f.store.legacyRecovery.recovered, 0);
+});
 
 test("third run: legacy-only unrecognised evidence cannot return a recognition profile", (t) => {
   const f = fixture(t);
@@ -210,6 +589,7 @@ test("third run: unresolved evidence stays pending through three scans, deletion
   enrollment.candidateReport(f.database, f.store, f.person.id);
   stages.push(summary());
   f.restart();
+  await f.store.legacyRecovery.done;
   stages.push(summary());
   t.diagnostic(`three scans + deletion + restart: ${JSON.stringify(stages)}`);
   assert.ok(stages.every((item) => item.meetings === 0 && item.usable === false));
@@ -244,6 +624,7 @@ test("third run: startup recovers legacy approval bytes before retention and is 
   );
   f.advance(4);
   f.restart();
+  await f.store.legacyRecovery.done;
   const audio = f.database.getVoiceExemplarAudio();
   const bytesEqual =
     audio.length === 1 &&
@@ -263,6 +644,7 @@ test("third run: startup recovers legacy approval bytes before retention and is 
   );
   const before = f.database.db.prepare("SELECT * FROM voice_exemplar_audio").get();
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.deepEqual(f.database.db.prepare("SELECT * FROM voice_exemplar_audio").get(), before);
   assert.equal(f.store.legacyRecovery.recovered, 0);
   t.diagnostic(`second startup: ${JSON.stringify(f.store.legacyRecovery)}`);
@@ -283,6 +665,7 @@ test("third run: startup recovers approvals even at the sample cap", async (t) =
       .run(`legacy-at-cap-${i}`, candidate.id);
   f.database.db.exec("DROP TABLE voice_evidence_provenance");
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(f.store.legacyRecovery.recovered, enrollment.MAX_SAMPLES);
   assert.equal(f.database.getVoiceExemplarAudio().length, enrollment.MAX_SAMPLES);
   for (const sample of f.database.getVoiceExemplarAudio())
@@ -305,6 +688,7 @@ test("third run: startup restores a graduated legacy profile without re-review",
     UPDATE notes SET transcript = NULL;`);
   f.advance(4);
   f.restart();
+  await f.store.legacyRecovery.done;
   const { meetings, cleanSpans, usable } = enrollment.progress(f.database, f.person.id);
   const profiles = f.database.getSpeakerProfiles(true).length;
   const result = {
@@ -329,6 +713,8 @@ test("third run: temporary key loss defers recovery and holds source audio befor
   };
   f.advance(4);
   f.restart();
+  while (!f.store.legacyRecovery.failures.length)
+    await new Promise((resolve) => setTimeout(resolve, 1));
   assert.equal(f.store.legacyRecovery.pendingRecovery, 1);
   assert.equal(f.store.legacyRecovery.unrecoverable, 0);
   assert.deepEqual(f.store.legacyRecovery.deferredNotes, [f.noteId]);
@@ -338,6 +724,7 @@ test("third run: temporary key loss defers recovery and holds source audio befor
   assert.equal(manifest.status, "complete");
   f.encryption.decryptBytes = decrypt;
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(f.store.legacyRecovery.recovered, 1);
   assert.deepEqual(enrollment.play(f.database, f.store, candidate.id).wav, playback.wav);
 });
@@ -353,6 +740,7 @@ test("third run: pending clip resolves once from its genuine manifest, never fro
   delete manifest.recordingId;
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(enrollment.progress(f.database, f.person.id).pendingRecovery, 1);
   assert.equal(enrollment.progress(f.database, f.person.id).meetings, 0);
   manifest.recordingId = actualId;
@@ -360,10 +748,12 @@ test("third run: pending clip resolves once from its genuine manifest, never fro
   enrollment.candidateReport(f.database, f.store, f.person.id);
   assert.equal(enrollment.progress(f.database, f.person.id).meetings, 0);
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(enrollment.progress(f.database, f.person.id).meetings, 1);
   manifest.recordingId = crypto.randomUUID();
   fs.writeFileSync(manifestPath, JSON.stringify(manifest));
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(
     f.database.db
       .prepare("SELECT recording_id FROM voice_evidence_provenance WHERE sample_id = ?")
@@ -421,6 +811,7 @@ test("approved exemplar bytes and row survive a retention sweep past the window 
   f.store.enforce();
   assert.equal(f.store.status(f.noteId).state, "expired");
   f.restart();
+  await f.store.legacyRecovery.done;
   const after = f.database.db
     .prepare("SELECT * FROM voice_exemplar_audio WHERE id = ?")
     .get(candidate.id);
@@ -490,6 +881,7 @@ test("exemplar survives re-diarisation, hard note deletion and note-id reuse", a
     1
   );
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.deepEqual(enrollment.play(f.database, f.store, candidate.id).wav, playback.wav);
   assert.equal(enrollment.listSamples(f.database, f.person.id)[0].permanent, true);
   assert.equal(enrollment.progress(f.database, f.person.id).cleanSpans, 1);
@@ -555,6 +947,7 @@ test("a graduated person remains matchable after every source meeting expires an
     f.database.db.prepare("DELETE FROM notes WHERE id = ?").run(note.id);
   }
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(enrollment.progress(f.database, f.person.id).usable, true);
   assert.deepEqual(f.database.getSpeakerProfiles(true)[0].embedding, before);
   f.database.db
@@ -659,6 +1052,7 @@ test("delete person removes exemplar ciphertext and vectors without an orphan bl
     null
   );
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(f.database.getVoiceExemplarAudio().length, 0);
 });
 
@@ -687,7 +1081,7 @@ test("mixed legacy and durable spans from one recording cannot graduate or split
     .prepare("UPDATE voice_exemplars SET recording_id = NULL WHERE id = ?")
     .run(first.candidate.id);
   // Startup recovery restores an existing approval without another owner review.
-  assert.equal(enrollment.recoverLegacy(f.database, f.store).recovered, 1);
+  assert.equal((await enrollment.recoverLegacy(f.database, f.store).done).recovered, 1);
   f.extractor.extractEmbeddingFromSamples = async () =>
     Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? 0.8 : i === 1 ? 0.6 : 0));
   await f.approve();
@@ -745,7 +1139,7 @@ test("mixed legacy and durable spans from one recording cannot graduate or split
 });
 
 for (const mapped of [false, true]) {
-  test(`legacy merge ancestry is erased through reset and both undos (mapped=${mapped})`, (t) => {
+  test(`legacy merge ancestry is erased through reset and both undos (mapped=${mapped})`, async (t) => {
     const f = fixture(t);
     const people = require("../../src/helpers/peopleActions");
     const db = f.database.db;
@@ -766,6 +1160,7 @@ for (const mapped of [false, true]) {
     const reset = people.applyPersonAction(f.database, { type: "reset", profileId: survivor.id });
     assert.equal(reset.success, true, reset.error);
     f.restart();
+    await f.store.legacyRecovery.done;
     const undoReset = people.undoPersonAction(f.database, reset.id);
     const undoMerge = people.undoPersonAction(f.database, merge.id);
     const restored = f.database.db
@@ -810,6 +1205,7 @@ test("startup repairs c42ba9e09 removal without an older ownership snapshot when
     .prepare("UPDATE voice_enrollment_actions SET before_sample = ? WHERE id = ?")
     .run(JSON.stringify({ ...sample, embedding: sample.embedding.toString("base64") }), removed.id);
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(
     f.database.db
       .prepare("SELECT before_sample FROM voice_enrollment_actions WHERE id = ?")
@@ -875,6 +1271,7 @@ test("startup repairs c42ba9e09 irreversible removal snapshots and preserves rev
     noteId: f.noteId,
   });
   f.restart();
+  await f.store.legacyRecovery.done;
   const repaired = f.database.db
     .prepare("SELECT before_sample FROM voice_enrollment_actions WHERE id = ?")
     .get(removed.id).before_sample;
@@ -906,6 +1303,7 @@ test("startup repairs c42ba9e09 irreversible removal snapshots and preserves rev
     `reversible undo: ${JSON.stringify({ exactVectorRestored: true, vectorBytes: sample.embedding.length, historyAdditions: 110 })}`
   );
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(
     f.database.db
       .prepare("SELECT before_sample FROM voice_enrollment_actions WHERE id = ?")
@@ -998,6 +1396,7 @@ test("clear all voice data erases exemplar blobs and vector snapshots while pres
     null
   );
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(f.database.getVoiceExemplarAudio().length, 0);
   assert.equal(people.undoClearVoiceData(f.database, result.id).success, true);
   assert.equal(f.database.getVoiceExemplarAudio().length, 0);
@@ -1052,6 +1451,7 @@ test("reset then undo and older rename undo restore identity and mappings withou
   const reset = people.applyPersonAction(f.database, { type: "reset", profileId: f.person.id });
   assert.equal(reset.success, true);
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(people.undoPersonAction(f.database, reset.id).success, true);
   assert.equal(
     f.database.db.prepare("SELECT profile_id FROM speaker_mappings WHERE note_id = ?").get(f.noteId)
@@ -1127,6 +1527,7 @@ test("irreversible sample removal scrubs its vector from older snapshots and can
   assert.equal(f.database.getVoiceExemplarAudio().length, 0);
   assert.equal(f.database.db.prepare("SELECT COUNT(*) AS n FROM voice_exemplars").get().n, 0);
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(
     f.database.db
       .prepare("SELECT length(embedding) AS n FROM speaker_profiles WHERE id = ?")
@@ -1196,6 +1597,7 @@ for (const removeBeforeDelete of [false, true]) {
       false
     );
     f.restart();
+    await f.store.legacyRecovery.done;
     assert.equal(f.database.getVoiceExemplarAudio().length, 0);
   });
 }
@@ -1222,6 +1624,7 @@ test("permanent ciphertext usage is separate from the recording budget and survi
   assert.equal(f.store.usage().usedBytes, 0);
   assert.equal(f.store.usage().permanentAudioBytes, bytes);
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(f.store.usage().permanentAudioBytes, bytes);
   const sample = f.database.getVoiceExemplarAudio()[0];
   assert.equal(enrollment.play(f.database, f.store, sample.id).state, "available");
@@ -1237,6 +1640,7 @@ test("orphan sweep on open removes an unowned encrypted exemplar blob", async (t
   f.database.db.prepare("UPDATE voice_exemplar_audio SET profile_id = 999999").run();
   f.database.db.pragma("foreign_keys = ON");
   f.restart();
+  await f.store.legacyRecovery.done;
   assert.equal(f.database.getVoiceExemplarAudio().length, 0);
 });
 

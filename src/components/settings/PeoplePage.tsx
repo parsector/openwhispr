@@ -1744,6 +1744,7 @@ export default function PeoplePage({
                                   (p.legacyVoice ||
                                     p.voiceProgress.approvedSpans > 0 ||
                                     p.voiceProgress.unrecoverable ||
+                                    p.voiceProgress.recoveryFailed ||
                                     p.voiceProgress.pendingRecovery)
                                 ? t("people.voiceUnavailable")
                                 : p.hasVoice || p.voiceProgress.cleanSpans > 0
@@ -1769,6 +1770,7 @@ export default function PeoplePage({
                         {p.legacyVoice ||
                         p.voiceProgress.pendingRecovery ||
                         p.voiceProgress.unrecoverable ||
+                        p.voiceProgress.recoveryFailed ||
                         p.voiceProgress.legacyRecovered ? (
                           <p role="status" className="mt-2 max-w-xl text-sm text-foreground">
                             {!!p.voiceProgress.legacyRecovered && (
@@ -1777,6 +1779,9 @@ export default function PeoplePage({
                                   count: p.voiceProgress.legacyRecovered,
                                 })}{" "}
                               </>
+                            )}
+                            {!!p.voiceProgress.recoveryFailed && (
+                              <>{t("people.legacyRecoveryFailed")} </>
                             )}
                             {t("people.legacyRecoveryDisclosure")}
                           </p>

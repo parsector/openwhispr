@@ -6017,6 +6017,7 @@
     "voiceUnavailable": "Voce non disponibile",
     "legacyRecovered": "Campioni precedenti recuperati: {{count}}.",
     "legacyRecoveryDisclosure": "I campioni precedenti recuperati contano normalmente. I campioni il cui audio è già scaduto non possono essere recuperati e sono esclusi definitivamente dal riconoscimento e dal conteggio della diversità delle registrazioni. Potrebbe essere necessario registrare di nuovo la voce. I campioni in attesa di un’identità di registrazione autentica restano indisponibili fino al recupero.",
+    "legacyRecoveryFailed": "Il recupero si è interrotto dopo ripetuti errori. Rimuovi i campioni non disponibili e registrane di nuovi.",
     "exemplarPlaybackKeyUnavailable": "La clip salvata non può essere riprodotta perché la chiave di crittografia non è disponibile. Ripristina la chiave originale per ascoltarla.",
     "exemplarCapture": "{{seconds}} s · acquisita il {{date}}",
     "enrollmentProgress": "Segmenti puliti: {{spans}} / 3 · registrazioni: {{meetings}} / 2",

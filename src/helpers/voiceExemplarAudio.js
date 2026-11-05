@@ -31,6 +31,7 @@ function open(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_voice_exemplar_audio_person_row
       ON voice_exemplar_audio(profile_id, note_id, row_ids, revision);
+    CREATE INDEX IF NOT EXISTS idx_voice_exemplar_audio_note ON voice_exemplar_audio(note_id);
   `);
   if (
     !db

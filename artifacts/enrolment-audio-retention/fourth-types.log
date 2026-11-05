@@ -1,0 +1,2 @@
+npm notice run open-whispr@1.13.0 typecheck
+npm notice run cd src && tsc --noEmit

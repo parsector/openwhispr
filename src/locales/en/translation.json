@@ -5999,6 +5999,7 @@
     "voiceUnavailable": "Voice unavailable",
     "legacyRecovered": "Recovered legacy samples: {{count}}.",
     "legacyRecoveryDisclosure": "Recovered legacy samples count normally. Samples whose audio has already expired cannot be recovered and are permanently ineligible for recognition and recording diversity. Re-enrolment may be needed. Samples awaiting a genuine recording identity remain unavailable until recovery.",
+    "legacyRecoveryFailed": "Recovery stopped after repeated failures. Remove unavailable samples and enrol new ones.",
     "exemplarPlaybackKeyUnavailable": "The saved clip cannot be played because its encryption key is unavailable. Restore the original key to listen.",
     "exemplarCapture": "{{seconds}} s · captured {{date}}",
     "enrollmentProgress": "Clean spans: {{spans}} / 3 · recordings: {{meetings}} / 2",

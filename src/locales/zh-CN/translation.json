@@ -5999,6 +5999,7 @@
     "voiceUnavailable": "声音不可用",
     "legacyRecovered": "已恢复的旧版样本：{{count}}。",
     "legacyRecoveryDisclosure": "恢复的旧版样本会正常计入。音频已过期的样本无法恢复，且永久无法用于识别或计算录音多样性，可能需要重新注册声音。尚未取得真实录音标识的样本，在恢复前仍不可用。",
+    "legacyRecoveryFailed": "多次恢复失败，已停止自动恢复。请移除不可用的样本并注册新样本。",
     "exemplarPlaybackKeyUnavailable": "加密密钥不可用，无法播放已保存的片段。请恢复原始密钥以收听。",
     "exemplarCapture": "{{seconds}} 秒 · 录制于 {{date}}",
     "enrollmentProgress": "干净片段：{{spans}} / 3 · 录音：{{meetings}} / 2",

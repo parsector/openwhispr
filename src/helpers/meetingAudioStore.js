@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const { randomUUID } = require("crypto");
-const { spawnSync } = require("child_process");
+const { spawnSync, execFile } = require("child_process");
 const { getFFmpegPath } = require("./ffmpegUtils");
 const { encryptBytes, decryptBytes } = require("./secretCrypto");
 const enrollmentTiming = require("./voiceEnrollmentTiming");
@@ -10,6 +10,15 @@ const RATE = 24000;
 const CHUNK_SAMPLES = RATE * 5;
 const DEFAULT_BUDGET = 2 * 1024 * 1024 * 1024;
 const TRACKS = ["mic", "system"];
+const CODEC_TIMEOUT_MS = 5000;
+
+function audioFailure(error) {
+  if (error.code === "audio_corrupt") return { state: "corrupt", reason: "audio_corrupt" };
+  if (error.code === "ENOENT") return { state: "unavailable", reason: "audio_missing" };
+  if (error.code === "ETIMEDOUT" || error.killed)
+    return { state: "temporary_failure", reason: "decoder_timeout" };
+  return { state: "temporary_failure", reason: error.code || "audio_io_error" };
+}
 
 function writeJsonAtomic(file, value) {
   const temp = `${file}.${randomUUID()}.pending`;
@@ -46,7 +55,13 @@ function encode(pcm) {
       "ogg",
       "pipe:1",
     ],
-    { input: pcm, maxBuffer: 8 * 1024 * 1024, windowsHide: true }
+    {
+      input: pcm,
+      maxBuffer: 8 * 1024 * 1024,
+      windowsHide: true,
+      timeout: CODEC_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+    }
   );
   if (result.status !== 0 || !result.stdout?.length) {
     throw new Error(
@@ -56,32 +71,61 @@ function encode(pcm) {
   return result.stdout;
 }
 
+function decodeArgs() {
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-f",
+    "ogg",
+    "-i",
+    "pipe:0",
+    "-f",
+    "s16le",
+    "-ar",
+    String(RATE),
+    "-ac",
+    "1",
+    "pipe:1",
+  ];
+}
+
 function decode(ogg) {
-  const result = spawnSync(
-    getFFmpegPath(),
-    [
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-f",
-      "ogg",
-      "-i",
-      "pipe:0",
-      "-f",
-      "s16le",
-      "-ar",
-      String(RATE),
-      "-ac",
-      "1",
-      "pipe:1",
-    ],
-    { input: ogg, maxBuffer: 16 * 1024 * 1024, windowsHide: true }
-  );
-  if (result.status !== 0) throw new Error("Stored audio could not be decoded");
+  const result = spawnSync(getFFmpegPath(), decodeArgs(), {
+    input: ogg,
+    maxBuffer: 16 * 1024 * 1024,
+    windowsHide: true,
+    timeout: CODEC_TIMEOUT_MS,
+    killSignal: "SIGKILL",
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw Object.assign(new Error("Stored audio could not be decoded"), { code: "decoder_error" });
   return result.stdout;
 }
 
-const defaultCodec = { encode, decode };
+function decodeAsync(ogg, { signal, timeout = CODEC_TIMEOUT_MS } = {}) {
+  timeout = Math.max(1, Math.min(CODEC_TIMEOUT_MS, Math.floor(timeout) || CODEC_TIMEOUT_MS));
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      getFFmpegPath(),
+      decodeArgs(),
+      {
+        encoding: "buffer",
+        maxBuffer: 16 * 1024 * 1024,
+        windowsHide: true,
+        timeout,
+        killSignal: "SIGKILL",
+        signal,
+      },
+      (error, stdout) => (error ? reject(error) : resolve(stdout))
+    );
+    child.stdin.on("error", () => {}); // Early exit is reported by execFile's callback.
+    child.stdin.end(ogg);
+  });
+}
+
+const defaultCodec = { encode, decode, decodeAsync };
 
 function wav(pcm) {
   const header = Buffer.alloc(44);
@@ -127,6 +171,7 @@ class MeetingAudioStore {
       codec = defaultCodec,
       onEvicted = null,
       onChanged = null,
+      recovery = {},
     } = {}
   ) {
     this.root = root;
@@ -144,16 +189,24 @@ class MeetingAudioStore {
     this.noticeFile = path.join(root, "evictions.json");
     this.evictions = this._readJson(this.noticeFile) || [];
     this.repair();
-    // Recover prior approvals before retention can erase their source chunks.
+    // Queue work without decoding during construction. Retention consults the
+    // queue's database predicate, including sources not yet loaded into a page.
     this.legacyRecovery =
-      this.database?.db && require("./voiceEnrollment").recoverLegacy(this.database, this);
+      this.database?.db
+        ?.prepare("SELECT 1 FROM sqlite_master WHERE name = 'voice_evidence_provenance'")
+        .get() && require("./voiceEnrollment").recoverLegacy(this.database, this, recovery);
     this.enforce();
   }
 
-  _readJson(file) {
+  cancelRecovery() {
+    this.legacyRecovery?.cancel();
+  }
+
+  _readJson(file, strictIO = false) {
     try {
       return JSON.parse(fs.readFileSync(file, "utf8"));
-    } catch {
+    } catch (error) {
+      if (strictIO && error.code && error.code !== "ENOENT") throw error;
       return null;
     }
   }
@@ -183,11 +236,11 @@ class MeetingAudioStore {
       null
     );
   }
-  _manifest(noteId) {
+  _manifest(noteId, strictIO = false) {
     this._noteId(noteId);
     const file = this._manifestPath(noteId);
     if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) return null;
-    const manifest = this._readJson(file);
+    const manifest = this._readJson(file, strictIO);
     if (!manifest || manifest.noteId !== noteId) return null;
     const identity = this._noteIdentity(noteId);
     if (identity && manifest.noteIdentity !== identity) return null;
@@ -203,7 +256,8 @@ class MeetingAudioStore {
         if (manifest.tracks?.[track] && !Array.isArray(chunks)) return null;
         for (const chunk of chunks || []) this._chunkFile(noteId, chunk.file);
       }
-    } catch {
+    } catch (error) {
+      if (strictIO && error.code && error.code !== "ENOENT") throw error;
       return null;
     }
     return manifest;
@@ -490,7 +544,8 @@ class MeetingAudioStore {
     if (
       !manifest.keep &&
       ["complete", "incomplete"].includes(manifest.status) &&
-      this.now() >= manifest.startedAt + manifest.retentionDays * 86400000
+      this.now() >= manifest.startedAt + manifest.retentionDays * 86400000 &&
+      !this.legacyRecovery?.protects(noteId)
     ) {
       result.state = "expired";
       result.bytes = 0;
@@ -512,9 +567,12 @@ class MeetingAudioStore {
       } else {
         try {
           this.encryption.decryptBytes(fs.readFileSync(file));
-        } catch {
-          result.state = "key_unavailable";
-          result.reason = "Audio encryption key is unavailable";
+        } catch (error) {
+          result.state = error.code === "audio_corrupt" ? "corrupt" : "key_unavailable";
+          result.reason =
+            error.code === "audio_corrupt"
+              ? "Audio authentication failed"
+              : "Audio encryption key is unavailable";
         }
       }
     }
@@ -522,7 +580,7 @@ class MeetingAudioStore {
   }
 
   recordingProvenance(noteId) {
-    const manifest = this._manifest(noteId);
+    const manifest = this._manifest(noteId, true);
     if (!manifest || !["complete", "incomplete"].includes(manifest.status)) return null;
     const chunks = TRACKS.flatMap((track) => manifest.tracks?.[track]?.chunks || []);
     if (
@@ -569,6 +627,35 @@ class MeetingAudioStore {
   }
 
   _span(noteId, track, startSeconds, endSeconds) {
+    const steps = this._spanSteps(noteId, track, startSeconds, endSeconds);
+    let step = steps.next();
+    while (!step.done) {
+      try {
+        step = steps.next(this.codec.decode(step.value));
+      } catch (error) {
+        step = steps.throw(error);
+      }
+    }
+    return step.value;
+  }
+
+  async spanAsync(noteId, track, startSeconds, endSeconds, options = {}) {
+    const steps = this._spanSteps(noteId, track, startSeconds, endSeconds);
+    let step = steps.next();
+    while (!step.done) {
+      try {
+        options.signal?.throwIfAborted();
+        const decoded = await (this.codec.decodeAsync?.(step.value, options) ??
+          this.codec.decode(step.value));
+        step = steps.next(decoded);
+      } catch (error) {
+        step = steps.throw(error);
+      }
+    }
+    return step.value;
+  }
+
+  *_spanSteps(noteId, track, startSeconds, endSeconds) {
     this._noteId(noteId);
     if (
       !TRACKS.includes(track) ||
@@ -580,7 +667,7 @@ class MeetingAudioStore {
     ) {
       return { state: "invalid" };
     }
-    const manifest = this._manifest(noteId);
+    const manifest = this._manifest(noteId, true);
     if (!manifest) return { state: "unavailable" };
     if (
       manifest.status === "deleted" ||
@@ -617,19 +704,34 @@ class MeetingAudioStore {
       try {
         const encrypted = fs.readFileSync(this._chunkFile(noteId, chunk.file));
         bytesRead += encrypted.length;
-        plaintext = this.encryption.decryptBytes(encrypted);
+        try {
+          plaintext = this.encryption.decryptBytes(encrypted);
+        } catch (error) {
+          return error.code && error.code !== "audio_key_unavailable"
+            ? audioFailure(error)
+            : { state: "key_unavailable", reason: "audio_key_unavailable" };
+        }
+      } catch (error) {
+        return audioFailure(error);
+      }
+      let ogg;
+      try {
+        ogg = unpack(plaintext).ogg;
       } catch {
-        return { state: "key_unavailable" };
+        return { state: "corrupt", reason: "audio_corrupt" };
       }
       try {
         const decodeStart = enrollmentTiming.now();
         try {
-          decoded = this.codec.decode(unpack(plaintext).ogg);
+          decoded = yield ogg;
         } finally {
           enrollmentTiming.decoded(enrollmentTiming.now() - decodeStart);
         }
-      } catch {
-        return { state: "unavailable" };
+      } catch (error) {
+        return {
+          state: "temporary_failure",
+          reason: error.code === "ETIMEDOUT" || error.killed ? "decoder_timeout" : "decoder_error",
+        };
       }
       const from = Math.max(start, chunk.startSample) - chunk.startSample;
       const to = Math.min(end, chunkEnd) - chunk.startSample;
@@ -886,7 +988,7 @@ class MeetingAudioStore {
       const noteId = Number(name);
       const manifest = this._manifest(noteId);
       if (!manifest || !["complete", "incomplete"].includes(manifest.status)) continue;
-      if (this.legacyRecovery?.deferredNotes.includes(noteId)) continue;
+      if (this.legacyRecovery?.protects(noteId)) continue;
       if (!manifest.keep && now >= manifest.startedAt + manifest.retentionDays * 86400000) {
         removed.push({ noteId, reason: "expired", ...this.delete(noteId, "expired") });
       } else candidates.push(manifest);
@@ -903,4 +1005,4 @@ class MeetingAudioStore {
   }
 }
 
-module.exports = { MeetingAudioStore, RATE, CHUNK_SAMPLES };
+module.exports = { MeetingAudioStore, RATE, CHUNK_SAMPLES, defaultCodec, CODEC_TIMEOUT_MS };

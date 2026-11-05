@@ -28,6 +28,7 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
     rows[0].voiceProgress.cleanSpans = 1;
     rows[0].voiceProgress.meetings = 1;
     rows[1].voiceProgress.unrecoverable = 1;
+    rows[1].voiceProgress.recoveryFailed = 1;
     window.electronAPI.playVoiceEnrollmentCandidate = async (id) => {
       window.playedExemplar = id;
       return { state: "available", wav: ${JSON.stringify(wav.toString("base64"))} };
@@ -76,7 +77,10 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   await row.getByText("Recovered legacy samples: 1.", { exact: false }).waitFor();
   const unavailable = page.locator('[data-person-row="2"]');
   await unavailable.getByText("Voice unavailable", { exact: true }).waitFor();
-  await unavailable.getByText(/permanently ineligible for recognition and recording diversity/).waitFor();
+  await unavailable.getByText(/Recovery stopped after repeated failures/).waitFor();
+  await unavailable
+    .getByText(/permanently ineligible for recognition and recording diversity/)
+    .waitFor();
   await row
     .getByText(
       "This clip is kept until you erase it by deleting the person, clearing all voice data, resetting their voice, removing the sample, or undoing its approval. Recording retention, eviction, note deletion, re-diarisation and app restart never erase it."
@@ -98,7 +102,7 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
       );
       assert.ok(await row.evaluate((element) => element.scrollWidth <= element.clientWidth + 1));
       await page.screenshot({
-        path: path.join(artifacts, `${width}-${dark ? "dark" : "light"}.png`),
+        path: path.join(artifacts, `fourth-${width}-${dark ? "dark" : "light"}.png`),
       });
     }
   }

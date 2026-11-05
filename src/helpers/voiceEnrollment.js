@@ -213,6 +213,11 @@ function progress(database, profileId) {
 function provenanceCounts(db, profileId) {
   const counts = {
     pendingRecovery: 0,
+    recoveryFailed: db
+      .prepare(
+        "SELECT count(*) AS n FROM voice_evidence_provenance WHERE profile_id = ? AND state = 'recovery_failed'"
+      )
+      .get(profileId).n,
     unrecoverable: db
       .prepare(
         "SELECT count(*) AS n FROM voice_evidence_provenance WHERE profile_id = ? AND state = 'unrecoverable'"
@@ -229,111 +234,12 @@ function provenanceCounts(db, profileId) {
   return counts;
 }
 
-// One pass at store startup, before its first retention sweep. This converts
-// prior consent, not new consent: use the approved interval and exact WAV bytes,
-// preserving its embedding, approval time and ID. No candidate scan or cap here.
-function recoverLegacy(database, store) {
-  const db = database.db;
-  const report = {
-    recovered: 0,
-    unrecoverable: 0,
-    pendingRecovery: 0,
-    resolved: 0,
-    failures: [],
-    deferredNotes: [],
-  };
-  if (!db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'voice_evidence_provenance'").get())
-    return report;
-  for (const profile of db.prepare("SELECT id FROM speaker_profiles").all()) {
-    const evidenceSamples = samples(db, profile.id);
-    for (const sample of evidenceSamples) {
-      const evidence = classifyEvidence(db, sample);
-      if (sample.durable_audio || evidence.state === "unrecoverable") {
-        const current = sample.durable_audio
-          ? classifyEvidence(db, sample, { store, record: true })
-          : evidence;
-        if (current.state === "pending_recovery") report.pendingRecovery++;
-        else if (current.state === "unrecoverable") report.unrecoverable++;
-        else report.resolved++;
-        continue;
-      }
-      const source = store.recordingProvenance(sample.note_id);
-      const audio =
-        source &&
-        store.span(
-          sample.note_id,
-          sample.track,
-          sample.start_sample / RATE,
-          sample.end_sample / RATE
-        );
-      if (audio?.state === "key_unavailable") {
-        classifyEvidence(db, sample, { record: true });
-        report.pendingRecovery++;
-        report.failures.push({ sampleId: sample.id, reason: "exemplar_key_unavailable" });
-        if (!report.deferredNotes.includes(sample.note_id))
-          report.deferredNotes.push(sample.note_id);
-        continue;
-      }
-      if (
-        !audio ||
-        audio.state !== "available" ||
-        audio.partial ||
-        sample.embedding?.length !== 2048
-      ) {
-        classifyEvidence(db, sample, { record: true, unavailable: "legacy_audio_unavailable" });
-        report.unrecoverable++;
-        report.failures.push({ sampleId: sample.id, reason: "legacy_audio_unavailable" });
-        continue;
-      }
-      let ciphertext;
-      try {
-        ciphertext = exemplarAudio.seal(store, audio.wav);
-      } catch (error) {
-        if (error.code !== "exemplar_key_unavailable") throw error;
-        report.pendingRecovery++;
-        report.failures.push({ sampleId: sample.id, reason: error.code });
-        if (!report.deferredNotes.includes(sample.note_id))
-          report.deferredNotes.push(sample.note_id);
-        continue;
-      }
-      db.transaction(() => {
-        const note = db.prepare("SELECT title FROM notes WHERE id = ?").get(sample.note_id);
-        exemplarAudio.save(
-          db,
-          {
-            id: sample.id,
-            profileId: sample.profile_id,
-            noteId: sample.note_id,
-            noteTitle: note?.title || "",
-            rowIds: JSON.parse(sample.row_ids),
-            revision: "legacy-approval",
-            track: sample.track,
-            startSample: sample.start_sample,
-            endSample: sample.end_sample,
-            durationSeconds: (sample.end_sample - sample.start_sample) / RATE,
-            meetingDate: sample.meeting_date,
-          },
-          audio.wav,
-          ciphertext,
-          sample.embedding
-        );
-        db.prepare(
-          "UPDATE voice_exemplar_audio SET approved_at = ?, created_at = ? WHERE id = ?"
-        ).run(sample.approved_at, sample.created_at, sample.id);
-        const current = classifyEvidence(
-          db,
-          db.prepare("SELECT * FROM voice_exemplar_audio WHERE id = ?").get(sample.id),
-          { store, record: true }
-        );
-        if (current.state === "resolved") report.resolved++;
-        else report.pendingRecovery++;
-      })();
-      report.recovered++;
-    }
-    if (evidenceSamples.length) rebuild(db, profile.id);
-  }
-  debugLogger.info("Legacy voice recovery", report, "voice-enrollment");
-  return report;
+// Conversion uses prior consent and exact approved bytes, outside startup.
+function recoverLegacy(database, store, options) {
+  store.cancelRecovery?.();
+  const recovery = require("./voiceEnrollmentRecovery").start(database, store, options);
+  store.legacyRecovery = recovery;
+  return recovery;
 }
 function listSamples(database, profileId) {
   const db = database.db;

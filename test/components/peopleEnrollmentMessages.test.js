@@ -34,6 +34,7 @@ for (const locale of ["en", "ar", "de", "es", "fr", "it", "ja", "pt", "ru", "zh-
     );
     const messages = translation.people.enrollmentErrors;
     assert.ok(translation.people.exemplarPlaybackKeyUnavailable);
+    assert.ok(translation.people.legacyRecoveryFailed);
     assert.notEqual(
       translation.people.exemplarPlaybackKeyUnavailable,
       messages.exemplar_key_unavailable

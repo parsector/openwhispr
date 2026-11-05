@@ -2287,6 +2287,7 @@ if (gotSingleInstanceLock) {
 }
 
 function performSyncTeardown() {
+  ipcHandlers?.meetingAudioStore?.cancelRecovery();
   stopLocalMcp?.();
   if (wakeRewarmTimer) {
     clearTimeout(wakeRewarmTimer);

@@ -2,12 +2,26 @@
 // Only approval and startup recovery record it. Readers never repair it from
 // cached recording_id columns, status IDs, sibling samples or transcript spans.
 function open(db) {
+  const prior = db
+    .prepare("SELECT sql FROM sqlite_master WHERE name = 'voice_evidence_provenance'")
+    .get();
+  if (prior && !prior.sql.includes("recovery_failed"))
+    db.transaction(() => {
+      db.exec("ALTER TABLE voice_evidence_provenance RENAME TO voice_evidence_provenance_old");
+      open(db);
+      db.exec(`INSERT INTO voice_evidence_provenance (sample_id, profile_id, state, recording_id, reason)
+      SELECT sample_id, profile_id, state, recording_id, reason FROM voice_evidence_provenance_old;
+      DROP TABLE voice_evidence_provenance_old`);
+    })();
   db.exec(`CREATE TABLE IF NOT EXISTS voice_evidence_provenance (
     sample_id TEXT PRIMARY KEY,
     profile_id INTEGER REFERENCES speaker_profiles(id) ON DELETE CASCADE,
-    state TEXT NOT NULL CHECK (state IN ('resolved', 'pending_recovery', 'unrecoverable')),
+    state TEXT NOT NULL CHECK (state IN ('resolved', 'pending_recovery', 'unrecoverable', 'recovery_failed')),
     recording_id TEXT,
     reason TEXT,
+    recovery_attempts INTEGER NOT NULL DEFAULT 0,
+    recovery_next_at INTEGER NOT NULL DEFAULT 0,
+    recovery_recording_id TEXT,
     CHECK ((state = 'resolved' AND recording_id IS NOT NULL) OR
            (state != 'resolved' AND recording_id IS NULL))
   )`);
@@ -24,7 +38,7 @@ function classifyEvidence(db, sample, { store = null, record = false, unavailabl
   if (saved && saved.state !== "pending_recovery")
     return saved.state === "resolved"
       ? { state: "resolved", recordingId: saved.recording_id }
-      : { state: "unrecoverable", reason: saved.reason };
+      : { state: saved.state, reason: saved.reason };
 
   let result = { state: "pending_recovery" };
   // Candidates have no approved sample ID. Classifying one for a scan cannot

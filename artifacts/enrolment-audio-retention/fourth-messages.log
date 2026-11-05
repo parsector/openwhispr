@@ -1,0 +1,19 @@
+✔ en gives every enrollment failure its own message (109.196963ms)
+✔ ar gives every enrollment failure its own message (17.199732ms)
+✔ de gives every enrollment failure its own message (11.89593ms)
+✔ es gives every enrollment failure its own message (7.214852ms)
+✔ fr gives every enrollment failure its own message (47.323254ms)
+✔ it gives every enrollment failure its own message (4.956419ms)
+✔ ja gives every enrollment failure its own message (5.064046ms)
+✔ pt gives every enrollment failure its own message (6.534084ms)
+✔ ru gives every enrollment failure its own message (5.738397ms)
+✔ zh-CN gives every enrollment failure its own message (4.686912ms)
+✔ zh-TW gives every enrollment failure its own message (4.140606ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1009.424392
