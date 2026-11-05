@@ -15318,7 +15318,7 @@ class IPCHandlers {
       }
     };
     // Raw rows, sent when there is no diarization to merge.
-    const sendUndiarized = async () => {
+    const sendUndiarized = async (cause = "diarization_skipped") => {
       let rows = transcriptSegments
         .map((segment) => ({ ...segment, id: segment.id || require("crypto").randomUUID() }))
         .filter((_, index) => !isEchoDuplicate(index));
@@ -15365,7 +15365,7 @@ class IPCHandlers {
           );
         }
       }
-      send({ segments: rows });
+      send({ segments: rows }, { clusters: 0, vectorsWritten: 0, cause });
     };
 
     const diarizationEnabled = (sessionConfig?.enabled ?? this.speakerDiarizationEnabled) !== false;
@@ -15804,7 +15804,7 @@ class IPCHandlers {
         this._diarizationSpeakerReservations.delete(sessionId);
         // The renderer only applies removedSegments alongside segments, so a
         // failed run falls back to the skip result rather than an empty one.
-        sendUndiarized();
+        sendUndiarized("diarization_failed");
       } finally {
         if (typeof rawPcmPath === "string") {
           try {

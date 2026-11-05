@@ -25,6 +25,7 @@ import { Skeleton } from "../ui/skeleton";
 import { useToast } from "../ui/useToast";
 import { matchesPerson } from "../../utils/personSearch";
 import { saveEnrollmentDecision } from "./enrollmentDecision";
+import { SpeakerCalibrationReport } from "./SpeakerCalibrationReport";
 
 type Person = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listPeople>>>[number];
 type Review = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listPeopleReview>>>[number];
@@ -377,7 +378,7 @@ export default function PeoplePage({
     });
   };
   const applyCalibration = async () => {
-    if (!calibrationReport) return;
+    if (calibrationReport?.resultType !== "supported_recommendation") return;
     const values = {
       ...calibration?.values,
       ...calibrationReport.recommended,
@@ -2054,136 +2055,10 @@ export default function PeoplePage({
               </div>
             )}
             {calibrationReport && (
-              <div className="mt-4 space-y-2 text-xs">
-                <p className="font-medium">
-                  {calibrationReport.evidence.notes} {t("people.calibrationNotes")};{" "}
-                  {calibrationReport.evidence.reviewedRows} {t("people.calibrationRows")};{" "}
-                  {calibrationReport.evidence.distinctPeople} {t("people.calibrationPeople")};{" "}
-                  {calibrationReport.evidence.machineClaims} {t("people.calibrationClaims")}
-                </p>
-                <p>{calibrationReport.evidence.coverage}</p>
-                <p>
-                  Playback placed {calibrationReport.evidence.placementCounts.exact} exact and{" "}
-                  {calibrationReport.evidence.placementCounts.approximate} approximate rows;{" "}
-                  {calibrationReport.evidence.placementCounts.unavailable} could not be placed.
-                  Embedding evaluated {calibrationReport.evidence.embeddingCounts.embedded} rows and
-                  refused {calibrationReport.evidence.embeddingCounts.refused}.
-                </p>
-                {calibrationReport.evidence.reconstructedRows > 0 &&
-                  calibrationReport.evidence.exactClusters === 0 && (
-                    <p>
-                      All calibration vectors were reconstructed from row audio. No stored centroid
-                      measurement is available.
-                    </p>
-                  )}
-                {calibrationReport.evidence.missingVectorDiagnostics.map((diagnostic) => (
-                  <p key={`${diagnostic.noteId}:${diagnostic.reason}`}>{diagnostic.message}</p>
-                ))}
-                <p>
-                  {calibrationReport.scope.kind === "range"
-                    ? `${calibrationReport.scope.from} – ${calibrationReport.scope.to}`
-                    : t("people.calibrationAll")}
-                </p>
-                {(["exact", "calibration", "estimated"] as const).map((kind) => {
-                  const analysis = calibrationReport.analyses[kind];
-                  return (
-                    <div key={kind} className="rounded-lg bg-muted/40 p-3">
-                      <strong>{analysis.label}</strong>
-                      <p className="mt-1">
-                        {analysis.rows}{" "}
-                        {kind === "exact"
-                          ? t("people.calibrationClusters")
-                          : t("people.calibrationRows")}
-                      </p>
-                      {kind === "estimated" && (
-                        <p className="mt-1 text-muted-foreground">
-                          {calibrationReport.analyses.estimated.reason}
-                        </p>
-                      )}
-                      {analysis.rows > 0 && (
-                        <p className="mt-1">
-                          {kind === "estimated" ? `${t("people.calibrationEstimate")}: ` : ""}
-                          {analysis.winner.right} {t("people.calibrationRight")},{" "}
-                          {analysis.winner.wrong} {t("people.calibrationWrong")},{" "}
-                          {analysis.winner.refused} {t("people.calibrationRefused")}
-                        </p>
-                      )}
-                      <details className="mt-2">
-                        <summary className="cursor-pointer">
-                          {t("people.calibrationCandidates")}
-                        </summary>
-                        <div className="mt-2 max-h-48 overflow-auto">
-                          <table className="w-full text-start tabular-nums">
-                            <thead>
-                              <tr>
-                                <th className="text-start">
-                                  {t("people.calibrationFields.similarityFloor")}
-                                </th>
-                                <th className="text-start">
-                                  {t("people.calibrationFields.runnerUpMargin")}
-                                </th>
-                                <th className="text-start">{t("people.calibrationRight")}</th>
-                                <th className="text-start">{t("people.calibrationWrong")}</th>
-                                <th className="text-start">{t("people.calibrationRefused")}</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {analysis.table.map((candidate) => (
-                                <tr
-                                  key={`${candidate.similarityFloor}:${candidate.runnerUpMargin}`}
-                                >
-                                  <td>{candidate.similarityFloor}</td>
-                                  <td>{candidate.runnerUpMargin}</td>
-                                  <td>{candidate.right}</td>
-                                  <td>{candidate.wrong}</td>
-                                  <td>{candidate.refused}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </details>
-                    </div>
-                  );
-                })}
-                {calibrationFields.map((key) => (
-                  <p key={key}>
-                    {t(`people.calibrationFields.${key}`)}:{" "}
-                    {calibrationReport.support[key]?.status === "calibrated"
-                      ? String(
-                          calibrationReport.recommended[key as "similarityFloor" | "runnerUpMargin"]
-                        )
-                      : t("people.uncalibrated")}{" "}
-                    {calibrationReport.support[key]?.reason}
-                    {calibrationReport.support[key]?.method && (
-                      <> · {calibrationReport.support[key].method}</>
-                    )}
-                  </p>
-                ))}
-                <details>
-                  <summary className="cursor-pointer">
-                    {calibrationReport.evidence.exclusions.length}{" "}
-                    {t("people.calibrationExclusions")}
-                  </summary>
-                  <ul className="mt-1 list-disc ps-5">
-                    {Object.entries(calibrationReport.evidence.exclusionCounts).map(
-                      ([reason, count]) => (
-                        <li key={reason}>
-                          {reason}: {count}
-                        </li>
-                      )
-                    )}
-                  </ul>
-                </details>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={!Object.keys(calibrationReport.recommended).length}
-                  onClick={() => void applyCalibration()}
-                >
-                  {t("people.calibrationApply")}
-                </Button>
-              </div>
+              <SpeakerCalibrationReport
+                report={calibrationReport}
+                onApply={() => void applyCalibration()}
+              />
             )}
             {calibrationError && (
               <p role="alert" className="mt-2 text-xs text-destructive">

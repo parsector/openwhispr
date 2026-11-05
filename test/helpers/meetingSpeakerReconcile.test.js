@@ -577,6 +577,48 @@ test("a stopped session's diarization reserves its speaker ids until its result 
   assert.equal(handlers._resolveMeetingSpeakerIndexBase(NOTE_ID, 0), 4);
 });
 
+test("skipped and failed diarization record their real completion causes", async () => {
+  const { IPCHandlers } = loadHandlers();
+  const DiarizationManager = loadDiarizationManager();
+  for (const enabled of [false, true]) {
+    let completion;
+    const handlers = Object.assign(Object.create(IPCHandlers.prototype), {
+      _diarizationSpeakerReservations: new Map(),
+      speakerDiarizationEnabled: enabled,
+      diarizationManager: Object.assign(new DiarizationManager(), {
+        isAvailable: () => true,
+        convertRawPcmToWav: async () => {
+          throw new Error("fixture conversion failure");
+        },
+      }),
+      databaseManager: {
+        getNote: () => ({}),
+        getSpeakerMappings: () => [],
+        saveNoteSpeakerCompletion: (_noteId, value) => {
+          completion = value;
+        },
+      },
+    });
+    const payload = await new Promise((resolve) => {
+      handlers._startOrSkipDiarization(
+        "completion-cause",
+        "/nonexistent/ow-cause.pcm",
+        0,
+        [{ id: "row", source: "system", timestamp: 1, text: "hello" }],
+        { isDestroyed: () => false, webContents: { send: (_channel, value) => resolve(value) } },
+        null,
+        null,
+        NOTE_ID,
+        "system",
+        0
+      );
+    });
+    assert.equal(completion.cause, enabled ? "diarization_failed" : "diarization_skipped");
+    assert.deepEqual(payload.centroidPersistence, completion);
+    assert.equal(payload.segments[0].text, "hello");
+  }
+});
+
 test("completion persistence reports empty extraction, expired audio, and rejected writes", async () => {
   const { IPCHandlers } = loadHandlers();
   let state = "complete";

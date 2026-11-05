@@ -150,11 +150,8 @@ async function main() {
         report: {
           synthetic: report.synthetic,
           evidence: { ...report.evidence, revisions: undefined },
-          exact: { rows: report.analyses.exact.rows, winner: report.analyses.exact.winner },
-          estimated: {
-            label: report.analyses.estimated.label,
-            rows: report.analyses.estimated.rows,
-          },
+          resultType: report.resultType,
+          diagnostic: report.analyses.calibration,
           support: report.support,
           recommended: report.recommended,
         },
