@@ -14614,24 +14614,65 @@ class IPCHandlers {
       timedEnrollment(
         "decide",
         async (event, id, choice, token) => {
-          const result = await require("./voiceEnrollment").decide(
-            this.databaseManager,
-            this.meetingAudioStore,
-            require("./speakerEmbeddings"),
-            id,
-            choice,
-            token,
-            event.sender
-          );
+          let result;
+          try {
+            result = await require("./voiceEnrollment").decide(
+              this.databaseManager,
+              this.meetingAudioStore,
+              require("./speakerEmbeddings"),
+              id,
+              choice,
+              token,
+              event.sender
+            );
+          } catch (cause) {
+            const sqliteCode = cause?.code || "";
+            const code =
+              sqliteCode.startsWith("SQLITE_BUSY") || sqliteCode.startsWith("SQLITE_LOCKED")
+                ? "database_busy"
+                : sqliteCode.startsWith("SQLITE_CONSTRAINT")
+                  ? "constraint_failed"
+                  : sqliteCode.startsWith("SQLITE")
+                    ? "persistence_failed"
+                    : "ipc_failed";
+            const context = require("./voiceEnrollment").playbackContext(id);
+            debugLogger.warn(
+              "Voice enrollment decision failed",
+              JSON.stringify({
+                code,
+                noteId: context.noteId,
+                personId: context.personId,
+                candidateId: id,
+                statement: "voiceEnrollment.decide before transaction",
+              }),
+              "voice-enrollment"
+            );
+            return { success: false, error: code };
+          }
           if (result.success) {
-            liveSpeakerIdentifier.invalidateAnchor();
-            this.notifyVectorChanges();
-            broadcastToWindows("people-changed");
-            if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
-              broadcastToWindows("meeting-speaker-evidence-changed", {
-                noteId: this._activeMeetingNoteId,
-                runId: liveSpeakerIdentifier.activeRunId,
-              });
+            try {
+              liveSpeakerIdentifier.invalidateAnchor();
+              this.notifyVectorChanges();
+              broadcastToWindows("people-changed");
+              if (this._activeMeetingNoteId && liveSpeakerIdentifier.activeRunId)
+                broadcastToWindows("meeting-speaker-evidence-changed", {
+                  noteId: this._activeMeetingNoteId,
+                  runId: liveSpeakerIdentifier.activeRunId,
+                });
+            } catch {
+              debugLogger.warn(
+                "Voice enrollment follow-up failed",
+                JSON.stringify({
+                  code: "refresh_failed",
+                  noteId: result.noteId,
+                  personId: result.personId,
+                  candidateId: id,
+                  statement: "notifyVectorChanges or broadcastToWindows",
+                }),
+                "voice-enrollment"
+              );
+              return { ...result, refreshFailed: true };
+            }
           }
           return result;
         },

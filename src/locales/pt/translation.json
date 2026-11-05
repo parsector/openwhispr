@@ -6020,6 +6020,23 @@
     "enrollmentDuration": "{{seconds}} segundos",
     "noLabelledEnrollmentRows": "Nenhuma linha atribuída a esta pessoa tem áudio utilizável.",
     "ownerCorrected": "Identificado por você",
+    "listeningTimeLeft": "A confirmação de escuta expira em {{minutes}}:{{seconds}}.",
+    "enrollmentErrors": {
+      "poor_audio": "Este áudio não serve como amostra de voz. Escolha outro trecho.",
+      "echo_audio": "Este áudio contém eco da outra faixa. Escolha outro trecho.",
+      "candidate_unavailable": "Este candidato mudou ou já foi analisado. Atualize a lista.",
+      "playback_required": "A confirmação de escuta expirou ou foi substituída. Ouça novamente.",
+      "span_mismatch": "Este trecho já não corresponde à gravação. Escolha outro trecho.",
+      "person_or_meeting_changed": "A pessoa ou a reunião mudou. Atualize a lista.",
+      "audio_unavailable": "Este áudio já não está disponível. Escolha outro trecho.",
+      "persistence_failed": "A gravação na base de dados local falhou. A confirmação de escuta continua válida; tente guardar novamente.",
+      "database_busy": "A base de dados local está ocupada. A confirmação de escuta continua válida; tente guardar novamente.",
+      "constraint_failed": "A base de dados local rejeitou a gravação. A confirmação de escuta continua válida; tente guardar novamente.",
+      "already_approved": "Esta amostra já foi aprovada. Atualize a lista.",
+      "refresh_failed": "A decisão foi guardada, mas uma atualização posterior falhou. Abra a lista novamente para ver as amostras recentes.",
+      "ipc_failed": "Não foi possível confirmar se a aprovação foi guardada. Atualize a lista antes de tentar novamente.",
+      "unavailable": "O registo de voz está indisponível de momento. Abra o painel novamente."
+    },
     "enrollmentReasons": {
       "short": "Menos de 3 s: {{count}}",
       "long": "Mais de 8 s: {{count}}",

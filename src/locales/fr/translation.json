@@ -6020,6 +6020,23 @@
     "enrollmentDuration": "{{seconds}} secondes",
     "noLabelledEnrollmentRows": "Aucune ligne attribuée à cette personne ne dispose d’un audio utilisable.",
     "ownerCorrected": "Attribué par vous",
+    "listeningTimeLeft": "La confirmation d’écoute expire dans {{minutes}}:{{seconds}}.",
+    "enrollmentErrors": {
+      "poor_audio": "Cet audio ne convient pas comme échantillon vocal. Choisissez un autre passage.",
+      "echo_audio": "Cet audio contient un écho de l’autre piste. Choisissez un autre passage.",
+      "candidate_unavailable": "Ce candidat a changé ou a déjà été examiné. Actualisez la liste.",
+      "playback_required": "La confirmation d’écoute a expiré ou a été remplacée. Réécoutez le passage.",
+      "span_mismatch": "Ce passage ne correspond plus à son enregistrement. Choisissez un autre passage.",
+      "person_or_meeting_changed": "La personne ou la réunion a changé. Actualisez la liste.",
+      "audio_unavailable": "Cet audio n’est plus disponible. Choisissez un autre passage.",
+      "persistence_failed": "L’écriture dans la base locale a échoué. Votre confirmation d’écoute reste valable ; essayez à nouveau d’enregistrer.",
+      "database_busy": "La base locale est occupée. Votre confirmation d’écoute reste valable ; essayez à nouveau d’enregistrer.",
+      "constraint_failed": "La base locale a refusé l’enregistrement. Votre confirmation d’écoute reste valable ; essayez à nouveau d’enregistrer.",
+      "already_approved": "Cet échantillon a déjà été approuvé. Actualisez la liste.",
+      "refresh_failed": "La décision a été enregistrée, mais une actualisation ultérieure a échoué. Rouvrez la liste pour voir les échantillons récents.",
+      "ipc_failed": "Impossible de confirmer si l’approbation a été enregistrée. Actualisez la liste avant de réessayer.",
+      "unavailable": "L’inscription vocale est indisponible pour le moment. Rouvrez le panneau."
+    },
     "enrollmentReasons": {
       "short": "Moins de 3 s : {{count}}",
       "long": "Plus de 8 s : {{count}}",

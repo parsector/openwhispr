@@ -24,6 +24,7 @@ import EmptyStateCard from "../ui/EmptyStateCard";
 import { Skeleton } from "../ui/skeleton";
 import { useToast } from "../ui/useToast";
 import { matchesPerson } from "../../utils/personSearch";
+import { saveEnrollmentDecision } from "./enrollmentDecision";
 
 type Person = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listPeople>>>[number];
 type Review = Awaited<ReturnType<NonNullable<typeof window.electronAPI.listPeopleReview>>>[number];
@@ -220,13 +221,30 @@ export default function PeoplePage({
   const [enrollmentSamples, setEnrollmentSamples] = useState<EnrollmentSample[]>([]);
   const [enrollmentLoading, setEnrollmentLoading] = useState(false);
   const [listeningId, setListeningId] = useState<string | null>(null);
-  const [listened, setListened] = useState<{ id: string; token: string } | null>(null);
+  const [listened, setListened] = useState<{ id: string; token: string; expiresAt: number } | null>(
+    null
+  );
+  const [listeningNow, setListeningNow] = useState(() => Date.now());
   const [enrollmentError, setEnrollmentError] = useState("");
   const enrollmentPlayer = useRef<HTMLAudioElement | null>(null);
   const enrollmentUrl = useRef<string | null>(null);
   const enrollmentRequest = useRef(0);
   const enrollmentCancelRef = useRef<HTMLButtonElement>(null);
   const enrollmentFromMenu = useRef(false);
+  useEffect(() => {
+    if (!listened) return;
+    const timer = window.setInterval(() => setListeningNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [listened]);
+  const listeningSeconds = listened
+    ? Math.max(0, Math.ceil((listened.expiresAt - listeningNow) / 1000))
+    : 0;
+  useEffect(() => {
+    if (listened && listeningSeconds === 0 && !working) {
+      setListened(null);
+      setEnrollmentError("playback_required");
+    }
+  }, [listened, listeningSeconds, working]);
   const savePeopleReturn = () => {
     const host = rootRef.current?.closest(".overflow-y-auto");
     window.sessionStorage.setItem(
@@ -468,10 +486,15 @@ export default function PeoplePage({
             .then((completed) => {
               if (request === enrollmentRequest.current && completed?.success) {
                 setListeningId(null);
-                setListened({ id: candidate.id, token: result.token! });
+                setListened({
+                  id: candidate.id,
+                  token: result.token!,
+                  expiresAt: completed.expiresAt!,
+                });
+                setListeningNow(Date.now());
               } else if (request === enrollmentRequest.current) {
                 setListeningId(null);
-                setEnrollmentError("playback_required");
+                setEnrollmentError(completed?.error || "playback_required");
               }
             })
             .catch(() => {
@@ -498,36 +521,47 @@ export default function PeoplePage({
   };
   const decideCandidate = async (candidate: EnrollmentCandidate, choice: "approve" | "reject") => {
     if (listened?.id !== candidate.id || candidate.profileId !== enrollingId) return;
+    if (Date.now() >= listened.expiresAt) {
+      setListened(null);
+      setEnrollmentError("playback_required");
+      return;
+    }
     const request = enrollmentRequest.current;
     setWorking(true);
     setEnrollmentError("");
-    try {
-      const result = await window.electronAPI.decideVoiceEnrollmentCandidate?.(
-        candidate.id,
-        choice,
-        listened.token
-      );
-      if (!result?.success) throw Error(result?.error || "unavailable");
-      const rendererRefreshStart = performance.now();
-      if (request !== enrollmentRequest.current) return;
-      setListened(null);
-      const samples = await window.electronAPI.listVoiceEnrollmentSamples?.(candidate.profileId);
-      if (request !== enrollmentRequest.current) return;
-      setCandidates(result.offers?.candidates || []);
-      if (result.offers?.reasons) setEnrollmentReasons(result.offers.reasons);
-      setEnrollmentSamples(samples || []);
-      await refresh();
+    const rendererRefreshStart = performance.now();
+    const result = await saveEnrollmentDecision(
+      candidate,
+      choice,
+      listened.token,
+      window.electronAPI,
+      candidates,
+      enrollmentSamples,
+      refresh
+    );
+    if (request === enrollmentRequest.current) {
+      setEnrollmentError(result.error);
+      setCandidates(result.candidates);
+      setEnrollmentSamples(result.samples);
+      if (result.reasons) setEnrollmentReasons(result.reasons);
       if (result.timingId)
         void window.electronAPI.reportVoiceEnrollmentRefresh?.(
           result.timingId,
           performance.now() - rendererRefreshStart
         );
-    } catch (cause) {
-      if (request === enrollmentRequest.current)
-        setEnrollmentError(String(cause instanceof Error ? cause.message : cause));
-    } finally {
-      setWorking(false);
+      if (
+        result.committed ||
+        [
+          "playback_required",
+          "candidate_unavailable",
+          "span_mismatch",
+          "person_or_meeting_changed",
+          "already_approved",
+        ].includes(result.error)
+      )
+        setListened(null);
     }
+    setWorking(false);
   };
   const removeEnrollmentSample = async (sample: EnrollmentSample) => {
     if (sample.profileId !== enrollingId) return;
@@ -1347,6 +1381,14 @@ export default function PeoplePage({
                               })}
                             </p>
                           )}
+                          {listened && (
+                            <p role="status" className="mt-2 text-sm text-muted-foreground">
+                              {t("people.listeningTimeLeft", {
+                                minutes: Math.floor(listeningSeconds / 60),
+                                seconds: String(listeningSeconds % 60).padStart(2, "0"),
+                              })}
+                            </p>
+                          )}
                           {working && (
                             <p role="status" className="mt-2 text-sm">
                               {t("people.waitForSave")}
@@ -1414,7 +1456,11 @@ export default function PeoplePage({
                                   <Button
                                     type="button"
                                     size="sm"
-                                    disabled={working || listened?.id !== candidate.id}
+                                    disabled={
+                                      working ||
+                                      listened?.id !== candidate.id ||
+                                      listeningSeconds === 0
+                                    }
                                     onClick={() => void decideCandidate(candidate, "approve")}
                                   >
                                     {t("people.approveSample")}
@@ -1423,7 +1469,11 @@ export default function PeoplePage({
                                     type="button"
                                     size="sm"
                                     variant="secondary"
-                                    disabled={working || listened?.id !== candidate.id}
+                                    disabled={
+                                      working ||
+                                      listened?.id !== candidate.id ||
+                                      listeningSeconds === 0
+                                    }
                                     onClick={() => void decideCandidate(candidate, "reject")}
                                   >
                                     {t("people.rejectSample")}

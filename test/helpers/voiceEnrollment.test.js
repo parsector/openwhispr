@@ -540,14 +540,246 @@ test('approval requires server-observed playback completion for the same candida
   f.audio.now = () => clock;
   const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
   const { token } = enrollment.play(f.db, f.audio, candidate.id);
-  assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token)).success, false);
+  assert.deepEqual(await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token),
+    { success: false, error: 'playback_required' });
   assert.equal(enrollment.complete(f.db, f.audio, candidate.id, token).success, false);
   clock += 4000;
   assert.equal(enrollment.complete(f.db, f.audio, candidate.id, token).success, true);
   const doc = JSON.parse(f.db.getNote(noteId).transcript);
   doc.rows[0].speakerName = 'Changed after playback';
   f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
-  assert.equal((await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token)).success, false);
+  assert.deepEqual(await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token),
+    { success: false, error: 'candidate_unavailable' });
+});
+
+test("a rolled-back approval reports its statement and permits retry with the completed listen", async (t) => {
+  const f = fixture(t);
+  f.note("retry");
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const { token } = enrollment.play(f.db, f.audio, candidate.id);
+  f.completeReview(candidate.id, token);
+  f.db.db.exec(`CREATE TRIGGER deny_enrollment BEFORE INSERT ON voice_exemplars
+    BEGIN SELECT RAISE(ABORT, 'write refused'); END`);
+  const logger = require("../../src/helpers/debugLogger");
+  const warnings = [];
+  const originalWarn = logger.warn;
+  logger.warn = (message, meta) => warnings.push({ message, meta });
+  t.after(() => {
+    logger.warn = originalWarn;
+  });
+  const failed = await enrollment.decide(
+    f.db,
+    f.audio,
+    f.extractor,
+    candidate.id,
+    "approve",
+    token
+  );
+  assert.deepEqual(
+    { success: failed.success, error: failed.error },
+    { success: false, error: "persistence_failed" }
+  );
+  assert.equal(enrollment.progress(f.db, f.person.id).approvedSpans, 0);
+  assert.equal(warnings.length, 1);
+  assert.doesNotMatch(warnings[0].meta, /\n/);
+  const log = JSON.parse(warnings[0].meta);
+  assert.match(log.statement, /INSERT INTO voice_exemplars/);
+  assert.equal(log.code, "persistence_failed");
+  assert.equal(log.noteId, candidate.noteId);
+  assert.equal(log.personId, candidate.profileId);
+  assert.equal(log.candidateId, candidate.id);
+  assert.doesNotMatch(JSON.stringify(warnings), /Alex|RIFF|embedding|Meeting retry/);
+  f.db.db.exec("DROP TRIGGER deny_enrollment");
+  assert.equal(
+    (await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, "approve", token)).success,
+    true
+  );
+});
+
+test("a second Play replaces the completed listening proof", async (t) => {
+  const f = fixture(t);
+  f.note("replacement");
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const first = enrollment.play(f.db, f.audio, candidate.id);
+  f.completeReview(candidate.id, first.token);
+  const second = enrollment.play(f.db, f.audio, candidate.id);
+  assert.deepEqual(
+    await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, "approve", first.token),
+    { success: false, error: "playback_required" }
+  );
+  assert.equal(enrollment.complete(f.db, f.audio, candidate.id, second.token).success, false);
+  f.completeReview(candidate.id, second.token);
+  assert.equal(
+    (await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, "approve", second.token))
+      .success,
+    true
+  );
+});
+
+test("an expired proof refuses approval and exposes its deadline to the listener", async (t) => {
+  const f = fixture(t);
+  f.note("expiry");
+  let now = 1000;
+  f.audio.now = () => now;
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const playback = enrollment.play(f.db, f.audio, candidate.id);
+  assert.equal(playback.expiresAt, 601000);
+  now += 5000;
+  assert.deepEqual(enrollment.complete(f.db, f.audio, candidate.id, playback.token), {
+    success: true,
+    expiresAt: 601000,
+  });
+  now = 601001;
+  assert.deepEqual(
+    await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, "approve", playback.token),
+    { success: false, error: "playback_required" }
+  );
+});
+
+test("a candidate already saved is reported as approved", async (t) => {
+  const f = fixture(t);
+  f.note("prior");
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const { token } = enrollment.play(f.db, f.audio, candidate.id);
+  f.completeReview(candidate.id, token);
+  f.db.db
+    .prepare(
+      `INSERT INTO voice_exemplars (id, profile_id, note_id, track,
+    start_sample, end_sample, embedding, approved_at, row_ids, meeting_date)
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`
+    )
+    .run(
+      candidate.id,
+      candidate.profileId,
+      candidate.noteId,
+      candidate.track,
+      candidate.startSample,
+      candidate.endSample,
+      Buffer.alloc(2048),
+      JSON.stringify(candidate.rowIds),
+      candidate.meetingDate
+    );
+  assert.deepEqual(
+    await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, "approve", token),
+    { success: false, error: "already_approved" }
+  );
+});
+
+test("a changed meeting is distinguished from an ordinary changed candidate", async (t) => {
+  const f = fixture(t);
+  f.note("deleted");
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const { token } = enrollment.play(f.db, f.audio, candidate.id);
+  f.completeReview(candidate.id, token);
+  f.db.db
+    .prepare("UPDATE notes SET deleted_at = CURRENT_TIMESTAMP WHERE id = ?")
+    .run(candidate.noteId);
+  assert.deepEqual(
+    await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, "approve", token),
+    { success: false, error: "person_or_meeting_changed" }
+  );
+});
+
+test("a busy database refuses save without consuming completed playback", async (t) => {
+  const f = fixture(t);
+  f.note("busy");
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const { token } = enrollment.play(f.db, f.audio, candidate.id);
+  f.completeReview(candidate.id, token);
+  const Sqlite = require("better-sqlite3");
+  const blocker = new Sqlite(f.db.db.name);
+  t.after(() => blocker.close());
+  f.db.db.pragma("busy_timeout = 1");
+  blocker.exec("BEGIN IMMEDIATE");
+  const failed = await enrollment.decide(
+    f.db,
+    f.audio,
+    f.extractor,
+    candidate.id,
+    "approve",
+    token
+  );
+  assert.deepEqual(
+    { success: failed.success, error: failed.error },
+    { success: false, error: "database_busy" }
+  );
+  blocker.exec("ROLLBACK");
+  assert.equal(
+    (await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, "approve", token)).success,
+    true
+  );
+});
+
+test("a schema constraint refuses save without consuming completed playback", async (t) => {
+  const f = fixture(t);
+  f.note("constraint", 2);
+  const [first, second] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const firstPlay = enrollment.play(f.db, f.audio, first.id);
+  f.completeReview(first.id, firstPlay.token);
+  assert.equal(
+    (await enrollment.decide(f.db, f.audio, f.extractor, first.id, "approve", firstPlay.token))
+      .success,
+    true
+  );
+  f.db.db.exec("CREATE UNIQUE INDEX only_one_voice_per_note ON voice_exemplars(note_id)");
+  const { token } = enrollment.play(f.db, f.audio, second.id);
+  f.completeReview(second.id, token);
+  const failed = await enrollment.decide(f.db, f.audio, f.extractor, second.id, "approve", token);
+  assert.deepEqual(
+    { success: failed.success, error: failed.error },
+    { success: false, error: "constraint_failed" }
+  );
+  f.db.db.exec("DROP INDEX only_one_voice_per_note");
+  assert.equal(
+    (await enrollment.decide(f.db, f.audio, f.extractor, second.id, "approve", token)).success,
+    true
+  );
+});
+
+test("a span whose recording changed reports the mismatch", async (t) => {
+  const f = fixture(t);
+  const { noteId } = f.note("mismatch");
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const { token } = enrollment.play(f.db, f.audio, candidate.id);
+  f.completeReview(candidate.id, token);
+  const doc = JSON.parse(f.db.getNote(noteId).transcript);
+  doc.rows[0].audioSpan.recordingId = "different-recording";
+  f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
+  assert.deepEqual(
+    await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, "approve", token),
+    { success: false, error: "span_mismatch" }
+  );
+});
+
+test("echo from the other track refuses approval", async (t) => {
+  const f = fixture(t);
+  const { noteId } = f.note("echo");
+  const [candidate] = enrollment.listCandidates(f.db, f.audio, f.person.id);
+  const { token, wav } = enrollment.play(f.db, f.audio, candidate.id);
+  f.completeReview(candidate.id, token);
+  // The other track's span only becomes readable after the eligibility recheck,
+  // so the decide-time echo backstop must catch it.
+  let otherReads = 0;
+  f.audio.status = () => ({
+    state: "complete",
+    recordingId: noteId,
+    tracks: {
+      // Chunk larger than span+margin keeps the candidate revision stable.
+      mic: { chunks: [{ startSample: 0, sampleCount: 24000 * 10 }] },
+      system: { chunks: [{ startSample: 0, sampleCount: 24000 * 10 }] },
+    },
+  });
+  f.audio.span = (id, track) => {
+    if (track !== "system") return { state: "available", wav, partial: false };
+    otherReads += 1;
+    return otherReads <= 1
+      ? { state: "missing" }
+      : { state: "available", wav, partial: false };
+  };
+  assert.deepEqual(
+    await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, "approve", token),
+    { success: false, error: "echo_audio" }
+  );
 });
 
 test('elapsed time and a forged completion cannot replace audible playback in the requesting window', async t => {
@@ -574,7 +806,7 @@ test('elapsed time and a forged completion cannot replace audible playback in th
   assert.deepEqual(enrollment.complete(f.db, store, candidate.id, second.token, otherWindow),
     { success: false, error: 'playback_required' });
   assert.deepEqual(enrollment.complete(f.db, store, candidate.id, second.token, sender),
-    { success: true });
+    { success: true, expiresAt: 606000 });
   assert.equal((await enrollment.decide(f.db, store, f.extractor, candidate.id, 'reject', second.token, otherWindow)).success, false);
   assert.equal((await enrollment.decide(f.db, store, f.extractor, candidate.id, 'reject', second.token, sender)).success, true);
 });
@@ -1014,6 +1246,6 @@ test('overlapping speech is not offered and clipped audio cannot be approved', a
   const { token } = enrollment.play(f.db, f.audio, candidate.id);
   f.completeReview(candidate.id, token);
   const decision = await enrollment.decide(f.db, f.audio, f.extractor, candidate.id, 'approve', token);
-  assert.equal(decision.success, false);
+  assert.deepEqual(decision, { success: false, error: 'poor_audio' });
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
 });

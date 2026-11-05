@@ -6002,6 +6002,23 @@
     "enrollmentDuration": "{{seconds}} 秒",
     "noLabelledEnrollmentRows": "この人に紐づく行に利用可能な音声がありません。",
     "ownerCorrected": "あなたが名前を付けました",
+    "listeningTimeLeft": "視聴の確認は{{minutes}}:{{seconds}}後に期限切れになります。",
+    "enrollmentErrors": {
+      "poor_audio": "この音声は声のサンプルに適していません。別の区間を選んでください。",
+      "echo_audio": "この音声には別のトラックのエコーが含まれています。別の区間を選んでください。",
+      "candidate_unavailable": "この候補は変更されたか、すでに確認済みです。一覧を更新してください。",
+      "playback_required": "視聴の確認が期限切れか、別の再生に置き換わりました。もう一度聴いてください。",
+      "span_mismatch": "この区間は録音と一致しなくなりました。別の区間を選んでください。",
+      "person_or_meeting_changed": "人物または会議が変更されました。一覧を更新してください。",
+      "audio_unavailable": "この音声は利用できなくなりました。別の区間を選んでください。",
+      "persistence_failed": "ローカルデータベースへの書き込みに失敗しました。視聴の確認はまだ有効です。もう一度保存してください。",
+      "database_busy": "ローカルデータベースが使用中です。視聴の確認はまだ有効です。もう一度保存してください。",
+      "constraint_failed": "ローカルデータベースが保存を拒否しました。視聴の確認はまだ有効です。もう一度保存してください。",
+      "already_approved": "このサンプルはすでに承認されています。一覧を更新してください。",
+      "refresh_failed": "判断は保存されましたが、その後の更新に失敗しました。最新のサンプルを見るには一覧を開き直してください。",
+      "ipc_failed": "承認が保存されたか確認できませんでした。再試行する前に一覧を更新してください。",
+      "unavailable": "現在、声の登録は利用できません。パネルを開き直してください。"
+    },
     "enrollmentReasons": {
       "short": "3秒未満: {{count}}",
       "long": "8秒超: {{count}}",
