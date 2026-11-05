@@ -207,8 +207,18 @@ function fixture(t) {
   wav.writeUInt32LE(wav.length - 44, 40);
   for (let i = 0; i < 24000 * 4; i++) wav.writeInt16LE(Math.round(10000 * Math.sin(i / 24)), 44 + i * 2);
   const recordingIds = new Map();
-  const audio = { encryption: require('../lib/fakeAudioEncryption'), now: () => reviewClock, status: id => ({ state: 'complete', recordingId: recordingIds.get(id) }), span: () => ({ state: 'available',
-    wav, partial: false }) };
+  const audio = { encryption: require('../lib/fakeAudioEncryption'), now: () => reviewClock, status: id => ({ state: 'complete', recordingId: recordingIds.get(id) }), span: (_id, _track, from, to) => {
+    // Match the requested trimmed span, as the real store does. A fixed 4s WAV
+    // concealed duration disagreement with the approved 3.5s sample bounds.
+    const samples = Math.round(to * 24000) - Math.round(from * 24000);
+    const spanWav = Buffer.alloc(44 + samples * 2);
+    wav.copy(spanWav, 0, 0, 44);
+    for (let offset = 44; offset < spanWav.length; offset += wav.length - 44)
+      wav.copy(spanWav, offset, 44);
+    spanWav.writeUInt32LE(spanWav.length - 8, 4);
+    spanWav.writeUInt32LE(spanWav.length - 44, 40);
+    return { state: 'available', wav: spanWav, partial: false };
+  } };
   audio.recordingProvenance = id => ({ noteId: id,
     noteIdentity: db.db.prepare('SELECT client_note_id FROM notes WHERE id = ?').get(id)?.client_note_id,
     status: 'complete', recordingId: recordingIds.get(id), tracks: { mic: { chunks: [{ file: 'retained.opus' }] } } });

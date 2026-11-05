@@ -1,5 +1,6 @@
 const { createHash } = require("node:crypto");
 const crypto = require("./secretCrypto");
+const { durationMatches, integrityError } = require("./voiceAudioIntegrity");
 
 // This store belongs to a person, never a note or a recording. Ciphertext lives
 // in the same SQLite transaction as consent; there are no external blob files.
@@ -131,6 +132,8 @@ function seal(store, bytes) {
 }
 
 function save(db, candidate, bytes, ciphertext, embedding) {
+  if (!durationMatches((bytes.length - 44) / 48, candidate.endSample - candidate.startSample))
+    throw integrityError();
   const identity = db
     .prepare("SELECT client_note_id FROM notes WHERE id = ?")
     .get(candidate.noteId);

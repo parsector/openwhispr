@@ -5,6 +5,7 @@ const { spawnSync, execFile } = require("child_process");
 const { getFFmpegPath } = require("./ffmpegUtils");
 const { encryptBytes, decryptBytes, refreshAudioKey } = require("./secretCrypto");
 const enrollmentTiming = require("./voiceEnrollmentTiming");
+const { exactCoverage, durationMatches } = require("./voiceAudioIntegrity");
 
 const RATE = 24000;
 const CHUNK_SAMPLES = RATE * 5;
@@ -624,20 +625,17 @@ class MeetingAudioStore {
     if (!manifest || !["complete", "incomplete"].includes(manifest.status)) return false;
     const state = manifest.tracks?.[track];
     if (!state || endSample > state.sampleCount || startSample < 0) return false;
-    let cursor = startSample;
+    if (!exactCoverage(state.chunks || [], startSample, endSample)) return false;
     for (const chunk of state.chunks || []) {
       const chunkEnd = chunk.startSample + chunk.sampleCount;
-      if (chunkEnd <= cursor || chunk.startSample >= endSample) continue;
-      if (chunk.startSample > cursor) return false;
+      if (chunkEnd <= startSample || chunk.startSample >= endSample) continue;
       try {
         if (!fs.existsSync(this._chunkFile(noteId, chunk.file))) return false;
       } catch {
         return false;
       }
-      cursor = Math.min(endSample, chunkEnd);
-      if (cursor === endSample) return true;
     }
-    return false;
+    return true;
   }
 
   span(noteId, track, startSeconds, endSeconds) {
@@ -725,23 +723,15 @@ class MeetingAudioStore {
     const end = Math.min(requestedEnd, state.sampleCount);
     if (end <= start)
       return { state: manifest.status === "recording" ? "not_flushed" : "unavailable" };
-    let cursor = start;
-    for (const chunk of state.chunks) {
-      const chunkEnd = chunk.startSample + chunk.sampleCount;
-      if (chunkEnd <= cursor || chunk.startSample >= end) continue;
-      if (chunk.startSample > cursor) return { state: "gap" };
-      cursor = Math.min(end, chunkEnd);
-      if (cursor === end) break;
-    }
-    if (cursor < end) return { state: "gap" };
-    const parts = [];
-    let covered = 0;
+    const integrityFailure = { state: "temporary_failure", reason: "source_integrity_failed" };
+    if (!exactCoverage(state.chunks, start, requestedEnd)) return integrityFailure;
+    // Authenticate every selected interval before yielding even the first
+    // decoder input. A later duplicate must never be hidden by an early break.
+    const authenticated = [];
     let bytesRead = 0;
-    let lastEnd = null;
     for (const chunk of state.chunks) {
       const chunkEnd = chunk.startSample + chunk.sampleCount;
       if (chunkEnd <= start || chunk.startSample >= end) continue;
-      let decoded;
       let plaintext;
       try {
         const encrypted = fs.readFileSync(this._chunkFile(noteId, chunk.file));
@@ -756,16 +746,29 @@ class MeetingAudioStore {
       } catch (error) {
         return audioFailure(error);
       }
-      let ogg;
       try {
-        ogg = unpack(plaintext).ogg;
+        const { entry, ogg } = unpack(plaintext);
+        if (
+          entry.file !== chunk.file ||
+          entry.startSample !== chunk.startSample ||
+          entry.sampleCount !== chunk.sampleCount
+        )
+          return integrityFailure;
+        authenticated.push({ ...entry, ogg });
       } catch {
         return { state: "corrupt", reason: "audio_corrupt" };
       }
+    }
+    if (!exactCoverage(authenticated, start, requestedEnd)) return integrityFailure;
+    authenticated.sort((a, b) => a.startSample - b.startSample);
+    const parts = [];
+    let covered = 0;
+    for (const chunk of authenticated) {
+      let decoded;
       try {
         const decodeStart = enrollmentTiming.now();
         try {
-          decoded = yield ogg;
+          decoded = yield chunk.ogg;
         } finally {
           enrollmentTiming.decoded(enrollmentTiming.now() - decodeStart);
         }
@@ -775,16 +778,18 @@ class MeetingAudioStore {
           reason: error.code === "ETIMEDOUT" || error.killed ? "decoder_timeout" : "decoder_error",
         };
       }
+      if (!durationMatches(decoded.length / 48, chunk.sampleCount) || decoded.length % 2)
+        return integrityFailure;
+      const chunkEnd = chunk.startSample + chunk.sampleCount;
       const from = Math.max(start, chunk.startSample) - chunk.startSample;
       const to = Math.min(end, chunkEnd) - chunk.startSample;
-      if (lastEnd != null && chunk.startSample + from > lastEnd) return { state: "unavailable" };
       const part = decoded.subarray(from * 2, Math.min(to * 2, decoded.length));
       parts.push(part);
       covered += part.length / 2;
-      lastEnd = chunk.startSample + to;
     }
     if (!parts.length) return { state: "unavailable" };
     const pcm = Buffer.concat(parts);
+    if (!durationMatches(pcm.length / 48, requestedEnd - start)) return integrityFailure;
     return {
       state: "available",
       wav: wav(pcm),

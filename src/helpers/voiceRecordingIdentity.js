@@ -1,4 +1,5 @@
 const { createHash } = require("node:crypto");
+const { durationMatches, integrityError } = require("./voiceAudioIntegrity");
 
 // Provenance belongs to an approval, independently of notes and undo snapshots.
 // Only approval and startup recovery record it. Readers never repair it from
@@ -50,6 +51,10 @@ function open(db) {
       recovery_sample_rate: "INTEGER",
       recovery_duration_ms: "INTEGER",
       recovery_expires_at: "INTEGER",
+      recovery_pcm_trust: "TEXT",
+      recovery_untrusted_pcm_hash: "TEXT",
+      recovery_untrusted_duration_ms: "INTEGER",
+      recovery_pcm_corrected_at: "INTEGER",
     }))
       if (!columns.has(name))
         db.exec(`ALTER TABLE voice_evidence_provenance ADD COLUMN ${name} ${type}`);
@@ -85,7 +90,11 @@ function pcmIdentity(bytes) {
   return createHash("sha256").update(bytes.subarray(44)).digest("hex");
 }
 
-function pinAudio(db, sample, source, bytes, hash = pcmIdentity(bytes)) {
+function pinAudio(db, sample, source, bytes, hash) {
+  // Guard every caller, including fresh approvals, before computing a digest.
+  if (!durationMatches((bytes.length - 44) / 48, sample.end_sample - sample.start_sample))
+    throw integrityError();
+  hash ??= pcmIdentity(bytes);
   db.prepare(
     `UPDATE voice_evidence_provenance SET
     recovery_pcm_hash=COALESCE(recovery_pcm_hash, ?),
@@ -96,7 +105,9 @@ function pinAudio(db, sample, source, bytes, hash = pcmIdentity(bytes)) {
     recovery_note_identity=COALESCE(recovery_note_identity, ?),
     recovery_codec=COALESCE(recovery_codec, ?),
     recovery_sample_rate=COALESCE(recovery_sample_rate, 24000),
-    recovery_duration_ms=COALESCE(recovery_duration_ms, ?)
+    recovery_duration_ms=COALESCE(recovery_duration_ms, ?),
+    recovery_pcm_corrected_at=CASE WHEN recovery_pcm_trust='untrusted' THEN ? ELSE recovery_pcm_corrected_at END,
+    recovery_pcm_trust=CASE WHEN recovery_pcm_trust='untrusted' THEN 'corrected' ELSE recovery_pcm_trust END
     WHERE sample_id=?`
   ).run(
     hash,
@@ -107,6 +118,7 @@ function pinAudio(db, sample, source, bytes, hash = pcmIdentity(bytes)) {
     source.noteIdentity || null,
     source.tracks?.[sample.track]?.codec || "audio/ogg; codecs=opus",
     (bytes.length - 44) / 48,
+    Date.now(),
     sample.id
   );
 }

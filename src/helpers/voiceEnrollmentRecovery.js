@@ -6,6 +6,7 @@ const {
   pinAudio,
 } = require("./voiceRecordingIdentity");
 const debugLogger = require("./debugLogger");
+const { durationMatches } = require("./voiceAudioIntegrity");
 
 // A small page of IDs, never a library of WAVs or ciphertext. Backoff and
 // attempts survive process exit; the queue and AbortController are disposable.
@@ -28,6 +29,29 @@ function start(
   yieldMs = Math.max(1, Math.min(1000, yieldMs || 10));
   retryBaseMs = Math.max(1, Math.min(60000, retryBaseMs || 1000));
   const db = database.db;
+  // One-time correction for legacy pins made from invalid-length decodes.
+  // Keep the rejected hash/duration as an audit trail; never touch durable clips
+  // or renew the evidence hold. A prior content refusal from this pin can retry.
+  db.prepare(
+    `UPDATE voice_evidence_provenance SET
+    recovery_untrusted_pcm_hash=recovery_pcm_hash,
+    recovery_untrusted_duration_ms=recovery_duration_ms,
+    recovery_pcm_hash=NULL, recovery_duration_ms=NULL, recovery_sample_rate=NULL,
+    recovery_pcm_trust='untrusted',
+    state=CASE WHEN state='recovery_failed' AND recovery_reason='audio_content_mismatch'
+      THEN 'pending_recovery' ELSE state END,
+    reason=CASE WHEN reason='audio_content_mismatch' THEN NULL ELSE reason END,
+    recovery_state=CASE WHEN recovery_reason='audio_content_mismatch' THEN 'pending_recovery' ELSE recovery_state END,
+    recovery_attempts=CASE WHEN recovery_reason='audio_content_mismatch' THEN 0 ELSE recovery_attempts END,
+    recovery_next_at=0,
+    recovery_reason=CASE WHEN recovery_reason='audio_content_mismatch' THEN NULL ELSE recovery_reason END
+    WHERE recovery_pcm_hash IS NOT NULL AND sample_id IN (
+      SELECT e.id FROM voice_exemplars e WHERE e.approved_at IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM voice_exemplar_audio a WHERE a.id=e.id)
+      AND (recovery_duration_ms IS NULL OR recovery_sample_rate IS NOT 24000 OR
+        ABS(recovery_duration_ms-(e.end_sample-e.start_sample)/24.0)>1))
+    AND state!='unrecoverable' AND COALESCE(recovery_state, '')!='unrecoverable'`
+  ).run();
   // One fixed grace period per approval, including approvals not yet paged.
   // Neither process restarts nor retries renew this retention exception.
   db.prepare(
@@ -328,6 +352,10 @@ function start(
       retry(sample, audio.reason || "legacy_audio_unavailable");
       return;
     }
+    if (!durationMatches((audio.wav.length - 44) / 48, sample.end_sample - sample.start_sample)) {
+      retry(sample, "source_integrity_failed");
+      return;
+    }
     const pcmHash = pcmIdentity(audio.wav);
     if (provenance?.recovery_pcm_hash && pcmHash !== provenance.recovery_pcm_hash) {
       terminal(sample, "audio_content_mismatch", true);
@@ -337,6 +365,7 @@ function start(
     // their baseline only from a complete decode, before encryption.
     pinAudio(db, sample, source, audio.wav, pcmHash);
     const repaired =
+      ["untrusted", "corrected"].includes(provenance?.recovery_pcm_trust) ||
       (provenance?.recovery_content_hash || source.contentHash) !== liveSource.contentHash;
     let ciphertext;
     try {
