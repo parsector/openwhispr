@@ -257,6 +257,35 @@ test('listing, repeated play, complete and approve resolve a span only during th
   assert.equal(resolved, listingResolutions);
 });
 
+test('voice query indexes migrate an existing database without changing results', t => {
+  const f = fixture(t);
+  const { noteId } = f.note('migration');
+  const sql = [
+    `SELECT id FROM notes WHERE note_type = 'meeting' AND deleted_at IS NULL ORDER BY id`,
+    `SELECT id FROM voice_exemplars WHERE profile_id = ? AND approved_at IS NOT NULL ORDER BY approved_at, id`,
+    `SELECT id FROM voice_exemplars WHERE profile_id = ? AND note_id = ? AND track = 'mic'
+      AND start_sample < ? AND end_sample > ?`,
+    `SELECT id FROM voice_enrollment_candidates WHERE profile_id = ? AND note_id = ?
+      AND track = 'mic' AND start_sample = ? AND end_sample = ?`,
+  ];
+  const args = [[], [f.person.id], [f.person.id, noteId, 120000, 0],
+    [f.person.id, noteId, 6000, 90000]];
+  const indexNames = ['idx_notes_meeting_live', 'idx_voice_exemplars_profile_approved',
+    'idx_voice_exemplars_overlap', 'idx_voice_candidates_overlap',
+    'idx_speaker_mappings_profile', 'idx_speaker_run_mappings_profile'];
+  for (const name of indexNames) f.db.db.exec(`DROP INDEX ${name}`);
+  f.db.db.pragma('user_version = 5');
+  const before = sql.map((query, i) => f.db.db.prepare(query).all(...args[i]));
+  f.db.db.close();
+  const reopened = new DatabaseManager();
+  f.db.db = reopened.db;
+  assert.equal(f.db.db.pragma('user_version', { simple: true }), 6);
+  assert.deepEqual(sql.map((query, i) => f.db.db.prepare(query).all(...args[i])), before);
+  for (const name of indexNames)
+    assert.ok(f.db.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?")
+      .get(name));
+});
+
 test('review cache recomputes only edited notes and keeps the person cap live', t => {
   const f = fixture(t);
   const one = f.note('one', 2).noteId;

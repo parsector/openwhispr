@@ -1471,6 +1471,26 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
+      // Version 6 adds the indexes used by candidate listing and live decision gates.
+      // The deleted_at column is present before this migration on old databases.
+      if (this.db.pragma("user_version", { simple: true }) < 6)
+        this.db.transaction(() => {
+          this.db.exec(`
+            CREATE INDEX IF NOT EXISTS idx_notes_meeting_live
+              ON notes(note_type, deleted_at);
+            CREATE INDEX IF NOT EXISTS idx_voice_exemplars_profile_approved
+              ON voice_exemplars(profile_id, approved_at, id);
+            CREATE INDEX IF NOT EXISTS idx_voice_exemplars_overlap
+              ON voice_exemplars(profile_id, note_id, track, start_sample, end_sample);
+            CREATE INDEX IF NOT EXISTS idx_voice_candidates_overlap
+              ON voice_enrollment_candidates(profile_id, note_id, track, start_sample, end_sample);
+            CREATE INDEX IF NOT EXISTS idx_speaker_mappings_profile
+              ON speaker_mappings(profile_id, note_id, speaker_id);
+            CREATE INDEX IF NOT EXISTS idx_speaker_run_mappings_profile
+              ON speaker_run_mappings(profile_id, note_id, run_id, cluster_id);
+          `);
+          this.db.pragma("user_version = 6");
+        })();
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN is_shared INTEGER NOT NULL DEFAULT 0");
       } catch (err) {
