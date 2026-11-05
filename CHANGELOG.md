@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-11-04
+
+People no longer makes you wait, and reviewing rows only costs what has changed.
+
+### People
+
+- **Opening People is instant again.** The eligibility pass no longer runs on navigation; nothing is computed until you press Review rows.
+- **Review rows opens on what it already knows.** Eligibility is cached per recording, so a second visit does no span work at all — only recordings that are new, edited, or whose audio changed are checked, one at a time, with visible progress.
+- **Keyboard focus survives the refresh.** The trigger is reachable as soon as the page renders, and focus stays on the row you were on when live results replace the cached ones. Escape returns you to the trigger.
+
+Measured on a 20-recording fixture: cold 81 ms, warm 4 ms.
+
 ## [1.13.0] - 2026-11-04
 
 Reviewing rows now leads somewhere: you see the newest audio first, and only the rows that can actually become a voice sample.
