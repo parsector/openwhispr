@@ -39,7 +39,7 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   const server = await createServer({
     root,
     configFile: path.join(root, "vite.config.mjs"),
-    server: { port: 0, host: "127.0.0.1" },
+    server: { port: 0, strictPort: false, host: "127.0.0.1" },
     plugins: [
       {
         name: "voice-exemplar-proof",
@@ -79,18 +79,17 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   await unavailable.getByText("Voice unavailable", { exact: true }).waitFor();
   await unavailable
     .getByText(
-      /Sources are protected for seven days from when approvals enter the recovery queue, including approvals still waiting to be processed/
+      "Some approved audio could not be verified or recovered. Its source stays protected for seven days from when approvals enter the recovery queue, including approvals still waiting. Source protection ends after that, and normal recording retention may then delete it. The approval record remains unless you erase it. Review these samples and enrol new audio.",
+      { exact: false }
     )
-    .waitFor();
-  await unavailable
-    .getByText(/approvals are marked unrecoverable\. Approval records remain unless you erase them/)
     .waitFor();
   await unavailable
     .getByText(/permanently ineligible for recognition and recording diversity/)
     .waitFor();
   await row
     .getByText(
-      "Recording retention, eviction, note deletion, re-diarisation and app restart do not remove this clip. You can erase it by deleting the person, clearing all voice data, resetting their voice, removing the sample or undoing its approval. Evidence retained after a failed recovery is also erased when its seven-day hold expires."
+      "Recording retention, eviction, note deletion, re-diarisation and app restart do not remove this clip. You can erase it by deleting the person, clearing all voice data, resetting their voice, removing the sample or undoing its approval. If recovery fails, source protection ends after the seven-day hold, and normal recording retention may then delete the source.",
+      { exact: true }
     )
     .waitFor();
   assert.match(await row.textContent(), /3.5 s/);
@@ -109,7 +108,7 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
       );
       assert.ok(await row.evaluate((element) => element.scrollWidth <= element.clientWidth + 1));
       await page.screenshot({
-        path: path.join(artifacts, `fourth-${width}-${dark ? "dark" : "light"}.png`),
+        path: path.join(artifacts, `copy-${width}-${dark ? "dark" : "light"}.png`),
       });
     }
   }
