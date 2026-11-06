@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.2] - 2026-11-06
+
+Approved voice clips stay safe, and calibration only recommends what the evidence supports.
+
+### Voices
+
+- **Approved clips are kept.** The audio you listened to and approved when enrolling a person is now stored permanently, encrypted and separately for each person. Recording retention no longer removes it.
+- **You decide when clips are erased.** They are erased only when you delete the person, clear all voice data, reset their voice, remove the sample or undo its approval.
+- **Earlier approvals recover their clips on first launch.** The app rebuilds them from recordings still on disk. If the recording is already gone, the sample says so plainly and asks for one fresh recording instead of failing silently.
+
+### Calibration
+
+- **Recommendations need real evidence.** Calibration refuses to present a recommendation it cannot support, and says which rows were excluded and why. Refusing every row no longer counts as a recommendation.
+- **Results show whether your targets were met.** The report compares precision and correct-name coverage with the targets you set: 0.90 precision and 0.70 coverage.
+
 ## [1.13.1] - 2026-11-04
 
 People no longer makes you wait, and enrolling a voice no longer re-reads your whole history.
