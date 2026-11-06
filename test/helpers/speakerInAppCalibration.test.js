@@ -7,6 +7,7 @@ const retainedRecording = (noteId) => ({
   status: "complete",
   tracks: { system: { chunks: [{ file: "retained.opus" }] } },
 });
+const { recommendationFixture } = require("../lib/speakerRecommendationFixture");
 const profiles = [
   { id: 1, name: "Ada", vector: [1, 0] },
   { id: 2, name: "Ben", vector: [0, 1] },
@@ -21,6 +22,28 @@ const rows = Array.from({ length: 40 }, (_, i) => ({
   vector: i % 2 ? [0.1, 0.99] : [0.99, 0.1],
   audioFingerprint: "a".repeat(64),
 }));
+test("all-refusal evidence is diagnostic_only with no recommendation", () => {
+  const report = buildReport({
+    rows: rows.map((row) => ({ ...row, vector: [-1, -1] })),
+    profiles,
+    scope: { kind: "all" },
+    modelFingerprint: "b".repeat(64),
+  });
+  assert.equal(report.resultType, "diagnostic_only");
+  assert.deepEqual(report.recommended, {});
+  assert.ok(report.failedCriteria.includes("nonempty_accepted_set"));
+});
+test("tied profiles never report calibrated", () => {
+  const report = buildReport({
+    rows,
+    profiles: profiles.map((profile) => ({ ...profile, vector: [1, 0] })),
+    scope: { kind: "all" },
+    modelFingerprint: "b".repeat(64),
+  });
+  assert.equal(report.resultType, "diagnostic_only");
+  assert.deepEqual(report.recommended, {});
+  assert.equal(report.support.similarityFloor.status, "uncalibrated");
+});
 test("stored centroid sweep measures the final pass against current profiles and refuses unsupported gates", () => {
   const report = buildReport({
     rows,
@@ -29,10 +52,11 @@ test("stored centroid sweep measures the final pass against current profiles and
     modelFingerprint: "b".repeat(64),
   });
   assert.equal(report.method, "stored-centroid-current-profiles");
-  assert.equal(report.analyses.exact.label, "Measured against your profiles as they are today");
+  assert.deepEqual(Object.keys(report.analyses), ["calibration"]);
   assert.equal(report.evidence.notes, 10);
-  assert.equal(report.support.similarityFloor.status, "calibrated");
-  assert.equal(report.support.runnerUpMargin.status, "calibrated");
+  assert.equal(report.resultType, "diagnostic_only");
+  assert.equal(report.support.similarityFloor.status, "uncalibrated");
+  assert.equal(report.support.runnerUpMargin.status, "uncalibrated");
   assert.equal(report.support.minimumVoicedSeconds.status, "uncalibrated");
   assert.equal(report.support.overlapToleranceSeconds.status, "uncalibrated");
   assert.equal(report.recommended.minimumVoicedSeconds, undefined);
@@ -115,19 +139,23 @@ test("a verified completion supplies stored centroid evidence to calibration", (
     { noteId: 63, clusters: 1, vectorsWritten: 1 },
   ]);
 });
-test("live row comparison is explicitly estimated and never uses a centroid as a live query", () => {
+test("exactly one reconstructed diagnostic sweep is produced", () => {
   const report = buildReport({
-    rows: rows.map((row) => ({ ...row, liveVector: row.vector })),
+    rows: rows.map((row) => ({
+      ...row,
+      vectorSource: "reconstructed-row-audio",
+      liveVector: row.vector,
+    })),
     profiles,
     scope: { kind: "all" },
     modelFingerprint: "b".repeat(64),
   });
-  assert.equal(report.analyses.estimated.label.includes("Estimate"), true);
-  assert.equal(report.analyses.estimated.rows, 40);
-  assert.equal(report.analyses.estimated.reason.includes("32 kb/s Opus"), true);
+  assert.deepEqual(Object.keys(report.analyses), ["calibration"]);
+  assert.equal(report.analyses.calibration.rows, 40);
+  assert.equal(report.analyses.calibration.table.length, 20);
 });
 
-test("reconstructed reviewed audio is labelled and can calibrate only with the full evidence gate", () => {
+test("reconstructed reviewed audio remains diagnostic without production parity and independent validation", () => {
   const report = buildReport({
     rows: rows.map((row) => ({
       ...row,
@@ -141,9 +169,11 @@ test("reconstructed reviewed audio is labelled and can calibrate only with the f
   });
   assert.equal(report.evidence.reconstructedRows, 40);
   assert.equal(report.evidence.storedRows, 0);
-  assert.equal(report.analyses.exact.rows, 0);
+  assert.equal(report.evidence.exactClusters, 0);
   assert.equal(report.support.similarityFloor.method, "reconstructed-row-audio");
-  assert.equal(report.support.similarityFloor.status, "calibrated");
+  assert.equal(report.support.similarityFloor.status, "uncalibrated");
+  assert.ok(report.failedCriteria.includes("production_parity"));
+  assert.ok(report.failedCriteria.includes("independent_sessions"));
   assert.match(report.evidence.coverage, /considered 40 of 40 reviewed rows/);
 });
 
@@ -176,12 +206,7 @@ test("applying a supported report records an ordered action and undo restores st
     thresholds.configure(path.join(dir, "thresholds.json"));
     const before = thresholds.current();
     assert.equal(thresholds.effectiveFloor(), 0.6);
-    const report = buildReport({
-      rows,
-      profiles,
-      scope: { kind: "all" },
-      modelFingerprint: "b".repeat(64),
-    });
+    const report = buildReport(recommendationFixture());
     const applied = action.apply({ db }, report);
     assert.equal(applied.success, true);
     assert.equal(applied.statuses.similarityFloor, "calibrated");
@@ -295,7 +320,7 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
     assert.equal(job.progress.processedRows, 1);
     assert.equal(job.progress.reembeddedRows, 1);
     assert.equal(job.progress.bytesRead, 1234);
-    assert.equal(job.report.analyses.estimated.rows, 1);
+    assert.equal(job.report.analyses.calibration.rows, 1);
     assert.equal(job.report.support.similarityFloor.method, "stored-centroid-current-profiles");
     assert.equal(await reportStillCurrent(job.report, database, audioStore, model), true);
     noteEmbeddings = [];
@@ -402,10 +427,7 @@ test("missing centroids use retained row audio and never write speaker training 
     await runJob(retained, database, audioStore, { kind: "all" }, { notes: 1, rows: 1 }, model);
     assert.equal(retained.report.evidence.reconstructedRows, 1);
     assert.match(retained.report.evidence.coverage, /considered 1 of 1 reviewed rows/);
-    assert.equal(
-      retained.report.evidence.missingVectorDiagnostics[0].reason,
-      "completion_without_speakerEmbeddings"
-    );
+    assert.equal(retained.report.evidence.missingVectorDiagnostics[0].reason, "unknown");
     assert.equal(retained.report.analyses.calibration.rows, 1);
     assert.equal(retained.report.support.similarityFloor.status, "uncalibrated");
     assert.equal(writes, 0);
@@ -433,7 +455,7 @@ test("missing centroids use retained row audio and never write speaker training 
   }
 });
 
-test("unaligned reviewed row uses the player's recording timebase and stays estimated", async () => {
+test("unaligned reviewed row uses the player's recording timebase and stays diagnostic", async () => {
   const fs = require("node:fs");
   const os = require("node:os");
   const path = require("node:path");
@@ -508,8 +530,8 @@ test("unaligned reviewed row uses the player's recording timebase and stays esti
     const retained = job();
     await runJob(retained, database, audioStore, { kind: "all" }, { notes: 1, rows: 400 }, model);
     assert.equal(retained.progress.reembeddedRows, 1);
-    assert.equal(retained.report.analyses.estimated.rows, 1);
-    assert.equal(retained.report.analyses.exact.rows, 0);
+    assert.equal(retained.report.analyses.calibration.rows, 1);
+    assert.equal(retained.report.evidence.exactClusters, 0);
     assert.equal(retained.report.evidence.reconstructedRows, 1);
     assert.equal(retained.report.evidence.exclusions.length, 0);
     assert.deepEqual(spans[0].slice(0, 2), [1, "system"]);
@@ -612,8 +634,8 @@ test("a 576 row labelled note reports the 400 row budget and evaluates only cons
   try {
     await runJob(job, database, audioStore, { kind: "all" }, { notes: 1, rows: 400 }, model);
     assert.equal(job.progress.reembeddedRows, 400);
-    assert.equal(job.report.analyses.estimated.rows, 400);
-    assert.equal(job.report.analyses.exact.rows, 0);
+    assert.equal(job.report.analyses.calibration.rows, 400);
+    assert.equal(job.report.evidence.exactClusters, 0);
     assert.equal(job.report.evidence.reviewedCandidates, 576);
     assert.equal(job.report.evidence.consideredRows, 400);
     assert.equal(job.report.evidence.truncatedByRowBudget, true);

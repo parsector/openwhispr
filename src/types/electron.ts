@@ -3985,75 +3985,7 @@ declare global {
           bytesRead: number;
           elapsedMs: number;
         };
-        report?: {
-          id: string;
-          scope: { kind: "all" | "range"; from?: string; to?: string };
-          recommended: Partial<{ similarityFloor: number; runnerUpMargin: number }>;
-          evidence: {
-            notes: number;
-            reviewedRows: number;
-            distinctPeople: number;
-            machineClaims: number;
-            exactClusters: number;
-            calibrationRows: number;
-            storedRows: number;
-            exemplarRows?: number;
-            reconstructedRows: number;
-            reviewedCandidates: number;
-            consideredRows: number;
-            rowBudget: number;
-            noteBudget: number;
-            selectedNotes: number;
-            truncatedByRowBudget: boolean;
-            placementCounts: { exact: number; approximate: number; unavailable: number };
-            embeddingCounts: { embedded: number; refused: number };
-            coverage: string;
-            exclusionCounts: Record<string, number>;
-            missingVectorDiagnostics: Array<{ noteId: number; reason: string; message: string }>;
-            estimatedRows: number;
-            exclusions: Array<{ reason: string }>;
-          };
-          analyses: {
-            exact: {
-              label: string;
-              rows: number;
-              winner: { right: number; wrong: number; refused: number };
-              table: Array<{
-                similarityFloor: number;
-                runnerUpMargin: number;
-                right: number;
-                wrong: number;
-                refused: number;
-              }>;
-            };
-            calibration: {
-              label: string;
-              rows: number;
-              winner: { right: number; wrong: number; refused: number };
-              table: Array<{
-                similarityFloor: number;
-                runnerUpMargin: number;
-                right: number;
-                wrong: number;
-                refused: number;
-              }>;
-            };
-            estimated: {
-              label: string;
-              reason: string;
-              rows: number;
-              winner: { right: number; wrong: number; refused: number };
-              table: Array<{
-                similarityFloor: number;
-                runnerUpMargin: number;
-                right: number;
-                wrong: number;
-                refused: number;
-              }>;
-            };
-          };
-          support: Record<string, { status: string; method?: string; reason?: string }>;
-        };
+        report?: import("./speakerCalibration").SpeakerCalibrationReport;
         error?: string;
       } | null>;
       cancelSpeakerCalibration?: () => Promise<{ success: boolean }>;

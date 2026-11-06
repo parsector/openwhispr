@@ -3,6 +3,8 @@ const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
 const { buildCalibrationLabels } = require("./speakerCalibrationExport");
 const { classifyEvidence, overlapsRecording } = require("./voiceRecordingIdentity");
+const { admitRecommendation, RECOMMENDATION_POLICY } = require("./speakerCalibrationPolicy");
+const { completionDiagnostic } = require("./speakerCompletionDiagnostic");
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const noteEmbeddingsFingerprint = (items) =>
@@ -88,6 +90,8 @@ function buildReport({
   noteEmbeddingFingerprints = {},
   generatedAt = new Date().toISOString(),
   synthetic = false,
+  validationEvidence = null,
+  policy = RECOMMENDATION_POLICY,
 }) {
   const byCluster = new Map();
   const storedRows = rows.filter(
@@ -109,9 +113,7 @@ function buildReport({
       allExclusions.push({ cluster: key, reason: "conflicting_reviewed_labels" });
     } else clusters.push(members[0]);
   }
-  const exact = sweep(clusters, profiles, "vector");
   const calibration = sweep([...clusters, ...reconstructedRows], profiles, "vector");
-  const estimated = sweep(rows, profiles, "liveVector");
   const people = new Set(rows.map((row) => row.truePerson).filter(Boolean));
   const notes = new Set(rows.map((row) => row.noteId));
   const claims = rows.filter((row) => row.machineLabel).length;
@@ -135,31 +137,23 @@ function buildReport({
     revision: row.revision,
     ...(row.exemplarId ? { exemplarId: row.exemplarId, contentHash: row.contentHash } : {}),
   }));
-  const gate =
-    !synthetic &&
-    rows.length >= 30 &&
-    notes.size >= 3 &&
-    people.size >= 2 &&
-    profiles.length >= 2 &&
-    claims >= 10 &&
-    /^[a-f0-9]{64}$/.test(modelFingerprint || "") &&
-    /^[a-f0-9]{64}$/.test(profileFingerprint) &&
-    Object.keys(audioFingerprints).length === notes.size &&
-    Object.values(audioFingerprints).every((hash) => /^[a-f0-9]{64}$/.test(hash));
-  const missing = [];
-  if (synthetic) missing.push("Synthetic fixture cannot calibrate settings");
-  if (rows.length < 30 || notes.size < 3 || people.size < 2)
-    missing.push("Need 30 reviewed rows across three notes and two people");
-  if (claims < 10) missing.push("Need ten recorded machine claims");
-  if (profiles.length < 2) missing.push("Need two current voice profiles");
-  if (calibration.rows < 12)
-    missing.push("Need twelve consistent stored clusters or reconstructed rows");
-  if (Object.keys(audioFingerprints).length !== notes.size)
-    missing.push("Need retained-audio fingerprints for every included note");
-  if (!/^[a-f0-9]{64}$/.test(modelFingerprint || ""))
-    missing.push("Speaker model fingerprint unavailable");
-  const calibrationStatus = gate && calibration.rows >= 12 ? "calibrated" : "uncalibrated";
-  const calibrationReason = calibrationStatus === "calibrated" ? undefined : missing.join("; ");
+  const admission = admitRecommendation({
+    rows,
+    profiles,
+    synthetic,
+    modelFingerprint,
+    profileFingerprint,
+    audioFingerprints,
+    analysis: calibration,
+    validationEvidence,
+    policy,
+  });
+  const resultType = admission.failedCriteria.length
+    ? "diagnostic_only"
+    : "supported_recommendation";
+  const calibrationStatus =
+    resultType === "supported_recommendation" ? "calibrated" : "uncalibrated";
+  const calibrationReason = admission.failedCriteria.join("; ");
   const method = exemplarRows
     ? "approved-exemplars-and-available-row-evidence"
     : reconstructedRows.length
@@ -199,7 +193,10 @@ function buildReport({
       .map((key) => [key, calibration.winner[key]])
   );
   return {
-    version: 2,
+    version: 3,
+    resultType,
+    ...admission,
+    nextAction: resultType === "diagnostic_only" ? "collect_independent_production_evidence" : null,
     id: randomUUID(),
     synthetic,
     method,
@@ -210,7 +207,7 @@ function buildReport({
       reviewedRows: rows.length,
       distinctPeople: people.size,
       machineClaims: claims,
-      exactClusters: exact.rows,
+      exactClusters: clusters.length,
       calibrationRows: calibration.rows,
       storedRows: storedRows.length,
       exemplarRows,
@@ -232,7 +229,6 @@ function buildReport({
       ),
       missingVectorDiagnostics,
       noteCentroidCompletions,
-      estimatedRows: estimated.rows,
       bytesRead,
       revisions,
       exclusions: allExclusions,
@@ -246,20 +242,9 @@ function buildReport({
       noteEmbeddings: noteEmbeddingFingerprints,
     },
     analyses: {
-      exact: { label: "Measured against your profiles as they are today", ...exact },
       calibration: {
-        label: exemplarRows
-          ? "Measured against your profiles as they are today"
-          : reconstructedRows.length
-            ? "Calibration using reconstructed row audio against current profiles"
-            : "Calibration using stored centroids against current profiles",
+        label: "people.calibrationDiagnosticSweep",
         ...calibration,
-      },
-      estimated: {
-        label: "Estimate: live decisions from re-embedded reviewed rows",
-        reason:
-          "Retained audio is 32 kb/s Opus. Original live speech windows were not saved; these are new row-window embeddings, not a live replay. A live query can differ from its running centroid by up to 2 in cosine.",
-        ...estimated,
       },
     },
     support,
@@ -349,11 +334,12 @@ function collectRows(database, audioStore, scope, budget) {
       noteEmbeddings.map((item) => [String(item.speaker_id), vectorOf(item.embedding)])
     );
     const completion = database.getNoteSpeakerCompletion?.(note.id);
+    const completionDisplay = completionDiagnostic(note.id, completion);
     if (completion)
       noteCentroidCompletions.push({
         noteId: note.id,
-        clusters: completion.clusters ?? 0,
-        vectorsWritten: completion.vectorsWritten ?? 0,
+        clusters: completionDisplay.clusters,
+        vectorsWritten: completionDisplay.vectorsWritten,
         ...(completion.cause ? { cause: completion.cause } : {}),
       });
     const reviewedIds = new Set(
@@ -399,33 +385,13 @@ function collectRows(database, audioStore, scope, budget) {
       if (rows.length >= budget.rows) continue;
       const vector = provenance.state === "resolved" ? vectors.get(String(row.speaker)) : null;
       if (!vector) {
-        const reason =
-          completion?.cause ||
-          (vectors.size
-            ? "speaker_id_vs_speaker_key_mismatch"
-            : !completion
-              ? "no_completion_event"
-              : !completion.hadSpeakerEmbeddings
-                ? "completion_without_speakerEmbeddings"
-                : "completion_embeddings_not_saved");
+        const diagnostic = completionDiagnostic(note.id, completion, vectors.size > 0);
         if (
           !missingVectorDiagnostics.some(
-            (item) => item.noteId === note.id && item.reason === reason
+            (item) => item.noteId === note.id && item.reason === diagnostic.reason
           )
         ) {
-          const explanations = {
-            no_completion_event: "No diarization completion event was recorded",
-            completion_without_speakerEmbeddings: "Diarization completed without speakerEmbeddings",
-            speaker_id_vs_speaker_key_mismatch:
-              "Stored speaker_id keys do not match the reviewed rows' speaker keys",
-            completion_embeddings_not_saved:
-              "Diarization supplied speakerEmbeddings, but none were saved",
-          };
-          missingVectorDiagnostics.push({
-            noteId: note.id,
-            reason,
-            message: `Note ${note.id}: ${explanations[reason] || reason}; ${completion?.vectorsWritten ?? 0} of ${completion?.clusters ?? 0} cluster vectors written; reviewed rows need reconstructed audio.`,
-          });
+          missingVectorDiagnostics.push(diagnostic);
         }
       }
       rows.push({
@@ -455,6 +421,12 @@ function collectRows(database, audioStore, scope, budget) {
     }
     if (rows.length > rowsBeforeNote)
       noteEmbeddingFingerprints[note.id] = noteEmbeddingsFingerprint(noteEmbeddings);
+    if (
+      rows.length > rowsBeforeNote &&
+      completion?.cause &&
+      !missingVectorDiagnostics.some((item) => item.noteId === note.id)
+    )
+      missingVectorDiagnostics.push(completionDisplay);
   }
   return {
     rows,
@@ -554,13 +526,13 @@ async function runJob(
         else {
           if (!audioHashes.has(row.noteId)) audioHashes.set(row.noteId, createHash("sha256"));
           audioHashes.get(row.noteId).update(span.wav);
-          row.liveVector = Array.from(
+          const reconstructedVector = Array.from(
             (await model.extractEmbeddingFromSamples(pcm16FromWav(span.wav))) || []
           );
-          if (row.liveVector.length) {
+          if (reconstructedVector.length) {
             job.progress.reembeddedRows++;
             if (!row.vector) {
-              row.vector = row.liveVector;
+              row.vector = reconstructedVector;
               row.vectorSource = "reconstructed-row-audio";
             }
           } else
