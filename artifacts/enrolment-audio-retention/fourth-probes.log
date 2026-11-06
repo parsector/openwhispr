@@ -1,0 +1,11 @@
+ℹ real stalled child: timeout=30ms signal=SIGKILL; next decode=48000 PCM bytes; all production spawn deadlines=5000ms
+ℹ startup complete: queued=5 clips=0 protected=1
+ℹ bounded completion: recovered=5 passes=3 maxPassItems=2 heartbeats=5
+ℹ decoder-timeout then success: realProcessTimeout=true attempts=2 recovered=1 bytesEqual=true unrecoverable=0
+ℹ eviction protection: queuedSources=2 evicted=0; after first classification: protected=1 evictable=1; recovered=2
+ℹ budget exhausted: state=recovery_failed attempts=3 reason=decoder_error restartAttempts=0 retention=expired
+ℹ corrupt ciphertext + valid key: {"state":"unrecoverable","reason":"audio_corrupt"} deferred=0 retention=expired chunkExists=false
+ℹ missing key: state=pending_recovery attempts=1 deferred=1 retained=complete recognitionProfiles=0
+ℹ key unlocked: persistedBackoff=true recovered=1 deferred=0
+ℹ missing key budget: {"state":"recovery_failed","reason":"audio_key_unavailable","recovery_attempts":3} clips=0 retention=expired
+ℹ cancel: decoderAborted=true clips=0; resume: recovered=1

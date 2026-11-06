@@ -1,0 +1,3 @@
+npm notice run open-whispr@1.13.0 i18n:check
+npm notice run node scripts/check-i18n.js
+[i18n] Locale keys and placeholders are consistent.

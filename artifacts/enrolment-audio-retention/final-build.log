@@ -1,0 +1,163 @@
+npm notice run open-whispr@1.13.0 build:renderer
+npm notice run cd src && vite build
+vite v8.1.6 building client environment for production...
+[2Ktransforming...✓ 2096 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                   3.50 kB │ gzip:     1.08 kB
+dist/assets/home-history-light-BNfZun6a.svg                       4.26 kB │ gzip:     1.08 kB
+dist/assets/onboarding-permission-system-audio-BWSTJfRG.webp      4.27 kB
+dist/assets/notes-empty-dark-BZPSbdFk.svg                         5.22 kB │ gzip:     1.40 kB
+dist/assets/notes-empty-light-DoU6UV59.svg                        5.47 kB │ gzip:     1.44 kB
+dist/assets/oruk-Dxh1T_z1.webp                                    5.48 kB
+dist/assets/llama-Dvadn2zR.svg                                    5.99 kB │ gzip:     1.91 kB
+dist/assets/notes-shared-space-dark-mumHuUb-.svg                  6.04 kB │ gzip:     2.07 kB
+dist/assets/notes-shared-space-light-C_B9wBNr.svg                 6.34 kB │ gzip:     2.13 kB
+dist/assets/chat-empty-dark-BNrpMmQ-.svg                          8.04 kB │ gzip:     2.71 kB
+dist/assets/chat-empty-light-BDfg_5rJ.svg                         8.31 kB │ gzip:     2.76 kB
+dist/assets/workspace-intro-workspace-DT92xNi6.webp               8.38 kB
+dist/assets/workspace-intro-teamspaces-f_rJktFz.webp              8.70 kB
+dist/assets/notes-transcripts-dark-BkY93idu.svg                  10.65 kB │ gzip:     1.48 kB
+dist/assets/notes-transcripts-light-0eJT6bF4.svg                 10.88 kB │ gzip:     1.52 kB
+dist/assets/onboarding-api-setup-hero-DI0fdp4t.webp              13.29 kB
+dist/assets/workspace-intro-teams-JJlR5YA8.webp                  15.24 kB
+dist/assets/inter-vietnamese-opsz-normal-Ci9T9ieq.woff2          15.26 kB
+dist/assets/onboarding-setup-warning-hero-Ba_q8KZQ.webp          16.64 kB
+dist/assets/inter-greek-ext-opsz-normal-BmPQvyvo.woff2           17.37 kB
+dist/assets/caveat-latin-ext-wght-normal-Byk3UhVp.woff2          29.47 kB
+dist/assets/inter-cyrillic-opsz-normal-BFQXbQ-f.woff2            29.63 kB
+dist/assets/inter-greek-opsz-normal-BM0NlUE_.woff2               30.20 kB
+dist/assets/onboarding-notes-meeting-detected-MUIp2Lq1.webp      32.35 kB
+dist/assets/NotoSans-normal-latin-avyUD5lZ.woff2                 35.85 kB
+dist/assets/icon-gTwPCoAw.png                                    38.02 kB
+dist/assets/NotoSans-italic-latin-eGoF9YZz.woff2                 39.60 kB
+dist/assets/inter-cyrillic-ext-opsz-normal-CfYZpDVp.woff2        41.52 kB
+dist/assets/caveat-cyrillic-ext-wght-normal-DiMfzA-V.woff2       42.85 kB
+dist/assets/inter-latin-opsz-normal-BwkfbSeq.woff2               72.92 kB
+dist/assets/caveat-latin-wght-normal-C1hSzPvX.woff2              74.93 kB
+dist/assets/caveat-cyrillic-wght-normal-D5lnP6kL.woff2           77.21 kB
+dist/assets/onboarding-assistant-preview-CISHVeZT.webp          106.64 kB
+dist/assets/inter-latin-ext-opsz-normal-DpK-iCPk.woff2          133.33 kB
+dist/assets/NotoSans-normal-latin-ext-Yer4Bbkz.woff2            168.14 kB
+dist/assets/NotoSans-italic-latin-ext-C5rzJbkZ.woff2            189.12 kB
+dist/assets/onboarding-bg-light-D0dANOpm.svg                    783.24 kB │ gzip:   589.77 kB
+dist/assets/onboarding-bg-dark-B2x2r62r.svg                     783.24 kB │ gzip:   589.77 kB
+dist/assets/legacyModels-DqtHbMkT.css                             2.28 kB │ gzip:     0.56 kB
+dist/assets/ControlPanel-B1KbCHcM.css                             3.78 kB │ gzip:     1.25 kB
+dist/assets/index-DgPveF1G.css                                  346.52 kB │ gzip:    45.99 kB
+dist/assets/pageWidth-Cs6FG_tn.js                                 0.04 kB │ gzip:     0.06 kB
+dist/assets/dist-BDRZUbsH.js                                      0.18 kB │ gzip:     0.16 kB
+dist/assets/requestSignIn-frJRZbko.js                             0.21 kB │ gzip:     0.16 kB
+dist/assets/skeleton-B5WCbrIL.js                                  0.23 kB │ gzip:     0.20 kB
+dist/assets/pinned-tls-fetch.browser-DsN643-q.js                  0.24 kB │ gzip:     0.20 kB
+dist/assets/membershipActions-BfwcNwr5.js                         0.24 kB │ gzip:     0.20 kB
+dist/assets/surfaces-r3cXZkn-.js                                  0.25 kB │ gzip:     0.16 kB
+dist/assets/AnalyticsService-Da50Z1L2.js                          0.27 kB │ gzip:     0.22 kB
+dist/assets/realtime.browser-Dvs7FL0_.js                          0.30 kB │ gzip:     0.22 kB
+dist/assets/pinned-ws.browser-RXnyQIa8.js                         0.36 kB │ gzip:     0.25 kB
+dist/assets/errors-DJx3PGlS.js                                    0.44 kB │ gzip:     0.21 kB
+dist/assets/subscriptionFlag-BjJlLi2R.js                          0.52 kB │ gzip:     0.30 kB
+dist/assets/useDialogs-nITtlig7.js                                0.52 kB │ gzip:     0.28 kB
+dist/assets/toolIcons-CJs9yeKP.js                                 0.58 kB │ gzip:     0.32 kB
+dist/assets/platform-bBGnQ_U8.js                                  0.58 kB │ gzip:     0.29 kB
+dist/assets/dist-C1RJhgYD.js                                      0.64 kB │ gzip:     0.39 kB
+dist/assets/TodoGroups-DKsvoFm2.js                                0.64 kB │ gzip:     0.35 kB
+dist/assets/spaceRosterCache-CXd2glRA.js                          0.65 kB │ gzip:     0.37 kB
+dist/assets/spacePermissions-B_MgPxQR.js                          0.68 kB │ gzip:     0.32 kB
+dist/assets/InvitationsService-CYwFxIf9.js                        0.69 kB │ gzip:     0.32 kB
+dist/assets/rolldown-runtime-QTnfLwEv.js                          0.69 kB │ gzip:     0.42 kB
+dist/assets/react-D6O-KfXb.js                                     0.69 kB │ gzip:     0.42 kB
+dist/assets/textarea-CTzT_5MQ.js                                  0.70 kB │ gzip:     0.44 kB
+dist/assets/i18nInstance-DuAUdJZQ.js                              0.70 kB │ gzip:     0.45 kB
+dist/assets/label-DLeziKGx.js                                     0.71 kB │ gzip:     0.45 kB
+dist/assets/managedTranscription-BURfhilD.js                      0.84 kB │ gzip:     0.44 kB
+dist/assets/EmptyStateCard-DMKEFb5s.js                            0.86 kB │ gzip:     0.46 kB
+dist/assets/DictationHotkeyHint-DEbhTUXx.js                       0.91 kB │ gzip:     0.52 kB
+dist/assets/MemberAvatar-BmeMtAAr.js                              0.93 kB │ gzip:     0.58 kB
+dist/assets/toggle-DlL5bXYv.js                                    0.94 kB │ gzip:     0.53 kB
+dist/assets/logger-BGhU901e.js                                    1.04 kB │ gzip:     0.52 kB
+dist/assets/generateTitle-Cl-3j1Pi.js                             1.05 kB │ gzip:     0.62 kB
+dist/assets/useLeaderboardParticipation-gfh2N1Ye.js               1.06 kB │ gzip:     0.56 kB
+dist/assets/badge-Brp6ZLkw.js                                     1.18 kB │ gzip:     0.52 kB
+dist/assets/CopyableCommand-BWF_Imf_.js                           1.19 kB │ gzip:     0.66 kB
+dist/assets/preload-helper-HclGiUj8.js                            1.21 kB │ gzip:     0.67 kB
+dist/assets/tabs-D7dGvUfe.js                                      1.31 kB │ gzip:     0.61 kB
+dist/assets/NotesService-B61P-7y1.js                              1.41 kB │ gzip:     0.64 kB
+dist/assets/cloudApi-BEem7tnO.js                                  1.49 kB │ gzip:     0.72 kB
+dist/assets/ThemedEmptyIllustration-BHJ4Tmro.js                   1.51 kB │ gzip:     0.71 kB
+dist/assets/tooltip-9CRGn8bX.js                                   1.54 kB │ gzip:     0.86 kB
+dist/assets/useUsage-a-QIFEZG.js                                  1.76 kB │ gzip:     0.91 kB
+dist/assets/DropZone-BWYpFknt.js                                  1.90 kB │ gzip:     0.98 kB
+dist/assets/CreateWorkspaceDialog-KDKyALHA.js                     2.01 kB │ gzip:     0.96 kB
+dist/assets/PersonAvatar-CFZ5JthA.js                              2.40 kB │ gzip:     1.29 kB
+dist/assets/useInsightsSyncOptIn-DdJbc9yR.js                      3.02 kB │ gzip:     1.44 kB
+dist/assets/select-oPdNq89o.js                                    3.03 kB │ gzip:     1.20 kB
+dist/assets/slack-DQfYawUa.js                                     3.26 kB │ gzip:     1.28 kB
+dist/assets/SettingsSection-WuwtvIKt.js                           3.61 kB │ gzip:     1.21 kB
+dist/assets/InviteTeammateDialog-CAMDaosn.js                      3.98 kB │ gzip:     1.64 kB
+dist/assets/legacyModels-CW89qdqX.js                              4.85 kB │ gzip:     2.10 kB
+dist/assets/ModelRegistry-C1QFrYTQ.js                             5.05 kB │ gzip:     1.80 kB
+dist/assets/useTranslation-CIUM9ogG.js                            5.08 kB │ gzip:     2.41 kB
+dist/assets/popover-ZU-LylXf.js                                   5.39 kB │ gzip:     1.97 kB
+dist/assets/transcriptDocument-CzS8_YMW.js                        6.13 kB │ gzip:     2.27 kB
+dist/assets/LeaderboardSkeleton-Bsa0rZ2r.js                       6.18 kB │ gzip:     1.89 kB
+dist/assets/parseTranscriptSegments-Bjdvzpti.js                   6.53 kB │ gzip:     2.30 kB
+dist/assets/authRequestContext-CEQPa1zK.js                        7.10 kB │ gzip:     2.31 kB
+dist/assets/tuf-root-B-bYCXnX.js                                  7.67 kB │ gzip:     3.41 kB
+dist/assets/microsoft-calendar-LMMNu2ky.js                        8.67 kB │ gzip:     5.29 kB
+dist/assets/composerLayout-DFxSblos.js                           10.52 kB │ gzip:     4.18 kB
+dist/assets/tuf-mN3Qhris.js                                      11.74 kB │ gzip:     3.59 kB
+dist/assets/InsightsView-sQJQA4gv.js                             12.21 kB │ gzip:     4.60 kB
+dist/assets/workspaceStore-B4W7MaTp.js                           12.37 kB │ gzip:     4.31 kB
+dist/assets/CommandSearch-0fx4bNcY.js                            14.15 kB │ gzip:     4.28 kB
+dist/assets/actionStore-gcByp-h0.js                              15.85 kB │ gzip:     6.24 kB
+dist/assets/languageRegistry-BEC3x4BS.js                         18.20 kB │ gzip:     2.39 kB
+dist/assets/noteStore-iHzLJEMv.js                                18.56 kB │ gzip:     5.91 kB
+dist/assets/ChatView-CtkNZIML.js                                 21.56 kB │ gzip:     7.59 kB
+dist/assets/ReferralModal-DUVOPDfo.js                            22.22 kB │ gzip:     6.40 kB
+dist/assets/esm-ByxYIRxF.js                                      23.32 kB │ gzip:     7.11 kB
+dist/assets/TodosView-ndAOXfPp.js                                25.59 kB │ gzip:     7.65 kB
+dist/assets/utils-B6KiDbIe.js                                    27.26 kB │ gzip:     8.69 kB
+dist/assets/RoutinesView-ZuSR6t3r.js                             27.95 kB │ gzip:     6.96 kB
+dist/assets/LinuxPttSetupInfo-CPmmHx3x.js                        29.29 kB │ gzip:     8.94 kB
+dist/assets/useDelayedFlag-EueJm4jC.js                           29.34 kB │ gzip:     8.35 kB
+dist/assets/auth-CPOdloMT.js                                     36.91 kB │ gzip:    13.62 kB
+dist/assets/versionedIntro-DgsT_jcb.js                           38.88 kB │ gzip:    12.77 kB
+dist/assets/LeaderboardView-DsEvJjsZ.js                          39.29 kB │ gzip:    11.25 kB
+dist/assets/UploadAudioView-CVK8G8Nk.js                          42.69 kB │ gzip:    12.49 kB
+dist/assets/dictationCleanup-B5EG2Syk.js                         44.79 kB │ gzip:    15.04 kB
+dist/assets/useMemberRoster-DzGUQQOy.js                          55.41 kB │ gzip:    16.31 kB
+dist/assets/enterpriseIdentityStore-Bxg93xs3.js                  61.90 kB │ gzip:    13.57 kB
+dist/assets/DictionaryView-BXv1HDrj.js                           63.16 kB │ gzip:    18.41 kB
+dist/assets/dist-C65BhZqJ.js                                     64.79 kB │ gzip:    24.62 kB
+dist/assets/SyncService-DxmuNdxY.js                              69.95 kB │ gzip:    18.26 kB
+dist/assets/OnboardingFlow-DUDZl1uN.js                          118.44 kB │ gzip:    38.59 kB
+dist/assets/IntegrationsView-Gf_e65U7.js                        120.25 kB │ gzip:    31.52 kB
+dist/assets/ControlPanel-NnQ_EEwS.js                            121.07 kB │ gzip:    35.12 kB
+dist/assets/settingsStore-BRH9nzcy.js                           130.95 kB │ gzip:    37.27 kB
+dist/assets/vendor-radix-D2jroRM5.js                            141.10 kB │ gzip:    45.55 kB
+dist/assets/zh-TW-BStHc32V.js                                   174.02 kB │ gzip:    40.75 kB
+dist/assets/es-BzDg09tn.js                                      190.80 kB │ gzip:    38.60 kB
+dist/assets/zh-CN-y41d5gWy.js                                   200.04 kB │ gzip:    48.86 kB
+dist/assets/dist-DCMvWgCU.js                                    200.34 kB │ gzip:    53.93 kB
+dist/assets/en-D7RJ7Qss.js                                      212.57 kB │ gzip:    44.75 kB
+dist/assets/ja-DKKSEMqS.js                                      213.86 kB │ gzip:    45.24 kB
+dist/assets/pt-D_dMUBQf.js                                      226.05 kB │ gzip:    48.26 kB
+dist/assets/fr-BIiegbft.js                                      232.92 kB │ gzip:    49.07 kB
+dist/assets/de-BD0eRZks.js                                      239.22 kB │ gzip:    51.98 kB
+dist/assets/it-CoYReQJm.js                                      258.16 kB │ gzip:    55.64 kB
+dist/assets/ru-B96Moqws.js                                      309.66 kB │ gzip:    56.65 kB
+dist/assets/index.browser-D4DpK17s.js                           327.16 kB │ gzip:    93.14 kB
+dist/assets/SettingsModal-QFETJ73q.js                           327.90 kB │ gzip:    78.26 kB
+dist/assets/ReasoningService-ZiLld7-q.js                        532.05 kB │ gzip:   133.47 kB
+dist/assets/PersonalNotesView-w4c7h2hL.js                       897.92 kB │ gzip:   282.37 kB
+dist/assets/index-BMgNQvFJ.js                                 1,103.62 kB │ gzip:   313.17 kB
+dist/assets/full-DL0Kq1X0.js                                  1,179.85 kB │ gzip:   514.46 kB
+dist/assets/i18n-Cix-264x.js                                  3,463.16 kB │ gzip: 1,013.27 kB
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 13.79s

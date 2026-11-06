@@ -1,0 +1,61 @@
+✔ en gives every enrollment failure its own message (118.619514ms)
+✔ ar gives every enrollment failure its own message (17.022688ms)
+✔ de gives every enrollment failure its own message (33.963708ms)
+✔ es gives every enrollment failure its own message (26.204009ms)
+✔ fr gives every enrollment failure its own message (23.221057ms)
+✔ it gives every enrollment failure its own message (11.475921ms)
+✔ ja gives every enrollment failure its own message (38.468908ms)
+✔ pt gives every enrollment failure its own message (27.691547ms)
+✔ ru gives every enrollment failure its own message (46.639577ms)
+✔ zh-CN gives every enrollment failure its own message (10.531188ms)
+✔ zh-TW gives every enrollment failure its own message (10.285015ms)
+[WARN][secretCrypto] OS keychain unavailable — falling back to safeStorage { error: 'locked', platform: 'linux' }
+[INFO][secretCrypto] recovered master key from safeStorage backup {}
+✔ an unreadable or missing Keychain entry recovers the existing backup without replacing it (270.166128ms)
+✔ device erasure removes the Keychain key and its on-disk backup (52.530812ms)
+✔ splitting a cluster keeps row ids and locks, gives a new number, and undoes in order (199.311178ms)
+✔ atomic correction merges a live row appended while IPC waits (7.596946ms)
+✔ failed persistence leaves mapping transcript and identifier unchanged (3.999145ms)
+✔ map undo and another identification cannot revive name or profile (3.898808ms)
+✔ undo restores from the ordered action log when transcript rows carry no history (7.85391ms)
+✔ only post-final corrections record the changed-after-final marker (4.384447ms)
+✔ migrating a current-tip note keeps every undo action without duplicating row events (14.275409ms)
+✔ legacy split and recognition events order with cloud adoption without losing either action (5.176925ms)
+✔ migrated row-only correction names its affected row for transcript history (5.797899ms)
+✔ older correction on different target waits for newest action (8.752267ms)
+✔ older correction on same cluster target is refused (4.595327ms)
+✔ cluster undo restores only its run mapping (5.53481ms)
+✔ same-target undo uses event order when the clock moves backward (2.090721ms)
+✔ an early correction survives 55 later corrections to other rows (675.85254ms)
+✔ a cloud label change preserves the local event and label without conflict (13.941151ms)
+✔ owner can correct a 650-row cluster and undo it from one indexed event (206.494821ms)
+✔ owner can correct a 500-row selection without filling first-event history (42.573347ms)
+✔ an oversized action rejects without changing the transcript or action log (526.34502ms)
+✔ undoing an old run never replaces the active run cache with its historical name (3.309336ms)
+[WARN] speaker-embeddings cluster voice unavailable { speaker: 'speaker_a', error: 'onnx worker request timeout' }
+✔ each cluster's voice comes from its three longest segments of 1.5 s or more (86.745944ms)
+✔ short voiced turns are concatenated into one cluster vector (23.545982ms)
+✔ concatenated silent turns do not become a speaker vector (51.948922ms)
+✔ only the audio each voice uses is read, never the whole WAV (88.734578ms)
+✔ a segment longer than 8 s is embedded from its last 8 s (20.55778ms)
+✔ a cluster whose voice fails leaves the other clusters' voices intact (51.776542ms)
+✔ a cancel between clusters stops before the next cluster (55.204297ms)
+✔ a cancelled upload stops before extracting voices (1.368244ms)
+✔ an extract arms an idle unload that releases the speaker session, then the worker (531.154436ms)
+✔ each extract restarts the idle window (418.168608ms)
+✔ extracts queued together leave a single idle timer (537.884234ms)
+✔ a failed extract still arms the idle unload (7.587028ms)
+✔ an extract in flight holds off the idle unload until it finishes (417.276086ms)
+✔ a segment too short to embed neither loads the model nor arms the timer (20.171603ms)
+✔ unload waits for an in-flight extract and a racing extract reloads after release (208.616459ms)
+✔ worker serializes speaker unload behind in-flight native inference (177.41928ms)
+✔ reloads after the shared worker restarts (477.556388ms)
+✔ a failed idle unload is logged and the next extract still reloads (773.295342ms)
+ℹ tests 50
+ℹ suites 0
+ℹ pass 50
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6830.868176

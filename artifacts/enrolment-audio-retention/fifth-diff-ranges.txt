@@ -1,0 +1,50 @@
+diff --git a/src/helpers/meetingAudioStore.js b/src/helpers/meetingAudioStore.js
+@@ -3 +3 @@ const path = require("path");
+@@ -6 +6 @@ const { getFFmpegPath } = require("./ffmpegUtils");
+@@ -14,0 +15,9 @@ const CODEC_TIMEOUT_MS = 5000;
+@@ -170 +179 @@ class MeetingAudioStore {
+@@ -582 +591 @@ class MeetingAudioStore {
+@@ -586,4 +595 @@ class MeetingAudioStore {
+@@ -590,0 +597,18 @@ class MeetingAudioStore {
+diff --git a/src/helpers/secretCrypto.js b/src/helpers/secretCrypto.js
+@@ -50 +50 @@ function _loadMasterKeyBackup() {
+@@ -70 +70,2 @@ function _initKeychain() {
+@@ -87 +88 @@ function _initKeychain() {
+@@ -89 +90 @@ function _ensureInit() {
+@@ -100,0 +102,8 @@ function _ensureInit() {
+@@ -147 +156,6 @@ function encryptBytes(bytes) {
+@@ -192 +206,9 @@ function clearDeviceKey() {
+diff --git a/src/helpers/voiceEnrollment.js b/src/helpers/voiceEnrollment.js
+@@ -218 +218 @@ function provenanceCounts(db, profileId) {
+@@ -223 +223 @@ function provenanceCounts(db, profileId) {
+diff --git a/src/helpers/voiceEnrollmentRecovery.js b/src/helpers/voiceEnrollmentRecovery.js
+@@ -2 +2 @@ const exemplarAudio = require("./voiceExemplarAudio");
+@@ -11 +11,2 @@ const pending = `(p.state IS NULL OR p.state = 'pending_recovery' OR
+@@ -123,4 +124,5 @@ function start(
+@@ -128 +130 @@ function start(
+@@ -136,5 +138,3 @@ function start(
+@@ -142 +142,8 @@ function start(
+@@ -173,3 +180 @@ function start(
+@@ -178 +183,8 @@ function start(
+@@ -182,0 +195,4 @@ function start(
+@@ -184,3 +200,2 @@ function start(
+@@ -188 +203 @@ function start(
+@@ -190,0 +206,11 @@ function start(
+@@ -218 +244 @@ function start(
+@@ -224 +250,5 @@ function start(
+@@ -266,0 +297,3 @@ function start(
+@@ -309 +342,4 @@ function start(
+diff --git a/src/helpers/voiceRecordingIdentity.js b/src/helpers/voiceRecordingIdentity.js
+@@ -24,0 +25,3 @@ function open(db) {
+@@ -27,0 +31,22 @@ function open(db) {
+@@ -49,10 +74 @@ function classifyEvidence(db, sample, { store = null, record = false, unavailabl
+@@ -98 +114 @@ function overlapsRecording(db, sample, note, store, track, start, end) {
+diff --git a/test/helpers/secretCryptoBackup.test.js b/test/helpers/secretCryptoBackup.test.js
+@@ -108,0 +109,31 @@ test('a genuinely unavailable binary key has a distinct non-corruption error', t
+diff --git a/test/helpers/voiceExemplarAudio.test.js b/test/helpers/voiceExemplarAudio.test.js
+@@ -329 +329 @@ test("fourth run: retry budget persists across restart and ends as recovery_fail
+@@ -351 +351 @@ test("fourth run: retries preserve a classified identity and reject replacement
+@@ -359,2 +359,11 @@ test("fourth run: retries preserve a classified identity and reject replacement
+@@ -364,0 +374,222 @@ test("fourth run: retries preserve a classified identity and reject replacement
+diff --git a/test/helpers/voiceRecordingIdentity.test.js b/test/helpers/voiceRecordingIdentity.test.js
+@@ -114,0 +115,24 @@ test("upgrading the provenance check preserves classifications and accepts recov

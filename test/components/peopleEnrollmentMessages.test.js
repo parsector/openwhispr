@@ -4,6 +4,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const expected = {
+  exemplar_key_unavailable:
+    "The audio encryption key is unavailable. No exemplar was saved. Restore access to the key and try again.",
   poor_audio: "This audio is unsuitable for a voice sample. Choose another span.",
   echo_audio: "This audio echoes the other track. Choose another span.",
   candidate_unavailable: "This candidate changed or was already reviewed. Refresh the list.",
@@ -31,6 +33,14 @@ for (const locale of ["en", "ar", "de", "es", "fr", "it", "ja", "pt", "ru", "zh-
       fs.readFileSync(path.join(__dirname, `../../src/locales/${locale}/translation.json`), "utf8")
     );
     const messages = translation.people.enrollmentErrors;
+    assert.ok(translation.people.exemplarPlaybackKeyUnavailable);
+    assert.ok(translation.people.legacyRecoveryFailed);
+    assert.notEqual(
+      translation.people.exemplarPlaybackKeyUnavailable,
+      messages.exemplar_key_unavailable
+    );
+    assert.match(translation.meetingAudio.permanentStorage, /\{\{used\}\}/);
+    assert.match(translation.meetingAudio.permanentStorage, /\{\{clips\}\}/);
     assert.deepEqual(Object.keys(messages).sort(), Object.keys(expected).sort());
     assert.equal(new Set(Object.values(messages)).size, Object.keys(expected).length);
     if (locale === "en") assert.deepEqual(messages, expected);

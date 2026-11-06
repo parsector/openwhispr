@@ -1,0 +1,7 @@
+mixed legacy+durable: {"cleanSpans":3,"meetings":1,"usable":false}
+unknown provenance: {"identities":[null,null],"cleanSpans":3,"meetings":0,"usable":false,"vectorBytes":0}
+legacy merge/reset/undo/undo: {"merge":true,"reset":true,"undoReset":true,"undoMerge":true,"display_name":"Alex","vectorBytes":0,"sample_count":0,"mappingRestored":true}
+(node:1298851) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///opt/data/dev/worktrees/openwhispr-enrolment-audio/src/helpers/sourceFidelity.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /opt/data/dev/worktrees/openwhispr-enrolment-audio/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

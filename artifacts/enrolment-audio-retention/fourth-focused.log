@@ -1,0 +1,859 @@
+✔ production codec spawns have deadlines; a stalled process is killed and the next decode succeeds (454.538549ms)
+ℹ real stalled child: timeout=30ms signal=SIGKILL; next decode=48000 PCM bytes; all production spawn deadlines=5000ms
+✔ audio store uses injected cipher, codec, and directory (73.596675ms)
+✔ interrupt, repair encrypted tracks, retrieve two arbitrary exact-duration spans (229.623668ms)
+✔ expiry and explicit deletion remove audio and derived voice, retain corrected transcript (66.216736ms)
+✔ stored meeting audio survives restart, exports on request, and deletion makes it unplayable (30.077436ms)
+✔ budget evicts the oldest recording and keep only exempts age expiry (2401.235868ms)
+✔ missing encryption key fails closed without a plaintext file (3.07512ms)
+✔ a manifest cannot redirect deletion or evict another note (60.700304ms)
+✔ symlink chunks are never read or followed during deletion (17.992794ms)
+✔ deletion removes unindexed tails and repair never resurrects tombstones (19.451165ms)
+✔ a failed unlink is reported and a later delete retries every owned chunk (19.316411ms)
+✔ one corrupt chunk does not prevent repair of a later meeting (70.04175ms)
+✔ device erasure drops live buffers and ciphertext; a reused note id cannot reach old audio (22.766624ms)
+✔ physical database reset leaves no recording for reused note one (55.431794ms)
+✔ deletion and device purge notify every window to discard playback (17.64716ms)
+✔ a replaced key leaves existing ciphertext and its manifest intact (18.535016ms)
+[INFO][database] People identity backfill complete { created: 5 }
+✔ permanent note deletion retires its correction and a trashed note says so (218.591386ms)
+✔ a local note with mapping history stays in trash until its mapping is undone (165.761034ms)
+✔ local folder deletion retires note corrections and exposes older undo (204.210976ms)
+✔ deleting one note retires a multi-note global rename without stranding older undo (270.488964ms)
+✔ undoing a correction in trash restores the note before changing its transcript (216.654086ms)
+✔ unavailable note markers cannot strand an older person action (226.076911ms)
+✔ deletion removes unmapped name-only biometric bytes from clear snapshots (186.099179ms)
+✔ deleted identity names are purged from persisted history across restart (201.903833ms)
+✔ history compacts 200 renames and displays the newest undoable action (502.581362ms)
+✔ people list counts notes and segments and flags near duplicates and used once (180.645748ms)
+✔ calendar and manual attendees become identity-only people, deduped against a speaker email (204.180934ms)
+✔ upgrade backfills three meeting notes once and People finds picker contacts by name and email (215.462306ms)
+✔ one attendee across two meetings is one person with two meetings (164.487584ms)
+✔ picker-only contacts keep merge undo and explicit deletion across restart (195.386667ms)
+✔ People searches every linked picker name and email when contacts share an identity (157.048727ms)
+✔ naming a speaker reuses an attendee identity and never names other rows (244.237709ms)
+✔ a correction rejects a deleted profile id inside its transaction (147.06793ms)
+✔ deleting an attendee identity hides old attendance until a new meeting registers them (276.156192ms)
+✔ an attendee-only person can be renamed and merged with undo (182.211163ms)
+✔ rename changes labels across notes, keeps locks, and undo restores labels (158.082712ms)
+✔ merge preserves survivor embedding, rewrites pinned rows, and restores loser on undo (186.702653ms)
+✔ a user locked Unknown stays Unknown when its old cluster is merged or deleted (161.43609ms)
+✔ merge counts only owned rows across runs, duplicate names, and soft-deleted notes (133.002821ms)
+✔ deletion clears suggestion-only notes and counts them (160.809282ms)
+✔ deleting a person invalidates name-only correction and legacy restores (124.877071ms)
+✔ deleting a person removes every row record for a name-only multi-row correction (141.904132ms)
+✔ clear voice deletes biometrics irreversibly and undo restores mappings only (174.673428ms)
+✔ reset and delete erase owned note embeddings, including soft-deleted notes (168.283723ms)
+✔ reset owns name-only note voice evidence when the name is unique (181.908697ms)
+✔ persistent action history stays ordered across another database manager and cancelled previews (148.799892ms)
+✔ global history distinguishes identical note-scoped adoption ids (176.530226ms)
+✔ a reset with no notes cannot undo after a later clear (127.901732ms)
+✔ delete allocates new unknown numbers and cannot restore the person (149.00523ms)
+✔ deleting a person removes their history and reports deleted references honestly (125.57038ms)
+✔ deleting one of two people with the same name leaves unattributed rows alone (143.024452ms)
+✔ reset voice removes embedding and samples but keeps name and labels (148.971104ms)
+✔ reset voice with no notes can be undone (125.593714ms)
+✔ clear voice evidence keeps identities, transcript labels, and action history, then allows reassignment (179.649972ms)
+✔ deleting after a global clear removes saved voice evidence and blocks its undo (132.673229ms)
+✔ deleting a merge survivor invalidates a zero-note identity restore (144.264942ms)
+✔ deleting after a zero-note clear counts and invalidates its saved history (139.705492ms)
+✔ person actions share ordered note history with an in-note correction (130.179706ms)
+✔ changed preview does not apply a wider action (163.92057ms)
+✔ naming a new speaker creates a person without voice training (131.700787ms)
+✔ rename, merge, and reset log in order around a note correction and undo in reverse (154.023483ms)
+✔ cross-note review defaults to flagged rows and a person filter finds all their rows (144.574992ms)
+✔ review rows sort by note date descending, then row position descending (157.542824ms)
+✔ a soft-deleted note is rewritten and logged so restoring it cannot revive a discarded name (137.457851ms)
+✔ reports a change when a retention period is shortened (2.840906ms)
+✔ is idempotent when both values are unchanged — dual-window mount sync (0.415053ms)
+✔ keeps the current value when an incoming value is missing or unusable (0.429636ms)
+✔ only the main renderer can replace process-global retention settings (0.618932ms)
+✔ no sweep runs before the renderer has synced the persisted settings (1101.659902ms)
+✔ the first sync sweeps even when the user's settings match the defaults (0.926649ms)
+✔ a disabled retention setting reaches the sweep before it can delete (0.691268ms)
+✔ carries the effective local-history switch, and reports it changing (0.695934ms)
+✔ carries whether the local-history policy has resolved, and reports it changing (0.856355ms)
+[WARN][secretCrypto] OS keychain unavailable — falling back to safeStorage { error: 'locked', platform: 'linux' }
+[INFO][secretCrypto] recovered master key from safeStorage backup {}
+[WARN][secretCrypto] OS keychain unavailable — falling back to safeStorage { error: 'locked', platform: 'linux' }
+✔ an unreadable or missing Keychain entry recovers the existing backup without replacing it (35.784041ms)
+✔ device erasure removes the Keychain key and its on-disk backup (56.018058ms)
+✔ a genuinely unavailable binary key has a distinct non-corruption error (3.498922ms)
+✔ purges local transcriptions past the retention window and keeps the rest (205.800016ms)
+✔ tombstones synced transcriptions instead of deleting them so the cloud copy is removed too (153.149045ms)
+✔ ignores rows that are already tombstoned (138.75901ms)
+✔ retention purges analytics counters on the same schedule as transcripts (117.59951ms)
+review cache benchmark: cold 20 span resolutions / 183.6 ms; warm 0 / 7.0 ms
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"fb5d933010a8515c81b1017796c154bd5a02e9d66bcf5978a83bee94d283b928","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"e79a3a854d731b667208c51e573035800b70cea302d9afd0e3597fa7c03b9d87","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"candidate_unavailable","noteId":1,"personId":1,"candidateId":"e79a3a854d731b667208c51e573035800b70cea302d9afd0e3597fa7c03b9d87","statement":"recheck candidate and recording"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"267f5e5363dac10bd5a77349bef546835c51d74f40bb8d5c66b149218509d863","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"1f2111988a51e10a4eeb18c78ab1de544adf34f818a39129a3df1f8c2a744a99","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"already_approved","noteId":1,"personId":1,"candidateId":"1733c1fe4a445ef1ca2adad23bfa4f29ec20ba17888435f9a99ae862b7489c43","statement":"recheck candidate and recording"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"person_or_meeting_changed","noteId":1,"personId":1,"candidateId":"cfc3b7848cdd68765aea13d943495be40528d130853744d7b78163c312c8ca4d","statement":"recheck candidate and recording"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"database_busy","noteId":1,"personId":1,"candidateId":"42e3a592e8970ee56b658597560e77b343aa35e5f739cdada52eccadb072c01f","statement":"INSERT INTO voice_exemplars"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"constraint_failed","noteId":1,"personId":1,"candidateId":"756d378b84016ebc1217203fc2b642a778bb05984cb0f7df450d5176240f795c","statement":"INSERT INTO voice_exemplars"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"span_mismatch","noteId":1,"personId":1,"candidateId":"59d5c54e4a5076f1d2ea2534db73547656307610669e6bdead487acab85abf68","statement":"recheck candidate and recording"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"echo_audio","noteId":1,"personId":1,"candidateId":"3ff6bd1795aba0f9b362f8083b24d68bf4f5c70a2a4d92ef6f2570409128d29f","statement":"check other audio track for echo"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"61fb0563fb31e30c73232fdb645222128dd1026078f6848c3820b52995716a96","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"cfa0a210ab31ebd6b8baaec18ebed95505f2c2e14826b3aad47067492405cd95","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"257f2d4c360dc53b03300a15c700d10fe039af033ac72590406a1032e0c1ae7b","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"dd789663c5ee70d5b7a2875725610470f442934441b2c0f3e5b6f20b701324da","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"poor_audio","noteId":1,"personId":1,"candidateId":"2831e96f1ac202ef6f0da009f3b20c206cb2210ea61d0ac2eb562d4225c571ba","statement":"check audio suitability"}
+✔ all voice guard thresholds carry the same uncalibrated label (43.30865ms)
+✔ decision timing emits one structured debug line after renderer refresh (3.314585ms)
+✔ review eligibility matches enrolment after owner labels, and changes when audio expires (448.524229ms)
+✔ review and enrolment use the whole shared span, echo guard, and sample cap (208.027241ms)
+✔ a retained legacy row without a persisted span is offered for review (243.692861ms)
+✔ focused candidate agrees with the scan and falls back after a revision change (132.69773ms)
+✔ enrolment facts cache invalidates for edits, audio loss, expiry and rules changes (174.139081ms)
+✔ listing, repeated play, complete and approve resolve a span only during the listing (217.601152ms)
+✔ voice query indexes exist on a fresh database and return after a version 3 upgrade (180.103234ms)
+✔ review cache recomputes only edited notes and keeps the person cap live (190.612837ms)
+✔ review cache invalidates for removed and expired audio and a rules-version bump (154.836671ms)
+✔ twenty-recording review benchmark preserves ordering and grouped reasons on a warm open (467.892849ms)
+✔ fresh identity stays unenrolled; approval needs playback; rejection is durable (149.472492ms)
+✔ a rejected exact span from before shared resolution is not offered again (156.758804ms)
+✔ a row corrected to this person is offered, while Unknown and another person are not (143.553549ms)
+✔ empty enrolment reports short, expired, and two-person rows separately (149.331613ms)
+✔ approval requires server-observed playback completion for the same candidate revision (130.37192ms)
+✔ a rolled-back approval reports its statement and permits retry with the completed listen (174.958978ms)
+✔ a second Play replaces the completed listening proof (197.776936ms)
+✔ an expired proof refuses approval and exposes its deadline to the listener (137.119217ms)
+✔ a candidate already saved is reported as approved (151.235078ms)
+✔ a changed meeting is distinguished from an ordinary changed candidate (141.482079ms)
+✔ a busy database refuses save without consuming completed playback (159.083154ms)
+✔ a schema constraint refuses save without consuming completed playback (195.580338ms)
+✔ a span whose recording changed reports the mismatch (135.11425ms)
+✔ echo from the other track refuses approval (157.134188ms)
+✔ elapsed time and a forged completion cannot replace audible playback in the requesting window (154.05265ms)
+✔ three approved corrected spans across two recordings graduate without naming rows; a later correction demotes (244.308002ms)
+✔ three legacy spans across two labelled meetings graduate only after each full review (266.338733ms)
+✔ cloud label adoption demotes a profile backed by changed rows (264.371974ms)
+✔ a direct transcript attribution change invalidates contributing evidence (188.342737ms)
+✔ changing a contributing speaker mapping demotes the old identity (178.620072ms)
+✔ two spans in one meeting stay provisional; an odd approved vector is surfaced (187.342294ms)
+✔ overlapping rows cannot count the same audio twice (132.992611ms)
+✔ reset and clear voice data remove approved samples; deleted audio cannot leave an offer (136.298738ms)
+✔ enrolment decisions undo in the same ordered action history (112.747218ms)
+✔ deleting recording audio preserves approved audio and vectors and blocks recording-owned undo (195.857429ms)
+✔ retention expiry makes a persisted review fact stale before the audio sweep (133.704297ms)
+✔ deleting source audio scrubs older clear-voice embedding snapshots (119.656687ms)
+✔ fresh install can delete its first recording before any enrolment action (116.440105ms)
+✔ note FK deletion preserves a profile and its person-owned approved meetings (187.148331ms)
+✔ audio deletion preserves all four durable samples and profile eligibility (240.168563ms)
+✔ hard note deletion scrubs note-owned actions and preserves durable audio and vectors (122.525594ms)
+✔ merging two approved voices preserves samples and flags the mixed profile (215.108214ms)
+✔ merge and reset retain rejected candidate tombstones (114.514764ms)
+✔ merge does not reoffer transferred spans and restores source ownership after recording deletion and undo (161.187875ms)
+✔ renaming a person keeps approved acoustic provenance clean (158.658477ms)
+✔ overlapping speech is not offered and clipped audio cannot be approved (122.100333ms)
+[ERROR] ERROR: Legacy voice recovery queue stopped {
+  "reason": "The database connection is not open"
+} voice-enrollment
+[ERROR] ERROR: Legacy voice recovery queue stopped {
+  "reason": "The database connection is not open"
+} voice-enrollment
+[ERROR] ERROR: Legacy voice recovery queue stopped {
+  "reason": "The database connection is not open"
+} voice-enrollment
+[ERROR] ERROR: Legacy voice recovery queue stopped {
+  "reason": "The database connection is not open"
+} voice-enrollment
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 5,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 5,
+  attempted: 5,
+  passes: 3,
+  maxPassItems: 2,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: constructor returns with recovery queued and yields between capped passes (628.707381ms)
+ℹ startup complete: queued=5 clips=0 protected=1
+ℹ bounded completion: recovered=5 passes=3 maxPassItems=2 heartbeats=5
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 2,
+  passes: 2,
+  maxPassItems: 1,
+  failures: [
+    {
+      sampleId: '79a9ccb4c5565b34619576c3cf1cbc91b2490eee5037719ca056e766b686e529',
+      reason: 'decoder_timeout',
+      attempts: 1,
+      state: 'pending_recovery'
+    }
+  ],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: decoder timeout retries and succeeds without re-review (685.279038ms)
+ℹ decoder-timeout then success: realProcessTimeout=true attempts=2 recovered=1 bytesEqual=true unrecoverable=0
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 2,
+  passes: 2,
+  maxPassItems: 1,
+  failures: [
+    {
+      sampleId: '76d64736d023610c5805f08272e5907a2cb60845cf1127e8663c3e41c989696f',
+      reason: 'decoder_error',
+      attempts: 1,
+      state: 'pending_recovery'
+    }
+  ],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: decoder ENOENT is temporary and retries (315.499533ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 2,
+  passes: 2,
+  maxPassItems: 1,
+  failures: [
+    {
+      sampleId: 'ec7a4f94bfbdbcd371c0a44e805e7485db9d180de8b034f6e8d3a04ba5ccc0ce',
+      reason: 'decoder_error',
+      attempts: 1,
+      state: 'pending_recovery'
+    }
+  ],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: decoder EBUSY is temporary and retries (288.762056ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 2,
+  passes: 2,
+  maxPassItems: 1,
+  failures: [
+    {
+      sampleId: 'd6d031a6349bde7fa523e2b4b795d2c76161f7a279a80be22d4c7e88f2e9c2b6',
+      reason: 'decoder_error',
+      attempts: 1,
+      state: 'pending_recovery'
+    }
+  ],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: decoder EAGAIN is temporary and retries (309.011533ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 2,
+  passes: 2,
+  maxPassItems: 1,
+  failures: [
+    {
+      sampleId: 'e8a6b3986e3778459d7ebcc04263279bd98058d99ca6d32bc9f10a04cb4ac3b4',
+      reason: 'EIO',
+      attempts: 1,
+      state: 'pending_recovery'
+    }
+  ],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: transient chunk IO is retried instead of classified as missing audio (239.553714ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 2,
+  passes: 2,
+  maxPassItems: 1,
+  failures: [
+    {
+      sampleId: '49cb5563c96316ebd986ee9eee076ed582dab2ac1da0eb6373a793be1413ac09',
+      reason: 'EIO',
+      attempts: 1,
+      state: 'pending_recovery'
+    }
+  ],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: transient manifest IO is retried instead of classified as missing audio (249.810435ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 2,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 2,
+  attempted: 2,
+  passes: 2,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: eviction protects later pages and releases each completed source (342.680061ms)
+ℹ eviction protection: queuedSources=2 evicted=0; after first classification: protected=1 evictable=1; recovered=2
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 1,
+  resolved: 0,
+  attempted: 3,
+  passes: 3,
+  maxPassItems: 1,
+  failures: [
+    {
+      sampleId: 'b4056843a9a05316eff057faca626e147d103dc441546c447e7a2c62815468cc',
+      reason: 'decoder_error',
+      attempts: 1,
+      state: 'pending_recovery'
+    },
+    {
+      sampleId: 'b4056843a9a05316eff057faca626e147d103dc441546c447e7a2c62815468cc',
+      reason: 'decoder_error',
+      attempts: 2,
+      state: 'pending_recovery'
+    },
+    {
+      sampleId: 'b4056843a9a05316eff057faca626e147d103dc441546c447e7a2c62815468cc',
+      reason: 'decoder_error',
+      attempts: 3,
+      state: 'recovery_failed'
+    }
+  ],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: retry budget persists across restart and ends as recovery_failed (333.501951ms)
+ℹ budget exhausted: state=recovery_failed attempts=3 reason=decoder_error restartAttempts=0 retention=expired
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 1,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 2,
+  passes: 2,
+  maxPassItems: 1,
+  failures: [
+    {
+      sampleId: 'd0f4c6a373d7686c12bad6f65e2f33829b76d6478a2b2adb095add3cbc6bb906',
+      reason: 'decoder_error',
+      attempts: 1,
+      state: 'pending_recovery'
+    }
+  ],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: retries preserve a classified identity and reject replacement audio (297.105979ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 1,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 1,
+  passes: 1,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: valid-key ciphertext corruption is terminal and releases retention (304.556211ms)
+ℹ corrupt ciphertext + valid key: {"state":"unrecoverable","reason":"audio_corrupt"} deferred=0 retention=expired chunkExists=false
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 1,
+  passes: 1,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: missing key stays pending and protected, then retries after unlock (296.341792ms)
+ℹ missing key: state=pending_recovery attempts=1 deferred=1 retained=complete recognitionProfiles=0
+ℹ key unlocked: persistedBackoff=true recovered=1 deferred=0
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 1,
+  resolved: 0,
+  attempted: 3,
+  passes: 3,
+  maxPassItems: 1,
+  failures: [
+    {
+      sampleId: 'df0bfc5294917d38df226109214332e96afb624ca4cb1cdf7659c6d73c369977',
+      reason: 'audio_key_unavailable',
+      attempts: 1,
+      state: 'pending_recovery'
+    },
+    {
+      sampleId: 'df0bfc5294917d38df226109214332e96afb624ca4cb1cdf7659c6d73c369977',
+      reason: 'audio_key_unavailable',
+      attempts: 2,
+      state: 'pending_recovery'
+    },
+    {
+      sampleId: 'df0bfc5294917d38df226109214332e96afb624ca4cb1cdf7659c6d73c369977',
+      reason: 'audio_key_unavailable',
+      attempts: 3,
+      state: 'recovery_failed'
+    }
+  ],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: a permanently missing key exhausts honestly and never creates a clip (250.0814ms)
+ℹ missing key budget: {"state":"recovery_failed","reason":"audio_key_unavailable","recovery_attempts":3} clips=0 retention=expired
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 1,
+  passes: 1,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: cancellation aborts an active decoder and queued work can resume (379.649758ms)
+ℹ cancel: decoderAborted=true clips=0; resume: recovered=1
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 1,
+  passes: 1,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ fourth run: revoking approval during decoding cannot resurrect its clip (285.478972ms)
+✔ third run: legacy-only unrecognised evidence cannot return a recognition profile (160.237018ms)
+ℹ unrecognised-evidence recognition: {"usable":false,"resolvedBytes":0,"recognitionProfiles":0,"provisionalProfiles":0}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 1,
+  maxPassItems: 3,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ third run: unresolved evidence stays pending through three scans, deletion and restart (386.740939ms)
+ℹ three scans + deletion + restart: [{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false}]
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 1,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 2,
+  passes: 1,
+  maxPassItems: 2,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ third run: startup recovers legacy approval bytes before retention and is idempotent (343.180282ms)
+ℹ startup legacy recovery: {"report":{"recovered":1,"unrecoverable":1,"recoveryFailed":0,"resolved":1,"attempted":2,"passes":1,"maxPassItems":2,"failures":[],"pendingRecovery":0,"deferredNotes":[]},"bytesEqual":true,"clips":1}
+ℹ second startup: {"recovered":0,"unrecoverable":0,"recoveryFailed":0,"resolved":0,"attempted":0,"passes":0,"maxPassItems":0,"failures":[],"pendingRecovery":0,"deferredNotes":[]}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 20,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 20,
+  attempted: 20,
+  passes: 1,
+  maxPassItems: 20,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ third run: startup recovers approvals even at the sample cap (626.876542ms)
+ℹ startup at cap: {"recovered":20,"equalClips":20}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 3,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 3,
+  attempted: 3,
+  passes: 1,
+  maxPassItems: 3,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ third run: startup restores a graduated legacy profile without re-review (472.101415ms)
+ℹ graduated legacy startup: {"recovered":3,"meetings":3,"cleanSpans":3,"usable":true,"profiles":1}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 1,
+  passes: 1,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ third run: temporary key loss defers recovery and holds source audio before retention (1238.24098ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 1,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 0,
+  passes: 1,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ third run: pending clip resolves once from its genuine manifest, never from scans (282.376143ms)
+✔ third run: calibration cannot reuse a pending or unrecoverable approval through its transcript centroid (187.075704ms)
+ℹ calibration fallback: {"pendingRows":0,"unrecoverableRows":0,"profiles":0}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ approved exemplar bytes and row survive a retention sweep past the window and restart (244.332795ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ exemplar survives re-diarisation, hard note deletion and note-id reuse (303.702189ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ playback, candidate resolution and calibration prefer approved exemplars to expired note audio (202.759023ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ a graduated person remains matchable after every source meeting expires and is deleted (400.906676ms)
+✔ approval copies the proven playback bytes without reading or re-encoding the span again (192.987063ms)
+✔ opening the exemplar schema preserves the existing migration version and uses only person ownership (139.83237ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ delete person removes exemplar ciphertext and vectors without an orphan blob (235.836619ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 1,
+  passes: 1,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ mixed legacy and durable spans from one recording cannot graduate or split centroid votes (467.656301ms)
+ℹ mixed legacy+durable: {"cleanSpans":3,"meetings":1,"approvedSpans":3,"conflict":false,"usable":false,"pendingRecovery":0,"recoveryFailed":0,"unrecoverable":0,"legacyRecovered":1,"requiredSpans":3,"requiredMeetings":2}
+ℹ unknown provenance: {"cleanSpans":0,"meetings":0,"approvedSpans":4,"conflict":false,"usable":false,"pendingRecovery":4,"recoveryFailed":0,"unrecoverable":0,"legacyRecovered":1,"requiredSpans":3,"requiredMeetings":2,"vectorBytes":0}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ legacy merge ancestry is erased through reset and both undos (mapped=false) (183.238439ms)
+ℹ legacy merge/reset/undo/undo: {"mapped":false,"merge":true,"reset":true,"undoReset":true,"undoMerge":true,"display_name":"Alex","vectorBytes":0,"sample_count":0}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ legacy merge ancestry is erased through reset and both undos (mapped=true) (208.204286ms)
+ℹ legacy merge/reset/undo/undo: {"mapped":true,"merge":true,"reset":true,"undoReset":true,"undoMerge":true,"display_name":"Alex","vectorBytes":0,"sample_count":0}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ startup repairs c42ba9e09 removal without an older ownership snapshot when erase intent survives (221.466418ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 1,
+  attempted: 1,
+  passes: 1,
+  maxPassItems: 1,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"candidate_unavailable","noteId":1,"personId":1,"candidateId":"17fab25a861542a7389324781ebc644079fc6556a77d207c2d55a5ecc2e4c7af","statement":"recheck candidate and recording"}
+✔ startup repairs c42ba9e09 irreversible removal snapshots and preserves reversible legacy removal (388.056097ms)
+ℹ legacy startup repair: {"historyAdditions":110,"markerPresent":false,"removedVectorRetained":false,"historicalVectorRetained":false,"liveDurableSamples":0}
+ℹ reversible undo: {"exactVectorRestored":true,"vectorBytes":2048,"historyAdditions":110}
+✔ durable-only intervals block resegmented eligibility, scanning, focused approval and calibration (195.073409ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ clear all voice data erases exemplar blobs and vector snapshots while preserving identity, labels and action log (220.061715ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ reset then undo and older rename undo restore identity and mappings without erased biometrics (345.846184ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ irreversible sample removal scrubs its vector from older snapshots and cannot be undone (197.249298ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ merge transfers enrollment history ownership and survivor deletion erases source historical vectors (remove first: false) (208.35129ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ merge transfers enrollment history ownership and survivor deletion erases source historical vectors (remove first: true) (207.484435ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+✔ permanent ciphertext usage is separate from the recording budget and survives eviction and merge (220.715065ms)
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  recoveryFailed: 0,
+  resolved: 0,
+  attempted: 0,
+  passes: 0,
+  maxPassItems: 0,
+  failures: [],
+  pendingRecovery: [Getter],
+  deferredNotes: [Getter]
+}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"exemplar_key_unavailable","noteId":1,"personId":1,"candidateId":"9c65b814d51959ccc6a502058b12026cfe3f86803a6d817c1e7d84864b6e71f3","statement":"BEGIN voice enrollment decision"}
+✔ orphan sweep on open removes an unowned encrypted exemplar blob (189.965319ms)
+✔ missing encryption key fails approval closed with exemplar_key_unavailable and no plaintext write (171.471139ms)
+✔ readers ignore cached IDs, status, transcripts and sibling identities (10.585146ms)
+✔ pending identity rejects tombstones, synthesized IDs and another note's manifest (1.831713ms)
+✔ resolved and unrecoverable classifications are terminal across future manifests (1.454871ms)
+✔ overlap uses classified provenance; unresolved same-note intervals still suppress duplicates (1.392744ms)
+✔ upgrading the provenance check preserves classifications and accepts recovery_failed (2.389103ms)
+ℹ tests 177
+ℹ suites 0
+ℹ pass 177
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 18509.30639

@@ -1,0 +1,11 @@
+✔ legacy and durable evidence resolve the real recording UUID without trusting reused note IDs (57.087638ms)
+✔ pre-UUID legacy and durable evidence share immutable note identity (9.891838ms)
+✔ audio-store UUID resolution upgrades legacy provenance without attaching an old note's exemplars (12.659243ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 824.026816

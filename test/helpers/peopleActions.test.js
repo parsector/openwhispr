@@ -222,7 +222,7 @@ test('upgrade backfills three meeting notes once and People finds picker contact
   assert.ok(people.every(p => !p.hasVoice && p.segmentCount === 0));
   const attendee = people.find(p => p.email === 'kostas@example.test');
   upgraded.db.prepare('UPDATE speaker_profiles SET embedding = ?, sample_count = 1 WHERE id = ?').run(Buffer.alloc(2048, 1), attendee.id);
-  assert.equal(listPeople(upgraded).find(p => p.id === attendee.id).hasVoice, true);
+  assert.equal(listPeople(upgraded).find(p => p.id === attendee.id).hasVoice, false);
 });
 test('one attendee across two meetings is one person with two meetings', t => {
   const f = fixture(t); if (!f) return;
@@ -459,7 +459,7 @@ test('deleting a person removes every row record for a name-only multi-row corre
   const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
   assert.equal(applySpeakerCorrection(f.db, null, { type: 'undo', noteId: id, id: 'multi' }).success, false);
 });
-test('clear voice deletes note embeddings and undo restores them', t => {
+test('clear voice deletes biometrics irreversibly and undo restores mappings only', t => {
   const f = fixture(t); if (!f) return;
   const alex = f.person('Alex', 1);
   const id = f.note('voice', [{ id: 'a', speaker: 'speaker_0', speakerName: 'Alex' }], [['speaker_0', alex]]);
@@ -470,7 +470,10 @@ test('clear voice deletes note embeddings and undo restores them', t => {
   assert.equal(clear.success, true);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 0);
   assert.equal(undoClearVoiceData(f.db, clear.id).success, true);
-  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 1);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 0);
+  assert.equal(f.db.db.prepare('SELECT length(embedding) AS n FROM speaker_profiles WHERE id = ?').get(alex.id).n, 0);
+  assert.equal(f.db.db.prepare('SELECT profile_id FROM speaker_mappings WHERE note_id = ?').get(id).profile_id, alex.id);
+  assert.equal(f.rows(id)[0].speakerName, 'Alex');
 });
 test('reset and delete erase owned note embeddings, including soft-deleted notes', t => {
   const f = fixture(t); if (!f) return;
@@ -488,7 +491,7 @@ test('reset and delete erase owned note embeddings, including soft-deleted notes
   assert.equal(reset.success, true);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 1);
   assert.equal(undoPersonAction(f.db, reset.id).success, true);
-  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 3);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 1);
   assert.equal(applyPersonAction(f.db, { type: 'delete', profileId: alex.id }).success, true);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 1);
 });
@@ -504,7 +507,7 @@ test('reset owns name-only note voice evidence when the name is unique', t => {
   assert.equal(reset.success, true);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 0);
   assert.equal(undoPersonAction(f.db, reset.id).success, true);
-  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 1);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM note_speaker_embeddings').get().n, 0);
 });
 test('persistent action history stays ordered across another database manager and cancelled previews', t => {
   const f = fixture(t); if (!f) return;
@@ -591,7 +594,8 @@ test('reset voice removes embedding and samples but keeps name and labels', t =>
   assert.equal(listPeople(f.db).find(p => p.id === person.id).hasVoice, false);
   assert.equal(f.rows(note)[0].speakerName, 'Alex');
   assert.equal(undoPersonAction(f.db, result.id).success, true);
-  assert.equal(f.db.db.prepare('SELECT sample_count FROM speaker_profiles WHERE id = ?').get(person.id).sample_count, 1);
+  assert.equal(f.db.db.prepare('SELECT sample_count FROM speaker_profiles WHERE id = ?').get(person.id).sample_count, 0);
+  assert.equal(f.db.db.prepare('SELECT profile_id FROM speaker_mappings WHERE note_id = ?').get(note).profile_id, person.id);
 });
 test('reset voice with no notes can be undone', t => {
   const f = fixture(t); if (!f) return;
@@ -602,7 +606,8 @@ test('reset voice with no notes can be undone', t => {
   assert.equal(done.success, true);
   assert.equal(listPeople(f.db).find(p => p.id === person.id).hasVoice, false);
   assert.equal(undoPersonAction(f.db, done.id).success, true);
-  assert.equal(listPeople(f.db).find(p => p.id === person.id).hasVoice, true);
+  assert.equal(listPeople(f.db).find(p => p.id === person.id).hasVoice, false);
+  assert.equal(listPeople(f.db).find(p => p.id === person.id).displayName, 'Solo');
 });
 test('clear voice evidence keeps identities, transcript labels, and action history, then allows reassignment', t => {
   const f = fixture(t); if (!f) return;

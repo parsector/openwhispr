@@ -1,0 +1,221 @@
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 3,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 1,
+  pendingRecovery: 0,
+  resolved: 1,
+  failures: [
+    {
+      sampleId: '479f1ea8b55dae0994012027fa86b413e95b97584fed567b65e2af3585814dbb',
+      reason: 'legacy_audio_unavailable'
+    }
+  ],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 1,
+  pendingRecovery: 0,
+  resolved: 1,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 20,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 20,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 3,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 3,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 1,
+  resolved: 0,
+  failures: [
+    {
+      sampleId: 'efdd8b16e1e345143f2e46c1b8d47a6fbca6a623bf351a0ee806afce1a52ae62',
+      reason: 'exemplar_key_unavailable'
+    }
+  ],
+  deferredNotes: [ 1 ]
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 1,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 1,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 1,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 1,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 0,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 0,
+  failures: [],
+  deferredNotes: []
+}
+[INFO][voice-enrollment] Legacy voice recovery {
+  recovered: 1,
+  unrecoverable: 0,
+  pendingRecovery: 0,
+  resolved: 1,
+  failures: [],
+  deferredNotes: []
+}
+✔ third run: legacy-only unrecognised evidence cannot return a recognition profile (200.128427ms)
+ℹ unrecognised-evidence recognition: {"usable":false,"resolvedBytes":0,"recognitionProfiles":0,"provisionalProfiles":0}
+✔ third run: unresolved evidence stays pending through three scans, deletion and restart (473.915077ms)
+ℹ three scans + deletion + restart: [{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false}]
+✔ third run: startup recovers legacy approval bytes before retention and is idempotent (368.11057ms)
+ℹ startup legacy recovery: {"report":{"recovered":1,"unrecoverable":1,"pendingRecovery":0,"resolved":1,"failures":[{"sampleId":"479f1ea8b55dae0994012027fa86b413e95b97584fed567b65e2af3585814dbb","reason":"legacy_audio_unavailable"}],"deferredNotes":[]},"bytesEqual":true,"clips":1}
+ℹ second startup: {"recovered":0,"unrecoverable":1,"pendingRecovery":0,"resolved":1,"failures":[],"deferredNotes":[]}
+✔ third run: startup recovers approvals even at the sample cap (398.534225ms)
+ℹ startup at cap: {"recovered":20,"equalClips":20}
+✔ third run: startup restores a graduated legacy profile without re-review (442.46852ms)
+ℹ graduated legacy startup: {"recovered":3,"meetings":3,"cleanSpans":3,"usable":true,"profiles":1}
+✔ third run: temporary key loss defers recovery and holds source audio before retention (226.448227ms)
+✔ third run: pending clip resolves once from its genuine manifest, never from scans (289.466761ms)
+✔ third run: calibration cannot reuse a pending or unrecoverable approval through its transcript centroid (193.196207ms)
+ℹ calibration fallback: {"pendingRows":0,"unrecoverableRows":0,"profiles":0}
+✔ startup repairs c42ba9e09 removal without an older ownership snapshot when erase intent survives (207.815207ms)
+✔ startup repairs c42ba9e09 irreversible removal snapshots and preserves reversible legacy removal (293.655493ms)
+ℹ legacy startup repair: {"historyAdditions":110,"markerPresent":false,"removedVectorRetained":false,"historicalVectorRetained":false,"liveDurableSamples":0}
+ℹ reversible undo: {"exactVectorRestored":true,"vectorBytes":2048,"historyAdditions":110}
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3702.332288

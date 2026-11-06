@@ -1,0 +1,2 @@
+npm notice run open-whispr@1.13.0 lint
+npm notice run eslint . --max-warnings=0 && cd src && eslint . --max-warnings=0

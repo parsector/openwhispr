@@ -1,0 +1,268 @@
+[INFO][database] People identity backfill complete { created: 5 }
+✔ permanent note deletion retires its correction and a trashed note says so (144.737488ms)
+✔ a local note with mapping history stays in trash until its mapping is undone (104.857749ms)
+✔ local folder deletion retires note corrections and exposes older undo (109.804835ms)
+✔ deleting one note retires a multi-note global rename without stranding older undo (115.807491ms)
+✔ undoing a correction in trash restores the note before changing its transcript (111.565964ms)
+✔ unavailable note markers cannot strand an older person action (117.958879ms)
+✔ deletion removes unmapped name-only biometric bytes from clear snapshots (114.409496ms)
+✔ deleted identity names are purged from persisted history across restart (107.039472ms)
+✔ history compacts 200 renames and displays the newest undoable action (272.00194ms)
+✔ people list counts notes and segments and flags near duplicates and used once (111.091702ms)
+✔ calendar and manual attendees become identity-only people, deduped against a speaker email (105.907777ms)
+✔ upgrade backfills three meeting notes once and People finds picker contacts by name and email (141.994291ms)
+✔ one attendee across two meetings is one person with two meetings (107.067765ms)
+✔ picker-only contacts keep merge undo and explicit deletion across restart (124.100954ms)
+✔ People searches every linked picker name and email when contacts share an identity (109.254738ms)
+✔ naming a speaker reuses an attendee identity and never names other rows (113.589308ms)
+✔ a correction rejects a deleted profile id inside its transaction (106.209368ms)
+✔ deleting an attendee identity hides old attendance until a new meeting registers them (114.745504ms)
+✔ an attendee-only person can be renamed and merged with undo (124.005869ms)
+✔ rename changes labels across notes, keeps locks, and undo restores labels (122.331658ms)
+✔ merge preserves survivor embedding, rewrites pinned rows, and restores loser on undo (121.58089ms)
+✔ a user locked Unknown stays Unknown when its old cluster is merged or deleted (107.393565ms)
+✔ merge counts only owned rows across runs, duplicate names, and soft-deleted notes (110.935657ms)
+✔ deletion clears suggestion-only notes and counts them (113.813022ms)
+✔ deleting a person invalidates name-only correction and legacy restores (110.548021ms)
+✔ deleting a person removes every row record for a name-only multi-row correction (107.983622ms)
+✖ clear voice deletes note embeddings and undo restores them (116.031204ms)
+✔ reset and delete erase owned note embeddings, including soft-deleted notes (125.111313ms)
+✔ reset owns name-only note voice evidence when the name is unique (110.408601ms)
+✔ persistent action history stays ordered across another database manager and cancelled previews (119.814219ms)
+✔ global history distinguishes identical note-scoped adoption ids (110.146094ms)
+✔ a reset with no notes cannot undo after a later clear (107.120849ms)
+✔ delete allocates new unknown numbers and cannot restore the person (114.033819ms)
+✔ deleting a person removes their history and reports deleted references honestly (117.382531ms)
+✔ deleting one of two people with the same name leaves unattributed rows alone (119.75705ms)
+✔ reset voice removes embedding and samples but keeps name and labels (111.410501ms)
+✔ reset voice with no notes can be undone (109.306947ms)
+✔ clear voice evidence keeps identities, transcript labels, and action history, then allows reassignment (131.58794ms)
+✔ deleting after a global clear removes saved voice evidence and blocks its undo (113.017335ms)
+✔ deleting a merge survivor invalidates a zero-note identity restore (125.759414ms)
+✔ deleting after a zero-note clear counts and invalidates its saved history (108.209378ms)
+✔ person actions share ordered note history with an in-note correction (114.989927ms)
+✔ changed preview does not apply a wider action (109.001565ms)
+✔ naming a new speaker creates a person without voice training (109.891462ms)
+✔ rename, merge, and reset log in order around a note correction and undo in reverse (129.284005ms)
+✔ cross-note review defaults to flagged rows and a person filter finds all their rows (127.194159ms)
+✔ review rows sort by note date descending, then row position descending (117.144816ms)
+✔ a soft-deleted note is rewritten and logged so restoring it cannot revive a discarded name (115.734572ms)
+review cache benchmark: cold 20 span resolutions / 87.5 ms; warm 0 / 4.9 ms
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"35d217ed7835ff99077b8c78c14f0a215797f74824d540ec9d45e83872f0a446","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"32cd8124df374cad089ad4ceb008b9a94adc216b69cf737bfbe9e01acbb2cfb0","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"candidate_unavailable","noteId":1,"personId":1,"candidateId":"32cd8124df374cad089ad4ceb008b9a94adc216b69cf737bfbe9e01acbb2cfb0","statement":"recheck candidate and recording"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"22321b20e4ec217aa0a25738492e268b0d0f21492b7bbc1c0193ed981feaa443","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"06c7c6aa465f2959a3a0758af34152a6307a1fff1ab8609f815c1644a5b57482","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"already_approved","noteId":1,"personId":1,"candidateId":"2f077383e3d8d612b4322ab74f56b97c0587b3cf3e9f025c60e9210736a21593","statement":"recheck candidate and recording"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"person_or_meeting_changed","noteId":1,"personId":1,"candidateId":"bb25b9f5fe44ff00f330c6581f55b91ff783df23447f1d07609d991a26ccdcd7","statement":"recheck candidate and recording"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"database_busy","noteId":1,"personId":1,"candidateId":"05e2b45d100e8501a88ec71de5a9f02341becbe7bb70b21de18cf6561d77ae02","statement":"INSERT INTO voice_exemplars"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"constraint_failed","noteId":1,"personId":1,"candidateId":"ca5760f2c2e5078f7eddc582bdfb18c59fa7400bf874a640d88b1e8e53280146","statement":"INSERT INTO voice_exemplars"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"span_mismatch","noteId":1,"personId":1,"candidateId":"a5d109c34fd445c912b8f04fab97993ab8b851b77ac1e083e029b95edd08f5ff","statement":"recheck candidate and recording"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"echo_audio","noteId":1,"personId":1,"candidateId":"3c4eff3d88d36c155737f91f21b83279bf09cb6c399a4852a17dc21f08358c3c","statement":"check other audio track for echo"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":1,"personId":1,"candidateId":"e2701fba6f48bfcfb306174dc46aca820ed8283027838974309f11e32249eb31","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"79f1dbffd6a70051964cfdb2c57ff5ff5d14223353e334e4c65b1ae9a2df038d","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"9badca059e5694d45b33c039a771593e94d93de6dba03151fe1a518ce8ff1660","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"playback_required","noteId":null,"personId":null,"candidateId":"75ef6b8474920bfb833ce5871b3dcabaf1552da0cfa5e329aaeb557648850924","statement":"validate completed playback"}
+[WARN][voice-enrollment] Voice enrollment decision failed {"code":"poor_audio","noteId":1,"personId":1,"candidateId":"4b29bc37eb890a78873f3ef8498c34de092b26f04bd9ebd17f23ee4ec2501da4","statement":"check audio suitability"}
+✔ all voice guard thresholds carry the same uncalibrated label (3.668095ms)
+✔ decision timing emits one structured debug line after renderer refresh (2.858115ms)
+✖ review eligibility matches enrolment after owner labels, and changes when audio expires (213.182047ms)
+✔ review and enrolment use the whole shared span, echo guard, and sample cap (124.539924ms)
+✔ a retained legacy row without a persisted span is offered for review (157.751407ms)
+✔ focused candidate agrees with the scan and falls back after a revision change (114.895134ms)
+✔ enrolment facts cache invalidates for edits, audio loss, expiry and rules changes (133.583866ms)
+✔ listing, repeated play, complete and approve resolve a span only during the listing (140.539421ms)
+✔ voice query indexes exist on a fresh database and return after a version 3 upgrade (133.298608ms)
+✔ review cache recomputes only edited notes and keeps the person cap live (131.445894ms)
+✔ review cache invalidates for removed and expired audio and a rules-version bump (117.703956ms)
+✔ twenty-recording review benchmark preserves ordering and grouped reasons on a warm open (270.730241ms)
+✔ fresh identity stays unenrolled; approval needs playback; rejection is durable (116.445381ms)
+✔ a rejected exact span from before shared resolution is not offered again (113.501805ms)
+✔ a row corrected to this person is offered, while Unknown and another person are not (138.858502ms)
+✔ empty enrolment reports short, expired, and two-person rows separately (119.628422ms)
+✔ approval requires server-observed playback completion for the same candidate revision (113.954192ms)
+✔ a rolled-back approval reports its statement and permits retry with the completed listen (145.335128ms)
+✔ a second Play replaces the completed listening proof (131.372684ms)
+✔ an expired proof refuses approval and exposes its deadline to the listener (110.080468ms)
+✔ a candidate already saved is reported as approved (118.509852ms)
+✔ a changed meeting is distinguished from an ordinary changed candidate (113.543516ms)
+✔ a busy database refuses save without consuming completed playback (135.944094ms)
+✔ a schema constraint refuses save without consuming completed playback (144.169306ms)
+✔ a span whose recording changed reports the mismatch (114.544541ms)
+✔ echo from the other track refuses approval (113.121462ms)
+✔ elapsed time and a forged completion cannot replace audible playback in the requesting window (121.252756ms)
+✔ three approved corrected spans across two recordings graduate without naming rows; a later correction demotes (181.835529ms)
+✔ three legacy spans across two labelled meetings graduate only after each full review (158.906436ms)
+✔ cloud label adoption demotes a profile backed by changed rows (165.563608ms)
+✔ a direct transcript attribution change invalidates contributing evidence (170.963081ms)
+✔ changing a contributing speaker mapping demotes the old identity (166.115165ms)
+✔ two spans in one meeting stay provisional; an odd approved vector is surfaced (190.787009ms)
+✖ overlapping rows cannot count the same audio twice (133.132646ms)
+✔ reset and clear voice data remove approved samples; deleted audio cannot leave an offer (137.381756ms)
+✔ enrolment decisions undo in the same ordered action history (117.94342ms)
+✖ deleting real retained audio removes approved vectors and blocks their undo (195.21754ms)
+✔ retention expiry makes a persisted review fact stale before the audio sweep (131.407101ms)
+✔ deleting source audio scrubs older clear-voice embedding snapshots (128.470234ms)
+✔ fresh install can delete its first recording before any enrolment action (121.414927ms)
+✖ note FK deletion demotes a profile even when other approved meetings remain (164.328076ms)
+✖ audio deletion demotes a profile even when enough other samples remain (184.75927ms)
+✖ hard note deletion scrubs enrollment actions and saved vectors (120.730368ms)
+✔ merging two approved voices preserves samples and flags the mixed profile (195.674303ms)
+✔ merge and reset retain rejected candidate tombstones (118.802109ms)
+✖ merge does not reoffer transferred spans or restore a deleted survivor voice on undo (154.763204ms)
+✔ renaming a person keeps approved acoustic provenance clean (151.095985ms)
+✔ overlapping speech is not offered and clipped audio cannot be approved (120.876205ms)
+ℹ tests 96
+ℹ suites 0
+ℹ pass 88
+ℹ fail 8
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7140.837718
+
+✖ failing tests:
+
+test at test/helpers/peopleActions.test.js:462:1
+✖ clear voice deletes note embeddings and undo restores them (116.031204ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  0 !== 1
+
+      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/peopleActions.test.js:473:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:969:18)
+      at Test.postRun (node:internal/test_runner/test:1537:19)
+      at Test.run (node:internal/test_runner/test:1462:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/voiceEnrollment.test.js:49:1
+✖ review eligibility matches enrolment after owner labels, and changes when audio expires (213.182047ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'reviewed'
+  - 'audio'
+
+      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:89:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'reviewed',
+    expected: 'audio',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/voiceEnrollment.test.js:955:1
+✖ overlapping rows cannot count the same audio twice (133.132646ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'available'
+  - 'unavailable'
+
+      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:972:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'available',
+    expected: 'unavailable',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/voiceEnrollment.test.js:1006:1
+✖ deleting real retained audio removes approved vectors and blocks their undo (195.21754ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  2048 !== 0
+
+      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1037:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2048,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/voiceEnrollment.test.js:1098:1
+✖ note FK deletion demotes a profile even when other approved meetings remain (164.328076ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  1 !== 0
+
+      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1109:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/voiceEnrollment.test.js:1114:1
+✖ audio deletion demotes a profile even when enough other samples remain (184.75927ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  4 !== 3
+
+      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1125:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 4,
+    expected: 3,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/voiceEnrollment.test.js:1131:1
+✖ hard note deletion scrubs enrollment actions and saved vectors (120.730368ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  2048 !== 0
+
+      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1141:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2048,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/voiceEnrollment.test.js:1190:1
+✖ merge does not reoffer transferred spans or restore a deleted survivor voice on undo (154.763204ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  2048 !== 0
+
+      at TestContext.<anonymous> (/opt/data/dev/worktrees/openwhispr-enrolment-audio/test/helpers/voiceEnrollment.test.js:1211:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:969:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 2048,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

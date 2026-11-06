@@ -1,15 +1,34 @@
 const fs = require("fs");
 const path = require("path");
-const { randomUUID } = require("crypto");
-const { spawnSync } = require("child_process");
+const { randomUUID, createHash } = require("crypto");
+const { spawnSync, execFile } = require("child_process");
 const { getFFmpegPath } = require("./ffmpegUtils");
-const { encryptBytes, decryptBytes } = require("./secretCrypto");
+const { encryptBytes, decryptBytes, refreshAudioKey } = require("./secretCrypto");
 const enrollmentTiming = require("./voiceEnrollmentTiming");
+const { exactCoverage, durationMatches } = require("./voiceAudioIntegrity");
 
 const RATE = 24000;
 const CHUNK_SAMPLES = RATE * 5;
 const DEFAULT_BUDGET = 2 * 1024 * 1024 * 1024;
 const TRACKS = ["mic", "system"];
+const CODEC_TIMEOUT_MS = 5000;
+
+function statIfPresent(file) {
+  try {
+    return fs.lstatSync(file);
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  }
+}
+
+function audioFailure(error) {
+  if (error.code === "audio_corrupt") return { state: "corrupt", reason: "audio_corrupt" };
+  if (error.code === "ENOENT") return { state: "unavailable", reason: "audio_missing" };
+  if (error.code === "ETIMEDOUT" || error.killed)
+    return { state: "temporary_failure", reason: "decoder_timeout" };
+  return { state: "temporary_failure", reason: error.code || "audio_io_error" };
+}
 
 function writeJsonAtomic(file, value) {
   const temp = `${file}.${randomUUID()}.pending`;
@@ -46,7 +65,13 @@ function encode(pcm) {
       "ogg",
       "pipe:1",
     ],
-    { input: pcm, maxBuffer: 8 * 1024 * 1024, windowsHide: true }
+    {
+      input: pcm,
+      maxBuffer: 8 * 1024 * 1024,
+      windowsHide: true,
+      timeout: CODEC_TIMEOUT_MS,
+      killSignal: "SIGKILL",
+    }
   );
   if (result.status !== 0 || !result.stdout?.length) {
     throw new Error(
@@ -56,32 +81,61 @@ function encode(pcm) {
   return result.stdout;
 }
 
+function decodeArgs() {
+  return [
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-f",
+    "ogg",
+    "-i",
+    "pipe:0",
+    "-f",
+    "s16le",
+    "-ar",
+    String(RATE),
+    "-ac",
+    "1",
+    "pipe:1",
+  ];
+}
+
 function decode(ogg) {
-  const result = spawnSync(
-    getFFmpegPath(),
-    [
-      "-hide_banner",
-      "-loglevel",
-      "error",
-      "-f",
-      "ogg",
-      "-i",
-      "pipe:0",
-      "-f",
-      "s16le",
-      "-ar",
-      String(RATE),
-      "-ac",
-      "1",
-      "pipe:1",
-    ],
-    { input: ogg, maxBuffer: 16 * 1024 * 1024, windowsHide: true }
-  );
-  if (result.status !== 0) throw new Error("Stored audio could not be decoded");
+  const result = spawnSync(getFFmpegPath(), decodeArgs(), {
+    input: ogg,
+    maxBuffer: 16 * 1024 * 1024,
+    windowsHide: true,
+    timeout: CODEC_TIMEOUT_MS,
+    killSignal: "SIGKILL",
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0)
+    throw Object.assign(new Error("Stored audio could not be decoded"), { code: "decoder_error" });
   return result.stdout;
 }
 
-const defaultCodec = { encode, decode };
+function decodeAsync(ogg, { signal, timeout = CODEC_TIMEOUT_MS } = {}) {
+  timeout = Math.max(1, Math.min(CODEC_TIMEOUT_MS, Math.floor(timeout) || CODEC_TIMEOUT_MS));
+  return new Promise((resolve, reject) => {
+    const child = execFile(
+      getFFmpegPath(),
+      decodeArgs(),
+      {
+        encoding: "buffer",
+        maxBuffer: 16 * 1024 * 1024,
+        windowsHide: true,
+        timeout,
+        killSignal: "SIGKILL",
+        signal,
+      },
+      (error, stdout) => (error ? reject(error) : resolve(stdout))
+    );
+    child.stdin.on("error", () => {}); // Early exit is reported by execFile's callback.
+    child.stdin.end(ogg);
+  });
+}
+
+const defaultCodec = { encode, decode, decodeAsync };
 
 function wav(pcm) {
   const header = Buffer.alloc(44);
@@ -123,10 +177,11 @@ class MeetingAudioStore {
     {
       database = null,
       now = Date.now,
-      encryption = { encryptBytes, decryptBytes },
+      encryption = { encryptBytes, decryptBytes, refreshAudioKey },
       codec = defaultCodec,
       onEvicted = null,
       onChanged = null,
+      recovery = {},
     } = {}
   ) {
     this.root = root;
@@ -144,13 +199,24 @@ class MeetingAudioStore {
     this.noticeFile = path.join(root, "evictions.json");
     this.evictions = this._readJson(this.noticeFile) || [];
     this.repair();
+    // Queue work without decoding during construction. Retention consults the
+    // queue's database predicate, including sources not yet loaded into a page.
+    this.legacyRecovery =
+      this.database?.db
+        ?.prepare("SELECT 1 FROM sqlite_master WHERE name = 'voice_evidence_provenance'")
+        .get() && require("./voiceEnrollment").recoverLegacy(this.database, this, recovery);
     this.enforce();
   }
 
-  _readJson(file) {
+  cancelRecovery() {
+    this.legacyRecovery?.cancel();
+  }
+
+  _readJson(file, strictIO = false) {
     try {
       return JSON.parse(fs.readFileSync(file, "utf8"));
-    } catch {
+    } catch (error) {
+      if (strictIO && error.code && error.code !== "ENOENT") throw error;
       return null;
     }
   }
@@ -180,11 +246,11 @@ class MeetingAudioStore {
       null
     );
   }
-  _manifest(noteId) {
+  _manifest(noteId, strictIO = false) {
     this._noteId(noteId);
     const file = this._manifestPath(noteId);
     if (fs.existsSync(file) && !fs.lstatSync(file).isFile()) return null;
-    const manifest = this._readJson(file);
+    const manifest = this._readJson(file, strictIO);
     if (!manifest || manifest.noteId !== noteId) return null;
     const identity = this._noteIdentity(noteId);
     if (identity && manifest.noteIdentity !== identity) return null;
@@ -200,7 +266,8 @@ class MeetingAudioStore {
         if (manifest.tracks?.[track] && !Array.isArray(chunks)) return null;
         for (const chunk of chunks || []) this._chunkFile(noteId, chunk.file);
       }
-    } catch {
+    } catch (error) {
+      if (strictIO && error.code && error.code !== "ENOENT") throw error;
       return null;
     }
     return manifest;
@@ -387,7 +454,6 @@ class MeetingAudioStore {
         version: 1,
         noteId,
         noteIdentity: this._noteIdentity(noteId),
-        recordingId: randomUUID(),
         startedAt: this.now(),
         retentionDays: this.policy.days,
         keep: false,
@@ -482,13 +548,14 @@ class MeetingAudioStore {
       bytes: TRACKS.reduce((sum, track) => sum + (manifest.tracks?.[track]?.byteLength || 0), 0),
       tracks: manifest.tracks,
       startedAt: manifest.startedAt,
-      recordingId: manifest.recordingId ?? noteId,
+      recordingId: manifest.recordingId ?? null,
       keep: manifest.keep,
     };
     if (
       !manifest.keep &&
       ["complete", "incomplete"].includes(manifest.status) &&
-      this.now() >= manifest.startedAt + manifest.retentionDays * 86400000
+      this.now() >= manifest.startedAt + manifest.retentionDays * 86400000 &&
+      !this.legacyRecovery?.protects(noteId)
     ) {
       result.state = "expired";
       result.bytes = 0;
@@ -510,13 +577,45 @@ class MeetingAudioStore {
       } else {
         try {
           this.encryption.decryptBytes(fs.readFileSync(file));
-        } catch {
-          result.state = "key_unavailable";
-          result.reason = "Audio encryption key is unavailable";
+        } catch (error) {
+          result.state = error.code === "audio_corrupt" ? "corrupt" : "key_unavailable";
+          result.reason =
+            error.code === "audio_corrupt"
+              ? "Audio authentication failed"
+              : "Audio encryption key is unavailable";
         }
       }
     }
     return result;
+  }
+
+  recordingProvenance(noteId, sample = null) {
+    const manifest = this._manifest(noteId, true);
+    if (!manifest || !["complete", "incomplete"].includes(manifest.status)) return null;
+    const chunks = TRACKS.flatMap((track) => manifest.tracks?.[track]?.chunks || []);
+    const indexed = chunks.some((chunk) =>
+      statIfPresent(this._chunkFile(noteId, chunk.file))?.isFile()
+    );
+    if (!indexed && !this._ownedChunks(noteId).length) return null;
+    if (sample) {
+      // Diagnostic snapshot only: repair, re-encryption and chunking may change
+      // this hash while the decoded approved PCM stays identical.
+      const hash = createHash("sha256");
+      hash.update(
+        JSON.stringify([manifest.noteId, manifest.noteIdentity, manifest.recordingId, sample.track])
+      );
+      for (const chunk of manifest.tracks?.[sample.track]?.chunks || []) {
+        if (
+          chunk.startSample >= sample.end_sample ||
+          chunk.startSample + chunk.sampleCount <= sample.start_sample
+        )
+          continue;
+        hash.update(JSON.stringify(chunk));
+        hash.update(fs.readFileSync(this._chunkFile(noteId, chunk.file)));
+      }
+      return { ...manifest, hasSourceAudio: true, contentHash: hash.digest("hex") };
+    }
+    return { ...manifest, hasSourceAudio: true };
   }
 
   // Cheap listing check: validate the retained chunk coverage without decoding
@@ -526,20 +625,17 @@ class MeetingAudioStore {
     if (!manifest || !["complete", "incomplete"].includes(manifest.status)) return false;
     const state = manifest.tracks?.[track];
     if (!state || endSample > state.sampleCount || startSample < 0) return false;
-    let cursor = startSample;
+    if (!exactCoverage(state.chunks || [], startSample, endSample)) return false;
     for (const chunk of state.chunks || []) {
       const chunkEnd = chunk.startSample + chunk.sampleCount;
-      if (chunkEnd <= cursor || chunk.startSample >= endSample) continue;
-      if (chunk.startSample > cursor) return false;
+      if (chunkEnd <= startSample || chunk.startSample >= endSample) continue;
       try {
         if (!fs.existsSync(this._chunkFile(noteId, chunk.file))) return false;
       } catch {
         return false;
       }
-      cursor = Math.min(endSample, chunkEnd);
-      if (cursor === endSample) return true;
     }
-    return false;
+    return true;
   }
 
   span(noteId, track, startSeconds, endSeconds) {
@@ -555,6 +651,35 @@ class MeetingAudioStore {
   }
 
   _span(noteId, track, startSeconds, endSeconds) {
+    const steps = this._spanSteps(noteId, track, startSeconds, endSeconds);
+    let step = steps.next();
+    while (!step.done) {
+      try {
+        step = steps.next(this.codec.decode(step.value));
+      } catch (error) {
+        step = steps.throw(error);
+      }
+    }
+    return step.value;
+  }
+
+  async spanAsync(noteId, track, startSeconds, endSeconds, options = {}) {
+    const steps = this._spanSteps(noteId, track, startSeconds, endSeconds);
+    let step = steps.next();
+    while (!step.done) {
+      try {
+        options.signal?.throwIfAborted();
+        const decoded = await (this.codec.decodeAsync?.(step.value, options) ??
+          this.codec.decode(step.value));
+        step = steps.next(decoded);
+      } catch (error) {
+        step = steps.throw(error);
+      }
+    }
+    return step.value;
+  }
+
+  *_spanSteps(noteId, track, startSeconds, endSeconds) {
     this._noteId(noteId);
     if (
       !TRACKS.includes(track) ||
@@ -566,7 +691,7 @@ class MeetingAudioStore {
     ) {
       return { state: "invalid" };
     }
-    const manifest = this._manifest(noteId);
+    const manifest = this._manifest(noteId, true);
     if (!manifest) return { state: "unavailable" };
     if (
       manifest.status === "deleted" ||
@@ -575,58 +700,96 @@ class MeetingAudioStore {
     )
       return { state: manifest.status };
     const state = manifest.tracks?.[track];
-    if (!state?.chunks?.length)
+    if (!state?.chunks?.length) {
+      // A locked key can leave every durable chunk unindexed. Probe an owned
+      // orphan so key refresh remains possible; absence of an index is not loss.
+      const orphan = this._ownedChunks(noteId).find((file) =>
+        path.basename(file).startsWith(`${track}-`)
+      );
+      if (orphan) {
+        try {
+          this.encryption.decryptBytes(fs.readFileSync(orphan));
+        } catch (error) {
+          return error.code === "audio_key_unavailable" || !error.code
+            ? { state: "key_unavailable", reason: "audio_key_unavailable" }
+            : audioFailure(error);
+        }
+        return { state: "temporary_failure", reason: "audio_index_incomplete" };
+      }
       return { state: manifest.status === "recording" ? "not_flushed" : "unavailable" };
+    }
     const start = Math.max(0, Math.round(startSeconds * RATE));
     const requestedEnd = Math.round(endSeconds * RATE);
     const end = Math.min(requestedEnd, state.sampleCount);
     if (end <= start)
       return { state: manifest.status === "recording" ? "not_flushed" : "unavailable" };
-    let cursor = start;
-    for (const chunk of state.chunks) {
-      const chunkEnd = chunk.startSample + chunk.sampleCount;
-      if (chunkEnd <= cursor || chunk.startSample >= end) continue;
-      if (chunk.startSample > cursor) return { state: "gap" };
-      cursor = Math.min(end, chunkEnd);
-      if (cursor === end) break;
-    }
-    if (cursor < end) return { state: "gap" };
-    const parts = [];
-    let covered = 0;
+    const integrityFailure = { state: "temporary_failure", reason: "source_integrity_failed" };
+    if (!exactCoverage(state.chunks, start, requestedEnd)) return integrityFailure;
+    // Authenticate every selected interval before yielding even the first
+    // decoder input. A later duplicate must never be hidden by an early break.
+    const authenticated = [];
     let bytesRead = 0;
-    let lastEnd = null;
     for (const chunk of state.chunks) {
       const chunkEnd = chunk.startSample + chunk.sampleCount;
       if (chunkEnd <= start || chunk.startSample >= end) continue;
-      let decoded;
       let plaintext;
       try {
         const encrypted = fs.readFileSync(this._chunkFile(noteId, chunk.file));
         bytesRead += encrypted.length;
-        plaintext = this.encryption.decryptBytes(encrypted);
-      } catch {
-        return { state: "key_unavailable" };
+        try {
+          plaintext = this.encryption.decryptBytes(encrypted);
+        } catch (error) {
+          return error.code && error.code !== "audio_key_unavailable"
+            ? audioFailure(error)
+            : { state: "key_unavailable", reason: "audio_key_unavailable" };
+        }
+      } catch (error) {
+        return audioFailure(error);
       }
+      try {
+        const { entry, ogg } = unpack(plaintext);
+        if (
+          entry.file !== chunk.file ||
+          entry.startSample !== chunk.startSample ||
+          entry.sampleCount !== chunk.sampleCount
+        )
+          return integrityFailure;
+        authenticated.push({ ...entry, ogg });
+      } catch {
+        return { state: "corrupt", reason: "audio_corrupt" };
+      }
+    }
+    if (!exactCoverage(authenticated, start, requestedEnd)) return integrityFailure;
+    authenticated.sort((a, b) => a.startSample - b.startSample);
+    const parts = [];
+    let covered = 0;
+    for (const chunk of authenticated) {
+      let decoded;
       try {
         const decodeStart = enrollmentTiming.now();
         try {
-          decoded = this.codec.decode(unpack(plaintext).ogg);
+          decoded = yield chunk.ogg;
         } finally {
           enrollmentTiming.decoded(enrollmentTiming.now() - decodeStart);
         }
-      } catch {
-        return { state: "unavailable" };
+      } catch (error) {
+        return {
+          state: "temporary_failure",
+          reason: error.code === "ETIMEDOUT" || error.killed ? "decoder_timeout" : "decoder_error",
+        };
       }
+      if (!durationMatches(decoded.length / 48, chunk.sampleCount) || decoded.length % 2)
+        return integrityFailure;
+      const chunkEnd = chunk.startSample + chunk.sampleCount;
       const from = Math.max(start, chunk.startSample) - chunk.startSample;
       const to = Math.min(end, chunkEnd) - chunk.startSample;
-      if (lastEnd != null && chunk.startSample + from > lastEnd) return { state: "unavailable" };
       const part = decoded.subarray(from * 2, Math.min(to * 2, decoded.length));
       parts.push(part);
       covered += part.length / 2;
-      lastEnd = chunk.startSample + to;
     }
     if (!parts.length) return { state: "unavailable" };
     const pcm = Buffer.concat(parts);
+    if (!durationMatches(pcm.length / 48, requestedEnd - start)) return integrityFailure;
     return {
       state: "available",
       wav: wav(pcm),
@@ -702,7 +865,6 @@ class MeetingAudioStore {
       version: 1,
       noteId,
       noteIdentity: this._noteIdentity(noteId),
-      recordingId: randomUUID(),
       tracks: {},
     };
     for (const track of TRACKS) {
@@ -842,8 +1004,22 @@ class MeetingAudioStore {
       if (!/^\d+$/.test(name)) continue;
       usedBytes += this.status(Number(name)).bytes;
     }
+    const hasExemplars = this.database?.db
+      ?.prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'voice_exemplar_audio'"
+      )
+      .get();
+    const permanent = hasExemplars
+      ? this.database.db
+          .prepare(
+            "SELECT COALESCE(SUM(length(ciphertext)), 0) AS bytes, COUNT(*) AS clips FROM voice_exemplar_audio"
+          )
+          .get()
+      : { bytes: 0, clips: 0 };
     return {
       usedBytes,
+      permanentAudioBytes: permanent.bytes,
+      permanentAudioCount: permanent.clips,
       budgetBytes: this.policy.budgetBytes,
       days: this.policy.days,
       evictions: this.evictions,
@@ -859,6 +1035,7 @@ class MeetingAudioStore {
       const noteId = Number(name);
       const manifest = this._manifest(noteId);
       if (!manifest || !["complete", "incomplete"].includes(manifest.status)) continue;
+      if (this.legacyRecovery?.protects(noteId)) continue;
       if (!manifest.keep && now >= manifest.startedAt + manifest.retentionDays * 86400000) {
         removed.push({ noteId, reason: "expired", ...this.delete(noteId, "expired") });
       } else candidates.push(manifest);
@@ -875,4 +1052,4 @@ class MeetingAudioStore {
   }
 }
 
-module.exports = { MeetingAudioStore, RATE, CHUNK_SAMPLES };
+module.exports = { MeetingAudioStore, RATE, CHUNK_SAMPLES, defaultCodec, CODEC_TIMEOUT_MS };

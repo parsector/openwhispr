@@ -35,6 +35,11 @@ test('an unreadable or missing Keychain entry recovers the existing backup witho
     let ciphertext;
     try { ciphertext = secrets.encryptBytes(Buffer.from('old recording')); }
     finally { Module._load = oldLoad; }
+    assert.equal(secrets.decryptBytes(ciphertext).toString(), 'old recording');
+    const corrupted = Buffer.from(ciphertext);
+    corrupted[13] ^= 1;
+    assert.throws(() => secrets.decryptBytes(corrupted), { code: 'audio_corrupt' });
+    assert.throws(() => secrets.decryptBytes(Buffer.alloc(3)), { code: 'audio_corrupt' });
     const iv = ciphertext.subarray(0, 12);
     const decipher = crypto.createDecipheriv('aes-256-gcm', oldKey, iv);
     decipher.setAuthTag(ciphertext.subarray(-16));
@@ -77,5 +82,58 @@ test('device erasure removes the Keychain key and its on-disk backup', t => {
     assert.equal(fs.existsSync(backup), false);
     secrets.encryptBytes(Buffer.from('new'));
     assert.notEqual(password, first);
+  } finally { Module._load = oldLoad; }
+});
+
+test('a genuinely unavailable binary key has a distinct non-corruption error', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-key-unavailable-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const oldLoad = Module._load;
+  Module._load = function(request, ...args) {
+    if (request === 'electron') return { app: { getPath: () => dir }, safeStorage: {
+      isEncryptionAvailable: () => false,
+    } };
+    if (request === '@napi-rs/keyring') return { Entry: class {
+      getPassword() { throw Error('locked'); }
+    } };
+    return oldLoad.call(this, request, ...args);
+  };
+  try {
+    const modulePath = require.resolve('../../src/helpers/secretCrypto');
+    delete require.cache[modulePath];
+    assert.throws(() => require(modulePath).decryptBytes(Buffer.alloc(64)), {
+      code: 'audio_key_unavailable',
+    });
+  } finally { Module._load = oldLoad; }
+});
+
+test('credential refresh keeps a missing key unavailable and never creates a replacement', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-key-refresh-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  let locked = true, reads = 0, writes = 0;
+  const oldLoad = Module._load;
+  Module._load = function(request, ...args) {
+    if (request === 'electron') return { app: { getPath: () => dir }, safeStorage: {
+      isEncryptionAvailable: () => false,
+    } };
+    if (request === '@napi-rs/keyring') return { Entry: class {
+      getPassword() { reads++; if (locked) throw Error('locked'); return null; }
+      setPassword() { writes++; }
+    } };
+    return oldLoad.call(this, request, ...args);
+  };
+  try {
+    const modulePath = require.resolve('../../src/helpers/secretCrypto');
+    delete require.cache[modulePath];
+    const secrets = require(modulePath);
+    assert.throws(() => secrets.decryptBytes(Buffer.alloc(64)), { code: 'audio_key_unavailable' });
+    secrets.refreshAudioKey();
+    locked = false;
+    secrets.refreshAudioKey();
+    assert.throws(() => secrets.decryptBytes(Buffer.alloc(64)), { code: 'audio_key_unavailable' });
+    assert.throws(() => secrets.encryptBytes(Buffer.from('audio')), { code: 'audio_key_unavailable' });
+    assert.equal(reads, 3);
+    assert.equal(writes, 0);
+    assert.equal(fs.existsSync(path.join(dir, 'secure-keys', 'master-key-backup.enc')), false);
   } finally { Module._load = oldLoad; }
 });

@@ -1,0 +1,153 @@
+Enrolment exemplar retention — third fix run
+Branch: fix/enrolment-audio-retention
+Base: e9b8d2336
+Workdir: /opt/data/dev/worktrees/openwhispr-enrolment-audio
+Rules: /opt/data/dev/AGENTS.md (there is no worktree-local AGENTS.md).
+Findings: /opt/data/dev/apps/_briefs/openwhispr-enrolment-audio-rereview2.md.
+
+This supersedes the second completion report. The old scripts and second-*.log files are historical evidence, not verification of the new mechanism. The new regression command first ran against the base implementation: 4 tests, 0 pass, 4 fail (third-baseline.log). It reproduced recognition returning one unusable legacy profile, a deletion tombstone gaining a recording vote that survived restart, no startup recovery, and a retained 2048-byte vector after 110 ordinary history additions.
+
+Classifier and consumer map
+src/helpers/voiceRecordingIdentity.js:16 is the only provenance classifier:
+  { state: "resolved", recordingId: <manifest UUID> }
+  { state: "pending_recovery" }
+  { state: "unrecoverable", reason: <reason> }
+
+The additive voice_evidence_provenance table (voiceRecordingIdentity.js:4; database.js:1375) is keyed by approved sample ID, independently of notes and undo snapshots. It stores recording identity at approval. The classifier's default read cannot resolve an existing approval from a supplied store. Only approval and startup recovery use record:true with a real manifest. The store supplies a matching, retained, complete/incomplete manifest with actual chunk files; the classifier requires a UUID and matching immutable note identity. Resolved and unrecoverable results are terminal. Deletion can mark a lost legacy approval unrecoverable, but cannot supply a resolved identity. There is no user_version change.
+
+Migrated consumers, including indirect paths:
+- voiceEnrollment.js:163 state(): graduation, consistency and clean spans use only classified resolved durable evidence; :176 diversity counts its recording IDs.
+- voiceEnrollment.js:368 resolveProfile(): the centroid groups classified resolved evidence into equal per-recording votes. Pending/unrecoverable vectors are absent, including when mixed with valid evidence.
+- voiceEnrollment.js:200 progress(), :213 provenanceCounts(), :338 listSamples(): owner progress, availability, pending/unrecoverable/recovered counts and sample classifications.
+- voiceEnrollment.js:152 reviewedRow(), :491 eligibility, :567 approved overlap, :595 candidate identity, :705 scanning duplicate suppression, :721 cached-fact overlap, :747 scanned candidate identity, :799 focused revalidation: all use the classifier directly or overlapsRecording (voiceRecordingIdentity.js:63). Scanning cannot promote an approval.
+- voiceEnrollment.js:1127 approval records classification in the consent/audio transaction, after playback and source revalidation.
+- database.js:7734 getSpeakerProfiles(): both metadata and embedding paths derive availability from resolveProfile; there is no legacy cache-return shortcut. Recognition and provisional suggestions receive no legacy-only vector. Live and final recognition already consume this API.
+- speakerInAppCalibration.js:278 approved evidence, :286 eligible exemplars, :291 recording budget, :301 selected source, :327 saved clip identity, :340 row evidence, :379 overlap, :400 centroid filtering, :449 identity, :451 audio eligibility, :515 playback revalidation, :651 report exemplar freshness and :671 source freshness all use classification. Every existing approval suppresses its transcript/centroid fallback, including pending and unrecoverable approvals.
+- voiceEnrollment.js:1249 removeSample() treats unrecoverable evidence as irreversible; :1604 removeNoteEvidence() classifies lost legacy evidence before deletion and leaves person-owned clips independent of the note. removeEvidence() clears the ledger with the erased voice data.
+- voiceEnrollment.js:1433 transferEnrollmentActions(), :1466 restoreEvidence(): ownership moves with merge/undo while sample provenance remains unchanged. Both durable ownership and restored legacy rows restore the ledger owner; provenance is not restored from mutable snapshots.
+
+Blocker fixes and real probes
+1. Recognition fails closed: database.js:7745,7758; voiceEnrollment.js:163,368; peopleActions.js:428,439.
+   People derives hasVoice from the same resolved profile. PeoplePage.tsx:1743 shows Voice unavailable for affected profiles, instead of claiming an available/provisional voice based on a cached legacy vector.
+
+2. Tombstone promotion removed: voiceRecordingIdentity.js:16; meetingAudioStore.js:392,487,524,718.
+   Neither deletion nor failure invents a recording UUID; status has no note-ID identity fallback. The probe additionally injects an old deletion-generated UUID into the tombstone, so it proves rejection of historical tombstones as well as preventing new ones. All three saved clips remain pending across restart. The six stages below are initial, scans 1/2/3, deletion with a fourth scan, restart.
+
+3. Automatic legacy recovery: meetingAudioStore.js:147 runs recoverLegacy (voiceEnrollment.js:235) after chunk repair and before the first retention/eviction sweep, independently of scanning and the sample cap. Each clip/audio/provenance promotion is transactional and retains its ID, original approved interval, exact WAV, vector and approval/creation time. Existing approval is authoritative; missing transcript rows do not require another review. Existing explicit reapproval requirements are preserved.
+   The seeded disk database drops the pre-classifier ledger and the legacy recording_id column before reopening. It contains one still-readable legacy approval and one whose recording directory is already gone. First startup recovered one encrypted clip with byte equality and declared the other permanently unrecoverable. Second startup recovered zero and left the complete saved row/ciphertext unchanged.
+   A separate seeded graduated profile restores three spans/three recordings and one recognition profile even with no current transcript rows. Another fixture recovers all 20 approvals at the cap. A missing encryption key defers recovery and holds affected recordings out of automatic expiry/eviction until a later startup; explicit deletion remains available (meetingAudioStore.js:889).
+
+4. Repair survives pruned history: voiceExemplarAudio.js:44,55-91 scans removal before_sample snapshots and durable ownership links directly. The snapshot proof does not require any global-history row. An explicit surviving erase reason is still honored for older removals without an ownership snapshot, preserving the old repair's coverage; it is optional, never an inner-join requirement.
+   The probe adds 110 ordinary history rows, asserts the erased action's global marker is absent, restarts, checks NULL before_sample and absence of its vector in older snapshots, and verifies idempotence after another restart. It separately makes a genuine reversible legacy removal the current undo point and compares the exact restored 2048-byte vector. Irreversible undo also fails when its UI history marker is absent.
+
+5. Owner consequence: docs/voice-exemplar-retention.md:7-13; PeoplePage.tsx:1743-1783; en/translation.json:5999-6001 and corresponding keys in all 11 locales. The recovery count and consequence appear on the collapsed person row, without opening details:
+   "Recovered legacy samples count normally. Samples whose audio has already expired cannot be recovered and are permanently ineligible for recognition and recording diversity. Re-enrolment may be needed. Samples awaiting a genuine recording identity remain unavailable until recovery."
+   The browser asserts Voice unavailable and this disclosure, and checks the saved-clip contract and playback wiring at 1440/412 widths in light/dark themes.
+
+Actual diagnostic output from third-probes.log:
+ℹ unrecognised-evidence recognition: {"usable":false,"resolvedBytes":0,"recognitionProfiles":0,"provisionalProfiles":0}
+ℹ three scans + deletion + restart: [{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false},{"meetings":0,"usable":false}]
+ℹ startup legacy recovery: {"report":{"recovered":1,"unrecoverable":1,"pendingRecovery":0,"resolved":1,"failures":[{"sampleId":"479f1ea8b55dae0994012027fa86b413e95b97584fed567b65e2af3585814dbb","reason":"legacy_audio_unavailable"}],"deferredNotes":[]},"bytesEqual":true,"clips":1}
+ℹ second startup: {"recovered":0,"unrecoverable":1,"pendingRecovery":0,"resolved":1,"failures":[],"deferredNotes":[]}
+ℹ startup at cap: {"recovered":20,"equalClips":20}
+ℹ graduated legacy startup: {"recovered":3,"meetings":3,"cleanSpans":3,"usable":true,"profiles":1}
+ℹ calibration fallback: {"pendingRows":0,"unrecoverableRows":0,"profiles":0}
+ℹ legacy startup repair: {"historyAdditions":110,"markerPresent":false,"removedVectorRetained":false,"historicalVectorRetained":false,"liveDurableSamples":0}
+ℹ reversible undo: {"exactVectorRestored":true,"vectorBytes":2048,"historyAdditions":110}
+
+Verification commands and results
+All commands ran in the assigned worktree, against isolated fixtures. No production data/process was accessed. Recorded logs have terminal-control sequences and trailing whitespace normalized; diagnostic values and command results are unchanged.
+
+$ node --import tsx --test --test-name-pattern='third run|startup repairs c42' test/helpers/voiceExemplarAudio.test.js
+third-probes.log: tests 10; pass 10; fail 0; cancelled 0; skipped 0; todo 0.
+The original 4-test red run is third-baseline.log. Its command used the same pattern before the additional regression cases were added.
+
+$ node --import tsx --test test/helpers/voiceExemplarAudio.test.js test/helpers/voiceEnrollment.test.js test/helpers/voiceRecordingIdentity.test.js test/helpers/meetingAudioStore.test.js test/helpers/peopleActions.test.js test/helpers/speakerInAppCalibration.test.js test/components/peopleEnrollmentDecision.test.js test/components/peopleEnrollmentMessages.test.js
+third-focused.log:
+ℹ tests 169
+ℹ pass 169
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+
+$ node --import tsx --test test/helpers/speakerCorrectionTransaction.test.js test/helpers/speakerEmbeddingsLifecycle.test.js test/helpers/speakerEmbeddingsClusterCentroids.test.js test/helpers/secretCryptoBackup.test.js test/helpers/liveSpeakerIdentifier.test.js
+third-additional.log:
+ℹ tests 65
+ℹ pass 65
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+
+$ node --test test/locales/translationCoverage.test.js
+third-translations.log: tests 9; pass 9; fail 0; cancelled 0; skipped 0; todo 0.
+
+$ node --test test/browser/voiceExemplarPlayback.cjs
+third-browser.log: tests 1; pass 1; fail 0; cancelled 0; skipped 0; todo 0.
+Screenshots: artifacts/enrolment-audio-retention/{1440,412}-{light,dark}.png.
+
+$ npm run lint
+third-lint.log:
+npm notice run open-whispr@1.13.0 lint
+npm notice run eslint . --max-warnings=0 && cd src && eslint . --max-warnings=0
+Exit 0, no diagnostics.
+
+$ node_modules/.bin/tsc --noEmit --project src/tsconfig.json
+third-types.log: exit 0, no diagnostics.
+
+$ npm run build:renderer
+third-build.log:
+vite v8.1.6 building client environment for production...
+transforming...✓ 2096 modules transformed.
+(!) Some chunks are larger than 500 kB after minification.
+✓ built in 15.99s
+Exit 0. The existing Vite chunk-size warning remains.
+
+$ git diff --check
+Exit 0, no output.
+
+The focused, additional, translation and browser suites total 244 test executions, zero failures/skips. This excludes the separate probe reruns, repair subset, and intermediate runs.
+
+Remaining limits
+- Audio physically erased before migration cannot be recovered. It is permanently ineligible. Old durable clips with no trustworthy surviving manifest stay pending even when their clip audio remains playable; this run deliberately refuses to trust their cached IDs retrospectively.
+- The legacy recovery path needs the existing approved 512-float embedding and complete audio coverage. It does not reconstruct missing biometric vectors from a newly loaded model. Temporary key failures defer recovery, potentially retaining affected recording ciphertext past its usual expiry until a later successful startup.
+- Historical erasure intent cannot be reconstructed if an import discarded both durable ownership/format information and its explicit erase reason: an otherwise identical vector-only removal is indistinguishable from a genuinely reversible legacy undo. Such ambiguous snapshots are preserved; their vectors are still ineligible for recognition without new provenance and durable evidence. The >110-history probe covers the reproduced case with surviving ownership snapshots, independently of the pruned marker.
+- Tests prove logical erasure from live rows and affected retained snapshots, not physical erasure from SQLite free pages, WAL files or backups.
+- The browser uses mocked WAV/IPC and proves renderer availability, disclosure, responsive fit and playback wiring. Helper fixtures separately use SQLite/filesystem storage, injected AES-GCM and a fixture codec. Production codec, native/system-keychain recovery and actual speaker audio output were not exercised.
+- Translation keys/interpolation pass coverage in all locales; native-speaker linguistic review was not performed.
+- No deployment, restart of a running service, push, PR or release was performed.
+
+Changed files — new-side diff ranges relative to e9b8d2336
+docs/voice-exemplar-retention.md: 7, 9-13
+src/components/settings/PeoplePage.tsx: 1743-1751, 1769-1783
+src/helpers/database.js: 1375, 7745-7753, 7758
+src/helpers/meetingAudioStore.js: 147-149, 392, 487, 524-535, 718, 858-869, 889
+src/helpers/peopleActions.js: 428, 439-440
+src/helpers/speakerInAppCalibration.js: 5, 278-283, 285-286, 291, 301, 304-305, 327, 340-344, 374, 383, 400, 449, 451-452, 515-518, 651, 671-675
+src/helpers/voiceEnrollment.js: 11, 139, 145-146, 148, 152, 159, 165-169, 176, 186, 195-196, 208, 213-337, 363, 371, 376-378, 410, 491, 510, 567, 595-597, 691, 705, 721, 747-752, 803, 1127-1131, 1219-1220, 1261, 1289-1291, 1301, 1306, 1434-1437, 1451-1453, 1496-1499, 1522-1525, 1605-1612, 1656-1657
+src/helpers/voiceExemplarAudio.js: 52-53, 55-74, 77-78, 81-91, 98-101, 325-328
+src/helpers/voiceRecordingIdentity.js: 1-14, 16-45, 47-60, 63-65, 68, 70-72, 77-80, 84
+src/locales/ar/translation.json: 6233-6235
+src/locales/de/translation.json: 5999-6001
+src/locales/en/translation.json: 5999-6001
+src/locales/es/translation.json: 6017-6019
+src/locales/fr/translation.json: 6017-6019
+src/locales/it/translation.json: 6017-6019
+src/locales/ja/translation.json: 5999-6001
+src/locales/pt/translation.json: 6017-6019
+src/locales/ru/translation.json: 6101-6103
+src/locales/zh-CN/translation.json: 5999-6001
+src/locales/zh-TW/translation.json: 5999-6001
+src/types/electron.ts: 4272-4274
+test/browser/voiceExemplarPlayback.cjs: 26-30, 76-79
+test/helpers/peopleActions.test.js: 225
+test/helpers/speakerInAppCalibration.test.js: 4-9, 109, 273, 382, 483, 588
+test/helpers/voiceEnrollment.test.js: 201-203, 1108-1110, 1114
+test/helpers/voiceExemplarAudio.test.js: 140-411, 689-690, 723, 736-738, 798-820, 860-876, 885, 905-907
+test/helpers/voiceRecordingIdentity.test.js: 5-6, 7, 9-10, 13-36, 38-75, 77, 81, 84, 86, 88
+artifacts/enrolment-audio-retention/verification.txt: this replacement report.
+artifacts/enrolment-audio-retention/third-{baseline,probes,focused,additional,translations,lint,types,browser,build}.log: new captured outputs.
+artifacts/enrolment-audio-retention/{1440,412}-{light,dark}.png: regenerated renderer fixtures.
+
+Post-commit git status --porcelain is reported in the final response.

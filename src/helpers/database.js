@@ -1371,6 +1371,9 @@ class DatabaseManager {
           this.db.exec(`ALTER TABLE note_speaker_completion ADD COLUMN ${column} ${type}`);
       }
 
+      require("./voiceExemplarAudio").open(this.db);
+      require("./voiceRecordingIdentity").open(this.db);
+
       // Local voice evidence has explicit recording provenance. The cache in
       // speaker_profiles is invalidated whenever its source audio is removed.
       this.db.exec(`
@@ -1386,8 +1389,10 @@ class DatabaseManager {
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
         CREATE INDEX IF NOT EXISTS idx_voice_exemplars_note ON voice_exemplars(note_id);
-        CREATE TRIGGER IF NOT EXISTS invalidate_deleted_voice_exemplar
-        AFTER DELETE ON voice_exemplars BEGIN
+        DROP TRIGGER IF EXISTS invalidate_deleted_voice_exemplar;
+        CREATE TRIGGER invalidate_deleted_voice_exemplar
+        AFTER DELETE ON voice_exemplars
+        WHEN NOT EXISTS (SELECT 1 FROM voice_exemplar_audio WHERE id = OLD.id) BEGIN
           UPDATE speaker_profiles SET embedding = x'', sample_count = 0,
             voice_usable = 0, voice_needs_reapproval = 1 WHERE id = OLD.profile_id;
         END;
@@ -1421,6 +1426,7 @@ class DatabaseManager {
         ["speaker_profiles", "voice_usable", "INTEGER NOT NULL DEFAULT 0"],
         ["voice_exemplars", "row_ids", "TEXT NOT NULL DEFAULT '[]'"],
         ["voice_exemplars", "meeting_date", "TEXT"],
+        ["voice_exemplars", "recording_id", "TEXT"],
         ["voice_enrollment_candidates", "row_ids", "TEXT NOT NULL DEFAULT '[]'"],
         ["voice_enrollment_candidates", "meeting_date", "TEXT"],
         ["voice_enrollment_candidates", "rejected_at", "TEXT"],
@@ -1434,6 +1440,8 @@ class DatabaseManager {
         )
           this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
       }
+
+      require("./voiceExemplarAudio").repair(this.db);
 
       // A cloud folder delete is optimistic until the API answers. Keep the
       // exact pre-delete row state in a durable journal so a permission denial
@@ -4832,7 +4840,12 @@ class DatabaseManager {
         this.db
           .prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='voice_exemplars'")
           .get() &&
-        this.db.prepare("SELECT 1 FROM voice_exemplars WHERE note_id = ? LIMIT 1").get(id)
+        this.db
+          .prepare(
+            `SELECT 1 FROM voice_exemplars WHERE note_id = ?
+          UNION SELECT 1 FROM voice_exemplar_audio WHERE note_id = ? LIMIT 1`
+          )
+          .get(id, id)
           ? require("./voiceEnrollment")
           : null;
       const changedRowIds = enrollment
@@ -7714,16 +7727,52 @@ class DatabaseManager {
     return this.db.prepare("SELECT * FROM speaker_profiles WHERE id = ?").get(winner.id);
   }
 
+  getVoiceExemplarAudio(profileId = null) {
+    return require("./voiceExemplarAudio").list(this.db, profileId);
+  }
+
   getSpeakerProfiles(includeEmbedding = false, { includeProvisional = false } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const query = includeEmbedding
-        ? `SELECT * FROM speaker_profiles WHERE ${includeProvisional ? "" : "voice_usable = 1 AND"}
-          sample_count > 0 AND length(embedding) = 2048 AND
-          EXISTS (SELECT 1 FROM voice_exemplars WHERE profile_id = speaker_profiles.id)`
+        ? `SELECT * FROM speaker_profiles WHERE
+          EXISTS (SELECT 1 FROM voice_exemplar_audio WHERE profile_id = speaker_profiles.id)
+          OR (sample_count > 0 AND length(embedding) = 2048 AND
+            EXISTS (SELECT 1 FROM voice_exemplars WHERE profile_id = speaker_profiles.id))`
         : `SELECT id, display_name, email, sample_count, voice_usable, created_at, updated_at
            FROM speaker_profiles`;
-      return this.db.prepare(query).all();
+      const profiles = this.db.prepare(query).all();
+      if (!includeEmbedding)
+        return profiles.map((profile) => {
+          const { result } = require("./voiceEnrollment").resolveProfile(this.db, profile.id);
+          return {
+            ...profile,
+            sample_count: result.cleanSpans,
+            voice_usable: Number(result.usable),
+          };
+        });
+      // Approved evidence is authoritative even when the derived profile cache
+      // is missing. Resolve from its saved vectors without reconstructing audio
+      // or repairing the separate diarization-centroid write path.
+      return profiles
+        .map((profile) => {
+          const { result, embedding } = require("./voiceEnrollment").resolveProfile(
+            this.db,
+            profile.id
+          );
+          return {
+            ...profile,
+            embedding,
+            sample_count: result.cleanSpans,
+            voice_usable: Number(result.usable),
+          };
+        })
+        .filter(
+          (profile) =>
+            profile.sample_count > 0 &&
+            profile.embedding?.length === 2048 &&
+            (includeProvisional || profile.voice_usable === 1)
+        );
     } catch (error) {
       debugLogger.error("Error getting speaker profiles", { error: error.message }, "database");
       throw error;
@@ -7797,7 +7846,7 @@ class DatabaseManager {
             .readTranscriptDocument(note.transcript)
             .rows.filter((row) => row.speaker === speakerId)
             .map((row) => row.id);
-          require("./voiceEnrollment").rowCorrected(this.db, noteId, ids);
+          require("./voiceEnrollment").rowCorrected(this.db, noteId, ids, true);
         }
         this.db
           .prepare(
