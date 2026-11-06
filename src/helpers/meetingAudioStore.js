@@ -723,6 +723,10 @@ class MeetingAudioStore {
     const end = Math.min(requestedEnd, state.sampleCount);
     if (end <= start)
       return { state: manifest.status === "recording" ? "not_flushed" : "unavailable" };
+    // A pause deliberately leaves an interval without chunks. Refuse playback
+    // as a gap before checking for unexpected missing or overlapping coverage.
+    if (state.gaps?.some((gap) => gap.startSample < requestedEnd && gap.endSample > start))
+      return { state: "gap" };
     const integrityFailure = { state: "temporary_failure", reason: "source_integrity_failed" };
     if (!exactCoverage(state.chunks, start, requestedEnd)) return integrityFailure;
     // Authenticate every selected interval before yielding even the first

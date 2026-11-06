@@ -18,6 +18,7 @@ const { LiveSpeakerIdentifier } = require('../../src/helpers/liveSpeakerIdentifi
 const { reconsiderLiveClusters, undoReconsideration } = require('../../src/helpers/liveSpeakerReconsideration');
 const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
 const { reconcileAutomaticTranscript } = require('../../src/helpers/transcriptDocument');
+const retainedSpeakerAudio = require('../lib/retainedSpeakerAudio');
 Module._load = originalLoad;
 
 const vector = (x, y = 0) => Float32Array.from({ length: 512 }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
@@ -27,18 +28,15 @@ function fixture(t) {
   const db = new Database();
   t.after(() => { db.db.close(); fs.rmSync(ownDir, { recursive: true, force: true }); });
   const person = db.createNamedSpeakerProfile('Alex');
-  const wav = Buffer.alloc(44 + 24000 * 2 * 4);
-  wav.write('RIFF');
-  for (let i = 0; i < 24000 * 4; i++) wav.writeInt16LE(Math.round(10000 * Math.sin(i / 24)), 44 + i * 2);
   let clock = Date.now();
-  const audio = { now: () => clock, status: () => ({ state: 'complete', bytes: wav.length }),
-    span: () => ({ state: 'available', wav, partial: false }) };
+  const { audio, record } = retainedSpeakerAudio(db, ownDir, () => clock);
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };
   for (const [title, count] of [['Earlier one', 2], ['Earlier two', 1]]) {
     const id = db.saveNote(title, '', 'meeting').note.id;
+    const recordingId = record(id, count);
     const rows = Array.from({ length: count }, (_, i) => ({ id: `${title}-${i}`, source: 'system',
       speaker: 'speaker_0', speakerName: 'Alex', speakerLockSource: 'user', suggestedProfileId: person.id,
-      audioSpan: { recordingId: id, trackId: 'system', startSample: i * 120000, endSample: i * 120000 + 96000 } }));
+      audioSpan: { recordingId, trackId: 'system', startSample: i * 120000, endSample: i * 120000 + 96000 } }));
     db.updateNote(id, { transcript: JSON.stringify({ version: 2, rows }) });
   }
   const noteId = db.saveNote('Live', '', 'meeting').note.id;

@@ -132,6 +132,25 @@ test("interrupt, repair encrypted tracks, retrieve two arbitrary exact-duration 
   assert.equal(tail.wav.length - 44, 3 * RATE * 2);
 });
 
+test("recording pauses report gaps for sync and async playback, including crossing spans", async (t) => {
+  const f = fixture(t);
+  const store = f.makeStore();
+  store.begin(1);
+  store.append(1, 'mic', signal(1, 440));
+  store.finish(1);
+  f.setClock(f.clock + 3000);
+  store.begin(1);
+  store.append(1, 'mic', signal(1, 660));
+  store.finish(1);
+  assert.deepEqual(store.status(1).tracks.mic.gaps, [{ startSample: RATE, endSample: 3 * RATE }]);
+  for (const [from, to] of [[1, 2], [.5, 3.5]]) {
+    assert.deepEqual(store.span(1, 'mic', from, to), { state: 'gap' });
+    assert.deepEqual(await store.spanAsync(1, 'mic', from, to), { state: 'gap' });
+  }
+  assert.equal(store.span(1, 'mic', 0, 1).state, 'available');
+  assert.equal((await store.spanAsync(1, 'mic', 3, 4)).state, 'available');
+});
+
 test("expiry and explicit deletion remove audio and derived voice, retain corrected transcript", (t) => {
   const f = fixture(t);
   const store = f.makeStore();
