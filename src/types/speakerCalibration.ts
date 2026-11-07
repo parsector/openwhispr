@@ -7,6 +7,7 @@ type CalibrationReportBase = {
   policy: Record<string, number | null>;
   failedCriteria: string[];
   nextAction: string | null;
+  criteriaGroups?: { unavailableInVersion: string[]; evidenceLimits: string[] };
   evidenceScope: {
     tuningSessions: string[];
     evaluationSessions: string[];
@@ -34,6 +35,9 @@ type CalibrationReportBase = {
     calibrationRows: number;
     storedRows: number;
     exemplarRows?: number;
+    savedExemplars?: number;
+    timingProvenanceCounts?: Record<string, number>;
+    fingerprintIntegrity?: Array<{ noteId: number; rowId: string; reason: string }>;
     reconstructedRows: number;
     reviewedCandidates: number;
     consideredRows: number;

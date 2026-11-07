@@ -3,7 +3,12 @@ const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
 const { buildCalibrationLabels } = require("./speakerCalibrationExport");
 const { classifyEvidence } = require("./voiceRecordingIdentity");
-const { admitRecommendation, RECOMMENDATION_POLICY } = require("./speakerCalibrationPolicy");
+const {
+  admitRecommendation,
+  RECOMMENDATION_POLICY,
+  evidenceFingerprintKey,
+  fingerprintIntegrity,
+} = require("./speakerCalibrationPolicy");
 const { completionDiagnostic } = require("./speakerCompletionDiagnostic");
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
@@ -71,6 +76,21 @@ function sweep(rows, profiles, key) {
   )[0];
   return { rows: examples.length, table, winner };
 }
+// Playback can offer approximate windows, but scoring needs bounded speech.
+function windowExclusion(row) {
+  if (row.timingProvenance === "retained_exemplar_clip") return null;
+  if (!["exact_stored_span", "capture_bounds"].includes(row.timingProvenance))
+    return `window_${row.timingProvenance || "unavailable"}`;
+  if (row.playbackUnavailableReason) return `playback_${row.playbackUnavailableReason}`;
+  if (
+    ![row.start, row.end, row.from, row.to].every(Number.isFinite) ||
+    row.end <= row.start ||
+    row.from > row.start ||
+    row.to < row.end
+  )
+    return "window_label_not_contained";
+  return null;
+}
 function buildReport({
   rows,
   profiles,
@@ -93,6 +113,27 @@ function buildReport({
   validationEvidence = null,
   policy = RECOMMENDATION_POLICY,
 }) {
+  exclusions = [...exclusions];
+  const savedExemplars = rows.filter((row) => row.exemplarId).length;
+  const timingProvenanceCounts = {};
+  const excludedRows = new Set(
+    exclusions
+      .filter((item) => item.rowId != null)
+      .map((item) => JSON.stringify([item.noteId, item.rowId]))
+  );
+  for (const row of rows) {
+    const provenance = row.timingProvenance || "unavailable";
+    timingProvenanceCounts[provenance] = (timingProvenanceCounts[provenance] || 0) + 1;
+    const reason = windowExclusion(row);
+    const key = JSON.stringify([row.noteId, row.rowId]);
+    if (reason && !excludedRows.has(key)) {
+      exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason });
+      excludedRows.add(key);
+    }
+  }
+  rows = rows.filter(
+    (row) => row.vector && !excludedRows.has(JSON.stringify([row.noteId, row.rowId]))
+  );
   const byCluster = new Map();
   const storedRows = rows.filter(
     (item) => item.vector && item.vectorSource !== "reconstructed-row-audio"
@@ -121,7 +162,9 @@ function buildReport({
     JSON.stringify(profiles.map((profile) => [profile.id, profile.name, profile.vector]))
   );
   const audioFingerprints = Object.fromEntries(
-    rows.filter((row) => row.audioFingerprint).map((row) => [row.noteId, row.audioFingerprint])
+    rows
+      .filter((row) => row.verifiedAudioFingerprint)
+      .map((row) => [evidenceFingerprintKey(row), row.verifiedAudioFingerprint])
   );
   const recordings = Object.fromEntries(
     rows.filter((row) => row.recordingId != null).map((row) => [row.noteId, row.recordingId])
@@ -135,6 +178,8 @@ function buildReport({
     noteId: row.noteId,
     rowId: row.rowId,
     revision: row.revision,
+    evidenceKey: evidenceFingerprintKey(row),
+    audioFingerprint: row.audioFingerprint,
     ...(row.exemplarId ? { exemplarId: row.exemplarId, contentHash: row.contentHash } : {}),
   }));
   const admission = admitRecommendation({
@@ -192,11 +237,29 @@ function buildReport({
       .filter((key) => support[key].status === "calibrated")
       .map((key) => [key, calibration.winner[key]])
   );
+  const unavailableInVersion =
+    validationEvidence == null
+      ? admission.failedCriteria.filter((key) =>
+          [
+            "production_parity",
+            "independent_sessions",
+            "positive_coverage",
+            "negative_coverage",
+            "nonempty_accepted_set",
+            "correct_name_coverage",
+            "precision",
+          ].includes(key)
+        )
+      : [];
   return {
     version: 3,
     resultType,
     ...admission,
-    nextAction: resultType === "diagnostic_only" ? "collect_independent_production_evidence" : null,
+    criteriaGroups: {
+      unavailableInVersion,
+      evidenceLimits: admission.failedCriteria.filter((key) => !unavailableInVersion.includes(key)),
+    },
+    nextAction: null,
     id: randomUUID(),
     synthetic,
     method,
@@ -210,6 +273,7 @@ function buildReport({
       exactClusters: clusters.length,
       calibrationRows: calibration.rows,
       storedRows: storedRows.length,
+      savedExemplars,
       exemplarRows,
       reconstructedRows: reconstructedRows.length,
       reviewedCandidates: reviewedCount,
@@ -218,6 +282,12 @@ function buildReport({
       noteBudget,
       selectedNotes,
       truncatedByRowBudget: consideredCount < reviewedCount,
+      audioFingerprintScope: "row",
+      fingerprintIntegrity: [
+        ...fingerprintIntegrity(rows, audioFingerprints),
+        ...exclusions.filter((item) => item.reason === "exemplar_integrity_failed"),
+      ],
+      timingProvenanceCounts,
       placementCounts,
       embeddingCounts,
       coverage: `considered ${consideredCount} of ${reviewedCount} reviewed rows in ${selectedNotes} selected ${selectedNotes === 1 ? "note" : "notes"} (row budget ${rowBudget}, note budget ${noteBudget}${consideredCount < reviewedCount ? "; row cap truncated the set" : ""}); ${reconstructedRows.length} reconstructed`,
@@ -322,6 +392,9 @@ function collectRows(database, audioStore, scope, budget, onProgress = () => {})
       rowId: JSON.parse(sample.row_ids)[0],
       revision: sample.revision,
       exemplarId: sample.id,
+      track: sample.track,
+      start: sample.start_sample / 24000,
+      end: sample.end_sample / 24000,
       contentHash: sample.content_hash,
       truePerson: person.display_name,
       recordingId: classifySample(sample).recordingId,
@@ -333,6 +406,7 @@ function collectRows(database, audioStore, scope, budget, onProgress = () => {})
       audioAvailable: true,
       audioState: "available",
       approximate: false,
+      timingProvenance: "retained_exemplar_clip",
     });
   }
   for (const note of chosen) {
@@ -405,6 +479,7 @@ function collectRows(database, audioStore, scope, budget, onProgress = () => {})
         playbackUnavailableReason: label.unavailableReason,
         playbackPlaceable: !label.unavailableReason,
         approximate: label.approximate,
+        timingProvenance: label.timingProvenance,
         audioFingerprint: null,
         recordingId: provenance.recordingId,
         audioManifestFingerprint: sha(JSON.stringify(status.tracks || {})),
@@ -474,7 +549,6 @@ async function runJobLocal(
       hash.update(chunk);
     modelFingerprint = hash.digest("hex");
   }
-  const audioHashes = new Map();
   // Group spans by source so the session can discard each recording's cache
   // after its last row. Admission still sees the original evidence order.
   const work = [...rows].sort(
@@ -498,7 +572,12 @@ async function runJobLocal(
           rowId: row.rowId,
           reason: audio?.error || "audio_unavailable",
         });
-      } else job.progress.bytesRead += audio.wav.length;
+      } else {
+        row.verifiedAudioFingerprint = sha(audio.wav);
+        job.progress.bytesRead += audio.wav.length;
+      }
+    } else if (windowExclusion(row)) {
+      exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason: windowExclusion(row) });
     } else if (
       !row.audioAvailable ||
       row.playbackUnavailableReason ||
@@ -522,7 +601,7 @@ async function runJobLocal(
         reason: "speaker_model_unavailable",
       });
     } else {
-      const args = [row.noteId, row.track, Math.max(row.from, row.to - 8), row.to];
+      const args = [row.noteId, row.track, row.from, row.to];
       const span = audioStore.spanAsync
         ? await audioStore.spanAsync(...args, { signal: job.abortController?.signal })
         : audioStore.span(...args);
@@ -531,8 +610,9 @@ async function runJobLocal(
         if (span.partial)
           exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason: "audio_partial" });
         else {
-          if (!audioHashes.has(row.noteId)) audioHashes.set(row.noteId, createHash("sha256"));
-          audioHashes.get(row.noteId).update(span.wav);
+          // Hash precisely these WAV bytes, never an aggregate of other rows.
+          row.audioFingerprint = sha(span.wav);
+          row.verifiedAudioFingerprint = row.audioFingerprint;
           const reconstructedVector = Array.from(
             (await model.extractEmbeddingFromSamples(pcm16FromWav(span.wav))) || []
           );
@@ -561,16 +641,13 @@ async function runJobLocal(
     job.state = "cancelled";
     return;
   }
-  for (const row of rows)
-    if (!row.exemplarId && audioHashes.has(row.noteId))
-      row.audioFingerprint = audioHashes.get(row.noteId).copy().digest("hex");
   const profiles = database
     .getSpeakerProfiles(true, { includeProvisional: true })
     .filter((p) => p.embedding?.length)
     .map((p) => ({ id: p.id, name: p.display_name, vector: vectorOf(p.embedding) }))
     .sort((a, b) => a.id - b.id);
   job.report = buildReport({
-    rows: rows.filter((row) => row.vector),
+    rows,
     profiles,
     scope,
     modelFingerprint,

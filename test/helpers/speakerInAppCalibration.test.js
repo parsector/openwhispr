@@ -21,6 +21,12 @@ const rows = Array.from({ length: 40 }, (_, i) => ({
   clusterId: i % 2 ? "2" : "1",
   vector: i % 2 ? [0.1, 0.99] : [0.99, 0.1],
   audioFingerprint: "a".repeat(64),
+  verifiedAudioFingerprint: "a".repeat(64),
+  timingProvenance: "exact_stored_span",
+  start: 0,
+  end: 2,
+  from: 0,
+  to: 2,
 }));
 test("all-refusal evidence is diagnostic_only with no recommendation", () => {
   const report = buildReport({
@@ -652,4 +658,208 @@ test("a 576 row labelled note reports the 400 row budget and evaluates only cons
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("unbounded historical windows never enter scoring even with a stored centroid", async (t) => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { runJob, collectRows } = require("../../src/helpers/speakerInAppCalibration");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bounded-calibration-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const modelPath = path.join(dir, "model.onnx");
+  fs.writeFileSync(modelPath, "fixture model");
+  const origin = 1_700_000_000_000;
+  const base = {
+    source: "system",
+    speaker: "1",
+    speakerName: "Ada",
+    speakerLockSource: "user",
+    timebase: "epoch",
+    recordingId: 62,
+    recordingOrigin: origin,
+  };
+  const cases = [
+    // Owner-labelled speech was 10–14 s. Completion alone at 30 s cannot locate it.
+    ["completion_timestamp_fallback", { timestamp: origin + 30_000 }, false],
+    ["onset_only", { timestamp: origin + 30_000, speechStart: origin + 10_000 }, false],
+    ["onset_only", { speechStart: origin + 10_000 }, false],
+    ["capture_bounds", { speechStart: origin + 10_000, speechEnd: origin + 14_000 }, true],
+    [
+      "capture_bounds",
+      { timestamp: origin + 30_000, speechStart: origin + 10_000, speechEnd: origin + 14_000 },
+      true,
+    ],
+    [
+      "exact_stored_span",
+      { audioSpan: { recordingId: 62, trackId: "system", startSample: 240000, endSample: 336000 } },
+      true,
+    ],
+    ["unavailable", {}, false],
+  ];
+  const wav = Buffer.alloc(44 + 4 * 24000 * 2);
+  wav.write("data", 36);
+  wav.writeUInt32LE(wav.length - 44, 40);
+  wav.writeUInt32LE(24000, 24);
+  for (const [provenance, timing, usable] of cases) {
+    const note = {
+      id: 62,
+      created_at: "2026-10-01",
+      transcript: JSON.stringify([{ ...base, id: "labelled-10-14", ...timing }]),
+    };
+    const database = {
+      db: { prepare: () => ({ all: () => [note] }) },
+      getNoteSpeakerEmbeddings: () => [
+        { speaker_id: "1", embedding: Buffer.from(new Float32Array([1, 0]).buffer) },
+      ],
+      getSpeakerProfiles: () =>
+        profiles.map((p) => ({
+          id: p.id,
+          display_name: p.name,
+          embedding: Buffer.from(new Float32Array(p.vector).buffer),
+        })),
+    };
+    const spans = [];
+    const audioStore = {
+      recordingProvenance: retainedRecording,
+      status: () => ({
+        state: "complete",
+        startedAt: origin,
+        recordingId: 62,
+        tracks: { system: { chunks: [{ startSample: 0, sampleCount: 40 * 24000 }] } },
+      }),
+      span: (...args) => {
+        spans.push(args);
+        return { wav };
+      },
+    };
+    const collected = collectRows(database, audioStore, { kind: "all" }, { notes: 1, rows: 10 });
+    const job = {
+      state: "running",
+      progress: { processedRows: 0, reembeddedRows: 0, bytesRead: 0 },
+    };
+    await runJob(
+      job,
+      database,
+      audioStore,
+      { kind: "all" },
+      { notes: 1, rows: 10 },
+      {
+        isAvailable: () => true,
+        getModelPath: () => modelPath,
+        extractEmbeddingFromSamples: async () => new Float32Array([1, 0]),
+      }
+    );
+    const report = job.report;
+    assert.equal(report.analyses.calibration.rows, usable ? 1 : 0, provenance);
+    assert.equal(collected.rows[0].timingProvenance, provenance);
+    assert.equal(report.evidence.timingProvenanceCounts[provenance], 1);
+    assert.equal(report.evidence.machineClaims, 0);
+    assert.equal(spans.length, usable ? 1 : 0);
+    for (const candidate of report.analyses.calibration.table) {
+      assert.equal(candidate.right + candidate.wrong + candidate.refused, usable ? 1 : 0);
+    }
+    if (usable) assert.deepEqual(spans[0], [62, "system", 9.96, 14.04]);
+    else {
+      assert.equal(report.evidence.exclusionCounts[`window_${provenance}`], 1);
+      assert.equal(report.evidence.reviewedRows, 0);
+      assert.equal(report.validation.positives, 0);
+      assert.equal(report.validation.negatives, 0);
+    }
+  }
+});
+
+test("capture bounds clipped by retained audio cannot enter the sweep or admission", () => {
+  const input = recommendationFixture();
+  delete input.validationEvidence;
+  input.rows = [
+    { ...input.rows[0], timingProvenance: "capture_bounds", start: 10, end: 14, from: 10, to: 12 },
+  ];
+  const report = buildReport(input);
+  assert.equal(report.analyses.calibration.rows, 0);
+  assert.equal(report.evidence.machineClaims, 0);
+  assert.equal(report.evidence.reviewedRows, 0);
+  assert.equal(report.evidence.exclusionCounts.window_label_not_contained, 1);
+  assert.equal(report.evidence.timingProvenanceCounts.capture_bounds, 1);
+  assert.ok(
+    report.analyses.calibration.table.every((row) => row.right + row.wrong + row.refused === 0)
+  );
+});
+
+test("reconstructed fingerprints verify each window's WAV bytes separately within one note", async (t) => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+  const path = require("node:path");
+  const { createHash } = require("node:crypto");
+  const { runJob } = require("../../src/helpers/speakerInAppCalibration");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "row-audio-hashes-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const modelPath = path.join(dir, "model.onnx");
+  fs.writeFileSync(modelPath, "fixture model");
+  const wavs = [1, 2].map((value) => {
+    const wav = Buffer.alloc(44 + 4 * 24000 * 2);
+    wav.write("data", 36);
+    wav.writeUInt32LE(wav.length - 44, 40);
+    wav.writeUInt32LE(24000, 24);
+    wav.writeInt16LE(value, 44);
+    return wav;
+  });
+  const note = {
+    id: 62,
+    created_at: "2026-10-01",
+    transcript: JSON.stringify(
+      [10, 20].map((start) => ({
+        id: `row-${start}`,
+        source: "system",
+        speaker: "1",
+        speakerName: "Ada",
+        speakerLockSource: "user",
+        audioSpan: {
+          trackId: "system",
+          recordingId: 62,
+          startSample: start * 24000,
+          endSample: (start + 4) * 24000,
+        },
+      }))
+    ),
+  };
+  const database = {
+    db: { prepare: () => ({ all: () => [note] }) },
+    getNoteSpeakerEmbeddings: () => [],
+    getSpeakerProfiles: () =>
+      profiles.map((p) => ({
+        id: p.id,
+        display_name: p.name,
+        embedding: Buffer.from(new Float32Array(p.vector).buffer),
+      })),
+  };
+  const job = { state: "running", progress: { processedRows: 0, reembeddedRows: 0, bytesRead: 0 } };
+  await runJob(
+    job,
+    database,
+    {
+      recordingProvenance: retainedRecording,
+      status: () => ({
+        state: "complete",
+        recordingId: 62,
+        tracks: { system: { chunks: [{ startSample: 0, sampleCount: 40 * 24000 }] } },
+      }),
+      span: (_note, _track, from) => ({ wav: wavs[from < 15 ? 0 : 1] }),
+    },
+    { kind: "all" },
+    { notes: 1, rows: 10 },
+    {
+      isAvailable: () => true,
+      getModelPath: () => modelPath,
+      extractEmbeddingFromSamples: async () => new Float32Array([1, 0]),
+    }
+  );
+  const report = job.report;
+  assert.equal(report.validation.checks.audio_fingerprints, true);
+  assert.equal(Object.keys(report.fingerprints.audio).length, 2);
+  assert.deepEqual(
+    Object.values(report.fingerprints.audio).sort(),
+    wavs.map((wav) => createHash("sha256").update(wav).digest("hex")).sort()
+  );
+  assert.deepEqual(report.evidence.fingerprintIntegrity, []);
 });

@@ -95,6 +95,7 @@ function buildCalibrationLabels(note, audio, status = {}) {
       from: resolved.from ?? null,
       to: resolved.to ?? null,
       approximate: resolved.approximate ?? true,
+      timingProvenance: resolved.timingProvenance,
       unavailableReason: resolved.reason,
       textHash: createHash("sha256")
         .update(String(row.text || ""))

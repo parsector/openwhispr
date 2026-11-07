@@ -35,6 +35,33 @@ const ADMISSION_CRITERIA = Object.freeze([
   "precision",
 ]);
 
+// A clip and a reconstructed interval are different evidence, even in one note.
+function evidenceFingerprintKey(row) {
+  return JSON.stringify([
+    row.noteId,
+    row.exemplarId ?? null,
+    row.rowId,
+    row.track ?? null,
+    row.start ?? null,
+    row.end ?? null,
+  ]);
+}
+function fingerprintIntegrity(rows, audioFingerprints) {
+  return rows.flatMap((row) => {
+    const verified = audioFingerprints[evidenceFingerprintKey(row)];
+    const reason = !row.audioFingerprint
+      ? "missing_fingerprint"
+      : !fingerprint(row.audioFingerprint)
+        ? "invalid_fingerprint"
+        : !fingerprint(verified)
+          ? "unverified_fingerprint"
+          : row.audioFingerprint !== verified
+            ? "fingerprint_mismatch"
+            : null;
+    return reason ? [{ noteId: row.noteId, rowId: row.rowId, reason }] : [];
+  });
+}
+
 function admitRecommendation({
   rows,
   profiles,
@@ -96,9 +123,7 @@ function admitRecommendation({
     model_fingerprint: fingerprint(modelFingerprint),
     profile_fingerprint: fingerprint(profileFingerprint),
     audio_fingerprints:
-      Object.keys(audioFingerprints).length === notes.size &&
-      Object.values(audioFingerprints).every(fingerprint) &&
-      rows.every((row) => row.audioFingerprint === audioFingerprints[row.noteId]),
+      rows.length > 0 && fingerprintIntegrity(rows, audioFingerprints).length === 0,
     production_parity:
       validObservations &&
       validationEvidence?.source === "production-decisions" &&
@@ -156,6 +181,8 @@ function hasSupportedAdmission(result) {
 
 module.exports = {
   RECOMMENDATION_POLICY,
+  evidenceFingerprintKey,
+  fingerprintIntegrity,
   ADMISSION_CRITERIA,
   admitRecommendation,
   hasSupportedAdmission,

@@ -6072,7 +6072,7 @@
       "analysis_rows": "Consistent diagnostic-example minimum not met.",
       "model_fingerprint": "Speaker model fingerprint unavailable or invalid.",
       "profile_fingerprint": "Profile fingerprint unavailable or invalid.",
-      "audio_fingerprints": "Retained-audio fingerprints missing or invalid.",
+      "audio_fingerprints": "Fingerprint integrity check failed for included evidence.",
       "production_parity": "Production-parity decisions at the selected policy and fingerprints are missing.",
       "independent_sessions": "Evaluation must use recording sessions independent of tuning.",
       "positive_coverage": "Evaluation needs positive examples of enrolled people.",
@@ -6129,7 +6129,7 @@
     "calibrationApply": "Apply these values",
     "calibrationSynthetic": "Synthetic report: these values remain uncalibrated.",
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
-    "calibrationUnavailable": "Calibration settings unavailable",
+    "calibrationUnavailable": "Calibration recommendation unavailable in this version.",
     "calibrationInvalidReport": "Invalid calibration report",
     "calibrationFields": {
       "similarityFloor": "Similarity floor",
@@ -6260,7 +6260,45 @@
     "doneReset": "Voice reset for {{name}}. Names in notes were kept.",
     "meetingCount": "Meetings: {{count}}",
     "lastSeen": "Last seen {{date}}",
-    "attendeeDeleteReappears": "They will disappear from People and can reappear if they attend a new meeting."
+    "attendeeDeleteReappears": "They will disappear from People and can reappear if they attend a new meeting.",
+    "calibrationVersionLimit": "The analysis reconstructs historical audio and does not perform the independent production evaluation a recommendation requires.",
+    "calibrationUnavailableGroup": "Not available in this version",
+    "calibrationEvidenceGroup": "Limits of the available evidence",
+    "calibrationManualAvailable": "You can continue to use manual settings.",
+    "calibrationScoredSummary": "Scored examples after exclusions: {{rows}}.",
+    "calibrationClaimsSummary": "Recorded machine claims among scored evidence: {{machineClaims}}; minimum required: {{minimum}}.",
+    "calibrationSourceSummary": "Saved exemplars: {{savedExemplars}}; scored exemplars: {{exemplarRows}}; scored reconstructed rows: {{reconstructedRows}}.",
+    "calibrationTimingTitle": "Timing provenance",
+    "calibrationIntegrityTitle": "Fingerprint integrity check",
+    "calibrationIntegrityItem": "Note {{noteId}}, row {{rowId}}: {{reason}}.",
+    "calibrationDeveloperSweep": "Developer diagnostics: Diagnostic threshold sweep",
+    "calibrationSweepUnavailable": "Threshold sweep unavailable: {{rows}} scored examples; at least {{minimum}} are required.",
+    "calibrationProcessingSummary": "Playback placement — exact: {{exact}}, approximate: {{approximate}}, unavailable: {{unavailable}}. Re-embedded rows: {{embedded}}; excluded rows: {{excluded}}.",
+    "calibrationTiming": {
+      "exact_stored_span": "Exact stored span",
+      "capture_bounds": "Capture start and end bounds",
+      "onset_only": "Onset only",
+      "completion_timestamp_fallback": "Completion-timestamp fallback",
+      "unavailable": "Timing unavailable",
+      "retained_exemplar_clip": "Retained exemplar clip",
+      "label_not_contained": "Labelled interval not fully contained in retained window"
+    },
+    "calibrationIntegrity": {
+      "missing_fingerprint": "fingerprint missing for this evidence item",
+      "invalid_fingerprint": "fingerprint invalid for this evidence item",
+      "unverified_fingerprint": "no verified audio hash for this evidence item",
+      "fingerprint_mismatch": "verified audio hash does not match this evidence item",
+      "exemplar_integrity_failed": "saved clip bytes failed length or fingerprint verification"
+    },
+    "calibrationUnavailableCriteria": {
+      "production_parity": "Production-parity evaluation",
+      "independent_sessions": "Independent recording sessions for evaluation",
+      "positive_coverage": "Evaluation coverage of enrolled people",
+      "negative_coverage": "Evaluation coverage of unenrolled or unknown people",
+      "nonempty_accepted_set": "Accepted names in independent evaluation",
+      "correct_name_coverage": "Evaluation correct-name coverage",
+      "precision": "Evaluation precision"
+    }
   },
   "meetingAudio": {
     "exportCalibration": "Export calibration data",

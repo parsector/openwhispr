@@ -6174,7 +6174,7 @@
       "analysis_rows": "Недостаточно согласованных диагностических примеров.",
       "model_fingerprint": "Отпечаток голосовой модели отсутствует или неверен.",
       "profile_fingerprint": "Отпечаток профилей отсутствует или неверен.",
-      "audio_fingerprints": "Отпечатки сохранённого аудио отсутствуют или неверны.",
+      "audio_fingerprints": "Проверка целостности отпечатков включённых данных не пройдена.",
       "production_parity": "Нет решений рабочего распознавания с выбранными порогами и отпечатками.",
       "independent_sessions": "Проверка должна использовать сеансы записи, независимые от подбора порогов.",
       "positive_coverage": "Для проверки нужны положительные примеры зарегистрированных людей.",
@@ -6231,7 +6231,7 @@
     "calibrationApply": "Apply these values",
     "calibrationSynthetic": "Synthetic report: these values remain uncalibrated.",
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
-    "calibrationUnavailable": "Calibration settings unavailable",
+    "calibrationUnavailable": "Рекомендация по калибровке недоступна в этой версии.",
     "calibrationInvalidReport": "Invalid calibration report",
     "calibrationFields": {
       "similarityFloor": "Similarity floor",
@@ -6362,7 +6362,45 @@
     "doneReset": "Голос {{name}} сброшен. Имена в заметках сохранены.",
     "meetingCount": "Встреч: {{count}}",
     "lastSeen": "Последнее участие: {{date}}",
-    "attendeeDeleteReappears": "Этот человек исчезнет из раздела «Люди» и может появиться снова после участия в новой встрече."
+    "attendeeDeleteReappears": "Этот человек исчезнет из раздела «Люди» и может появиться снова после участия в новой встрече.",
+    "calibrationVersionLimit": "Анализ восстанавливает историческое аудио и не выполняет независимую оценку в рабочих условиях, необходимую для рекомендации.",
+    "calibrationUnavailableGroup": "Недоступно в этой версии",
+    "calibrationEvidenceGroup": "Ограничения доступных данных",
+    "calibrationManualAvailable": "Вы можете по-прежнему использовать ручные настройки.",
+    "calibrationScoredSummary": "Оценено примеров после исключений: {{rows}}.",
+    "calibrationClaimsSummary": "Записанные автоматические назначения в оценённых данных: {{machineClaims}}; необходимый минимум: {{minimum}}.",
+    "calibrationSourceSummary": "Сохранённые образцы: {{savedExemplars}}; оценённые образцы: {{exemplarRows}}; оценённые восстановленные строки: {{reconstructedRows}}.",
+    "calibrationTimingTitle": "Происхождение временных границ",
+    "calibrationIntegrityTitle": "Проверка целостности отпечатков",
+    "calibrationIntegrityItem": "Заметка {{noteId}}, строка {{rowId}}: {{reason}}.",
+    "calibrationDeveloperSweep": "Диагностика для разработчиков: Диагностический перебор порогов",
+    "calibrationSweepUnavailable": "Перебор порогов недоступен: оценено примеров — {{rows}}; требуется не менее {{minimum}}.",
+    "calibrationProcessingSummary": "Размещение воспроизведения — точное: {{exact}}, приблизительное: {{approximate}}, недоступное: {{unavailable}}. Повторно вычислены векторы строк: {{embedded}}; исключены строки: {{excluded}}.",
+    "calibrationTiming": {
+      "exact_stored_span": "Точный сохранённый интервал",
+      "capture_bounds": "Границы начала и конца захвата",
+      "onset_only": "Только начало",
+      "completion_timestamp_fallback": "Подстановка по времени завершения",
+      "unavailable": "Временные границы недоступны",
+      "retained_exemplar_clip": "Сохранённый эталонный клип",
+      "label_not_contained": "Размеченный интервал не полностью входит в сохранённое окно"
+    },
+    "calibrationIntegrity": {
+      "missing_fingerprint": "отпечаток этого элемента отсутствует",
+      "invalid_fingerprint": "отпечаток этого элемента недействителен",
+      "unverified_fingerprint": "для этого элемента нет проверенного хеша аудио",
+      "fingerprint_mismatch": "проверенный хеш аудио не соответствует этому элементу",
+      "exemplar_integrity_failed": "данные сохранённого клипа не прошли проверку длины или отпечатка"
+    },
+    "calibrationUnavailableCriteria": {
+      "production_parity": "Оценка, соответствующая рабочим условиям",
+      "independent_sessions": "Независимые сеансы записи для оценки",
+      "positive_coverage": "Охват зарегистрированных людей при оценке",
+      "negative_coverage": "Охват незарегистрированных или неизвестных людей при оценке",
+      "nonempty_accepted_set": "Принятые имена в независимой оценке",
+      "correct_name_coverage": "Охват верных имён при оценке",
+      "precision": "Точность оценки"
+    }
   },
   "meetingAudio": {
     "exportCalibration": "Экспортировать данные калибровки",

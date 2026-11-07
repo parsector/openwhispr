@@ -6306,7 +6306,7 @@
       "analysis_rows": "لم يتحقق الحد الأدنى لأمثلة التشخيص المتسقة.",
       "model_fingerprint": "بصمة نموذج المتحدث غير متاحة أو غير صالحة.",
       "profile_fingerprint": "بصمة الملفات غير متاحة أو غير صالحة.",
-      "audio_fingerprints": "بصمات الصوت المحتفظ به مفقودة أو غير صالحة.",
+      "audio_fingerprints": "فشل فحص سلامة بصمات الأدلة المدرجة.",
       "production_parity": "قرارات مطابقة للإنتاج بالقيم والبصمات المختارة غير متاحة.",
       "independent_sessions": "يجب أن يستخدم التقييم جلسات تسجيل مستقلة عن الضبط.",
       "positive_coverage": "يحتاج التقييم إلى أمثلة إيجابية لأشخاص مسجلين.",
@@ -6363,7 +6363,7 @@
     "calibrationApply": "Apply these values",
     "calibrationSynthetic": "Synthetic report: these values remain uncalibrated.",
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
-    "calibrationUnavailable": "Calibration settings unavailable",
+    "calibrationUnavailable": "توصية المعايرة غير متاحة في هذا الإصدار.",
     "calibrationInvalidReport": "Invalid calibration report",
     "calibrationFields": {
       "similarityFloor": "Similarity floor",
@@ -6494,7 +6494,45 @@
     "doneReset": "أُعيد ضبط صوت {{name}}. بقيت الأسماء في الملاحظات.",
     "meetingCount": "الاجتماعات: {{count}}",
     "lastSeen": "آخر ظهور {{date}}",
-    "attendeeDeleteReappears": "سيختفي هذا الشخص من صفحة الأشخاص ويمكن أن يظهر مجددًا إذا حضر اجتماعًا جديدًا."
+    "attendeeDeleteReappears": "سيختفي هذا الشخص من صفحة الأشخاص ويمكن أن يظهر مجددًا إذا حضر اجتماعًا جديدًا.",
+    "calibrationVersionLimit": "يعيد التحليل بناء الصوت التاريخي ولا يجري التقييم المستقل في بيئة الإنتاج الذي تتطلبه التوصية.",
+    "calibrationUnavailableGroup": "غير متاح في هذا الإصدار",
+    "calibrationEvidenceGroup": "حدود الأدلة المتاحة",
+    "calibrationManualAvailable": "يمكنك الاستمرار في استخدام الإعدادات اليدوية.",
+    "calibrationScoredSummary": "عدد الأمثلة المقيّمة بعد الاستبعاد: {{rows}}.",
+    "calibrationClaimsSummary": "التعيينات الآلية المسجلة ضمن الأدلة المقيّمة: {{machineClaims}}؛ الحد الأدنى المطلوب: {{minimum}}.",
+    "calibrationSourceSummary": "العينات المحفوظة: {{savedExemplars}}؛ العينات المقيّمة: {{exemplarRows}}؛ الصفوف المعاد بناؤها والمقيّمة: {{reconstructedRows}}.",
+    "calibrationTimingTitle": "مصدر معلومات التوقيت",
+    "calibrationIntegrityTitle": "فحص سلامة البصمات",
+    "calibrationIntegrityItem": "الملاحظة {{noteId}}، الصف {{rowId}}: {{reason}}.",
+    "calibrationDeveloperSweep": "تشخيصات المطورين: مسح تشخيصي للعتبات",
+    "calibrationSweepUnavailable": "مسح العتبات غير متاح: عدد الأمثلة المقيّمة {{rows}}؛ الحد الأدنى المطلوب {{minimum}}.",
+    "calibrationProcessingSummary": "موضع التشغيل — دقيق: {{exact}}، تقريبي: {{approximate}}، غير متاح: {{unavailable}}. صفوف أعيد حساب متجهاتها: {{embedded}}؛ الصفوف المستبعدة: {{excluded}}.",
+    "calibrationTiming": {
+      "exact_stored_span": "الفترة الدقيقة المحفوظة",
+      "capture_bounds": "حدود بدء الالتقاط ونهايته",
+      "onset_only": "البداية فقط",
+      "completion_timestamp_fallback": "الرجوع إلى الطابع الزمني للاكتمال",
+      "unavailable": "التوقيت غير متاح",
+      "retained_exemplar_clip": "مقطع مرجعي محفوظ",
+      "label_not_contained": "الفترة المصنفة ليست محتواة بالكامل في النافذة المحفوظة"
+    },
+    "calibrationIntegrity": {
+      "missing_fingerprint": "بصمة عنصر الدليل هذا مفقودة",
+      "invalid_fingerprint": "بصمة عنصر الدليل هذا غير صالحة",
+      "unverified_fingerprint": "لا توجد تجزئة صوت متحقق منها لعنصر الدليل هذا",
+      "fingerprint_mismatch": "تجزئة الصوت المتحقق منها لا تطابق عنصر الدليل هذا",
+      "exemplar_integrity_failed": "فشلت بيانات المقطع المحفوظ في التحقق من الطول أو البصمة"
+    },
+    "calibrationUnavailableCriteria": {
+      "production_parity": "تقييم مطابق لبيئة الإنتاج",
+      "independent_sessions": "جلسات تسجيل مستقلة للتقييم",
+      "positive_coverage": "تغطية الأشخاص المسجلين في التقييم",
+      "negative_coverage": "تغطية الأشخاص غير المسجلين أو غير المعروفين في التقييم",
+      "nonempty_accepted_set": "الأسماء المقبولة في التقييم المستقل",
+      "correct_name_coverage": "تغطية الأسماء الصحيحة في التقييم",
+      "precision": "دقة التقييم"
+    }
   },
   "meetingAudio": {
     "exportCalibration": "تصدير بيانات المعايرة",

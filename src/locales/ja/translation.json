@@ -6072,7 +6072,7 @@
       "analysis_rows": "一貫した診断サンプル数が最低数に達していません。",
       "model_fingerprint": "話者モデルのフィンガープリントが不明または無効です。",
       "profile_fingerprint": "プロファイルのフィンガープリントが不明または無効です。",
-      "audio_fingerprints": "保持音声のフィンガープリントが不足または無効です。",
+      "audio_fingerprints": "対象の証拠のフィンガープリント整合性確認に失敗しました。",
       "production_parity": "選択した設定値とフィンガープリントに対応する本番判定がありません。",
       "independent_sessions": "検証には調整から独立した録音セッションが必要です。",
       "positive_coverage": "検証には登録済み人物の正例が必要です。",
@@ -6129,7 +6129,7 @@
     "calibrationApply": "Apply these values",
     "calibrationSynthetic": "Synthetic report: these values remain uncalibrated.",
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
-    "calibrationUnavailable": "Calibration settings unavailable",
+    "calibrationUnavailable": "このバージョンではキャリブレーションの推奨は利用できません。",
     "calibrationInvalidReport": "Invalid calibration report",
     "calibrationFields": {
       "similarityFloor": "Similarity floor",
@@ -6260,7 +6260,45 @@
     "doneReset": "{{name}} の音声をリセットしました。ノートの名前は保持しました。",
     "meetingCount": "参加した会議: {{count}}",
     "lastSeen": "最終参加日: {{date}}",
-    "attendeeDeleteReappears": "この人は「人」から消えますが、新しい会議に参加すると再び表示されます。"
+    "attendeeDeleteReappears": "この人は「人」から消えますが、新しい会議に参加すると再び表示されます。",
+    "calibrationVersionLimit": "この分析は過去の音声を再構成するもので、推奨に必要な独立した本番環境での評価は行いません。",
+    "calibrationUnavailableGroup": "このバージョンでは利用できない項目",
+    "calibrationEvidenceGroup": "利用可能な証拠の制約",
+    "calibrationManualAvailable": "引き続き手動設定を使用できます。",
+    "calibrationScoredSummary": "除外後の評価例数：{{rows}}。",
+    "calibrationClaimsSummary": "評価対象の証拠に記録された自動割り当て：{{machineClaims}}、必要な最小数：{{minimum}}。",
+    "calibrationSourceSummary": "保存済みサンプル：{{savedExemplars}}、評価したサンプル：{{exemplarRows}}、評価した再構成行：{{reconstructedRows}}。",
+    "calibrationTimingTitle": "時間情報の由来",
+    "calibrationIntegrityTitle": "フィンガープリントの整合性確認",
+    "calibrationIntegrityItem": "ノート {{noteId}}、行 {{rowId}}：{{reason}}。",
+    "calibrationDeveloperSweep": "開発者向け診断：診断用しきい値スイープ",
+    "calibrationSweepUnavailable": "しきい値スイープは利用できません：評価例数 {{rows}}、必要な最小数 {{minimum}}。",
+    "calibrationProcessingSummary": "再生位置 — 正確：{{exact}}、概算：{{approximate}}、利用不可：{{unavailable}}。再埋め込み行数：{{embedded}}、除外行数：{{excluded}}。",
+    "calibrationTiming": {
+      "exact_stored_span": "保存された正確な区間",
+      "capture_bounds": "キャプチャの開始と終了の境界",
+      "onset_only": "開始のみ",
+      "completion_timestamp_fallback": "完了タイムスタンプによる代替",
+      "unavailable": "時間情報なし",
+      "retained_exemplar_clip": "保持された参照クリップ",
+      "label_not_contained": "ラベル付き区間が保持ウィンドウに完全には含まれていません"
+    },
+    "calibrationIntegrity": {
+      "missing_fingerprint": "この証拠項目のフィンガープリントがありません",
+      "invalid_fingerprint": "この証拠項目のフィンガープリントは無効です",
+      "unverified_fingerprint": "この証拠項目には検証済み音声ハッシュがありません",
+      "fingerprint_mismatch": "検証済み音声ハッシュがこの証拠項目と一致しません",
+      "exemplar_integrity_failed": "保存されたクリップのバイト数またはフィンガープリントの検証に失敗しました"
+    },
+    "calibrationUnavailableCriteria": {
+      "production_parity": "本番環境と同等の評価",
+      "independent_sessions": "評価用の独立した録音セッション",
+      "positive_coverage": "登録済みの人に対する評価の網羅性",
+      "negative_coverage": "未登録または不明な人に対する評価の網羅性",
+      "nonempty_accepted_set": "独立評価で受理された名前",
+      "correct_name_coverage": "評価での正しい名前のカバレッジ",
+      "precision": "評価の適合率"
+    }
   },
   "meetingAudio": {
     "exportCalibration": "校正データをエクスポート",

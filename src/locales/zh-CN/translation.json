@@ -6072,7 +6072,7 @@
       "analysis_rows": "一致的诊断样本数未达最低要求。",
       "model_fingerprint": "说话人模型指纹缺失或无效。",
       "profile_fingerprint": "声纹指纹缺失或无效。",
-      "audio_fingerprints": "保留音频的指纹缺失或无效。",
+      "audio_fingerprints": "纳入证据的指纹完整性检查失败。",
       "production_parity": "缺少使用所选设置和指纹的生产等效判定。",
       "independent_sessions": "评估必须使用与调参独立的录音会话。",
       "positive_coverage": "评估需要已注册人员的正例。",
@@ -6129,7 +6129,7 @@
     "calibrationApply": "Apply these values",
     "calibrationSynthetic": "Synthetic report: these values remain uncalibrated.",
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
-    "calibrationUnavailable": "Calibration settings unavailable",
+    "calibrationUnavailable": "此版本无法提供校准建议。",
     "calibrationInvalidReport": "Invalid calibration report",
     "calibrationFields": {
       "similarityFloor": "Similarity floor",
@@ -6260,7 +6260,45 @@
     "doneReset": "已重置 {{name}} 的声音，笔记中的姓名已保留。",
     "meetingCount": "参加会议：{{count}}",
     "lastSeen": "上次出现：{{date}}",
-    "attendeeDeleteReappears": "此人将从“人物”中消失；如果参加新的会议，可能会再次出现。"
+    "attendeeDeleteReappears": "此人将从“人物”中消失；如果参加新的会议，可能会再次出现。",
+    "calibrationVersionLimit": "此分析会重建历史音频，但不会执行提出建议所需的独立生产环境评估。",
+    "calibrationUnavailableGroup": "此版本不提供的功能",
+    "calibrationEvidenceGroup": "可用证据的局限",
+    "calibrationManualAvailable": "您可以继续使用手动设置。",
+    "calibrationScoredSummary": "排除后评分的示例数：{{rows}}。",
+    "calibrationClaimsSummary": "评分证据中记录的自动分配数：{{machineClaims}}；最低要求：{{minimum}}。",
+    "calibrationSourceSummary": "已保存的样本：{{savedExemplars}}；已评分样本：{{exemplarRows}}；已评分的重建行：{{reconstructedRows}}。",
+    "calibrationTimingTitle": "时间信息来源",
+    "calibrationIntegrityTitle": "指纹完整性检查",
+    "calibrationIntegrityItem": "笔记 {{noteId}}，行 {{rowId}}：{{reason}}。",
+    "calibrationDeveloperSweep": "开发者诊断：诊断阈值扫描",
+    "calibrationSweepUnavailable": "阈值扫描不可用：已评分 {{rows}} 个示例；至少需要 {{minimum}} 个。",
+    "calibrationProcessingSummary": "播放定位 — 精确：{{exact}}，近似：{{approximate}}，不可用：{{unavailable}}。重新生成嵌入的行数：{{embedded}}；排除行数：{{excluded}}。",
+    "calibrationTiming": {
+      "exact_stored_span": "已保存的精确区间",
+      "capture_bounds": "采集开始和结束边界",
+      "onset_only": "仅有起点",
+      "completion_timestamp_fallback": "使用完成时间戳回退",
+      "unavailable": "时间信息不可用",
+      "retained_exemplar_clip": "保留的参考音频片段",
+      "label_not_contained": "标注区间未完全包含在保留的窗口内"
+    },
+    "calibrationIntegrity": {
+      "missing_fingerprint": "此证据项缺少指纹",
+      "invalid_fingerprint": "此证据项的指纹无效",
+      "unverified_fingerprint": "此证据项没有经过验证的音频哈希",
+      "fingerprint_mismatch": "经过验证的音频哈希与此证据项不匹配",
+      "exemplar_integrity_failed": "保存的音频片段未通过长度或指纹验证"
+    },
+    "calibrationUnavailableCriteria": {
+      "production_parity": "与生产环境一致的评估",
+      "independent_sessions": "用于评估的独立录音会话",
+      "positive_coverage": "评估对已登记人员的覆盖",
+      "negative_coverage": "评估对未登记或未知人员的覆盖",
+      "nonempty_accepted_set": "独立评估中接受的姓名",
+      "correct_name_coverage": "评估中的正确姓名覆盖率",
+      "precision": "评估精确率"
+    }
   },
   "meetingAudio": {
     "exportCalibration": "导出校准数据",

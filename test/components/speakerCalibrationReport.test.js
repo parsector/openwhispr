@@ -113,3 +113,52 @@ test("People settings delegates its report rendering and guards the apply handle
   );
   assert.doesNotMatch(source, /analysis\.winner|analyses\.estimated/);
 });
+
+test("diagnostic report leads with the version limit and separates capabilities from evidence", async (t) => {
+  const render = await renderer(t);
+  const input = recommendationFixture();
+  delete input.validationEvidence;
+  input.rows[0].timingProvenance = "completion_timestamp_fallback";
+  input.rows[1].timingProvenance = "onset_only";
+  input.rows[2].verifiedAudioFingerprint = "c".repeat(64);
+  input.rows.forEach((row, i) => {
+    row.machineLabel = i === 3 ? "Ada" : null;
+  });
+  const report = buildReport(input);
+  const html = render(report);
+  assert.match(html, /role="status">Calibration recommendation unavailable in this version\.<\/p>/);
+  assert.match(
+    html,
+    /The analysis reconstructs historical audio and does not perform the independent production evaluation a recommendation requires\./
+  );
+  assert.match(html, /Not available in this version/);
+  assert.match(html, /Limits of the available evidence/);
+  assert.match(html, /Timing provenance/);
+  assert.match(html, /Completion-timestamp fallback: 1/);
+  assert.match(html, /Onset only: 1/);
+  assert.match(html, /Scored examples after exclusions: 20/);
+  assert.match(html, /Recorded machine claims among scored evidence: 1; minimum required: 10/);
+  assert.match(html, /Saved exemplars: 0; scored exemplars: 0; scored reconstructed rows: 0/);
+  assert.match(html, /Fingerprint integrity check/);
+  assert.match(html, /verified audio hash does not match this evidence item/);
+  assert.match(
+    html,
+    /<details[^>]*><summary[^>]*>Developer diagnostics: Diagnostic threshold sweep<\/summary>/
+  );
+  assert.doesNotMatch(html, /<details[^>]*open|re-enrol|re-enroll|Keep reviewing names|try again/i);
+  assert.ok(html.indexOf("Not available in this version") < html.indexOf("Production-parity"));
+  assert.ok(
+    html.indexOf("Limits of the available evidence") > html.indexOf("Evaluation precision")
+  );
+});
+
+test("too few scored examples hide the sweep table and explain its minimum", async (t) => {
+  const render = await renderer(t);
+  const input = recommendationFixture();
+  delete input.validationEvidence;
+  input.rows = input.rows.slice(0, 1);
+  const html = render(buildReport(input));
+  assert.match(html, /Developer diagnostics: Diagnostic threshold sweep/);
+  assert.match(html, /Threshold sweep unavailable: 1 scored examples; at least 12 are required/);
+  assert.doesNotMatch(html, /<table/);
+});

@@ -6072,7 +6072,7 @@
       "analysis_rows": "一致的診斷樣本數未達最低要求。",
       "model_fingerprint": "說話者模型指紋遺失或無效。",
       "profile_fingerprint": "聲紋指紋遺失或無效。",
-      "audio_fingerprints": "保留音訊的指紋遺失或無效。",
+      "audio_fingerprints": "納入證據的指紋完整性檢查失敗。",
       "production_parity": "缺少使用所選設定和指紋的正式環境等效判定。",
       "independent_sessions": "評估必須使用與調整參數獨立的錄音工作階段。",
       "positive_coverage": "評估需要已註冊人員的正例。",
@@ -6129,7 +6129,7 @@
     "calibrationApply": "Apply these values",
     "calibrationSynthetic": "Synthetic report: these values remain uncalibrated.",
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
-    "calibrationUnavailable": "Calibration settings unavailable",
+    "calibrationUnavailable": "此版本無法提供校準建議。",
     "calibrationInvalidReport": "Invalid calibration report",
     "calibrationFields": {
       "similarityFloor": "Similarity floor",
@@ -6260,7 +6260,45 @@
     "doneReset": "已重設 {{name}} 的聲音，筆記中的姓名已保留。",
     "meetingCount": "參加會議：{{count}}",
     "lastSeen": "上次出現：{{date}}",
-    "attendeeDeleteReappears": "此人將從「人物」中消失；如果參加新的會議，可能會再次出現。"
+    "attendeeDeleteReappears": "此人將從「人物」中消失；如果參加新的會議，可能會再次出現。",
+    "calibrationVersionLimit": "此分析會重建歷史音訊，但不會執行提出建議所需的獨立正式環境評估。",
+    "calibrationUnavailableGroup": "此版本不提供的功能",
+    "calibrationEvidenceGroup": "可用證據的限制",
+    "calibrationManualAvailable": "您可以繼續使用手動設定。",
+    "calibrationScoredSummary": "排除後評分的範例數：{{rows}}。",
+    "calibrationClaimsSummary": "評分證據中記錄的自動指派數：{{machineClaims}}；最低要求：{{minimum}}。",
+    "calibrationSourceSummary": "已儲存的樣本：{{savedExemplars}}；已評分樣本：{{exemplarRows}}；已評分的重建列：{{reconstructedRows}}。",
+    "calibrationTimingTitle": "時間資訊來源",
+    "calibrationIntegrityTitle": "指紋完整性檢查",
+    "calibrationIntegrityItem": "筆記 {{noteId}}，列 {{rowId}}：{{reason}}。",
+    "calibrationDeveloperSweep": "開發者診斷：診斷閾值掃描",
+    "calibrationSweepUnavailable": "閾值掃描無法使用：已評分 {{rows}} 個範例；至少需要 {{minimum}} 個。",
+    "calibrationProcessingSummary": "播放定位 — 精確：{{exact}}，近似：{{approximate}}，無法使用：{{unavailable}}。重新產生嵌入的列數：{{embedded}}；排除列數：{{excluded}}。",
+    "calibrationTiming": {
+      "exact_stored_span": "已儲存的精確區間",
+      "capture_bounds": "擷取開始與結束邊界",
+      "onset_only": "僅有起點",
+      "completion_timestamp_fallback": "使用完成時間戳記回退",
+      "unavailable": "時間資訊無法使用",
+      "retained_exemplar_clip": "保留的參考音訊片段",
+      "label_not_contained": "標註區間未完全包含在保留的視窗內"
+    },
+    "calibrationIntegrity": {
+      "missing_fingerprint": "此證據項目缺少指紋",
+      "invalid_fingerprint": "此證據項目的指紋無效",
+      "unverified_fingerprint": "此證據項目沒有經過驗證的音訊雜湊",
+      "fingerprint_mismatch": "經過驗證的音訊雜湊與此證據項目不符",
+      "exemplar_integrity_failed": "儲存的音訊片段未通過長度或指紋驗證"
+    },
+    "calibrationUnavailableCriteria": {
+      "production_parity": "與正式環境一致的評估",
+      "independent_sessions": "用於評估的獨立錄音工作階段",
+      "positive_coverage": "評估對已登錄人員的涵蓋",
+      "negative_coverage": "評估對未登錄或未知人員的涵蓋",
+      "nonempty_accepted_set": "獨立評估中接受的姓名",
+      "correct_name_coverage": "評估中的正確姓名涵蓋率",
+      "precision": "評估精確率"
+    }
   },
   "meetingAudio": {
     "exportCalibration": "匯出校準資料",

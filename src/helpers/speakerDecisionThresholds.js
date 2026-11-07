@@ -26,6 +26,20 @@ let state = {
 function current() {
   return structuredClone(state);
 }
+function validAudioFingerprints(evidence, fingerprints) {
+  const audio = fingerprints?.audio || {};
+  if (evidence.audioFingerprintScope === "row")
+    return evidence.revisions.every(
+      (row) =>
+        /^[a-f0-9]{64}$/.test(row.audioFingerprint || "") &&
+        row.audioFingerprint === audio[row.evidenceKey]
+    );
+  // Previously applied settings used note aggregates. Preserve their reload path.
+  return (
+    Object.keys(audio).length === evidence.notes &&
+    Object.values(audio).every((hash) => /^[a-f0-9]{64}$/i.test(hash))
+  );
+}
 function validStoredEvidence(evidence) {
   return (
     // Preserve legacy applied settings: invalidating their status would change
@@ -48,8 +62,7 @@ function validStoredEvidence(evidence) {
     evidence.exclusions.every((item) => typeof item.reason === "string" && item.reason) &&
     /^[a-f0-9]{64}$/i.test(evidence.fingerprints?.model || "") &&
     /^[a-f0-9]{64}$/i.test(evidence.fingerprints?.profiles || "") &&
-    Object.keys(evidence.fingerprints?.audio || {}).length === evidence.notes &&
-    Object.values(evidence.fingerprints?.audio || {}).every((hash) => /^[a-f0-9]{64}$/i.test(hash))
+    validAudioFingerprints(evidence, evidence.fingerprints)
   );
 }
 function configure(destination) {
@@ -123,8 +136,7 @@ function apply(values, report = null) {
     report.evidence.exclusions.every((item) => typeof item.reason === "string" && item.reason) &&
     /^[a-f0-9]{64}$/i.test(report.fingerprints?.model || "") &&
     /^[a-f0-9]{64}$/i.test(report.fingerprints?.profiles || "") &&
-    Object.keys(report.fingerprints?.audio || {}).length === report.evidence.notes &&
-    Object.values(report.fingerprints?.audio || {}).every((hash) => /^[a-f0-9]{64}$/i.test(hash)) &&
+    validAudioFingerprints(report.evidence, report.fingerprints) &&
     report.analyses?.calibration?.winner?.right + report.analyses?.calibration?.winner?.wrong > 0;
   const statuses = Object.fromEntries(
     Object.keys(LIMITS).map((key) => [

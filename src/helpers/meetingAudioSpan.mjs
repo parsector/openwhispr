@@ -74,6 +74,9 @@ function resolveMeetingAudioSpan(row, rows, recordingId, startedAt, tracks, cont
   const span = row.audioSpan;
   const validSpan = !!span && span.recordingId === recordingId;
   const track = row.source;
+  const completion = seconds(row.timestamp, startedAt);
+  const onset = seconds(row.speechStart, startedAt);
+  const speechEnd = seconds(row.speechEnd, startedAt);
   if (
     !["mic", "system"].includes(track) ||
     (row.recordingId != null && row.recordingId !== recordingId) ||
@@ -81,26 +84,36 @@ function resolveMeetingAudioSpan(row, rows, recordingId, startedAt, tracks, cont
     (row.timebase === "epoch" && row.timestamp != null && row.timestamp < 1e12) ||
     (row.timebase === "recording" &&
       (row.recordingId == null || (row.timestamp != null && row.timestamp > 1e12))) ||
-    (!validSpan && (row.timestamp == null || (row.timestamp > 1e12 && startedAt == null))) ||
+    (!validSpan &&
+      ((row.timestamp == null && onset == null) || (row.timestamp > 1e12 && startedAt == null))) ||
     (row.timebase == null &&
       startedAt != null &&
       row.timestamp != null &&
       row.timestamp < 1e12 &&
       !validSpan)
   )
-    return { reason: "timebase" };
-  if (validSpan && span.trackId !== track) return { reason: "track_mismatch" };
+    return { reason: "timebase", timingProvenance: "unavailable" };
+  if (validSpan && span.trackId !== track)
+    return { reason: "track_mismatch", timingProvenance: "unavailable" };
 
-  const completion = seconds(row.timestamp, startedAt);
-  const onset = seconds(row.speechStart, startedAt);
-  const speechEnd = seconds(row.speechEnd, startedAt);
   const start = validSpan
     ? span.startSample / RATE
     : (onset ?? Math.max(0, (completion ?? 0) - UNKNOWN_ONSET_WINDOW));
   const end = validSpan
     ? span.endSample / RATE
     : (speechEnd ?? completion ?? start + UNKNOWN_ONSET_WINDOW);
-  const details = { start, end, track, approximate: !validSpan };
+  // Provenance describes the stored timing evidence, independently of whether
+  // playback can place it in retained audio. Completion is never a capture end.
+  const timingProvenance = validSpan
+    ? "exact_stored_span"
+    : onset != null && speechEnd != null
+      ? "capture_bounds"
+      : onset != null
+        ? "onset_only"
+        : completion != null
+          ? "completion_timestamp_fallback"
+          : "unavailable";
+  const details = { start, end, track, approximate: !validSpan, timingProvenance };
   const anchor = validSpan ? start : (onset ?? completion ?? start);
   const index = context ? -1 : rows.findIndex((candidate) => candidate.id === row.id);
   const nextStart = context

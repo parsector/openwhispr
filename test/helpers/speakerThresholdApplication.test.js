@@ -89,6 +89,12 @@ test("a reconstructed diagnostic report cannot calibrate settings when applied o
         vector: i % 2 ? [0, 1] : [1, 0],
         vectorSource: "reconstructed-row-audio",
         audioFingerprint: "a".repeat(64),
+        verifiedAudioFingerprint: "a".repeat(64),
+        timingProvenance: "exact_stored_span",
+        start: 0,
+        end: 2,
+        from: 0,
+        to: 2,
       })),
       profiles: [
         { id: 1, name: "Ada", vector: [1, 0] },

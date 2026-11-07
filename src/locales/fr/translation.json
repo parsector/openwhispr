@@ -6090,7 +6090,7 @@
       "analysis_rows": "Minimum d’exemples diagnostiques cohérents non atteint.",
       "model_fingerprint": "Empreinte du modèle vocal absente ou invalide.",
       "profile_fingerprint": "Empreinte des profils absente ou invalide.",
-      "audio_fingerprints": "Empreintes de l’audio conservé absentes ou invalides.",
+      "audio_fingerprints": "Échec de la vérification d’intégrité des empreintes des éléments inclus.",
       "production_parity": "Décisions équivalentes à la production pour les valeurs et empreintes choisies manquantes.",
       "independent_sessions": "L’évaluation doit utiliser des sessions indépendantes du réglage.",
       "positive_coverage": "L’évaluation exige des exemples positifs de personnes enregistrées.",
@@ -6147,7 +6147,7 @@
     "calibrationApply": "Apply these values",
     "calibrationSynthetic": "Synthetic report: these values remain uncalibrated.",
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
-    "calibrationUnavailable": "Calibration settings unavailable",
+    "calibrationUnavailable": "Recommandation de calibrage indisponible dans cette version.",
     "calibrationInvalidReport": "Invalid calibration report",
     "calibrationFields": {
       "similarityFloor": "Similarity floor",
@@ -6278,7 +6278,45 @@
     "doneReset": "Voix réinitialisée pour {{name}}. Les noms des notes sont conservés.",
     "meetingCount": "Réunions : {{count}}",
     "lastSeen": "Dernière présence : {{date}}",
-    "attendeeDeleteReappears": "Cette personne disparaîtra de Personnes et pourra réapparaître si elle participe à une nouvelle réunion."
+    "attendeeDeleteReappears": "Cette personne disparaîtra de Personnes et pourra réapparaître si elle participe à une nouvelle réunion.",
+    "calibrationVersionLimit": "L’analyse reconstruit l’audio historique et n’effectue pas l’évaluation indépendante en production nécessaire à une recommandation.",
+    "calibrationUnavailableGroup": "Indisponible dans cette version",
+    "calibrationEvidenceGroup": "Limites des éléments disponibles",
+    "calibrationManualAvailable": "Vous pouvez continuer à utiliser les réglages manuels.",
+    "calibrationScoredSummary": "Exemples évalués après exclusions : {{rows}}.",
+    "calibrationClaimsSummary": "Attributions automatiques enregistrées parmi les éléments évalués : {{machineClaims}} ; minimum requis : {{minimum}}.",
+    "calibrationSourceSummary": "Extraits enregistrés : {{savedExemplars}} ; extraits évalués : {{exemplarRows}} ; lignes reconstruites évaluées : {{reconstructedRows}}.",
+    "calibrationTimingTitle": "Provenance des repères temporels",
+    "calibrationIntegrityTitle": "Vérification de l’intégrité des empreintes",
+    "calibrationIntegrityItem": "Note {{noteId}}, ligne {{rowId}} : {{reason}}.",
+    "calibrationDeveloperSweep": "Diagnostics de développement : Comparaison diagnostique des seuils",
+    "calibrationSweepUnavailable": "Comparaison des seuils indisponible : {{rows}} exemples évalués ; au moins {{minimum}} sont requis.",
+    "calibrationProcessingSummary": "Placement de lecture — exact : {{exact}}, approximatif : {{approximate}}, indisponible : {{unavailable}}. Lignes réencodées : {{embedded}} ; lignes exclues : {{excluded}}.",
+    "calibrationTiming": {
+      "exact_stored_span": "Intervalle exact enregistré",
+      "capture_bounds": "Bornes de début et de fin de capture",
+      "onset_only": "Début uniquement",
+      "completion_timestamp_fallback": "Repli sur l’horodatage de fin de traitement",
+      "unavailable": "Repères temporels indisponibles",
+      "retained_exemplar_clip": "Extrait de référence conservé",
+      "label_not_contained": "Intervalle étiqueté non entièrement contenu dans la fenêtre conservée"
+    },
+    "calibrationIntegrity": {
+      "missing_fingerprint": "empreinte manquante pour cet élément",
+      "invalid_fingerprint": "empreinte invalide pour cet élément",
+      "unverified_fingerprint": "aucun hachage audio vérifié pour cet élément",
+      "fingerprint_mismatch": "le hachage audio vérifié ne correspond pas à cet élément",
+      "exemplar_integrity_failed": "échec de la vérification de longueur ou d’empreinte des données de l’extrait enregistré"
+    },
+    "calibrationUnavailableCriteria": {
+      "production_parity": "Évaluation conforme à la production",
+      "independent_sessions": "Sessions d’enregistrement indépendantes pour l’évaluation",
+      "positive_coverage": "Couverture des personnes inscrites lors de l’évaluation",
+      "negative_coverage": "Couverture des personnes non inscrites ou inconnues lors de l’évaluation",
+      "nonempty_accepted_set": "Noms acceptés lors de l’évaluation indépendante",
+      "correct_name_coverage": "Couverture des noms corrects lors de l’évaluation",
+      "precision": "Précision de l’évaluation"
+    }
   },
   "meetingAudio": {
     "exportCalibration": "Exporter les données de calibration",

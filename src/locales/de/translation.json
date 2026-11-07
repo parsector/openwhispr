@@ -6072,7 +6072,7 @@
       "analysis_rows": "Mindestzahl konsistenter Diagnosebeispiele nicht erreicht.",
       "model_fingerprint": "Fingerabdruck des Sprechermodells fehlt oder ist ungültig.",
       "profile_fingerprint": "Profilfingerabdruck fehlt oder ist ungültig.",
-      "audio_fingerprints": "Fingerabdrücke erhaltener Audiodaten fehlen oder sind ungültig.",
+      "audio_fingerprints": "Integritätsprüfung der Fingerabdrücke für einbezogene Nachweise fehlgeschlagen.",
       "production_parity": "Produktionsgleiche Entscheidungen für die gewählten Werte und Fingerabdrücke fehlen.",
       "independent_sessions": "Die Prüfung muss Aufnahmesitzungen unabhängig von der Abstimmung nutzen.",
       "positive_coverage": "Die Prüfung benötigt positive Beispiele registrierter Personen.",
@@ -6129,7 +6129,7 @@
     "calibrationApply": "Apply these values",
     "calibrationSynthetic": "Synthetic report: these values remain uncalibrated.",
     "calibrationReportReady": "Report loaded. Review the numbers, then apply.",
-    "calibrationUnavailable": "Calibration settings unavailable",
+    "calibrationUnavailable": "Kalibrierungsempfehlung in dieser Version nicht verfügbar.",
     "calibrationInvalidReport": "Invalid calibration report",
     "calibrationFields": {
       "similarityFloor": "Similarity floor",
@@ -6260,7 +6260,45 @@
     "doneReset": "Stimme von {{name}} zurückgesetzt. Namen in Notizen bleiben erhalten.",
     "meetingCount": "Besuchte Meetings: {{count}}",
     "lastSeen": "Zuletzt gesehen: {{date}}",
-    "attendeeDeleteReappears": "Diese Person verschwindet aus „Personen“ und kann nach Teilnahme an einem neuen Meeting wieder erscheinen."
+    "attendeeDeleteReappears": "Diese Person verschwindet aus „Personen“ und kann nach Teilnahme an einem neuen Meeting wieder erscheinen.",
+    "calibrationVersionLimit": "Die Analyse rekonstruiert historische Audiodaten und führt nicht die unabhängige Auswertung im Produktivbetrieb durch, die eine Empfehlung erfordert.",
+    "calibrationUnavailableGroup": "In dieser Version nicht verfügbar",
+    "calibrationEvidenceGroup": "Grenzen der verfügbaren Nachweise",
+    "calibrationManualAvailable": "Sie können weiterhin manuelle Einstellungen verwenden.",
+    "calibrationScoredSummary": "Bewertete Beispiele nach Ausschlüssen: {{rows}}.",
+    "calibrationClaimsSummary": "Aufgezeichnete maschinelle Zuordnungen in bewerteten Nachweisen: {{machineClaims}}; erforderliches Minimum: {{minimum}}.",
+    "calibrationSourceSummary": "Gespeicherte Beispiele: {{savedExemplars}}; bewertete Beispiele: {{exemplarRows}}; bewertete rekonstruierte Zeilen: {{reconstructedRows}}.",
+    "calibrationTimingTitle": "Herkunft der Zeitangaben",
+    "calibrationIntegrityTitle": "Integritätsprüfung der Fingerabdrücke",
+    "calibrationIntegrityItem": "Notiz {{noteId}}, Zeile {{rowId}}: {{reason}}.",
+    "calibrationDeveloperSweep": "Entwicklerdiagnose: Diagnostischer Schwellenwertvergleich",
+    "calibrationSweepUnavailable": "Schwellenwertvergleich nicht verfügbar: {{rows}} bewertete Beispiele; mindestens {{minimum}} erforderlich.",
+    "calibrationProcessingSummary": "Wiedergabezuordnung — exakt: {{exact}}, ungefähr: {{approximate}}, nicht verfügbar: {{unavailable}}. Neu eingebettete Zeilen: {{embedded}}; ausgeschlossene Zeilen: {{excluded}}.",
+    "calibrationTiming": {
+      "exact_stored_span": "Exakt gespeicherter Abschnitt",
+      "capture_bounds": "Aufnahmestart und Aufnahmeende",
+      "onset_only": "Nur Beginn",
+      "completion_timestamp_fallback": "Ersatz anhand des Abschlusszeitpunkts",
+      "unavailable": "Zeitangaben nicht verfügbar",
+      "retained_exemplar_clip": "Aufbewahrter Beispielclip",
+      "label_not_contained": "Beschriftetes Intervall nicht vollständig im aufbewahrten Fenster enthalten"
+    },
+    "calibrationIntegrity": {
+      "missing_fingerprint": "Fingerabdruck für diesen Nachweis fehlt",
+      "invalid_fingerprint": "Fingerabdruck für diesen Nachweis ungültig",
+      "unverified_fingerprint": "kein verifizierter Audio-Hash für diesen Nachweis",
+      "fingerprint_mismatch": "verifizierter Audio-Hash stimmt nicht mit diesem Nachweis überein",
+      "exemplar_integrity_failed": "Längen- oder Fingerabdruckprüfung der gespeicherten Clip-Daten fehlgeschlagen"
+    },
+    "calibrationUnavailableCriteria": {
+      "production_parity": "Auswertung im Produktivbetrieb",
+      "independent_sessions": "Unabhängige Aufnahmesitzungen zur Auswertung",
+      "positive_coverage": "Auswertungsabdeckung registrierter Personen",
+      "negative_coverage": "Auswertungsabdeckung nicht registrierter oder unbekannter Personen",
+      "nonempty_accepted_set": "Akzeptierte Namen in der unabhängigen Auswertung",
+      "correct_name_coverage": "Abdeckung korrekter Namen in der Auswertung",
+      "precision": "Präzision der Auswertung"
+    }
   },
   "meetingAudio": {
     "exportCalibration": "Kalibrierungsdaten exportieren",

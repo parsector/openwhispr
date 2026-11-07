@@ -256,3 +256,54 @@ test("diagnostic reports are rejected by the apply action even if a recommendati
     /No supported/
   );
 });
+
+for (const kind of ["two clips", "clip and reconstructed window"]) {
+  test(`different verified fingerprints in one note admit ${kind}`, () => {
+    const input = recommendationFixture();
+    input.rows[0] = {
+      ...input.rows[0],
+      exemplarId: "clip-a",
+      vectorSource: "approved-exemplar",
+      timingProvenance: "retained_exemplar_clip",
+    };
+    input.rows[1] = {
+      ...input.rows[1],
+      audioFingerprint: "c".repeat(64),
+      verifiedAudioFingerprint: "c".repeat(64),
+      ...(kind === "two clips"
+        ? {
+            exemplarId: "clip-b",
+            vectorSource: "approved-exemplar",
+            timingProvenance: "retained_exemplar_clip",
+          }
+        : {
+            vectorSource: "reconstructed-row-audio",
+            track: "system",
+            start: 10,
+            end: 14,
+            from: 10,
+            to: 14,
+          }),
+    };
+    const report = buildReport(input);
+    assert.equal(report.failedCriteria.includes("audio_fingerprints"), false);
+    assert.equal(report.resultType, "supported_recommendation");
+    assert.equal(Object.keys(report.fingerprints.audio).length, 40);
+    assert.deepEqual(report.evidence.fingerprintIntegrity, []);
+  });
+}
+
+test("missing, invalid, unverified and mismatched row fingerprints remain integrity failures", () => {
+  for (const [reason, change] of [
+    ["missing_fingerprint", { audioFingerprint: null }],
+    ["invalid_fingerprint", { audioFingerprint: "broken" }],
+    ["unverified_fingerprint", { verifiedAudioFingerprint: null }],
+    ["fingerprint_mismatch", { verifiedAudioFingerprint: "c".repeat(64) }],
+  ]) {
+    const input = recommendationFixture();
+    Object.assign(input.rows[0], change);
+    const report = rejects(input, "audio_fingerprints");
+    assert.equal(report.evidence.fingerprintIntegrity[0].reason, reason);
+    assert.equal(report.evidence.fingerprintIntegrity[0].rowId, "row-0");
+  }
+});
