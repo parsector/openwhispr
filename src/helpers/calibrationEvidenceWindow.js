@@ -33,8 +33,16 @@ function windowExclusion(row, retainedTrack = row.retainedTrack) {
     row.to < row.end
   )
     return "window_label_not_contained";
-  if (row.end - row.start < MINIMUM_LABEL_SECONDS) return "span_too_short";
-  const { startSample, endSample } = measurementInterval(row);
+  // Recover exact stored endpoints before subtracting: seconds can make an
+  // exactly 36,000-sample label appear shorter than 1.5 seconds.
+  const tooShort = row.timingProvenance === "exact_stored_span"
+    ? Math.round(row.end * MEASUREMENT_RATE) - Math.round(row.start * MEASUREMENT_RATE) <
+      MINIMUM_LABEL_SECONDS * MEASUREMENT_RATE
+    : row.end - row.start < MINIMUM_LABEL_SECONDS;
+  if (tooShort) return "span_too_short";
+  const { startSample, endSample, from, to } = measurementInterval(row);
+  // Match the store's strict seconds comparison on the rounded request.
+  if (to - from > 120) return "audio_invalid";
   if (
     retainedTrack &&
     ((retainedTrack.sampleCount != null && endSample > retainedTrack.sampleCount) ||

@@ -119,3 +119,50 @@ test("CLI embeds the app's rounded source window before resampling", (t) => {
   const report = JSON.parse(fs.readFileSync(path.join(directory, "calibration-report.json")));
   assert.equal(report.evidence.rowCount, 4);
 });
+
+for (const [name, startSample, endSample, reason] of [
+  ["a 120-second label with margins", 24000, 2904000, "audio_invalid"],
+  ["a measurement window below 120 seconds", 24000, 2902056, null],
+  ["a measurement window at 120 seconds", 24000, 2902080, null],
+  ["a measurement window above 120 seconds", 24000, 2902104, "audio_invalid"],
+  ["an exact 36000-sample label", 12005, 48005, null],
+  ["a 35994-sample label", 12005, 47999, "span_too_short"],
+  ["a 35999-sample label at the same onset", 12005, 48004, "span_too_short"],
+  ["another 35999-sample label", 24001, 60000, "span_too_short"],
+]) {
+  test(`CLI measurement parity: ${name}`, (t) => {
+    const directory = fs.mkdtempSync(path.join(__dirname, "../../node_modules/.cache/calibrate-parity-"));
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const fixture = spawnSync(process.execPath,
+      ["scripts/fixtures/create-synthetic-calibration.js", directory], { encoding: "utf8" });
+    assert.equal(fixture.status, 0, fixture.stderr);
+    const file = path.join(directory, "labels.json");
+    const labels = JSON.parse(fs.readFileSync(file));
+    const sampleCount = 123 * 24000;
+    const track = { sampleCount, chunks: [{ startSample: 0, sampleCount }] };
+    const { buildCalibrationLabels } = require("../../src/helpers/speakerCalibrationExport");
+    const [boundary] = buildCalibrationLabels({
+      id: 1,
+      transcript: JSON.stringify([{
+        id: "boundary", source: "system",
+        audioSpan: { recordingId: 1, trackId: "system", startSample, endSample },
+      }]),
+    }, {}, { recordingId: 1, tracks: { system: track } }).rows;
+    const wav = Buffer.alloc(44 + sampleCount * 2);
+    fs.readFileSync(path.join(directory, "system.wav")).copy(wav, 0, 0, 44);
+    wav.writeUInt32LE(wav.length - 8, 4);
+    wav.writeUInt32LE(sampleCount * 2, 40);
+    fs.writeFileSync(path.join(directory, "boundary.wav"), wav);
+    labels.audio.boundary = { file: "boundary.wav", retainedTrack: track };
+    labels.rows.push({ ...labels.rows[0], ...boundary, track: "boundary", truePerson: "A", trueOverlap: false });
+    fs.writeFileSync(file, JSON.stringify(labels));
+    const result = spawnSync(process.execPath, ["scripts/calibrate.js", "--meeting", directory], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(fs.readFileSync(path.join(directory, "calibration-report.json")));
+    assert.equal(report.evidence.rowCount, reason ? 4 : 5);
+    assert.deepEqual(report.evidence.exclusions, reason ? [{ rowId: "boundary", reason }] : []);
+    assert.equal(boundary.calibrationExclusionReason, reason);
+  });
+}

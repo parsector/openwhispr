@@ -297,6 +297,58 @@ test("measurement rejects a stored span one sample shorter than 1.5 seconds", as
   assert.equal(windowExclusion(label), "span_too_short");
 });
 
+for (const [name, startSample, endSample, from, to, reason] of [
+  ["a 120-second label with margins", 24000, 2904000, 0.96, 121.04, "audio_invalid"],
+  ["a measurement window below 120 seconds", 24000, 2902056, 0.96, 120.959, null],
+  ["a measurement window at 120 seconds", 24000, 2902080, 0.96, 120.96, null],
+  ["a measurement window above 120 seconds", 24000, 2902104, 0.96, 120.961, "audio_invalid"],
+  ["an exact 36000-sample label", 12005, 48005, 0.46, 2.04, null],
+  ["a 35994-sample label", 12005, 47999, 0.46, 2.04, "span_too_short"],
+  ["a 35999-sample label at the same onset", 12005, 48004, 0.46, 2.04, "span_too_short"],
+  ["another 35999-sample label", 24001, 60000, 0.96, 2.54, "span_too_short"],
+]) {
+  test(`measurement parity: ${name}`, async (t) => {
+    const f = boundedFixture(t);
+    const { MeetingAudioStore, RATE } = require("../../src/helpers/meetingAudioStore");
+    const store = new MeetingAudioStore(path.dirname(f.model.getModelPath()), {
+      encryption: { encryptBytes: (bytes) => bytes, decryptBytes: (bytes) => bytes },
+      codec: require("../lib/fakeAudioCodec"),
+    });
+    store.begin(1);
+    store.append(1, "system", Buffer.alloc(123 * RATE * 2));
+    store.finish(1);
+    const status = store.status(1);
+    const [row] = JSON.parse(f.note.transcript);
+    row.audioSpan = { recordingId: status.recordingId, trackId: "system", startSample, endSample };
+    f.note.transcript = JSON.stringify([row]);
+    const { buildCalibrationLabels } = require("../../src/helpers/speakerCalibrationExport");
+    const { windowExclusion, measurementInterval } = require("../../src/helpers/calibrationEvidenceWindow");
+    const label = buildCalibrationLabels(f.note, {}, status).rows[0];
+    assert.deepEqual([label.from, label.to], [from, to]);
+    const interval = measurementInterval(label);
+    const span = store.span(1, "system", interval.from, interval.to);
+    assert.equal(span.state, reason === "audio_invalid" ? "invalid" : "available");
+    Object.assign(f.audioStore, {
+      status: () => status,
+      recordingProvenance: (...args) => store.recordingProvenance(...args),
+      span: (...args) => store.span(...args),
+    });
+    const report = await f.run();
+    assert.equal(report.evidence.reviewedRows, reason ? 0 : 1);
+    assert.deepEqual(report.evidence.exclusions.map(({ reason }) => reason), reason ? [reason] : []);
+    assert.equal(label.calibrationExclusionReason, reason);
+    assert.equal(windowExclusion(label, status.tracks.system), reason);
+  });
+}
+
+test("measurement preserves the seconds-based capture-bounds minimum", () => {
+  const { windowExclusion } = require("../../src/helpers/calibrationEvidenceWindow");
+  assert.equal(windowExclusion({
+    timingProvenance: "capture_bounds", start: 12005 / 24000, end: 48005 / 24000,
+    from: 0.46, to: 2.04,
+  }), "span_too_short");
+});
+
 test("measurement rejects a resolved window rounded past retained samples", async (t) => {
   const f = boundedFixture(t);
   const [row] = JSON.parse(f.note.transcript);
