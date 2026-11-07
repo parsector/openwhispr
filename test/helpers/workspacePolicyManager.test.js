@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -37,7 +38,7 @@ function response(status, body) {
 }
 
 function setup(proxyFetch, overrides = {}) {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-policy-manager-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-policy-manager-"));
   const cachePath = path.join(tempDir, "workspace-policy.json");
   const tokenState = { token: "token-a", generation: 1 };
   const broadcasts = [];

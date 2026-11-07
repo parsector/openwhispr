@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { evaluateSpeakerAccuracy } = require("../../scripts/lib/speaker-accuracy-eval");
@@ -31,7 +32,7 @@ test("correction effort is unavailable without a reviewed action log", () => {
 });
 
 test('CLI derives correction rate from hashed WAV duration, not the manifest claim', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-accuracy-'));
+  const dir = createTempDir(path.join(os.tmpdir(), 'ow-accuracy-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const wav = Buffer.alloc(44 + 24000 * 2);
   wav.write('RIFF', 0); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8);

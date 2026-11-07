@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -25,7 +26,7 @@ test("merges independent WebM recorder segments into one decodable timeline", as
     return;
   }
 
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-merge-test-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-merge-test-"));
   try {
     const segments = [];
     for (let index = 0; index < 2; index += 1) {

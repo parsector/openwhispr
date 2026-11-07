@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -5,7 +6,7 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 test("gap 3: CLI excludes fallback rows before measurement, overlap and scoring", (t) => {
-  const directory = fs.mkdtempSync(
+  const directory = createTempDir(
     path.join(__dirname, "../../node_modules/.cache/calibrate-gaps-")
   );
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -53,7 +54,7 @@ for (const [name, start, end, from, to, sampleCount, reason, retainedTrack] of [
     }],
 ]) {
   test(`CLI rejects ${name}`, (t) => {
-    const directory = fs.mkdtempSync(path.join(__dirname, "../../node_modules/.cache/calibrate-window-"));
+    const directory = createTempDir(path.join(__dirname, "../../node_modules/.cache/calibrate-window-"));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     const fixture = spawnSync(process.execPath,
       ["scripts/fixtures/create-synthetic-calibration.js", directory], { encoding: "utf8" });
@@ -78,7 +79,7 @@ for (const [name, start, end, from, to, sampleCount, reason, retainedTrack] of [
 }
 
 test("CLI embeds the app's rounded source window before resampling", (t) => {
-  const directory = fs.mkdtempSync(path.join(__dirname, "../../node_modules/.cache/calibrate-pcm-"));
+  const directory = createTempDir(path.join(__dirname, "../../node_modules/.cache/calibrate-pcm-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const fixture = spawnSync(process.execPath,
     ["scripts/fixtures/create-synthetic-calibration.js", directory], { encoding: "utf8" });
@@ -131,7 +132,7 @@ for (const [name, startSample, endSample, reason] of [
   ["another 35999-sample label", 24001, 60000, "span_too_short"],
 ]) {
   test(`CLI measurement parity: ${name}`, (t) => {
-    const directory = fs.mkdtempSync(path.join(__dirname, "../../node_modules/.cache/calibrate-parity-"));
+    const directory = createTempDir(path.join(__dirname, "../../node_modules/.cache/calibrate-parity-"));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     const fixture = spawnSync(process.execPath,
       ["scripts/fixtures/create-synthetic-calibration.js", directory], { encoding: "utf8" });

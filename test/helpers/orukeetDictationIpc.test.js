@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -12,7 +13,7 @@ const originalLoad = Module._load;
 // Only Electron, account state and the remote authorization response are stubbed.
 const handlers = new Map();
 const broadcasts = [];
-const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "orukeet-dictation-ipc-"));
+const userDataDirectory = createTempDir(path.join(os.tmpdir(), "orukeet-dictation-ipc-"));
 let tokenState = { token: "account-a", generation: 1 };
 const tokenListeners = new Set();
 let backendResponse = async () => Response.json(cloudSession);

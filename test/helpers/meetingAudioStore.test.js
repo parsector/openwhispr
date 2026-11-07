@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -9,7 +10,7 @@ const { MeetingAudioStore, RATE } = require("../../src/helpers/meetingAudioStore
 const fakeCodec = require("../lib/fakeAudioCodec");
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ow-audio-test-"));
+  const root = createTempDir(path.join(os.tmpdir(), "ow-audio-test-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const key = crypto.randomBytes(32);
   const encryption = {
@@ -57,7 +58,7 @@ function correlation(actual, expected) {
 }
 
 test("audio store uses injected cipher, codec, and directory", (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ow-audio-seams-"));
+  const root = createTempDir(path.join(os.tmpdir(), "ow-audio-seams-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const calls = { encrypt: 0, decrypt: 0, encode: 0, decode: 0 };
   const encryption = {
@@ -345,7 +346,7 @@ test("device erasure drops live buffers and ciphertext; a reused note id cannot 
 });
 
 test('physical database reset leaves no recording for reused note one', t => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-device-wipe-'));
+  const home = createTempDir(path.join(os.tmpdir(), 'ow-device-wipe-'));
   t.after(() => fs.rmSync(home, { recursive: true, force: true }));
   const dbPath = path.join(home, 'transcriptions.db');
   const root = path.join(home, 'meeting-audio');

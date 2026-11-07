@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -6,7 +7,7 @@ const path = require("node:path");
 const Module = require("node:module");
 
 test("commitment schema survives repeated initialization", (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-commitments-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "openwhispr-commitments-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const originalLoad = Module._load;
   Module._load = function (request, parent, isMain) {
@@ -38,7 +39,7 @@ test("commitment schema survives repeated initialization", (t) => {
 });
 
 test("legacy commitments gain attribution and agent job columns without changing existing rows or user_version", (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-commitments-migrate-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "openwhispr-commitments-migrate-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const originalLoad = Module._load;
   Module._load = function (request, parent, isMain) {

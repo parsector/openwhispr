@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -95,7 +96,7 @@ test("fetchJson forwards caller init and keeps the User-Agent alongside caller h
 });
 
 test("downloadFile waits for a cancelled write stream to close before removing its temp file", async () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "downloadUtils-test-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "downloadUtils-test-"));
   const destination = path.join(tempDir, "model.bin");
   const response = new PassThrough();
   response.statusCode = 200;

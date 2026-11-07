@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -22,7 +23,7 @@ try {
 }
 
 test("a note title ending in transcript keeps both mirrored files", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   const note = {
@@ -49,7 +50,7 @@ test("a note title ending in transcript keeps both mirrored files", (t) => {
 });
 
 test("folder names cannot escape the configured mirror directory", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   markdownMirror.init(basePath);
@@ -64,7 +65,7 @@ test("folder names cannot escape the configured mirror directory", (t) => {
 });
 
 test("unsafe folder names do not collide with portable folder names", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   markdownMirror.init(basePath);
@@ -85,7 +86,7 @@ test("unsafe folder names do not collide with portable folder names", (t) => {
 });
 
 test("encoded folder keys cannot collide with logical folder names", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   markdownMirror.init(basePath);
@@ -100,8 +101,8 @@ test("encoded folder keys cannot collide with logical folder names", (t) => {
 });
 
 test("writes reject a symlinked folder that resolves outside the mirror", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
-  const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const outsidePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
   t.after(() => fs.rmSync(outsidePath, { recursive: true, force: true }));
   fs.symlinkSync(outsidePath, path.join(basePath, "linked"), "dir");
@@ -114,8 +115,8 @@ test("writes reject a symlinked folder that resolves outside the mirror", (t) =>
 });
 
 test("writes reject a symlinked note file without changing its target", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
-  const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const outsidePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
   t.after(() => fs.rmSync(outsidePath, { recursive: true, force: true }));
   const outsideFile = path.join(outsidePath, "outside.md");
@@ -131,7 +132,7 @@ test("writes reject a symlinked note file without changing its target", (t) => {
 });
 
 test("Windows-reserved and trailing-character folder names use distinct portable keys", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
   const folderNames = ["CON", "NUL.txt", "CONIN$", "folder.", "folder "];
 
@@ -160,7 +161,7 @@ test("Windows-reserved and trailing-character folder names use distinct portable
 });
 
 test("portable folders still support the normal ensure, rename, and delete journey", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   markdownMirror.init(basePath);
@@ -177,7 +178,7 @@ test("portable folders still support the normal ensure, rename, and delete journ
 });
 
 test("renaming a mirrored note cleans up both stale files and reveals the note", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   const note = {
@@ -232,7 +233,7 @@ function readFrontmatter(fileContent) {
 }
 
 test("a title with control characters keeps the frontmatter a valid single-line mapping", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   const note = {
@@ -257,7 +258,7 @@ test("a title with control characters keeps the frontmatter a valid single-line 
 });
 
 test("deleteNote removes the note's other files even when one unlink fails", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   const note = {
@@ -298,7 +299,7 @@ test("deleteNote removes the note's other files even when one unlink fails", (t)
 });
 
 test("a note file re-saved with a BOM or CRLF is still recognised as its note", (t) => {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
 
   const note = {

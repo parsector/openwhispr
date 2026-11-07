@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -32,7 +33,7 @@ function database() {
 function settings() { return { isSignedIn: false, productHelpEnabled: false, calendarConnected: false, cloudBackupEnabled: false, webSearchEnabled: false, keepNotesUnchanged: true }; }
 
 test("MCP scopes deny and record every write while legacy and unscoped tokens retain reads", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-todo-write-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-todo-write-"));
   const data = database();
   const tokens = createTokenStore(dir);
   const reader = tokens.create("Old reader");

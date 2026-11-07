@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -22,7 +23,7 @@ test("Prompt Studio labels dictation-agent runs for policy enforcement", async (
   globalThis.__promptStudioReasoningCalls = calls;
 
   const { createServer } = await import("vite");
-  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-prompt-studio-test-"));
+  const cacheDir = createTempDir(path.join(os.tmpdir(), "openwhispr-prompt-studio-test-"));
   const vite = await createServer({
     root: path.resolve(__dirname, "../../src"),
     cacheDir,

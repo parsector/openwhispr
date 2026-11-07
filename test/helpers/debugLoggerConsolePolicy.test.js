@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -188,7 +189,7 @@ test("development and non-Windows packaged builds preserve console logging", asy
 test(
   "packaged Windows retains debug logs in the file sink while suppressing the console",
   async () => {
-    const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-debug-logger-"));
+    const userDataPath = createTempDir(path.join(os.tmpdir(), "openwhispr-debug-logger-"));
     const logger = loadLogger({
       platform: "win32",
       isPackaged: true,
@@ -257,7 +258,7 @@ test("routine window-drag activity obeys the packaged Windows console policy", a
 });
 
 test("default logger creates no file or logs directory", async () => {
-  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-private-logger-"));
+  const userDataPath = createTempDir(path.join(os.tmpdir(), "openwhispr-private-logger-"));
   try {
     const logger = loadLogger({ platform: "linux", isPackaged: true, isReady: true, userDataPath });
     await captureConsole(() => logger.error("structural failure", { code: "TEST" }));
@@ -269,7 +270,7 @@ test("default logger creates no file or logs directory", async () => {
 });
 
 test("debug file retention keeps five newest files", async () => {
-  const userDataPath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-log-retention-"));
+  const userDataPath = createTempDir(path.join(os.tmpdir(), "openwhispr-log-retention-"));
   const logsDir = path.join(userDataPath, "logs");
   fs.mkdirSync(logsDir);
   for (let day = 1; day <= 7; day++) {

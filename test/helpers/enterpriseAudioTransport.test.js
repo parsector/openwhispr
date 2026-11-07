@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -20,7 +21,7 @@ let directory, certificate, ca, server, sockets, port, dnsOnlyServer, dnsOnlyPor
 const requests = [];
 before(async () => {
   if (!hasOpenSsl) return;
-  directory = fs.mkdtempSync(path.join(os.tmpdir(), "ow-enterprise-tls-"));
+  directory = createTempDir(path.join(os.tmpdir(), "ow-enterprise-tls-"));
   const openssl = (...args) => execFileSync("openssl", args, { cwd: directory, stdio: "ignore" });
   openssl(
     "req",

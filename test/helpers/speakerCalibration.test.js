@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -226,7 +227,7 @@ test("a renamed person without a correction has no provable machine label", () =
 });
 
 test("calibration command excludes owner-corrected rows with no machine claim from accuracy", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-calibration-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "ow-calibration-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const fixture = spawnSync(
     process.execPath,

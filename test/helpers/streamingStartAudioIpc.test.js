@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -17,7 +18,7 @@ const { deferred } = require("./harness/deferred");
 const handlers = new Map();
 const modulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
-const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "streaming-start-audio-ipc-"));
+const userDataDirectory = createTempDir(path.join(os.tmpdir(), "streaming-start-audio-ipc-"));
 const event = { sender: { id: 1 } };
 // The audio each provider socket received, in the order the sockets opened.
 const sockets = [];

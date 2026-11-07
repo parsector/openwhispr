@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const childProcess = require("node:child_process");
@@ -39,7 +40,7 @@ async function withDbusMock(dbusModule, fn) {
 
 function withTempHyprConfig(fn) {
   return async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-hyprland-test-"));
+    const root = createTempDir(path.join(os.tmpdir(), "openwhispr-hyprland-test-"));
     const saved = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
     for (const key of ENV_KEYS) delete process.env[key];
     process.env.XDG_CONFIG_HOME = path.join(root, "config");

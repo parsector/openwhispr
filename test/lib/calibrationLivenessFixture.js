@@ -1,4 +1,5 @@
 // Isolated, real SQLite and retained-audio store. No owner data or keychain.
+const createTempDir = require("./tempDir");
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
@@ -11,8 +12,7 @@ async function fixture(
   libraryRoot = path.resolve(__dirname, "../..")
 ) {
   const parent = path.join(process.cwd(), "node_modules/.cache");
-  fs.mkdirSync(parent, { recursive: true });
-  const directory = fs.mkdtempSync(path.join(parent, "calibration-"));
+  const directory = createTempDir("calibration-", parent);
   currentDirectory = directory;
   const load = Module._load;
   Module._load = function (request, parent, isMain) {

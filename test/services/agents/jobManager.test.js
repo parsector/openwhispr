@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -8,7 +9,7 @@ const debugLogger = require("../../../src/helpers/debugLogger");
 const { createClaudeRunner } = require("../../../src/services/agents/claudeRunner");
 const fakeCli = path.join(__dirname, "../../fixtures/fakeClaude.js");
 function setup(t, overrides = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-jobs-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "agent-jobs-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const notes = [];
   const db = {
@@ -595,7 +596,7 @@ test("Cursor routes to its runner with configured mode and keeps queue, stall an
 test("write job edits only its worktree and note records the branch and diff", async (t) => {
   const { execFileSync } = require("node:child_process");
   const git = (cwd, ...args) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-write-manager-"));
+  const root = createTempDir(path.join(os.tmpdir(), "agent-write-manager-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const repo = path.join(root, "repo");
   fs.mkdirSync(repo);

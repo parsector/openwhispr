@@ -1,3 +1,4 @@
+const createTempDir = require("../../../lib/tempDir");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -14,7 +15,7 @@ const { McpManager } = require("../../../../src/services/mcp/client/manager");
 const fixture = path.resolve(__dirname, "../../../fixtures/mcpFakeServer.js");
 
 test("config validates and writes private, atomic JSON", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-config-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "mcp-config-"));
   const file = path.join(dir, "mcp", "servers.json");
   const store = createConfigStore(file);
   assert.deepEqual(store.read().mcpServers, {});
@@ -35,7 +36,7 @@ test("config validates and writes private, atomic JSON", () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 test("result size override persists in client settings and validates choices", () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-result-size-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "mcp-result-size-"));
   try {
     const store = createConfigStore(path.join(dir, "servers.json"));
     store.write({ mcpServers: { demo: { type: "http", url: "http://localhost" } } });
@@ -53,7 +54,7 @@ test("result size override persists in client settings and validates choices", (
 test("name regex and collision on server enable", async () => {
   assert.equal(NAME.test("x".repeat(65)), false);
   assert.equal(NAME.test("bad space"), false);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-manager-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "mcp-manager-"));
   const store = createConfigStore(path.join(dir, "servers.json"));
   const manager = new McpManager(store, { reservedNames: ["demo__echo"] });
   await manager.upsert("demo", { command: process.execPath, args: [fixture] });
@@ -159,7 +160,7 @@ test("HTTP timeout and cancellation abort requests", async () => {
   }
 });
 test("external config changes refresh the manager revision and server set", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "mcp-refresh-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "mcp-refresh-"));
   const file = path.join(dir, "servers.json");
   const store = createConfigStore(file);
   const manager = new McpManager(store);

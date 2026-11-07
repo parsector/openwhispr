@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -97,7 +98,7 @@ test("fresh Chinese browser locale survives settings hydration", async (t) => {
 });
 
 test("main locale fallback remains implicit and yields to an explicit preference", (t) => {
-  const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-ui-language-"));
+  const userDataDirectory = createTempDir(path.join(os.tmpdir(), "openwhispr-ui-language-"));
   const originalEnvironment = { ...process.env };
   const originalResourcesPath = process.resourcesPath;
   process.resourcesPath = userDataDirectory;

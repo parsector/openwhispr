@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -23,7 +24,7 @@ test('renders tokens, local ISO date, unknown tokens, defaults, and missing even
 });
 
 test('saved template and other trigger keys round-trip; event runs title notes and collisions keep time suffix', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'routine-title-'));
+  const directory = createTempDir(path.join(os.tmpdir(), 'routine-title-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const originalLoad = Module._load;
   Module._load = function (request, parent, isMain) {

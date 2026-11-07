@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const REQUIRED_DB_FAILURE =
   "DB-backed tests were required (REQUIRE_DB_TESTS is set) but the better-sqlite3 native " +
   "binding could not be loaded, so this test would have been skipped instead of run. In CI " +
@@ -39,7 +40,7 @@ const DatabaseManager = require("../../../src/helpers/database.js");
 // A real DatabaseManager over a private tmpdir. Returns null when the caller
 // must bail because skipOrFail marked the test skipped.
 function createDb(t) {
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-sync-harness-"));
+  const userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-sync-harness-"));
   setUserDataDir(userDataDir);
 
   // Probe first: a binding failure here is the loader's, not schema setup's.

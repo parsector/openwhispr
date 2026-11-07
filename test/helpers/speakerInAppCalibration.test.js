@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { buildReport } = require("../../src/helpers/speakerInAppCalibration");
@@ -190,7 +191,7 @@ test("applying a supported report records an ordered action and undo restores st
   const { DatabaseSync } = require("node:sqlite");
   const thresholds = require("../../src/helpers/speakerDecisionThresholds");
   const action = require("../../src/helpers/speakerCalibrationAction");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-calibration-action-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-calibration-action-"));
   const db = new DatabaseSync(":memory:");
   db.transaction =
     (fn) =>
@@ -268,7 +269,7 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
   const os = require("node:os");
   const path = require("node:path");
   const { runJob, reportStillCurrent } = require("../../src/helpers/speakerInAppCalibration");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-calibration-job-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-calibration-job-"));
   const modelPath = path.join(dir, "model.onnx");
   fs.writeFileSync(modelPath, "fixture model");
   const row = {
@@ -368,7 +369,7 @@ test("missing centroids use retained row audio and never write speaker training 
   const os = require("node:os");
   const path = require("node:path");
   const { runJob } = require("../../src/helpers/speakerInAppCalibration");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-backfill-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-backfill-"));
   const modelPath = path.join(dir, "model.onnx");
   fs.writeFileSync(modelPath, "fixture model");
   const row = {
@@ -468,7 +469,7 @@ test("unaligned reviewed row uses the player's recording timebase and stays diag
   const os = require("node:os");
   const path = require("node:path");
   const { runJob } = require("../../src/helpers/speakerInAppCalibration");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-resolved-row-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-resolved-row-"));
   const modelPath = path.join(dir, "model.onnx");
   fs.writeFileSync(modelPath, "fixture model");
   const origin = 1_700_000_000_000;
@@ -578,7 +579,7 @@ test("a 576 row labelled note reports the 400 row budget and evaluates only cons
   const os = require("node:os");
   const path = require("node:path");
   const { runJob } = require("../../src/helpers/speakerInAppCalibration");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-capped-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-capped-"));
   const modelPath = path.join(dir, "model.onnx");
   fs.writeFileSync(modelPath, "fixture model");
   const origin = 1_700_000_000_000;
@@ -667,7 +668,7 @@ test("unbounded historical windows never enter scoring even with a stored centro
   const os = require("node:os");
   const path = require("node:path");
   const { runJob, collectRows } = require("../../src/helpers/speakerInAppCalibration");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "bounded-calibration-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "bounded-calibration-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const modelPath = path.join(dir, "model.onnx");
   fs.writeFileSync(modelPath, "fixture model");
@@ -794,7 +795,7 @@ test("reconstructed fingerprints verify each window's WAV bytes separately withi
   const path = require("node:path");
   const { createHash } = require("node:crypto");
   const { runJob } = require("../../src/helpers/speakerInAppCalibration");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "row-audio-hashes-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "row-audio-hashes-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const modelPath = path.join(dir, "model.onnx");
   fs.writeFileSync(modelPath, "fixture model");

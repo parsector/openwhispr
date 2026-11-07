@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -50,7 +51,7 @@ const ENCODERS = {
 const UNFIXTURABLE = ["amr", "ape"];
 
 function makeTempDir(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-provider-upload-test-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "ow-provider-upload-test-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }

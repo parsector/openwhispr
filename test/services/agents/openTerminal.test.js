@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -7,7 +8,7 @@ const { EventEmitter } = require("node:events");
 const { terminalCommands, openTerminal } = require("../../../src/services/agents/openTerminal");
 
 test("terminal plans use fixed argv and a safely quoted folder", () => {
-  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "agent's folder "));
+  const folder = createTempDir(path.join(os.tmpdir(), "agent's folder "));
   try {
     for (const harness of ["claude", "cursor-agent"]) {
       const job = { harness, mode: "read-only", sessionId: "session:1", project: { folder } };
@@ -39,7 +40,7 @@ test("terminal plans use fixed argv and a safely quoted folder", () => {
 });
 
 test("all invalid terminal jobs spawn nothing", async () => {
-  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "agent-terminal-"));
+  const folder = createTempDir(path.join(os.tmpdir(), "agent-terminal-"));
   let spawned = 0;
   const spawnImpl = () => {
     spawned++;

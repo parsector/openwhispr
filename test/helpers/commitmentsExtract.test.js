@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -9,7 +10,7 @@ const { CommitmentStore } = require("../../src/helpers/commitments/store");
 const { resolveExtractionModel } = require("../../src/helpers/commitments/extractionModel");
 
 function setup(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-todos-extract-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-todos-extract-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const original = Module._load;
   Module._load = function (request, parent, isMain) {

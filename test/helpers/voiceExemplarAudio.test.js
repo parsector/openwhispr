@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -21,7 +22,7 @@ const { MeetingAudioStore, RATE } = require("../../src/helpers/meetingAudioStore
 const codec = require("../lib/fakeAudioCodec");
 
 function fixture(t, options = {}) {
-  directory = fs.mkdtempSync(path.join(os.tmpdir(), "exemplar-"));
+  directory = createTempDir(path.join(os.tmpdir(), "exemplar-"));
   const root = directory;
   let database = new DatabaseManager();
   let clock = Date.now();

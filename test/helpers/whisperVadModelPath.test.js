@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const assert = require("node:assert/strict");
 const fs = require("fs");
 const os = require("os");
@@ -49,7 +50,7 @@ describe("WhisperManager.getVadModelPath (#1208)", () => {
   }
 
   beforeEach(() => {
-    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ow-vad-test-"));
+    tempRoot = createTempDir(path.join(os.tmpdir(), "ow-vad-test-"));
     cacheRoot = path.join(tempRoot, "cache");
     process.env.OPENWHISPR_CACHE_ROOT = cacheRoot;
   });

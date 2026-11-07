@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -60,7 +61,7 @@ function createPcm16Wav(sampleValue, sampleCount = 160) {
 }
 
 test("transcribes audible mono 16 kHz WAV input", async (t) => {
-  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-parakeet-wav-test-"));
+  const tempHome = createTempDir(path.join(os.tmpdir(), "openwhispr-parakeet-wav-test-"));
   const originalLoad = Module._load;
   let ffmpegUtils;
   let conversions = 0;

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -7,7 +8,7 @@ const { createPaidKeyCheck } = require("../../src/helpers/paidKeyCheck");
 const { deferred } = require("./harness/deferred");
 
 function scratchFile(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "paid-key-check-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "paid-key-check-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return path.join(dir, "paid-key-checks.json");
 }

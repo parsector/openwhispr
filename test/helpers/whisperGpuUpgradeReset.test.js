@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -48,7 +49,7 @@ function clearFailureKeys() {
 }
 
 test.beforeEach(() => {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpu-upgrade-reset-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "gpu-upgrade-reset-"));
   appVersion = "1.9.1";
   clearFailureKeys();
 });

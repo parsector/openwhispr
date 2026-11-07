@@ -1,11 +1,11 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
 
-let userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-connector-actions-db-"));
+let userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-connector-actions-db-"));
 const originalLoad = Module._load;
 
 Module._load = function patchedLoad(request, parent, isMain) {
@@ -35,7 +35,7 @@ function isNativeBindingUnavailable(error) {
 }
 
 function createDb(t) {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-connector-actions-db-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-connector-actions-db-"));
   try {
     const db = new DatabaseManager();
     db.setActiveAccountId("account-a");

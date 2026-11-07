@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -14,7 +15,7 @@ require.cache[require.resolve("electron")] = {
 const notice = require("../../src/helpers/gpuPackMigrationNotice.js");
 
 test.beforeEach(() => {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpu-notice-test-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "gpu-notice-test-"));
 });
 
 test.afterEach(() => {

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -54,7 +55,7 @@ test(
     const start = source.indexOf("let typedBrowsers");
     const end = source.indexOf("// End of typingChunks.", start);
     assert.ok(start >= 0 && end > start);
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-paste-typing-"));
+    const directory = createTempDir(path.join(os.tmpdir(), "openwhispr-paste-typing-"));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     const harness = path.join(directory, "main.swift");
     const binary = path.join(directory, "paste-typing-test");

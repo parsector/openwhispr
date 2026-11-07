@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -5,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
 
-let userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-translation-db-"));
+let userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-translation-db-"));
 const originalLoad = Module._load;
 
 Module._load = function patchedLoad(request, parent, isMain) {
@@ -27,7 +28,7 @@ const DatabaseManager = require("../../src/helpers/database.js");
 const { skipOrFail } = require("./harness/db.js");
 
 function createDb(t) {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-translation-db-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-translation-db-"));
   try {
     const BetterSqlite = require("better-sqlite3");
     const probe = new BetterSqlite(path.join(userDataDir, "probe.db"));

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -17,7 +18,7 @@ const policyData = {
 };
 
 function withTempCache(run) {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-policy-cache-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-policy-cache-"));
   const cachePath = path.join(tempDir, "workspace-policy.json");
   try {
     run(cachePath);

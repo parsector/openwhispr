@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -8,7 +9,7 @@ const Module = require("node:module");
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
-const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "local-server-sync-ipc-"));
+const userDataDirectory = createTempDir(path.join(os.tmpdir(), "local-server-sync-ipc-"));
 
 const MODEL = "qwen3.5-4b-q4_k_m";
 const modelManager = {

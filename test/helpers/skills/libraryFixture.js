@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
@@ -62,7 +63,7 @@ function fakeDatabase() {
 }
 
 function setup(t) {
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-skill-library-"));
+  const userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-skill-library-"));
   t.after(() => fs.rmSync(userDataDir, { recursive: true, force: true }));
   const database = fakeDatabase();
   const library = new SkillLibrary({ userDataDir, database, recommendedDir: RECOMMENDED_DIR });

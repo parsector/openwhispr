@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -690,7 +691,7 @@ test("a folder whose name the app can't address is left out, not listed unmanage
 
 test("a symlinked skill folder or file is never followed", (t) => {
   const { library, skillsDir } = setup(t);
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-skill-outside-"));
+  const outside = createTempDir(path.join(os.tmpdir(), "openwhispr-skill-outside-"));
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
   fs.writeFileSync(path.join(outside, "SKILL.md"), skillText("linked"));
   fs.mkdirSync(skillsDir, { recursive: true });

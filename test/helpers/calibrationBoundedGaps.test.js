@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -8,7 +9,7 @@ const { recommendationFixture } = require("../lib/speakerRecommendationFixture")
 const { reportStillCurrentLocal } = require("../../src/helpers/speakerInAppCalibration");
 
 function boundedFixture(t) {
-  const directory = fs.mkdtempSync(path.join(__dirname, "../../node_modules/.cache/bounded-gaps-"));
+  const directory = createTempDir(path.join(__dirname, "../../node_modules/.cache/bounded-gaps-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const modelPath = path.join(directory, "model");
   fs.writeFileSync(modelPath, "fixture model");
@@ -164,7 +165,7 @@ test("gap 4: a fully excluded note leaves no embedding dependency", async (t) =>
 
 test("gap 4: apply and reload reject a row identity rebound to an existing hash", (t) => {
   const config = require("../../src/helpers/speakerDecisionThresholds");
-  const directory = fs.mkdtempSync(
+  const directory = createTempDir(
     path.join(__dirname, "../../node_modules/.cache/freshness-boundary-")
   );
   t.after(() => {

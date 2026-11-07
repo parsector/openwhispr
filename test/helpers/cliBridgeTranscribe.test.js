@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -42,7 +43,7 @@ function createBridge(models = MODELS, snapshot = { success: true, managed: fals
 }
 
 function audioFile() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cli-transcribe-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-cli-transcribe-"));
   const file = path.join(dir, "memo.wav");
   fs.writeFileSync(file, "RIFF....WAVE");
   return { dir, file };

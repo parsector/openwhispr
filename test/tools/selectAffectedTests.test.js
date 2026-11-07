@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -7,7 +8,7 @@ const { execFileSync } = require("node:child_process");
 const { changedFilesFromGit, selectForChanges } = require("../../scripts/select-affected-tests");
 
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "affected-tests-"));
+  const root = createTempDir(path.join(os.tmpdir(), "affected-tests-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const write = (file, source) => {
     const full = path.join(root, file);

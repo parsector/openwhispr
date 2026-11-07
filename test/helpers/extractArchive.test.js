@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -14,7 +15,7 @@ const ZIP_FIXTURE_B64 =
   "Bmp1eAsAAQToAwAABOgDAABQSwUGAAAAAAEAAQBTAAAAVwAAAAAA";
 
 function makeTmpDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "extractArchive-test-"));
+  return createTempDir(path.join(os.tmpdir(), "extractArchive-test-"));
 }
 
 function writeZip(dir, name, buf) {
@@ -232,7 +233,7 @@ test(
   "extractArchive PowerShell fallback extracts a zip under apostrophe paths",
   { skip: process.platform !== "win32" },
   async () => {
-    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "O'Brien-extract-"));
+    const tmp = createTempDir(path.join(os.tmpdir(), "O'Brien-extract-"));
     const zipPath = writeZip(tmp, "binary.zip", Buffer.from(ZIP_FIXTURE_B64, "base64"));
     const dest = path.join(tmp, "out");
     fs.mkdirSync(dest);

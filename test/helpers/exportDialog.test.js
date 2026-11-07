@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -131,7 +132,7 @@ for (const [format, name] of [
 }
 
 async function exportNoteToFile(t, content, format = "txt") {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-note-export-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "openwhispr-note-export-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const filePath = path.join(directory, `note.${format}`);
   note.content = content;

@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -11,7 +12,7 @@ const {
 } = require("../../../src/services/agents/presetStore");
 
 function setup(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-presets-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "agent-presets-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const projectStore = createProjectStore(path.join(dir, "agents", "projects.json"));
   projectStore.save({

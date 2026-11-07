@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -153,7 +154,7 @@ test(
   "a bootstrap file cannot import a malformed proxy credential",
   { skip: process.platform === "win32" },
   async (t) => {
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
+    const directory = createTempDir(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     const fixture = setup({ bootstrapDirectory: directory });
     const write = (credentials) =>
@@ -180,7 +181,7 @@ test(
 );
 
 test("a policy or setup refusal before the probe is shown and never reported as a device check", async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ow-audio-refusal-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "ow-audio-refusal-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const refusal = (code, messageKey) => async () => {
     throw Object.assign(new Error(code), { code, ...(messageKey ? { messageKey } : {}) });
@@ -237,7 +238,7 @@ function draftAzureSetup(t, { config = {}, fetchApi, systemFetch } = {}) {
   };
   const fingerprint = configFingerprint("azure", record.config);
   const binding = { accountId: "account-a", workspaceId: "workspace-a", authGeneration: 1 };
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ow-audio-device-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "ow-audio-device-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const systemRequests = [];
   const transportRequests = [];

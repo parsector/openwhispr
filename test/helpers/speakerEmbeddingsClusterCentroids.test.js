@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -42,7 +43,7 @@ function writeWav(levels) {
   header.write("data", 36);
   header.writeUInt32LE(data.length, 40);
 
-  const wavPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ow-centroids-")), "a.wav");
+  const wavPath = path.join(createTempDir(path.join(os.tmpdir(), "ow-centroids-")), "a.wav");
   fs.writeFileSync(wavPath, Buffer.concat([header, data]));
   return wavPath;
 }

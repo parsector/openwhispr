@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -71,7 +72,7 @@ function installDotenvStub(t) {
 }
 
 test("adopts a legacy chat-agent hotkey as the voice-agent hotkey", async (t) => {
-  const userDataDirectory = fs.mkdtempSync(
+  const userDataDirectory = createTempDir(
     path.join(os.tmpdir(), "openwhispr-voice-agent-hotkey-")
   );
   const environmentSnapshot = snapshotEnvironment();
@@ -112,7 +113,7 @@ test("adopts a legacy chat-agent hotkey as the voice-agent hotkey", async (t) =>
 });
 
 test("device cleanup clears persisted settings and encrypted secret files", async (t) => {
-  const userDataDirectory = fs.mkdtempSync(
+  const userDataDirectory = createTempDir(
     path.join(os.tmpdir(), "openwhispr-device-settings-cleanup-")
   );
   const environmentSnapshot = new Map(

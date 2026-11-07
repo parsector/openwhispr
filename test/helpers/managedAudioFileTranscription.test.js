@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const nodeTest = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -169,7 +170,7 @@ test("the IPC job retains its original profile lifetime during preparation and b
 });
 
 nodeTest("managed uploads under the size cap report start and completion progress", async () => {
-  const directory = fs.mkdtempSync(path.join(getSafeTempDir(), "managed-small-"));
+  const directory = createTempDir(path.join(getSafeTempDir(), "managed-small-"));
   const filePath = path.join(directory, "upload.mp3");
   fs.writeFileSync(filePath, Buffer.from("small"));
   for (const input of [

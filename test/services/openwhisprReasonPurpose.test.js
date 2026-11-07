@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -17,7 +18,7 @@ test("OpenWhispr reasoning labels only dictation-agent requests for server enfor
   };
 
   const { createServer } = await import("vite");
-  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-reason-purpose-test-"));
+  const cacheDir = createTempDir(path.join(os.tmpdir(), "openwhispr-reason-purpose-test-"));
   const vite = await createServer({
     root: path.resolve(__dirname, "../../src"),
     cacheDir,
@@ -113,7 +114,7 @@ test("OpenWhispr reasoning splits teammates' words into sharedDictionary", async
     },
   };
   const { createServer } = await import("vite");
-  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-reason-shared-test-"));
+  const cacheDir = createTempDir(path.join(os.tmpdir(), "openwhispr-reason-shared-test-"));
   globalThis.__reasonSharedSettings = {
     customPrompts: { cleanup: "" },
     customDictionary: ["Piha"],

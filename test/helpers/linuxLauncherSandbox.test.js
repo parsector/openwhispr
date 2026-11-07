@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -11,7 +12,7 @@ const isLinux = process.platform === "linux";
 const BINARY_NAME = "open-whispr";
 
 function setupLauncher() {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "linux-launcher-test-"));
+  const tmp = createTempDir(path.join(os.tmpdir(), "linux-launcher-test-"));
   const appDir = path.join(tmp, "app");
   const stubBin = path.join(tmp, "stub-bin");
   const argsFile = path.join(tmp, "args.txt");

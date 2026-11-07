@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -37,7 +38,7 @@ function logLines() {
 }
 
 test.beforeEach(() => {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpu-fallback-log-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "gpu-fallback-log-"));
   warned.length = 0;
 });
 

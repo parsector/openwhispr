@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -11,7 +12,7 @@ const originalLoad = Module._load;
 // Registers the real handler closures against a fake `this` (the scaffolding
 // from agentDictationPillIpc.test.js), with userData in a temporary directory.
 const handlers = new Map();
-const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
+const userDataDirectory = createTempDir(path.join(os.tmpdir(), "account-scope-ipc-"));
 
 const electronStub = {
   app: {

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -107,7 +108,7 @@ test.before(() => {
   handler = handlers.get("diarize-audio-file");
   assert.ok(handler, "diarize-audio-file must be registered");
 
-  audioPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "ow-diarize-test-")), "call.mp3");
+  audioPath = path.join(createTempDir(path.join(os.tmpdir(), "ow-diarize-test-")), "call.mp3");
   fs.writeFileSync(audioPath, "");
   Ctor.prototype.approveAudioPath(audioPath);
 });

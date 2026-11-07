@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -17,7 +18,7 @@ const fakeCrypto = {
 const silentLogger = { info() {}, warn() {}, error() {} };
 
 function tempDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-credentials-"));
+  return createTempDir(path.join(os.tmpdir(), "openwhispr-credentials-"));
 }
 
 test("a credential round-trips and is never stored in plaintext", async () => {

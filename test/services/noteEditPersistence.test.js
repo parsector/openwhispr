@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -14,7 +15,7 @@ const CONTENT = "My private reminder: bring a notebook.";
 const TRANSCRIPT = JSON.stringify([{ speaker: "Alex", text: "I will send the poll by Sunday." }]);
 
 test("note edits preserve separate stored fields, reopen correctly, and report failed saves", async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ow-note-edit-test-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "ow-note-edit-test-"));
   const originalLoad = Module._load;
   Module._load = function (request, parent, isMain) {
     if (request === "electron")

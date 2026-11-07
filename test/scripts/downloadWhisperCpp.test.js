@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -47,7 +48,7 @@ test("all-platform mode reports failure after attempting every configured downlo
 });
 
 test("cached win32 install is complete only for the current tag with every required DLL", () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-install-test-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "whisper-install-test-"));
   const binaryPath = path.join(tempDir, BINARIES["win32-x64"].outputName);
   const markerPath = path.join(tempDir, ".whisper-cpp-win32-x64.json");
   const requiredLibraries = BINARIES["win32-x64"].requiredLibraries;
@@ -83,7 +84,7 @@ test("cached win32 install is complete only for the current tag with every requi
 });
 
 test("copyLibraries copies matching libraries from a nested extract dir", () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-dll-test-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "whisper-dll-test-"));
   const extractDir = path.join(tempDir, "extract", "nested");
   const destDir = path.join(tempDir, "bin");
   fs.mkdirSync(extractDir, { recursive: true });

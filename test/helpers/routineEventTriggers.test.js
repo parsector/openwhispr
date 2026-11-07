@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -167,7 +168,7 @@ test('meeting prep context includes prior notes with event attendees', () => {
 });
 
 test('meeting-ended run without calendar writes only its own note and reads optional summary', async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'routine-events-'));
+  const directory = createTempDir(path.join(os.tmpdir(), 'routine-events-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const originalLoad = Module._load;
   Module._load = function (request, parent, isMain) {

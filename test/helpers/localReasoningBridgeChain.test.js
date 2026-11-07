@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -62,7 +63,7 @@ const ROOMY_MACHINE_BYTES = 48 * 1024 * 1024 * 1024;
 // Stands up the stub server plus a bridge whose model manager already
 // believes llama-server is running that model on the stub's port.
 async function setupChain(t, respond) {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-local-chain-"));
+  const home = await createTempDir(path.join(os.tmpdir(), "openwhispr-local-chain-"));
   electronHome = home;
   t.after(() => fs.rm(home, { recursive: true, force: true }));
 

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -9,7 +10,7 @@ const { UNDO_TTL_MS, initializeNoteUndo } = require("../../src/helpers/noteUndo"
 
 // Real SQLite and the real tool/registry, with only Electron/provider transport stubbed.
 test("safe assistant edits and atomic Undo", async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ow-assistant-undo-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "ow-assistant-undo-"));
   const originalLoad = Module._load;
   let database;
   try {

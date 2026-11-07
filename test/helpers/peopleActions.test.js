@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -17,7 +18,7 @@ const { listPeople, backfillPeopleIdentities, listPeopleActions, listReviewRows,
 const { readTranscriptDocument } = require('../../src/helpers/transcriptDocument');
 const { readSpeakerActionLog } = require('../../src/helpers/speakerActionLog');
 function fixture(t) {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'openwhispr-people-'));
+  dir = createTempDir(path.join(os.tmpdir(), 'openwhispr-people-'));
   let db;
   try { db = new DatabaseManager(); } catch (error) { skipOrFail(t, error); return null; }
   t.after(() => { db.db.close(); fs.rmSync(dir, { recursive: true, force: true }); });

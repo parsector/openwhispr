@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -13,7 +14,7 @@ const probes = [];
 const tokens = [];
 let probeAnswer = async () => ({ success: true });
 let tokenAnswer = async () => "token";
-const userData = fs.mkdtempSync(path.join(os.tmpdir(), "provider-connection-ipc-"));
+const userData = createTempDir(path.join(os.tmpdir(), "provider-connection-ipc-"));
 
 const electronStub = {
   app: {

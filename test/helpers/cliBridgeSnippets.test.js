@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -5,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
 
-let userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cli-snip-"));
+let userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-cli-snip-"));
 const originalLoad = Module._load;
 const broadcasts = [];
 
@@ -42,7 +43,7 @@ function isNativeBindingUnavailable(error) {
 }
 
 function createBridge(t) {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cli-snip-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-cli-snip-"));
   let db;
   try {
     const BetterSqlite = require("better-sqlite3");

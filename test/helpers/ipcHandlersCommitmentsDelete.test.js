@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -8,7 +9,7 @@ const { CommitmentStore } = require("../../src/helpers/commitments/store");
 const { deleteCommitment } = require("../../src/helpers/commitments/delete");
 
 test("commitments delete IPC refuses outside debug and removes related rows in debug", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-todos-delete-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-todos-delete-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const originalLoad = Module._load;
   Module._load = function (request, parent, isMain) {

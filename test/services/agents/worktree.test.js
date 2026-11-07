@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -10,7 +11,7 @@ function git(cwd, ...args) {
   return execFileSync("git", args, { cwd, encoding: "utf8" });
 }
 function fixture(t) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-worktree-"));
+  const root = createTempDir(path.join(os.tmpdir(), "agent-worktree-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const repo = path.join(root, "repo");
   const userData = path.join(root, "userData");

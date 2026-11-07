@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -16,7 +17,7 @@ const {
 // that fails must hand the fallback its key error line, where the warn log used
 // to keep only the first 200 characters of the device banner (#1736, #1340).
 const serverModulePath = require.resolve("../../src/helpers/whisperServer");
-const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-gpu-reason-"));
+const userDataDir = createTempDir(path.join(os.tmpdir(), "whisper-gpu-reason-"));
 const modelPath = path.join(userDataDir, "ggml-large-v3-turbo.bin");
 fs.writeFileSync(modelPath, "model");
 test.after(() => fs.rmSync(userDataDir, { recursive: true, force: true }));

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
@@ -85,7 +86,7 @@ function defaultVault(directory, { platform = "linux", backend, available = true
 }
 
 test("the production vault rejects Linux basic_text before provisioning or importing plaintext", async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-default-secrets-"));
+  const directory = await createTempDir(path.join(os.tmpdir(), "ow-audio-default-secrets-"));
   const source = path.join(directory, "enterprise-audio-bootstrap.json");
   const fixture = defaultVault(path.join(directory, "encrypted"), { backend: "basic_text" });
   try {
@@ -131,7 +132,7 @@ test("the production vault rejects Linux basic_text before provisioning or impor
 });
 
 test("the production vault uses protected OS fallback storage and fails when none is available", async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-default-secrets-"));
+  const directory = await createTempDir(path.join(os.tmpdir(), "ow-audio-default-secrets-"));
   try {
     for (const [platform, backend] of [
       ["linux", "gnome_libsecret"],
@@ -165,7 +166,7 @@ test("the production vault uses protected OS fallback storage and fails when non
 });
 
 test("encrypted enterprise credentials are atomic, isolated by account/workspace and invalidate on rotation", async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-secrets-"));
+  const directory = await createTempDir(path.join(os.tmpdir(), "ow-audio-secrets-"));
   let changed = 0;
   const vault = createEnterpriseAudioCredentials({
     directory,
@@ -209,7 +210,7 @@ test("encrypted enterprise credentials are atomic, isolated by account/workspace
 });
 
 test("protected MDM imports bind the signed-in account and configured slots and remove plaintext only after success", async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
+  const directory = await createTempDir(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
   const source = path.join(directory, "enterprise-audio-bootstrap.json");
   const vault = createEnterpriseAudioCredentials({
     directory: path.join(directory, "encrypted"),
@@ -255,7 +256,7 @@ test("protected MDM imports bind the signed-in account and configured slots and 
 });
 
 test("deleting an account removes every workspace vault it owns and no other account's", async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-secrets-"));
+  const directory = await createTempDir(path.join(os.tmpdir(), "ow-audio-secrets-"));
   let changed = 0;
   const vault = createEnterpriseAudioCredentials({
     directory,
@@ -290,7 +291,7 @@ test(
   "an unreadable bootstrap is rejected with its own code before it is claimed",
   { skip: process.platform === "win32" || process.getuid?.() === 0 },
   async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
+    const directory = await createTempDir(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
     const source = path.join(directory, "enterprise-audio-bootstrap.json");
     try {
       await fs.writeFile(source, "{}", { mode: 0o200 });
@@ -323,7 +324,7 @@ test(
 );
 
 test("a failed import that can't be restored deletes its claimed plaintext", async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
+  const directory = await createTempDir(path.join(os.tmpdir(), "ow-audio-bootstrap-"));
   const source = path.join(directory, "enterprise-audio-bootstrap.json");
   const data = {
     version: 1,

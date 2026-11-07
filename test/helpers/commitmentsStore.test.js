@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -7,7 +8,7 @@ const Module = require("node:module");
 const { CommitmentStore, isOverdue } = require("../../src/helpers/commitments/store");
 
 test("store handles edits, archive, history and proposals on a temp DB", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-todos-store-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-todos-store-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const original = Module._load;
   Module._load = function (request, parent, isMain) {
@@ -80,7 +81,7 @@ test("user text edits are pinned against later extraction", () => {
 });
 
 test("expiry reopens proposed todo and source removal scrubs evidence", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-todos-sweep-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-todos-sweep-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const original = Module._load;
   Module._load = function (request, parent, isMain) {

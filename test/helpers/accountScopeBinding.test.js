@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
@@ -18,7 +19,7 @@ const binding = require("../../src/helpers/accountScopeBinding.js");
 Module._load = originalLoad;
 
 function freshUserData(t) {
-  userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-binding-"));
+  userDataDirectory = createTempDir(path.join(os.tmpdir(), "account-scope-binding-"));
   t.after(() => fs.rmSync(userDataDirectory, { recursive: true, force: true }));
   return userDataDirectory;
 }

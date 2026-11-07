@@ -1,3 +1,4 @@
+const createTempDir = require("./tempDir");
 // Shared setup for tests that load renderer modules through Vite SSR:
 // Map-backed browser globals plus a dev server with per-test module mocks.
 const fs = require("node:fs");
@@ -233,7 +234,7 @@ async function createRendererServer(
   } = {}
 ) {
   const { createServer } = await import("vite");
-  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), cachePrefix));
+  const cacheDir = createTempDir(path.join(os.tmpdir(), cachePrefix));
   const suffixes = Object.keys(mockModules);
   const vite = await createServer({
     root: path.resolve(__dirname, "../../src"),

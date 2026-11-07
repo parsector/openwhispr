@@ -1,3 +1,4 @@
+const createTempDir = require("./tempDir");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -18,7 +19,7 @@ async function runLinuxFastPasteFixture(
   fixtureName,
   { env = process.env, sharedLibraries = [] } = {}
 ) {
-  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-fast-paste-"));
+  const temporaryDirectory = createTempDir(path.join(os.tmpdir(), "openwhispr-fast-paste-"));
   let xvfb;
   t.after(async () => {
     if (xvfb && xvfb.exitCode === null && xvfb.signalCode === null) {

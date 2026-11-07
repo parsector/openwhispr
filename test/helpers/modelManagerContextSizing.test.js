@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -54,7 +55,7 @@ async function setup(
   t,
   { tokenCount = null, totalMemoryBytes = 48 * GIB, finishReason = "stop" } = {}
 ) {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-ctx-sizing-"));
+  const home = await createTempDir(path.join(os.tmpdir(), "openwhispr-ctx-sizing-"));
   electronHome = home;
   t.after(() => fs.rm(home, { recursive: true, force: true }));
 

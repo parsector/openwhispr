@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -11,7 +12,7 @@ const fixture = (name) => fs.readFileSync(path.join(root, "test/fixtures", name)
 const script = path.join(root, "scripts/inject-release-notes.mjs");
 
 test("injects exact notes into a real-shaped feed without changing other keys, twice", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "release-notes-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "release-notes-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const feedPath = path.join(dir, "latest-arm64-mac.yml");
   const notesPath = path.join(dir, "release-notes.md");
@@ -42,7 +43,7 @@ test("injects exact notes into a real-shaped feed without changing other keys, t
 });
 
 test("rejects raw HTML release notes before changing the update feed", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "release-notes-html-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "release-notes-html-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const feedPath = path.join(dir, "latest-arm64-mac.yml");
   const notesPath = path.join(dir, "release-notes.md");

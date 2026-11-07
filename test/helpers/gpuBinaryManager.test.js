@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -131,8 +132,8 @@ function useWindowsAsset(manager) {
 }
 
 test.beforeEach(() => {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpuBinaryManager-user-"));
-  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "gpuBinaryManager-tmp-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "gpuBinaryManager-user-"));
+  tempDir = createTempDir(path.join(os.tmpdir(), "gpuBinaryManager-tmp-"));
   state.release = null;
   state.fetchedUrls = [];
   state.downloads = [];

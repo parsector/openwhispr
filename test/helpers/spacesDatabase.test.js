@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { randomUUID } = require("node:crypto");
@@ -6,7 +7,7 @@ const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
 
-let userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-spaces-db-"));
+let userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-spaces-db-"));
 const originalLoad = Module._load;
 
 Module._load = function patchedLoad(request, parent, isMain) {
@@ -35,7 +36,7 @@ function isNativeBindingUnavailable(error) {
 }
 
 function createDb(t) {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-spaces-db-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-spaces-db-"));
   try {
     const BetterSqlite = require("better-sqlite3");
     const probe = new BetterSqlite(path.join(userDataDir, "probe.db"));
@@ -1535,7 +1536,7 @@ test("getFolderNoteCounts attributes space-root notes per space", (t) => {
 });
 
 test("folders rebuild succeeds on a legacy DB with notes referencing folders", (t) => {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-spaces-db-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-spaces-db-"));
   let legacy;
   try {
     const BetterSqlite = require("better-sqlite3");

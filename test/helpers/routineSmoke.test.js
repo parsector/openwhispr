@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -6,7 +7,7 @@ const path = require("node:path");
 const Module = require("node:module");
 
 test("saving the gallery template and running it writes a note and done row", async (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-routine-smoke-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "openwhispr-routine-smoke-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const originalLoad = Module._load;
   Module._load = function patchedLoad(request, parent, isMain) {

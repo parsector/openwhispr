@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -50,7 +51,7 @@ function buildHarness(t) {
   const start = source.indexOf("let pasteSessionType");
   const end = source.indexOf("// End of TranscriptPromise.", start);
   assert.ok(start >= 0 && end > start);
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-paste-read-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "openwhispr-paste-read-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const harness = path.join(directory, "main.swift");
   const binary = path.join(directory, "paste-read-test");

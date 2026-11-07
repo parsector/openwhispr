@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -22,7 +23,7 @@ async function setup(initialAccount = "acct-a") {
     load(),
     loadStore(),
   ]);
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-connector-credentials-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-connector-credentials-"));
   let accountId = initialAccount;
   const credentials = createConnectorCredentials({
     store: createCredentialStore({ dir, secretCrypto: fakeCrypto, logger: silentLogger }),

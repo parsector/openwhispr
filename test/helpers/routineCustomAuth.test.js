@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -7,7 +8,7 @@ const path = require("node:path");
 
 const handlersPath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
-const directory = fs.mkdtempSync(path.join(os.tmpdir(), "routine-auth-"));
+const directory = createTempDir(path.join(os.tmpdir(), "routine-auth-"));
 const requests = [];
 const logs = [];
 const notifications = [];

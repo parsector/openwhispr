@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const { afterEach, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -67,7 +68,7 @@ function setPlatform(platform) {
 }
 
 beforeEach((t) => {
-  userData = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-updater-"));
+  userData = createTempDir(path.join(os.tmpdir(), "openwhispr-updater-"));
   packaged = true;
   t.mock.method(console, "log", () => {});
   t.mock.method(console, "error", () => {});

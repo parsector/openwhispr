@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -19,7 +20,7 @@ const manifest = {
 const managerFile = path.resolve(__dirname, "../../src/helpers/parakeet.js");
 
 function setup(t, options = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "parakeet-manifest-"));
+  const root = createTempDir(path.join(os.tmpdir(), "parakeet-manifest-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const calls = { downloads: [], manifests: [], events: [], errors: [], warms: 0, timeouts: [] };
   const realRequire = createRequire(managerFile);

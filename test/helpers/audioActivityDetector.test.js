@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const { afterEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -1117,7 +1118,7 @@ test("darwin: native snapshots exclude background speech while preserving meetin
     return;
   }
 
-  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-mac-mic-listener-"));
+  const temporaryDirectory = createTempDir(path.join(os.tmpdir(), "openwhispr-mac-mic-listener-"));
   const executablePath = path.join(temporaryDirectory, "mic-listener-state-test");
   t.after(() => fs.rmSync(temporaryDirectory, { force: true, recursive: true }));
 
@@ -1236,7 +1237,7 @@ test("darwin: native snapshots exclude background speech while preserving meetin
 });
 
 test("win32: portable native state seam handles reference counts and failures", (t) => {
-  const temporaryDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-mic-listener-"));
+  const temporaryDirectory = createTempDir(path.join(os.tmpdir(), "openwhispr-mic-listener-"));
   const executablePath = path.join(temporaryDirectory, "mic-listener-state-test");
   t.after(() => fs.rmSync(temporaryDirectory, { force: true, recursive: true }));
 

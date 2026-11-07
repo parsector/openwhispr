@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -13,7 +14,7 @@ function save(database, name, id) {
 }
 
 test('routine rename refuses folder collision and deletion offers both folder outcomes', (t) => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'routine-folders-'));
+  const directory = createTempDir(path.join(os.tmpdir(), 'routine-folders-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const originalLoad = Module._load;
   Module._load = function (request, parent, isMain) {

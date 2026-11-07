@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -25,7 +26,7 @@ function setProcessPath(name, value) {
 // resources dir with no deb/rpm marker, so each case states only what differs.
 function withInstall(fn) {
   return async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-url-handler-test-"));
+    const root = createTempDir(path.join(os.tmpdir(), "openwhispr-url-handler-test-"));
     const saved = Object.fromEntries(MANAGED_ENV.map((name) => [name, process.env[name]]));
     const savedExecPath = process.execPath;
     const savedResourcesPath = process.resourcesPath;

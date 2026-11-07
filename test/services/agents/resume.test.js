@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -43,7 +44,7 @@ test("both runners pass a validated resume ID as argv", () => {
 });
 
 test("prepare validates parent and persists resumedFrom; write resume reuses its worktree", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-resume-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "agent-resume-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, "agents", "jobs.json");
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -110,7 +111,7 @@ test("prepare validates parent and persists resumedFrom; write resume reuses its
 });
 
 test("missing and malformed saved sessions cannot be resumed", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-resume-invalid-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "agent-resume-invalid-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   for (const sessionId of [null, "bad id", "x".repeat(129)]) {
     const file = path.join(dir, `jobs-${String(sessionId).length}.json`);
@@ -150,7 +151,7 @@ test("missing and malformed saved sessions cannot be resumed", async (t) => {
 });
 
 test("failed read-only jobs with a session can resume without a project input", async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-resume-read-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "agent-resume-read-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const file = path.join(dir, "jobs.json");
   fs.writeFileSync(

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -26,7 +27,7 @@ function correlation(actual, expected) {
 }
 
 test('capture → serialized rows → finalization → playback → decoded tone across stop and restart', async (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-playback-chain-'));
+  const root = createTempDir(path.join(os.tmpdir(), 'ow-playback-chain-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const key = crypto.randomBytes(32);
   const encryption = {

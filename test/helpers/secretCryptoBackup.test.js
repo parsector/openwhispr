@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -7,7 +8,7 @@ const Module = require('node:module');
 const crypto = require('node:crypto');
 
 test('an unreadable or missing Keychain entry recovers the existing backup without replacing it', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-key-backup-'));
+  const dir = createTempDir(path.join(os.tmpdir(), 'ow-key-backup-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const backup = path.join(dir, 'secure-keys', 'master-key-backup.enc');
   fs.mkdirSync(path.dirname(backup), { recursive: true });
@@ -52,7 +53,7 @@ test('an unreadable or missing Keychain entry recovers the existing backup witho
 });
 
 test('device erasure removes the Keychain key and its on-disk backup', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-key-wipe-'));
+  const dir = createTempDir(path.join(os.tmpdir(), 'ow-key-wipe-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   let password = null, deletes = 0;
   const oldLoad = Module._load;
@@ -86,7 +87,7 @@ test('device erasure removes the Keychain key and its on-disk backup', t => {
 });
 
 test('a genuinely unavailable binary key has a distinct non-corruption error', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-key-unavailable-'));
+  const dir = createTempDir(path.join(os.tmpdir(), 'ow-key-unavailable-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const oldLoad = Module._load;
   Module._load = function(request, ...args) {
@@ -108,7 +109,7 @@ test('a genuinely unavailable binary key has a distinct non-corruption error', t
 });
 
 test('credential refresh keeps a missing key unavailable and never creates a replacement', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-key-refresh-'));
+  const dir = createTempDir(path.join(os.tmpdir(), 'ow-key-refresh-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   let locked = true, reads = 0, writes = 0;
   const oldLoad = Module._load;

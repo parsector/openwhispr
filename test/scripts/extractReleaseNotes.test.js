@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -9,7 +10,7 @@ const yaml = require("js-yaml");
 const scriptRoot = path.resolve(__dirname, "../..");
 
 test("extraction and feed injection preserve the version heading and markdown", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "release-extract-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "release-extract-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.writeFileSync(
     path.join(dir, "CHANGELOG.md"),

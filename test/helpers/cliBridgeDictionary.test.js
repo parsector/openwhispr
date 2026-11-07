@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -5,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const Module = require("node:module");
 
-let userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cli-dict-"));
+let userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-cli-dict-"));
 const originalLoad = Module._load;
 // Routes broadcast through the shared windowBroadcast module, which reaches for
 // Electron's BrowserWindow; capture the calls so they can be asserted here.
@@ -46,7 +47,7 @@ function isNativeBindingUnavailable(error) {
 // Builds the route table against a real database with broadcasts stubbed. The
 // constructor does not start a server, so routes can be invoked directly.
 function createBridge(t) {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cli-dict-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-cli-dict-"));
   let db;
   try {
     const BetterSqlite = require("better-sqlite3");

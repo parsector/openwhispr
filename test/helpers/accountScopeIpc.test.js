@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -14,7 +15,7 @@ const originalLoad = Module._load;
 // handlers run against the real accountScopeBinding.
 const handlers = new Map();
 const broadcasts = [];
-const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scope-ipc-"));
+const userDataDirectory = createTempDir(path.join(os.tmpdir(), "account-scope-ipc-"));
 let tokenState = { token: null, generation: 0 };
 
 const electronStub = {

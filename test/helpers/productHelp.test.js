@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
@@ -294,7 +295,7 @@ test("the main-process helper loads using only files included in desktop packagi
   const fs = require("node:fs");
   const os = require("node:os");
   const path = require("node:path");
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-help-package-"));
+  const root = createTempDir(path.join(os.tmpdir(), "openwhispr-help-package-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const packageFiles = require("../../electron-builder.json").files;
   for (const directory of ["helpers", "config"]) {

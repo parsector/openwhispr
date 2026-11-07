@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { spawn } = require("child_process");
@@ -104,7 +105,7 @@ async function withServer(fn) {
 }
 
 test("downloadFile lets the process exit after following a redirect", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "download-utils-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "download-utils-"));
   const dest = path.join(dir, "model.bin");
   try {
     await withServer(async (port) => {
@@ -138,7 +139,7 @@ test("fetchLatestRelease lets the process exit after a redirect or an error stat
 });
 
 test("downloadFile ignores a reset on the redirect it already followed", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "download-utils-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "download-utils-"));
   const dest = path.join(dir, "model.bin");
   try {
     await withServer(async (port) => {

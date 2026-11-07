@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -44,7 +45,7 @@ function loadModelManager() {
 }
 
 async function withHome(prefix, fn) {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  const home = await createTempDir(path.join(os.tmpdir(), prefix));
   electronHome = home;
   try {
     return await fn(home);

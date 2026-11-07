@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -69,7 +70,7 @@ function request(overrides = {}) {
 }
 
 test("deduplicates config and Azure token refreshes while keeping cloud tokens out of config", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const calls = { config: 0, assertion: 0, azure: 0 };
   let configHeaders;
@@ -119,7 +120,7 @@ test("deduplicates config and Azure token refreshes while keeping cloud tokens o
 });
 
 test("authorization failures evict cached config while server failures use it transiently", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const cachePath = path.join(tempDir, "config.json");
   const enforcedConfig = managedConfig();
@@ -147,7 +148,7 @@ test("authorization failures evict cached config while server failures use it tr
 });
 
 test("a rotated credential's cache drops the old credential's entries", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const cachePath = path.join(tempDir, "config.json");
   const otherWorkspaceId = "44444444-4444-4444-8444-444444444444";
@@ -182,7 +183,7 @@ test("a rotated credential's cache drops the old credential's entries", async (t
 });
 
 test("another API origin's cache entries survive a rotated credential", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const cachePath = path.join(tempDir, "config.json");
   let apiUrl = "https://api.example.com";
@@ -204,7 +205,7 @@ test("another API origin's cache entries survive a rotated credential", async (t
 });
 
 test("an Enterprise-plan downgrade clears prior managed enforcement", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const enforcedConfig = managedConfig();
   enforcedConfig.providers[0].mode = "managed_required";
@@ -233,7 +234,7 @@ test("an Enterprise-plan downgrade clears prior managed enforcement", async (t) 
 });
 
 test("a malformed successful config response fails closed instead of using disk cache", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const enforcedConfig = managedConfig();
   enforcedConfig.providers[0].mode = "managed_required";
@@ -258,7 +259,7 @@ test("a malformed successful config response fails closed instead of using disk 
 });
 
 test("a first transient failure does not claim that enforcement is disabled", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const manager = createEnterpriseIdentityManager({
     cachePath: path.join(tempDir, "config.json"),
@@ -276,7 +277,7 @@ test("a first transient failure does not claim that enforcement is disabled", as
 });
 
 test("a generation change discards old cloud credentials and broadcasts the new envelope", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   let generation = 1;
   let tokenCalls = 0;
@@ -315,7 +316,7 @@ test("a generation change discards old cloud credentials and broadcasts the new 
 });
 
 test("rejects stale auth generations before making a request", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   let called = false;
   const manager = createEnterpriseIdentityManager({
@@ -336,7 +337,7 @@ test("rejects stale auth generations before making a request", async (t) => {
 });
 
 test("Bedrock exchanges the workspace assertion for short-lived web identity credentials", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const config = managedConfig();
   config.providers = [
@@ -399,7 +400,7 @@ test("Bedrock exchanges the workspace assertion for short-lived web identity cre
 });
 
 test("assertion requests carry the inference scope being exercised", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-scope-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-scope-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const bodies = [];
   const config = managedConfig();
@@ -449,7 +450,7 @@ function settles(promise) {
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 test("a config body that stalls after headers times out and frees the shared request", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-stall-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-stall-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let configCalls = 0;
@@ -488,7 +489,7 @@ test("a config body that stalls after headers times out and frees the shared req
 
 for (const status of [401, 403]) {
   test(`a cached config is evicted when a ${status} response body stalls`, async (t) => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-stall-"));
+    const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-stall-"));
     t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const cachePath = path.join(tempDir, "cache.json");
@@ -544,7 +545,7 @@ for (const status of [401, 403]) {
 }
 
 test("a stalled 401 assertion body preserves authorization errors and evicts the cached config", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-stall-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-stall-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const cachePath = path.join(tempDir, "cache.json");
@@ -612,7 +613,7 @@ test("a stalled 401 assertion body preserves authorization errors and evicts the
 });
 
 test("an Azure token body that stalls after headers times out and frees the shared credential", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-stall-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-stall-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   t.mock.timers.enable({ apis: ["setTimeout"] });
   let azureCalls = 0;
@@ -651,7 +652,7 @@ test("an Azure token body that stalls after headers times out and frees the shar
 });
 
 test("only transcription token exchanges use the audio network profile and requesting identity", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-network-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-network-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const config = managedConfig();
   const network = { proxy: { mode: "fixed", url: "http://proxy.example.com:8080/" } };
@@ -715,7 +716,7 @@ const REALTIME = {
 };
 
 test("managed resolution errors carry their translation key across the main process", async (t) => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
   t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
   const manager = createEnterpriseIdentityManager({
     cachePath: path.join(tempDir, "config.json"),
@@ -738,7 +739,7 @@ test("eviction reports which audio operations a required record enforced", async
     [BATCH_ONLY, ["batch"]],
     [{ ...BATCH_ONLY, ...REALTIME }, ["batch", "realtime"]],
   ]) {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-enterprise-"));
+    const tempDir = createTempDir(path.join(os.tmpdir(), "openwhispr-enterprise-"));
     t.after(() => fs.rmSync(tempDir, { recursive: true, force: true }));
     const snapshots = [];
     let response = jsonResponse({ data: requiredAudioConfig(audio) });

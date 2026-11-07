@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -9,7 +10,7 @@ const path = require("path");
 // unanswerable from a customer debug log (CUS-113 had to infer 1.8.x from the
 // Electron version).
 test("debug log System Info header includes the app version", async () => {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "debugLogger-test-"));
+  const tempDir = createTempDir(path.join(os.tmpdir(), "debugLogger-test-"));
   const electronPath = require.resolve("electron");
   const debugLoggerPath = require.resolve("../../src/helpers/debugLogger.js");
   const originalElectronCache = require.cache[electronPath];

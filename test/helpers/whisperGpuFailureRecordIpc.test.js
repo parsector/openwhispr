@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -16,7 +17,7 @@ const originalLoad = Module._load;
 const handlers = new Map();
 const broadcasts = [];
 // A private userData, so nothing (e.g. tokenStore's auth-token.bin) is read from a shared temp dir
-const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-gpu-ipc-"));
+const userDataDir = createTempDir(path.join(os.tmpdir(), "whisper-gpu-ipc-"));
 const electronStub = {
   app: {
     getPath: () => userDataDir,

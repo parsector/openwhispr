@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -25,7 +26,7 @@ test("the Vite dev module graph exposes the shared renderer geometry exports", a
   }
 
   const { createServer } = await import("vite");
-  const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-vite-geometry-test-"));
+  const cacheDir = createTempDir(path.join(os.tmpdir(), "openwhispr-vite-geometry-test-"));
   const vite = await createServer({
     root: SRC_ROOT,
     cacheDir,

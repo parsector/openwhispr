@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -187,7 +188,7 @@ test('a retained legacy row without a persisted span is offered for review', asy
 });
 
 function fixture(t) {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-enroll-'));
+  dir = createTempDir(path.join(os.tmpdir(), 'ow-enroll-'));
   const db = new DatabaseManager();
   t.after(() => { db.db.close(); fs.rmSync(dir, { recursive: true, force: true }); });
   const person = db.createNamedSpeakerProfile('Alex');

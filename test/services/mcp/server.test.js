@@ -1,3 +1,4 @@
+const createTempDir = require("../../lib/tempDir");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -12,7 +13,7 @@ const { createTools, capResult } = require("../../../src/services/mcp/server/too
 const { searchNotes } = require("../../../src/helpers/noteSearch");
 
 function fixture() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-mcp-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-mcp-"));
   const tokens = createTokenStore(dir);
   const token = tokens.create("Claude Desktop");
   const note = { id: 7, title: "Plan", content: "A private note", enhanced_content: "", transcript: "", space_id: 1, created_at: "2026-01-01", note_type: "text" };

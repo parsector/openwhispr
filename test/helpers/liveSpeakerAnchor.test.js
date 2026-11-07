@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -22,7 +23,7 @@ Module._load = load;
 const vector = (x, y = 0) => Float32Array.from({ length: 512 }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
 const unit = (x, y) => { const n = Math.hypot(x, y); return vector(x / n, y / n); };
 function fixture(t) {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ow-live-anchor-'));
+  dir = createTempDir(path.join(os.tmpdir(), 'ow-live-anchor-'));
   const ownDir = dir;
   const db = new Database();
   t.after(() => { db.db.close(); fs.rmSync(ownDir, { recursive: true, force: true }); });

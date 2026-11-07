@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -92,7 +93,7 @@ async function loadModelDownloadHandler(modelManager) {
 
 for (const outcome of ["cancel", "error", "complete"]) {
   test(`the owning IPC request settles after ${outcome} when a duplicate arrives during preflight`, async (t) => {
-    const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-ipc-owner-"));
+    const tmpHome = await createTempDir(path.join(os.tmpdir(), "openwhispr-ipc-owner-"));
     electronHome = tmpHome;
     const preflight = Promise.withResolvers();
     const transferStarted = Promise.withResolvers();
@@ -170,7 +171,7 @@ for (const outcome of ["cancel", "error", "complete"]) {
 }
 
 test("the IPC registry permits distinct LLM transfers and settles them independently", async (t) => {
-  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-ipc-concurrent-"));
+  const tmpHome = await createTempDir(path.join(os.tmpdir(), "openwhispr-ipc-concurrent-"));
   electronHome = tmpHome;
   const [firstModel, secondModel] = modelRegistryData.localProviders[0].models;
   const firstTransfer = Promise.withResolvers();
@@ -217,7 +218,7 @@ test("the IPC registry permits distinct LLM transfers and settles them independe
 });
 
 test("getAllModels surfaces in-flight local model download state", async (t) => {
-  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-model-status-"));
+  const tmpHome = await createTempDir(path.join(os.tmpdir(), "openwhispr-model-status-"));
   electronHome = tmpHome;
   t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
 
@@ -248,7 +249,7 @@ test("getAllModels surfaces in-flight local model download state", async (t) => 
 });
 
 test("getAllModels retries when a download completes during filesystem checks", async (t) => {
-  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-model-snapshot-"));
+  const tmpHome = await createTempDir(path.join(os.tmpdir(), "openwhispr-model-snapshot-"));
   electronHome = tmpHome;
   t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
 
@@ -296,7 +297,7 @@ test("getAllModels retries when a download completes during filesystem checks", 
 });
 
 test("downloadModel permits distinct local models to download concurrently", async (t) => {
-  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-single-download-"));
+  const tmpHome = await createTempDir(path.join(os.tmpdir(), "openwhispr-single-download-"));
   electronHome = tmpHome;
   t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
 
@@ -335,7 +336,7 @@ test("downloadModel permits distinct local models to download concurrently", asy
 });
 
 test("parallel downloads reserve their combined disk space", async (t) => {
-  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-disk-reservation-"));
+  const tmpHome = await createTempDir(path.join(os.tmpdir(), "openwhispr-disk-reservation-"));
   electronHome = tmpHome;
   t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
 
@@ -380,7 +381,7 @@ test("parallel downloads reserve their combined disk space", async (t) => {
 });
 
 test("cancelling an optional drafter does not complete the model download", async (t) => {
-  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-drafter-cancel-"));
+  const tmpHome = await createTempDir(path.join(os.tmpdir(), "openwhispr-drafter-cancel-"));
   electronHome = tmpHome;
   t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
 
@@ -417,7 +418,7 @@ test("cancelling an optional drafter does not complete the model download", asyn
 });
 
 test("downloadModel rejects a duplicate local model download", async (t) => {
-  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-duplicate-download-"));
+  const tmpHome = await createTempDir(path.join(os.tmpdir(), "openwhispr-duplicate-download-"));
   electronHome = tmpHome;
   t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
 
@@ -433,7 +434,7 @@ test("downloadModel rejects a duplicate local model download", async (t) => {
 });
 
 test("cancelDownload keeps the local LLM guard until the request unwinds", async (t) => {
-  const tmpHome = await fs.mkdtemp(path.join(os.tmpdir(), "openwhispr-cancel-guard-"));
+  const tmpHome = await createTempDir(path.join(os.tmpdir(), "openwhispr-cancel-guard-"));
   electronHome = tmpHome;
   t.after(() => fs.rm(tmpHome, { recursive: true, force: true }));
 

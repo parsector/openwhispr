@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
@@ -64,7 +65,7 @@ describe("modelDirUtils cache policy (#1279, #1399)", () => {
   }
 
   beforeEach(() => {
-    tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "ow-cache-test-"));
+    tempRoot = createTempDir(path.join(os.tmpdir(), "ow-cache-test-"));
     process.env = { ...originalEnv };
     delete process.env.OPENWHISPR_CACHE_ROOT;
     delete process.env.USERPROFILE;

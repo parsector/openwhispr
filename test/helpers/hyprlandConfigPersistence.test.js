@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -25,7 +26,7 @@ try {
 }
 
 function fixture(fn) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "hyprland-config-test-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "hyprland-config-test-"));
   const config = {
     path: path.join(dir, "hyprland.lua"),
     bindsPath: path.join(dir, "openwhispr-binds.lua"),

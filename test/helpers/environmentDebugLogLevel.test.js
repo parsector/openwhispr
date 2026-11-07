@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -87,7 +88,7 @@ function installDotenvStub(t, userDataEnvPath) {
 }
 
 function setup(t) {
-  const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-debug-log-level-"));
+  const userDataDirectory = createTempDir(path.join(os.tmpdir(), "openwhispr-debug-log-level-"));
   const environmentSnapshot = snapshotEnvironment();
   const originalResourcesPath = process.resourcesPath;
   process.resourcesPath = userDataDirectory;

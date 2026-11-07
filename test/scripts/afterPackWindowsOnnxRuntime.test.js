@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -7,7 +8,7 @@ const path = require("path");
 const { verifyWindowsOnnxRuntimePrivatized } = require("../../scripts/afterPack");
 
 function makeBinDir(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "afterpack-bin-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "afterpack-bin-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }

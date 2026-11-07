@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -35,7 +36,7 @@ function readString(body, offset) {
 // A compositor that lists `globals` and, once zcosmic_toplevel_info_v1 is bound, sends
 // `toplevels` the way cosmic-comp does for a version 1 client. Records every bind.
 function startCompositor(t, { globals, toplevels }) {
-  const runtimeDir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-cosmic-"));
+  const runtimeDir = createTempDir(path.join(os.tmpdir(), "ow-cosmic-"));
   const binds = [];
   const server = net.createServer((socket) => {
     let registry = null;
@@ -112,7 +113,7 @@ test("returns null when the compositor has no COSMIC toplevel info", async (t) =
 });
 
 test("returns null without a Wayland socket", async () => {
-  const runtimeDir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-cosmic-"));
+  const runtimeDir = createTempDir(path.join(os.tmpdir(), "ow-cosmic-"));
   try {
     assert.equal(
       await getCosmicActiveAppId({ XDG_RUNTIME_DIR: runtimeDir, WAYLAND_DISPLAY: "wayland-9" }),

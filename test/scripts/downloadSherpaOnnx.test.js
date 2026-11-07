@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -37,7 +38,7 @@ test("removes only libraries from the previous sherpa-onnx install", () => {
 });
 
 function makeBinDir(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sherpa-win32-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "sherpa-win32-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   return dir;
 }

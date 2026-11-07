@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -7,7 +8,7 @@ const { createWorkspacePolicyManager } = require("../../src/helpers/workspacePol
 const { createAudioFeaturePolicy } = require("../../src/helpers/audioFeaturePolicy");
 
 function setupPolicy(fetchPolicy, token = "personal-token") {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "personal-audio-policy-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "personal-audio-policy-"));
   const tokenState = { token, generation: 1 };
   const manager = createWorkspacePolicyManager({
     cachePath: path.join(directory, "policy.json"),

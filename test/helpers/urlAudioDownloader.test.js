@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const dns = require("dns");
@@ -947,7 +948,7 @@ test("downloadDirect defers a cancelled download's rejection until the write str
 // --- selectYtDlpOutput: finished-file selection + transient cleanup ---
 
 function mkSelectDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "ow-ytdlp-select-"));
+  return createTempDir(path.join(os.tmpdir(), "ow-ytdlp-select-"));
 }
 
 // Create a prefix-matched file with a fixed mtime (seconds) to make ordering deterministic.

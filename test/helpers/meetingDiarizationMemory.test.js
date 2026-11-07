@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -7,7 +8,7 @@ const DiarizationManager = require("../../src/helpers/diarization");
 
 test("meeting PCM converts in memory and reaches diarization through a secure FIFO", async (t) => {
   if (process.platform === "win32") return t.skip("POSIX descriptor path");
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ow-diarize-pipe-"));
+  const root = createTempDir(path.join(os.tmpdir(), "ow-diarize-pipe-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const mock = path.join(root, "diarizer");
   fs.writeFileSync(mock, `#!/usr/bin/env node

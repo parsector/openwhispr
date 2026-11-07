@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -19,7 +20,7 @@ function setEnv(name, value) {
 
 function withTmpXdgDirs(fn) {
   return async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-autostart-test-"));
+    const root = createTempDir(path.join(os.tmpdir(), "openwhispr-autostart-test-"));
     const saved = Object.fromEntries(MANAGED_ENV.map((name) => [name, process.env[name]]));
     MANAGED_ENV.forEach((name) => setEnv(name, undefined));
     process.env.XDG_CONFIG_HOME = path.join(root, "config");

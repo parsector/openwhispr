@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -105,7 +106,7 @@ test("a restart after the Vulkan pack is removed drops the old Vulkan fallback",
 });
 
 test("startup pre-warm preserves the installed Vulkan fallback", async () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-prewarm-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "whisper-prewarm-"));
   const modelPath = path.join(dir, "ggml-base.bin");
   fs.writeFileSync(modelPath, "model");
 
@@ -404,7 +405,7 @@ test("pre-warm and every server start check for a GPU fallback before starting",
   const os = require("node:os");
   const fs = require("node:fs");
   const path = require("node:path");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-gpu-warn-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "whisper-gpu-warn-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const modelPath = path.join(dir, "ggml-base.bin");
   fs.writeFileSync(modelPath, "");

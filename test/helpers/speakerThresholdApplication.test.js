@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -8,7 +9,7 @@ const { buildReport } = require("../../src/helpers/speakerInAppCalibration");
 
 test("recommendation is never applied until explicit settings save and synthetic data stays uncalibrated", () => {
   const config = require("../../src/helpers/speakerDecisionThresholds");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-threshold-test-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-threshold-test-"));
   try {
     config.configure(path.join(dir, "thresholds.json"));
     const { matchReason } = require("../../src/helpers/speakerUncertainty");
@@ -46,7 +47,7 @@ test("recommendation is never applied until explicit settings save and synthetic
 
 test("an independently validated report calibrates each supported threshold and routes the naming floor", () => {
   const config = require("../../src/helpers/speakerDecisionThresholds");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-threshold-test-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-threshold-test-"));
   const file = path.join(dir, "thresholds.json");
   try {
     config.configure(file);
@@ -74,7 +75,7 @@ test("an independently validated report calibrates each supported threshold and 
 test("a reconstructed diagnostic report cannot calibrate settings when applied or reloaded", () => {
   const config = require("../../src/helpers/speakerDecisionThresholds");
   const { buildReport } = require("../../src/helpers/speakerInAppCalibration");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-reconstructed-threshold-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-reconstructed-threshold-"));
   const file = path.join(dir, "thresholds.json");
   try {
     config.configure(file);
@@ -115,7 +116,7 @@ test("a reconstructed diagnostic report cannot calibrate settings when applied o
 
 test("legacy applied settings retain their production values and status on reload", () => {
   const config = require("../../src/helpers/speakerDecisionThresholds");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "speaker-legacy-threshold-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-legacy-threshold-"));
   const file = path.join(dir, "thresholds.json");
   try {
     config.configure(file);
