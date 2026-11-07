@@ -327,10 +327,12 @@ test("background job counts retained bytes and re-embedded reviewed rows", async
     assert.equal(job.progress.reembeddedRows, 1);
     assert.equal(job.progress.bytesRead, 1234);
     assert.equal(job.report.analyses.calibration.rows, 1);
-    assert.equal(job.report.support.similarityFloor.method, "stored-centroid-current-profiles");
+    // Scores now come from reconstructed bounded-window audio, not stored centroids.
+    assert.equal(job.report.support.similarityFloor.method, "reconstructed-row-audio");
     assert.equal(await reportStillCurrent(job.report, database, audioStore, model), true);
     noteEmbeddings = [];
-    assert.equal(await reportStillCurrent(job.report, database, audioStore, model), false);
+    // Removing unused centroids does not invalidate reconstructed audio evidence.
+    assert.equal(await reportStillCurrent(job.report, database, audioStore, model), true);
     noteEmbeddings = [{ speaker_id: 1, embedding: Buffer.from(new Float32Array([1, 0]).buffer) }];
     note.transcript = JSON.stringify([{ ...row, text: "edited after calibration" }]);
     assert.equal(await reportStillCurrent(job.report, database, audioStore, model), false);
