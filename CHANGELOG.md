@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.3] - 2026-11-07
+
+### Calibration
+
+- **Calibration no longer freezes the app.** It runs in the background while the window stays responsive and progress stays visible.
+- **Cancel and try again.** You can cancel calibration while it runs and start again after a cancelled or failed run.
+- **Faster results for large libraries.** Calibration reuses audio it has already loaded and processed for each recording instead of repeating that work for every row.
+- **Your voice settings stay the same.** Recognition profiles, approval thresholds and existing approvals are unchanged.
+
 ## [1.13.2] - 2026-11-06
 
 Approved voice clips stay safe, and calibration only recommends what the evidence supports.
