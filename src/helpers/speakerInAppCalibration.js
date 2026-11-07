@@ -11,7 +11,7 @@ const {
   validRowEvidence,
 } = require("./speakerCalibrationPolicy");
 const { completionDiagnostic } = require("./speakerCompletionDiagnostic");
-const { windowExclusion } = require("./calibrationEvidenceWindow");
+const { windowExclusion, measurementInterval, pcm16Samples } = require("./calibrationEvidenceWindow");
 
 const rowExclusion = (row, reason, extra = {}) => ({
   noteId: row.noteId,
@@ -23,6 +23,24 @@ const rowExclusion = (row, reason, extra = {}) => ({
 });
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
+const clusterKey = (row) => JSON.stringify([row.noteId, row.clusterId]);
+function reviewedClusterMembership(rows) {
+  const clusters = new Map();
+  for (const row of rows) {
+    if (row.exemplarId) continue;
+    const key = clusterKey(row);
+    if (!clusters.has(key)) clusters.set(key, []);
+    clusters.get(key).push([row.rowId, row.truePerson]);
+  }
+  return Object.fromEntries(
+    [...clusters]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, members]) => [
+        key,
+        members.sort(([a], [b]) => String(a).localeCompare(String(b))),
+      ])
+  );
+}
 const noteEmbeddingsFingerprint = (items) =>
   sha(
     JSON.stringify(
@@ -147,7 +165,7 @@ function buildReport({
   // Conflicts remove every member before counts, hashes or admission are built.
   const byCluster = new Map();
   for (const row of rows.filter((item) => !item.exemplarId)) {
-    const key = JSON.stringify([row.noteId, row.clusterId]);
+    const key = clusterKey(row);
     if (!byCluster.has(key)) byCluster.set(key, []);
     byCluster.get(key).push(row);
   }
@@ -330,6 +348,9 @@ function buildReport({
       noteCentroidCompletions,
       bytesRead,
       revisions,
+      // A serialized snapshot avoids rebuilding another row-sized object graph
+      // on the main thread when the worker delivers a large report.
+      reviewedClusterMembership: JSON.stringify(reviewedClusterMembership(rows)),
       exclusions: allExclusions,
     },
     fingerprints: {
@@ -505,6 +526,7 @@ function collectRows(database, audioStore, scope, budget, onProgress = () => {})
         end: label.end,
         from: label.from,
         to: label.to,
+        retainedTrack: status.tracks?.[label.track],
         playbackUnavailableReason: label.unavailableReason,
         playbackPlaceable: !label.unavailableReason,
         approximate: label.approximate,
@@ -540,10 +562,39 @@ function pcm16FromWav(wav) {
   if (data < 0) throw Error("Missing WAV data");
   const sampleRate = wav.readUInt32LE(24);
   const count = Math.floor(wav.readUInt32LE(data + 4) / 2);
-  const result = new Float32Array(Math.floor((count * 16000) / sampleRate));
-  for (let i = 0; i < result.length; i++)
-    result[i] = wav.readInt16LE(data + 8 + Math.floor((i * sampleRate) / 16000) * 2) / 32768;
-  return result;
+  return pcm16Samples(wav.subarray(data + 8, data + 8 + count * 2), sampleRate);
+}
+// Freshness measures newly selected siblings with exactly the same eligibility
+// rules as report generation. Failed/unbounded evidence cannot decide conflicts.
+async function measureBoundedRow(row, audioStore, model, modelFingerprint, signal) {
+  const windowReason = windowExclusion(row);
+  if (windowReason) return { reason: windowReason };
+  if (!row.audioAvailable) return { reason: `audio_${row.audioState}` };
+  if (!modelFingerprint) return { reason: "speaker_model_unavailable" };
+  const { from, to } = measurementInterval(row);
+  const args = [row.noteId, row.track, from, to];
+  const span = audioStore.spanAsync
+    ? await audioStore.spanAsync(...args, { signal })
+    : audioStore.span(...args);
+  if (!span.wav) return { reason: `audio_${span.state}` };
+  const bytesRead = span.bytesRead ?? span.wav.length;
+  if (span.partial) return { reason: "audio_partial", bytesRead };
+  // Hash precisely these WAV bytes, never an aggregate of other rows.
+  row.audioFingerprint = sha(span.wav);
+  row.verifiedAudioFingerprint = row.audioFingerprint;
+  let reconstructedVector = [];
+  try {
+    reconstructedVector = Array.from(
+      (await model.extractEmbeddingFromSamples(pcm16FromWav(span.wav))) || []
+    );
+  } catch {
+    // An extraction failure cannot make the old centroid eligible.
+  }
+  if (!reconstructedVector.length || !reconstructedVector.every(Number.isFinite))
+    return { reason: "embedding_unavailable", bytesRead };
+  row.vector = reconstructedVector;
+  row.vectorSource = "reconstructed-row-audio";
+  return { bytesRead };
 }
 async function runJobLocal(
   job,
@@ -597,54 +648,17 @@ async function runJobLocal(
         row.verifiedAudioFingerprint = sha(audio.wav);
         job.progress.bytesRead += audio.wav.length;
       }
-    } else if (windowExclusion(row)) {
-      exclusions.push(rowExclusion(row, windowExclusion(row)));
-    } else if (
-      !row.audioAvailable ||
-      row.playbackUnavailableReason ||
-      !Number.isFinite(row.from) ||
-      !Number.isFinite(row.to) ||
-      Math.min(row.end, row.to) - Math.max(row.start, row.from) < 1.5
-    ) {
-      exclusions.push(
-        rowExclusion(
-          row,
-          !row.audioAvailable
-            ? `audio_${row.audioState}`
-            : row.playbackUnavailableReason
-              ? `playback_${row.playbackUnavailableReason}`
-              : "span_too_short"
-        )
-      );
-    } else if (!modelFingerprint) {
-      exclusions.push(rowExclusion(row, "speaker_model_unavailable"));
     } else {
-      const args = [row.noteId, row.track, row.from, row.to];
-      const span = audioStore.spanAsync
-        ? await audioStore.spanAsync(...args, { signal: job.abortController?.signal })
-        : audioStore.span(...args);
-      if (span.wav) {
-        job.progress.bytesRead += span.bytesRead ?? span.wav.length;
-        if (span.partial) exclusions.push(rowExclusion(row, "audio_partial"));
-        else {
-          // Hash precisely these WAV bytes, never an aggregate of other rows.
-          row.audioFingerprint = sha(span.wav);
-          row.verifiedAudioFingerprint = row.audioFingerprint;
-          let reconstructedVector = [];
-          try {
-            reconstructedVector = Array.from(
-              (await model.extractEmbeddingFromSamples(pcm16FromWav(span.wav))) || []
-            );
-          } catch {
-            // An extraction failure cannot make the old centroid eligible.
-          }
-          if (reconstructedVector.length && reconstructedVector.every(Number.isFinite)) {
-            job.progress.reembeddedRows++;
-            row.vector = reconstructedVector;
-            row.vectorSource = "reconstructed-row-audio";
-          } else exclusions.push(rowExclusion(row, "embedding_unavailable"));
-        }
-      } else exclusions.push(rowExclusion(row, `audio_${span.state}`));
+      const measured = await measureBoundedRow(
+        row,
+        audioStore,
+        model,
+        modelFingerprint,
+        job.abortController?.signal
+      );
+      job.progress.bytesRead += measured.bytesRead || 0;
+      if (measured.reason) exclusions.push(rowExclusion(row, measured.reason));
+      else job.progress.reembeddedRows++;
     }
     job.progress.processedRows++;
     job.progress.elapsedMs = Date.now() - started;
@@ -758,11 +772,70 @@ async function reportStillCurrentLocal(
     }
     const row = notes.get(noteId).get(rowId);
     if (!row || sha(JSON.stringify(row)) !== revision) return false;
-    const args = [noteId, evidence.track, evidence.from, evidence.to];
+    const { from, to } = measurementInterval(evidence);
+    const args = [noteId, evidence.track, from, to];
     const span = audioStore.spanAsync
       ? await audioStore.spanAsync(...args)
       : audioStore.span(...args);
     if (!span?.wav || span.partial || sha(span.wav) !== evidence.audioFingerprint) return false;
+  }
+  if (typeof report.evidence.reviewedClusterMembership !== "string") return false;
+  // Bind every included transcript row exactly once without duplicating its
+  // cluster/label in the already large revision list sent back by the worker.
+  let savedMembership, membershipRows;
+  try {
+    savedMembership = JSON.parse(report.evidence.reviewedClusterMembership);
+    membershipRows = Object.entries(savedMembership).flatMap(([cluster, members]) => {
+      const [noteId] = JSON.parse(cluster);
+      return members.map(([rowId]) => JSON.stringify([noteId, rowId]));
+    }).sort();
+  } catch {
+    return false;
+  }
+  const includedRows = report.evidence.revisions
+    .filter((row) => !row.exemplarId)
+    .map((row) => JSON.stringify([row.noteId, row.rowId]))
+    .sort();
+  if (JSON.stringify(membershipRows) !== JSON.stringify(includedRows)) return false;
+  if (savedMembership && Object.keys(savedMembership).length) {
+    // Replay scope, budgets, review selection and exemplar suppression. Only
+    // clusters that contributed evidence can make this report stale.
+    const selected = collectRows(database, audioStore, report.scope, {
+      rows: report.evidence.rowBudget,
+      notes: report.evidence.noteBudget,
+    }).rows;
+    const members = [];
+    const included = new Map(
+      report.evidence.revisions
+        .filter((row) => !row.exemplarId)
+        .map((row) => [JSON.stringify([row.noteId, row.rowId]), row])
+    );
+    for (const row of selected) {
+      if (row.exemplarId || !Object.hasOwn(savedMembership, clusterKey(row))) continue;
+      const saved = included.get(JSON.stringify([row.noteId, row.rowId]));
+      if (saved) {
+        // The bytes/model/revision were verified above. Re-resolving can still
+        // change the measurement window when an adjacent transcript row changes.
+        if (
+          windowExclusion(row) ||
+          !row.audioAvailable ||
+          ["revision", "track", "start", "end", "from", "to", "timingProvenance"].some(
+            (key) => row[key] !== saved[key]
+          )
+        )
+          return false;
+        members.push(row);
+        continue;
+      }
+      const measured = await measureBoundedRow(row, audioStore, model, report.fingerprints.model);
+      if (!measured.reason) members.push(row);
+    }
+    // A new conflicting label cannot equal the saved uniform membership; the
+    // same pre-conflict eligibility filter is used by buildReport above.
+    if (
+      JSON.stringify(reviewedClusterMembership(members)) !== report.evidence.reviewedClusterMembership
+    )
+      return false;
   }
   return true;
 }

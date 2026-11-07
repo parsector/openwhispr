@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 const fs = require('node:fs');
-const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { spawnSync } = require('node:child_process');
 const { sweepCalibration } = require('../src/helpers/speakerCalibration');
-const { windowExclusion } = require('../src/helpers/calibrationEvidenceWindow');
+const { windowExclusion, measurementInterval, pcm16Samples, MEASUREMENT_RATE } = require('../src/helpers/calibrationEvidenceWindow');
 
 function wavInfo(file) {
   const header = Buffer.alloc(44);
@@ -15,7 +13,8 @@ function wavInfo(file) {
     header.readUInt16LE(20) !== 1 || header.readUInt16LE(22) !== 1 || header.readUInt16LE(34) !== 16)
     throw Error(`Expected mono PCM16 WAV: ${file}`); }
   finally { fs.closeSync(fd); }
-  return { rate: header.readUInt32LE(24), duration: header.readUInt32LE(40) / header.readUInt32LE(28) };
+  return { rate: header.readUInt32LE(24), sampleCount: header.readUInt32LE(40) / 2,
+    duration: header.readUInt32LE(40) / header.readUInt32LE(28) };
 }
 
 function voicedSeconds(file, start, end) {
@@ -55,62 +54,60 @@ function embeddingWindow(file, start, end) {
       if (chunk.toString('ascii', 0, 4) === 'data') { dataOffset = offset + 8; break; }
       offset += 8 + length + length % 2;
     }
-    if (dataOffset < 0 || rate !== 16000) throw Error('Resampled audio is missing 16 kHz PCM data');
-    const first = Math.floor(start * rate);
-    const samples = Math.floor(end * rate) - first;
+    if (dataOffset < 0 || rate <= 0) throw Error('Audio is missing PCM data');
+    const first = Math.round(start * rate);
+    const samples = Math.round(end * rate) - first;
     const bytes = Buffer.alloc(samples * 2);
     const count = fs.readSync(fd, bytes, 0, bytes.length, dataOffset + first * 2);
     if (count !== bytes.length) throw Error('Labelled row extends past audio duration');
-    const values = new Float32Array(samples);
-    for (let i = 0; i < samples; i++) values[i] = bytes.readInt16LE(i * 2) / 32768;
-    return values;
+    return pcm16Samples(bytes, rate);
   } finally { fs.closeSync(fd); }
 }
 
 async function measureRows(base, labels) {
-  const exclusions = [];
-  const rows = labels.rows.filter(row => {
-    const reason = windowExclusion(row);
-    if (reason) exclusions.push({ rowId: row.rowId, reason });
-    return !reason;
-  }).map(row => ({ ...row }));
-  if (!rows.length) throw Error(`No included bounded audio evidence; excluded ${exclusions.length} rows: ${exclusions.map(row => `${row.rowId} (${row.reason})`).join(', ')}`);
-  const files = {};
+  const files = {}, fileTracks = {}, retainedTracks = {};
   for (const [track, audio] of Object.entries(labels.audio)) {
     const file = path.resolve(base, audio.file);
     if (!file.startsWith(base + path.sep) || !fs.statSync(file).isFile()) throw Error(`Invalid audio file: ${audio.file}`);
     files[track] = file;
+    const info = wavInfo(file);
+    const sampleCount = Math.floor(info.sampleCount * MEASUREMENT_RATE / info.rate);
+    fileTracks[track] = { sampleCount, chunks: [{ startSample: 0, sampleCount }] };
+    retainedTracks[track] = audio.retainedTrack || fileTracks[track];
   }
+  const exclusions = [];
+  const rows = labels.rows.filter(row => {
+    const reason = windowExclusion(row, retainedTracks[row.track]) ||
+      windowExclusion(row, fileTracks[row.track]);
+    if (reason) exclusions.push({ rowId: row.rowId, reason });
+    return !reason;
+  }).map(row => ({ ...row }));
+  if (!rows.length) throw Error(`No included bounded audio evidence; excluded ${exclusions.length} rows: ${exclusions.map(row => `${row.rowId} (${row.reason})`).join(', ')}`);
   const durationSeconds = Math.max(...Object.values(files).map(file => wavInfo(file).duration));
   for (const row of rows) {
     if (!files[row.track] || !Number.isFinite(row.start) || !Number.isFinite(row.end) || row.end <= row.start ||
-      row.start < 0 || row.end > wavInfo(files[row.track]).duration + .001 ||
+      row.start < 0 ||
       typeof row.truePerson !== 'string' || !row.truePerson || typeof row.trueOverlap !== 'boolean')
       throw Error(`Review truePerson, trueOverlap, start and end for row ${row.rowId}`);
+    const { from, to } = measurementInterval(row);
     row.voicedSeconds = labels.synthetic && Number.isFinite(row.voicedSeconds) ? row.voicedSeconds
-      : voicedSeconds(files[row.track], row.start, row.end);
+      : voicedSeconds(files[row.track], from, to);
     row.overlapSeconds = labels.synthetic && Number.isFinite(row.overlapSeconds) ? row.overlapSeconds
       : Math.max(0, ...rows.filter(other => other !== row && other.track === row.track &&
         other.truePerson !== row.truePerson && Number.isFinite(other.end))
         .map(other => Math.min(row.end, other.end) - Math.max(row.start, other.start)));
   }
   if (!labels.synthetic) {
-    const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'openwhispr-calibration-'));
     let embeddings;
     try {
-      const { getFFmpegPath } = require('../src/helpers/ffmpegUtils');
       embeddings = require('../src/helpers/speakerEmbeddings');
       if (!embeddings.isAvailable()) throw Error('Local speaker embedding model unavailable; run npm run download:diarization-models, then calibrate again');
-      const converted = {};
-      for (const [track, file] of Object.entries(files)) {
-        converted[track] = path.join(temp, `${track}-16k.wav`);
-        const result = spawnSync(getFFmpegPath(), ['-hide_banner', '-loglevel', 'error', '-y', '-i', file,
-          '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', converted[track]], { windowsHide: true });
-        if (result.status !== 0) throw Error(`Could not resample ${track} audio: ${result.stderr}`);
-      }
       const vectors = [];
-      for (const row of rows) vectors.push(await embeddings.extractEmbeddingFromSamples(
-        embeddingWindow(converted[row.track], row.start, row.end)));
+      for (const row of rows) {
+        const { from, to } = measurementInterval(row);
+        vectors.push(await embeddings.extractEmbeddingFromSamples(
+          embeddingWindow(files[row.track], from, to)));
+      }
       const cohorts = new Map();
       for (let i = 0; i < rows.length; i++) {
         if (rows[i].trueOverlap || !vectors[i]) continue;
@@ -137,7 +134,6 @@ async function measureRows(base, labels) {
       }
     } finally {
       if (embeddings) await embeddings.unload().catch(() => {});
-      fs.rmSync(temp, { recursive: true, force: true });
     }
   }
   const audioSha256 = Object.fromEntries(Object.entries(files).map(([track, file]) => {

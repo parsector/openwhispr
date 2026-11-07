@@ -1,6 +1,24 @@
 // Playback may offer approximate coordinates. Calibration requires a bounded
 // labelled interval contained in the retained audio selected for measurement.
-function windowExclusion(row) {
+const { exactCoverage } = require("./voiceAudioIntegrity");
+const MEASUREMENT_RATE = 24000;
+const MINIMUM_LABEL_SECONDS = 1.5;
+
+// Keep the resolver's millisecond rounding. Both consumers then request its
+// from/to window at the nearest canonical (24 kHz) sample, with no tolerance or
+// clipping at the retained boundary. Resampling happens only after this slice.
+function measurementInterval(row) {
+  const startSample = Math.round(row.from * MEASUREMENT_RATE);
+  const endSample = Math.round(row.to * MEASUREMENT_RATE);
+  return {
+    startSample,
+    endSample,
+    from: startSample / MEASUREMENT_RATE,
+    to: endSample / MEASUREMENT_RATE,
+  };
+}
+
+function windowExclusion(row, retainedTrack = row.retainedTrack) {
   if (row.timingProvenance === "retained_exemplar_clip") return null;
   if (!["exact_stored_span", "capture_bounds"].includes(row.timingProvenance))
     return `window_${row.timingProvenance || "unavailable"}`;
@@ -15,7 +33,25 @@ function windowExclusion(row) {
     row.to < row.end
   )
     return "window_label_not_contained";
+  if (row.end - row.start < MINIMUM_LABEL_SECONDS) return "span_too_short";
+  const { startSample, endSample } = measurementInterval(row);
+  if (
+    retainedTrack &&
+    ((retainedTrack.sampleCount != null && endSample > retainedTrack.sampleCount) ||
+      !exactCoverage(retainedTrack.chunks || [], startSample, endSample))
+  )
+    return "window_retained_coverage";
   return null;
 }
 
-module.exports = { windowExclusion };
+// The app and CLI slice source PCM first, then use the same sample-count and
+// source-index flooring when converting that bounded interval to 16 kHz.
+function pcm16Samples(pcm, sampleRate) {
+  const count = Math.floor(pcm.length / 2);
+  const result = new Float32Array(Math.floor((count * 16000) / sampleRate));
+  for (let i = 0; i < result.length; i++)
+    result[i] = pcm.readInt16LE(Math.floor((i * sampleRate) / 16000) * 2) / 32768;
+  return result;
+}
+
+module.exports = { windowExclusion, measurementInterval, pcm16Samples, MEASUREMENT_RATE };

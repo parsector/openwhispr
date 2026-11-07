@@ -112,9 +112,31 @@ function buildCalibrationLabels(note, audio, status = {}) {
       truePerson: null,
       trueOverlap: null,
     };
-    return { ...label, calibrationExclusionReason: windowExclusion(label) };
+    return {
+      ...label,
+      calibrationExclusionReason: windowExclusion(label, status.tracks?.[label.track]),
+    };
   });
-  return { version: 1, synthetic: false, audio, rows };
+  // Exported WAVs fill recording gaps with silence. Preserve the retained
+  // sample ownership so the CLI cannot mistake that padding for evidence.
+  const retainedAudio = Object.fromEntries(
+    Object.entries(audio).map(([track, file]) => [
+      track,
+      status.tracks?.[track]
+        ? {
+            ...file,
+            retainedTrack: {
+              sampleCount: status.tracks[track].sampleCount,
+              chunks: (status.tracks[track].chunks || []).map(({ startSample, sampleCount }) => ({
+                startSample,
+                sampleCount,
+              })),
+            },
+          }
+        : file,
+    ])
+  );
+  return { version: 1, synthetic: false, audio: retainedAudio, rows };
 }
 
 module.exports = { buildCalibrationLabels };

@@ -59,12 +59,12 @@ function boundedFixture(t) {
     getModelPath: () => modelPath,
     extractEmbeddingFromSamples: async () => new Float32Array([1, 0]),
   };
-  const run = async () => {
+  const run = async (budget = { rows: 10, notes: 2 }) => {
     const job = {
       state: "running",
       progress: { processedRows: 0, reembeddedRows: 0, bytesRead: 0 },
     };
-    await runJobLocal(job, database, audioStore, { kind: "all" }, { rows: 10, notes: 2 }, model);
+    await runJobLocal(job, database, audioStore, { kind: "all" }, budget, model);
     return job.report;
   };
   return { note, wav, database, audioStore, model, run };
@@ -256,4 +256,111 @@ test("gap 6: zero included evidence fails availability without alleging fingerpr
   assert.deepEqual(report.evidence.fingerprintIntegrity, []);
   assert.equal(report.resultType, "diagnostic_only");
   assert.deepEqual(report.recommended, {});
+});
+
+test("freshness sees a newly reviewed conflicting sibling without an included-row edit", async (t) => {
+  const f = boundedFixture(t);
+  const [r1] = JSON.parse(f.note.transcript);
+  r1.id = "r1";
+  f.note.transcript = JSON.stringify([r1]);
+  const report = await f.run();
+  assert.equal(report.evidence.reviewedRows, 1);
+  assert.equal(await reportStillCurrentLocal(report, f.database, f.audioStore, f.model), true);
+  const missingMembership = structuredClone(report);
+  missingMembership.evidence.reviewedClusterMembership = "{}";
+  assert.equal(await reportStillCurrentLocal(missingMembership, f.database, f.audioStore, f.model), false);
+  f.note.transcript = JSON.stringify([
+    r1,
+    {
+      ...r1,
+      id: "r2",
+      speakerName: "Ben",
+      audioSpan: { ...r1.audioSpan, startSample: 384000, endSample: 480000 },
+    },
+  ]);
+  const rebuilt = await f.run();
+  assert.equal(rebuilt.evidence.reviewedRows, 0);
+  assert.equal(rebuilt.evidence.exclusionCounts.conflicting_reviewed_labels, 2);
+  assert.deepEqual(rebuilt.evidence.exclusions.map((row) => row.rowId), ["r1", "r2"]);
+  assert.equal(await reportStillCurrentLocal(report, f.database, f.audioStore, f.model), false);
+});
+
+test("measurement rejects a stored span one sample shorter than 1.5 seconds", async (t) => {
+  const f = boundedFixture(t);
+  const [row] = JSON.parse(f.note.transcript);
+  row.audioSpan = { ...row.audioSpan, startSample: 24001, endSample: 60000 };
+  f.note.transcript = JSON.stringify([row]);
+  const { buildCalibrationLabels } = require("../../src/helpers/speakerCalibrationExport");
+  const { windowExclusion } = require("../../src/helpers/calibrationEvidenceWindow");
+  const label = buildCalibrationLabels(f.note, {}, f.audioStore.status()).rows[0];
+  assert.equal((await f.run()).evidence.exclusionCounts.span_too_short, 1);
+  assert.equal(windowExclusion(label), "span_too_short");
+});
+
+test("measurement rejects a resolved window rounded past retained samples", async (t) => {
+  const f = boundedFixture(t);
+  const [row] = JSON.parse(f.note.transcript);
+  row.audioSpan = { ...row.audioSpan, startSample: 24000, endSample: 72000 };
+  f.note.transcript = JSON.stringify([row]);
+  const track = { sampleCount: 72013, chunks: [{ startSample: 0, sampleCount: 72013 }] };
+  const status = { ...f.audioStore.status(), tracks: { system: track } };
+  f.audioStore.status = () => status;
+  const { buildCalibrationLabels } = require("../../src/helpers/speakerCalibrationExport");
+  const { windowExclusion } = require("../../src/helpers/calibrationEvidenceWindow");
+  const label = buildCalibrationLabels(f.note, {}, status).rows[0];
+  assert.equal(label.from, 0.96);
+  assert.equal(label.to, 3.001);
+  assert.equal(windowExclusion(label, track), "window_retained_coverage");
+  // The stub decoder would supply bytes; validation must reject before calling it.
+  f.audioStore.span = () => assert.fail("uncovered interval reached the decoder");
+  assert.equal((await f.run()).evidence.exclusionCounts.window_retained_coverage, 1);
+});
+
+test("freshness ignores siblings outside selection or bounded embedding eligibility", async (t) => {
+  const f = boundedFixture(t);
+  const [r1] = JSON.parse(f.note.transcript);
+  const report = await f.run();
+  const limited = await f.run({ rows: 1, notes: 2 });
+  const sibling = {
+    ...r1,
+    id: "sibling",
+    speakerName: "Ben",
+    audioSpan: { ...r1.audioSpan, startSample: 384000, endSample: 480000 },
+  };
+  f.note.transcript = JSON.stringify([r1, sibling]);
+  assert.equal(await reportStillCurrentLocal(limited, f.database, f.audioStore, f.model), true);
+  f.note.transcript = JSON.stringify([r1, { ...sibling, speakerLockSource: "machine" }]);
+  assert.equal(await reportStillCurrentLocal(report, f.database, f.audioStore, f.model), true);
+  f.note.transcript = JSON.stringify([
+    r1, { ...sibling, audioSpan: undefined, timestamp: 20 },
+  ]);
+  assert.equal(await reportStillCurrentLocal(report, f.database, f.audioStore, f.model), true);
+  f.note.transcript = JSON.stringify([r1, { ...sibling, speaker: "unrelated" }]);
+  f.model.extractEmbeddingFromSamples = () => assert.fail("unrelated evidence was measured");
+  assert.equal(await reportStillCurrentLocal(report, f.database, f.audioStore, f.model), true);
+  f.note.transcript = JSON.stringify([r1, sibling]);
+  f.model.extractEmbeddingFromSamples = async () => null;
+  assert.equal(await reportStillCurrentLocal(report, f.database, f.audioStore, f.model), true);
+  assert.equal((await f.run()).evidence.exclusionCounts.conflicting_reviewed_labels, undefined);
+});
+
+test("freshness rechecks the measurement interval resolved for an unchanged reviewed row", async (t) => {
+  const f = boundedFixture(t);
+  const [row] = JSON.parse(f.note.transcript);
+  const origin = 1700000000000;
+  delete row.audioSpan;
+  Object.assign(row, {
+    timebase: "epoch", recordingId: 1,
+    speechStart: origin + 10000, speechEnd: origin + 14000, timestamp: origin + 14000,
+  });
+  f.note.transcript = JSON.stringify([row]);
+  const status = { ...f.audioStore.status(), startedAt: origin };
+  f.audioStore.status = () => status;
+  const report = await f.run();
+  assert.equal(report.evidence.reviewedRows, 1);
+  assert.equal(await reportStillCurrentLocal(report, f.database, f.audioStore, f.model), true);
+  status.startedAt -= 1000;
+  const rebuilt = await f.run();
+  assert.notEqual(rebuilt.evidence.revisions[0].start, report.evidence.revisions[0].start);
+  assert.equal(await reportStillCurrentLocal(report, f.database, f.audioStore, f.model), false);
 });
