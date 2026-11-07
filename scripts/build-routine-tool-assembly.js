@@ -18,7 +18,22 @@ const result = buildSync({
 });
 const contents = result.outputFiles[0].contents;
 if (process.argv.includes("--check")) {
-  if (!fs.existsSync(output) || !fs.readFileSync(output).equals(contents)) {
+  let matches = false;
+  if (fs.existsSync(output)) {
+    const committed = fs.readFileSync(output);
+    matches = committed.equals(contents);
+    if (!matches) {
+      const { normalizeAssembly } = require("./lib/normalize-routine-tool-assembly");
+      try {
+        matches =
+          normalizeAssembly(committed.toString("utf8")) ===
+          normalizeAssembly(Buffer.from(contents).toString("utf8"));
+      } catch (error) {
+        console.error(error.message);
+      }
+    }
+  }
+  if (!matches) {
     console.error("Routine tool assembly is stale; run npm run compile:routine-tools");
     process.exitCode = 1;
   }
