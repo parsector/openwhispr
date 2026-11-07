@@ -6072,6 +6072,7 @@
       "analysis_rows": "Mindestzahl konsistenter Diagnosebeispiele nicht erreicht.",
       "model_fingerprint": "Fingerabdruck des Sprechermodells fehlt oder ist ungültig.",
       "profile_fingerprint": "Profilfingerabdruck fehlt oder ist ungültig.",
+      "audio_evidence": "Für die Kalibrierung sind keine einbezogenen Audiodaten verfügbar.",
       "audio_fingerprints": "Integritätsprüfung der Fingerabdrücke für einbezogene Nachweise fehlgeschlagen.",
       "production_parity": "Produktionsgleiche Entscheidungen für die gewählten Werte und Fingerabdrücke fehlen.",
       "independent_sessions": "Die Prüfung muss Aufnahmesitzungen unabhängig von der Abstimmung nutzen.",

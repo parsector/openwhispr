@@ -91,7 +91,7 @@ export function SpeakerCalibrationReport({
         <section className="space-y-1">
           <h3 className="font-medium">{t("people.calibrationIntegrityTitle")}</h3>
           {evidence.fingerprintIntegrity.map((item) => (
-            <p key={`${item.noteId}:${item.rowId}`}>
+            <p key={item.evidenceKey || `${item.noteId}:${item.rowId}`}>
               {t("people.calibrationIntegrityItem", {
                 noteId: item.noteId,
                 rowId: item.rowId,

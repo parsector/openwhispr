@@ -37,7 +37,13 @@ type CalibrationReportBase = {
     exemplarRows?: number;
     savedExemplars?: number;
     timingProvenanceCounts?: Record<string, number>;
-    fingerprintIntegrity?: Array<{ noteId: number; rowId: string; reason: string }>;
+    fingerprintIntegrity?: Array<{
+      noteId: number;
+      rowId: string;
+      exemplarId?: string;
+      evidenceKey?: string;
+      reason: string;
+    }>;
     reconstructedRows: number;
     reviewedCandidates: number;
     consideredRows: number;

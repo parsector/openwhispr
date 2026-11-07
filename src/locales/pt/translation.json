@@ -6090,6 +6090,7 @@
       "analysis_rows": "Mínimo de exemplos diagnósticos consistentes não atingido.",
       "model_fingerprint": "Impressão digital do modelo de voz ausente ou inválida.",
       "profile_fingerprint": "Impressão digital dos perfis ausente ou inválida.",
+      "audio_evidence": "Não há evidências de áudio incluídas disponíveis para calibração.",
       "audio_fingerprints": "Falha na verificação de integridade das impressões digitais das evidências incluídas.",
       "production_parity": "Faltam decisões equivalentes à produção com os valores e impressões digitais selecionados.",
       "independent_sessions": "A avaliação deve usar sessões de gravação independentes do ajuste.",

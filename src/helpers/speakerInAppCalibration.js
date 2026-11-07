@@ -8,8 +8,19 @@ const {
   RECOMMENDATION_POLICY,
   evidenceFingerprintKey,
   fingerprintIntegrity,
+  validRowEvidence,
 } = require("./speakerCalibrationPolicy");
 const { completionDiagnostic } = require("./speakerCompletionDiagnostic");
+const { windowExclusion } = require("./calibrationEvidenceWindow");
+
+const rowExclusion = (row, reason, extra = {}) => ({
+  noteId: row.noteId,
+  rowId: row.rowId,
+  ...(row.exemplarId ? { exemplarId: row.exemplarId } : {}),
+  evidenceKey: evidenceFingerprintKey(row),
+  reason,
+  ...extra,
+});
 
 const sha = (value) => createHash("sha256").update(value).digest("hex");
 const noteEmbeddingsFingerprint = (items) =>
@@ -76,21 +87,6 @@ function sweep(rows, profiles, key) {
   )[0];
   return { rows: examples.length, table, winner };
 }
-// Playback can offer approximate windows, but scoring needs bounded speech.
-function windowExclusion(row) {
-  if (row.timingProvenance === "retained_exemplar_clip") return null;
-  if (!["exact_stored_span", "capture_bounds"].includes(row.timingProvenance))
-    return `window_${row.timingProvenance || "unavailable"}`;
-  if (row.playbackUnavailableReason) return `playback_${row.playbackUnavailableReason}`;
-  if (
-    ![row.start, row.end, row.from, row.to].every(Number.isFinite) ||
-    row.end <= row.start ||
-    row.from > row.start ||
-    row.to < row.end
-  )
-    return "window_label_not_contained";
-  return null;
-}
 function buildReport({
   rows,
   profiles,
@@ -107,34 +103,64 @@ function buildReport({
   embeddingCounts = { embedded: 0, refused: 0 },
   missingVectorDiagnostics = [],
   noteCentroidCompletions = [],
-  noteEmbeddingFingerprints = {},
   generatedAt = new Date().toISOString(),
   synthetic = false,
   validationEvidence = null,
   policy = RECOMMENDATION_POLICY,
 }) {
-  exclusions = [...exclusions];
+  // Expand legacy row-wide/cluster exclusions into explicit evidence records.
+  // An evidence-keyed failure affects only that clip or reconstructed interval.
+  exclusions = exclusions.flatMap((item) =>
+    rows
+      .filter((row) =>
+        item.evidenceKey
+          ? evidenceFingerprintKey(row) === item.evidenceKey
+          : item.rowId != null
+            ? row.noteId === item.noteId &&
+              row.rowId === item.rowId &&
+              (item.exemplarId == null || row.exemplarId === item.exemplarId)
+            : item.cluster === JSON.stringify([row.noteId, row.clusterId]) ||
+              item.cluster === `${row.noteId}:${row.clusterId}`
+      )
+      .map((row) => rowExclusion(row, item.reason, item.cluster ? { cluster: item.cluster } : {}))
+  );
   const savedExemplars = rows.filter((row) => row.exemplarId).length;
   const timingProvenanceCounts = {};
   const excludedRows = new Set(
-    exclusions
-      .filter((item) => item.rowId != null)
-      .map((item) => JSON.stringify([item.noteId, item.rowId]))
+    exclusions.filter((item) => item.rowId != null).map((item) => item.evidenceKey)
   );
   for (const row of rows) {
     const provenance = row.timingProvenance || "unavailable";
     timingProvenanceCounts[provenance] = (timingProvenanceCounts[provenance] || 0) + 1;
-    const reason = windowExclusion(row);
-    const key = JSON.stringify([row.noteId, row.rowId]);
+    const reason =
+      windowExclusion(row) ||
+      (row.vectorSource === "stored-centroid-current-profiles"
+        ? "bounded_vector_unavailable"
+        : null);
+    const key = evidenceFingerprintKey(row);
     if (reason && !excludedRows.has(key)) {
-      exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason });
+      exclusions.push(rowExclusion(row, reason));
       excludedRows.add(key);
     }
   }
-  rows = rows.filter(
-    (row) => row.vector && !excludedRows.has(JSON.stringify([row.noteId, row.rowId]))
-  );
+  rows = rows.filter((row) => row.vector && !excludedRows.has(evidenceFingerprintKey(row)));
+  // Conflicts remove every member before counts, hashes or admission are built.
   const byCluster = new Map();
+  for (const row of rows.filter((item) => !item.exemplarId)) {
+    const key = JSON.stringify([row.noteId, row.clusterId]);
+    if (!byCluster.has(key)) byCluster.set(key, []);
+    byCluster.get(key).push(row);
+  }
+  const conflicting = new Set();
+  for (const [cluster, members] of byCluster) {
+    if (new Set(members.map((row) => row.truePerson)).size <= 1) continue;
+    for (const row of members) {
+      conflicting.add(row);
+      exclusions.push(rowExclusion(row, "conflicting_reviewed_labels", { cluster }));
+    }
+  }
+  rows = rows.filter((row) => !conflicting.has(row));
+  byCluster.clear();
   const storedRows = rows.filter(
     (item) => item.vector && item.vectorSource !== "reconstructed-row-audio"
   );
@@ -149,11 +175,7 @@ function buildReport({
   }
   const clusters = [];
   const allExclusions = [...exclusions];
-  for (const [key, members] of byCluster) {
-    if (new Set(members.map((row) => row.truePerson)).size > 1) {
-      allExclusions.push({ cluster: key, reason: "conflicting_reviewed_labels" });
-    } else clusters.push(members[0]);
-  }
+  for (const members of byCluster.values()) clusters.push(members[0]);
   const calibration = sweep([...clusters, ...reconstructedRows], profiles, "vector");
   const people = new Set(rows.map((row) => row.truePerson).filter(Boolean));
   const notes = new Set(rows.map((row) => row.noteId));
@@ -180,6 +202,13 @@ function buildReport({
     revision: row.revision,
     evidenceKey: evidenceFingerprintKey(row),
     audioFingerprint: row.audioFingerprint,
+    track: row.track ?? null,
+    start: row.start,
+    end: row.end,
+    from: row.from,
+    to: row.to,
+    timingProvenance: row.timingProvenance,
+    vectorSource: row.vectorSource ?? null,
     ...(row.exemplarId ? { exemplarId: row.exemplarId, contentHash: row.contentHash } : {}),
   }));
   const admission = admitRecommendation({
@@ -309,7 +338,8 @@ function buildReport({
       audio: audioFingerprints,
       recordings,
       audioManifests,
-      noteEmbeddings: noteEmbeddingFingerprints,
+      // The bounded sweep never consumes note-cluster centroids.
+      noteEmbeddings: {},
     },
     analyses: {
       calibration: {
@@ -379,7 +409,6 @@ function collectRows(database, audioStore, scope, budget, onProgress = () => {})
     exclusions = [],
     missingVectorDiagnostics = [],
     noteCentroidCompletions = [];
-  const noteEmbeddingFingerprints = {};
   let reviewedCount = 0;
   for (const sample of exemplars) {
     reviewedCount++;
@@ -488,8 +517,6 @@ function collectRows(database, audioStore, scope, budget, onProgress = () => {})
         audioState: status.state,
       });
     }
-    if (rows.length > rowsBeforeNote)
-      noteEmbeddingFingerprints[note.id] = noteEmbeddingsFingerprint(noteEmbeddings);
     if (
       rows.length > rowsBeforeNote &&
       completion?.cause &&
@@ -506,7 +533,6 @@ function collectRows(database, audioStore, scope, budget, onProgress = () => {})
     selectedNotes: selectedOrigins.size,
     missingVectorDiagnostics,
     noteCentroidCompletions,
-    noteEmbeddingFingerprints,
   };
 }
 function pcm16FromWav(wav) {
@@ -536,7 +562,6 @@ async function runJobLocal(
     selectedNotes,
     missingVectorDiagnostics,
     noteCentroidCompletions,
-    noteEmbeddingFingerprints,
   } = collectRows(database, audioStore, scope, budget, (totalRows) => {
     job.progress.totalRows = totalRows;
     job.onProgress?.();
@@ -567,17 +592,13 @@ async function runJobLocal(
         classifyEvidence(database.db, { id: row.exemplarId }).state !== "resolved"
       ) {
         row.vector = null;
-        exclusions.push({
-          noteId: row.noteId,
-          rowId: row.rowId,
-          reason: audio?.error || "audio_unavailable",
-        });
+        exclusions.push(rowExclusion(row, audio?.error || "audio_unavailable"));
       } else {
         row.verifiedAudioFingerprint = sha(audio.wav);
         job.progress.bytesRead += audio.wav.length;
       }
     } else if (windowExclusion(row)) {
-      exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason: windowExclusion(row) });
+      exclusions.push(rowExclusion(row, windowExclusion(row)));
     } else if (
       !row.audioAvailable ||
       row.playbackUnavailableReason ||
@@ -585,21 +606,18 @@ async function runJobLocal(
       !Number.isFinite(row.to) ||
       Math.min(row.end, row.to) - Math.max(row.start, row.from) < 1.5
     ) {
-      exclusions.push({
-        noteId: row.noteId,
-        rowId: row.rowId,
-        reason: !row.audioAvailable
-          ? `audio_${row.audioState}`
-          : row.playbackUnavailableReason
-            ? `playback_${row.playbackUnavailableReason}`
-            : "span_too_short",
-      });
+      exclusions.push(
+        rowExclusion(
+          row,
+          !row.audioAvailable
+            ? `audio_${row.audioState}`
+            : row.playbackUnavailableReason
+              ? `playback_${row.playbackUnavailableReason}`
+              : "span_too_short"
+        )
+      );
     } else if (!modelFingerprint) {
-      exclusions.push({
-        noteId: row.noteId,
-        rowId: row.rowId,
-        reason: "speaker_model_unavailable",
-      });
+      exclusions.push(rowExclusion(row, "speaker_model_unavailable"));
     } else {
       const args = [row.noteId, row.track, row.from, row.to];
       const span = audioStore.spanAsync
@@ -607,30 +625,26 @@ async function runJobLocal(
         : audioStore.span(...args);
       if (span.wav) {
         job.progress.bytesRead += span.bytesRead ?? span.wav.length;
-        if (span.partial)
-          exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason: "audio_partial" });
+        if (span.partial) exclusions.push(rowExclusion(row, "audio_partial"));
         else {
           // Hash precisely these WAV bytes, never an aggregate of other rows.
           row.audioFingerprint = sha(span.wav);
           row.verifiedAudioFingerprint = row.audioFingerprint;
-          const reconstructedVector = Array.from(
-            (await model.extractEmbeddingFromSamples(pcm16FromWav(span.wav))) || []
-          );
-          if (reconstructedVector.length) {
+          let reconstructedVector = [];
+          try {
+            reconstructedVector = Array.from(
+              (await model.extractEmbeddingFromSamples(pcm16FromWav(span.wav))) || []
+            );
+          } catch {
+            // An extraction failure cannot make the old centroid eligible.
+          }
+          if (reconstructedVector.length && reconstructedVector.every(Number.isFinite)) {
             job.progress.reembeddedRows++;
-            if (!row.vector) {
-              row.vector = reconstructedVector;
-              row.vectorSource = "reconstructed-row-audio";
-            }
-          } else
-            exclusions.push({
-              noteId: row.noteId,
-              rowId: row.rowId,
-              reason: "embedding_unavailable",
-            });
+            row.vector = reconstructedVector;
+            row.vectorSource = "reconstructed-row-audio";
+          } else exclusions.push(rowExclusion(row, "embedding_unavailable"));
         }
-      } else
-        exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason: `audio_${span.state}` });
+      } else exclusions.push(rowExclusion(row, `audio_${span.state}`));
     }
     job.progress.processedRows++;
     job.progress.elapsedMs = Date.now() - started;
@@ -666,7 +680,6 @@ async function runJobLocal(
     embeddingCounts: { embedded: job.progress.reembeddedRows, refused: exclusions.length },
     missingVectorDiagnostics,
     noteCentroidCompletions,
-    noteEmbeddingFingerprints,
   });
   job.progress.elapsedMs = Date.now() - started;
   job.state = "complete";
@@ -677,7 +690,8 @@ async function reportStillCurrentLocal(
   audioStore,
   model = require("./speakerEmbeddings")
 ) {
-  if (!report?.evidence?.revisions || !report?.fingerprints) return false;
+  if (report?.version !== 3 || !validRowEvidence(report.evidence, report.fingerprints))
+    return false;
   if (!model.isAvailable()) return false;
   const modelHash = createHash("sha256");
   for await (const chunk of require("node:fs").createReadStream(model.getModelPath()))
@@ -703,16 +717,20 @@ async function reportStillCurrentLocal(
   const exemplars = new Map(
     (database.getVoiceExemplarAudio?.() || []).map((item) => [item.id, item])
   );
-  for (const { noteId, rowId, revision, exemplarId, contentHash } of report.evidence.revisions) {
+  for (const evidence of report.evidence.revisions) {
+    const { noteId, rowId, revision, exemplarId, contentHash } = evidence;
     if (exemplarId) {
       const sample = exemplars.get(exemplarId);
+      const playback =
+        sample && require("./voiceExemplarAudio").play(database.db, audioStore, exemplarId);
       if (
         !sample ||
         classifyEvidence(database.db, sample).state !== "resolved" ||
         sample.revision !== revision ||
         sample.content_hash !== contentHash ||
-        require("./voiceExemplarAudio").play(database.db, audioStore, exemplarId)?.state !==
-          "available"
+        playback?.state !== "available" ||
+        !playback.wav ||
+        sha(playback.wav) !== evidence.audioFingerprint
       )
         return false;
       continue;
@@ -740,6 +758,11 @@ async function reportStillCurrentLocal(
     }
     const row = notes.get(noteId).get(rowId);
     if (!row || sha(JSON.stringify(row)) !== revision) return false;
+    const args = [noteId, evidence.track, evidence.from, evidence.to];
+    const span = audioStore.spanAsync
+      ? await audioStore.spanAsync(...args)
+      : audioStore.span(...args);
+    if (!span?.wav || span.partial || sha(span.wav) !== evidence.audioFingerprint) return false;
   }
   return true;
 }

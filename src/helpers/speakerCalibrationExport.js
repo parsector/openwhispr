@@ -1,6 +1,7 @@
 const { createHash } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
+const { windowExclusion } = require("./calibrationEvidenceWindow");
 const {
   resolveMeetingAudioSpan,
   createMeetingAudioSpanContext,
@@ -87,7 +88,7 @@ function buildCalibrationLabels(note, audio, status = {}) {
     const ownerCorrectionActionIds = related
       .filter((action) => action.event?.actor !== "machine")
       .map((action) => action.id);
-    return {
+    const label = {
       rowId: row.id,
       track: resolved.track ?? row.source,
       start: resolved.start ?? null,
@@ -111,6 +112,7 @@ function buildCalibrationLabels(note, audio, status = {}) {
       truePerson: null,
       trueOverlap: null,
     };
+    return { ...label, calibrationExclusionReason: windowExclusion(label) };
   });
   return { version: 1, synthetic: false, audio, rows };
 }

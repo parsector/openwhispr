@@ -6090,6 +6090,7 @@
       "analysis_rows": "Minimum d’exemples diagnostiques cohérents non atteint.",
       "model_fingerprint": "Empreinte du modèle vocal absente ou invalide.",
       "profile_fingerprint": "Empreinte des profils absente ou invalide.",
+      "audio_evidence": "Aucune donnée audio incluse n’est disponible pour l’étalonnage.",
       "audio_fingerprints": "Échec de la vérification d’intégrité des empreintes des éléments inclus.",
       "production_parity": "Décisions équivalentes à la production pour les valeurs et empreintes choisies manquantes.",
       "independent_sessions": "L’évaluation doit utiliser des sessions indépendantes du réglage.",

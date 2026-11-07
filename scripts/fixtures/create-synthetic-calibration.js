@@ -20,6 +20,7 @@ const rows = [
   ['d', 'A', 'A', .8, .4, .12, false, true],
 ].map(([rowId, truePerson, bestName, bestScore, runnerUpScore, overlapSeconds, corrected, trueOverlap], i) => ({
   rowId, track: 'system', start: i * 2, end: i * 2 + 1.8, textHash: 'synthetic',
+  timingProvenance: 'exact_stored_span', from: i * 2, to: i * 2 + 1.8,
   currentLabel: corrected ? truePerson : bestName, machineLabel: bestName,
   corrected, truePerson, trueOverlap, bestName, bestScore, runnerUpScore,
   voicedSeconds: 2, overlapSeconds, currentOverlapDetected: false, finalPassChanged: false,

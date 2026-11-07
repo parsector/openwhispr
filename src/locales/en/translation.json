@@ -6072,6 +6072,7 @@
       "analysis_rows": "Consistent diagnostic-example minimum not met.",
       "model_fingerprint": "Speaker model fingerprint unavailable or invalid.",
       "profile_fingerprint": "Profile fingerprint unavailable or invalid.",
+      "audio_evidence": "No included audio evidence is available for calibration.",
       "audio_fingerprints": "Fingerprint integrity check failed for included evidence.",
       "production_parity": "Production-parity decisions at the selected policy and fingerprints are missing.",
       "independent_sessions": "Evaluation must use recording sessions independent of tuning.",

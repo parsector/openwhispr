@@ -6090,6 +6090,7 @@
       "analysis_rows": "No se alcanza el mínimo de ejemplos diagnósticos coherentes.",
       "model_fingerprint": "Huella del modelo de voz ausente o inválida.",
       "profile_fingerprint": "Huella de perfiles ausente o inválida.",
+      "audio_evidence": "No hay evidencia de audio incluida disponible para la calibración.",
       "audio_fingerprints": "La comprobación de integridad de las huellas falló para la evidencia incluida.",
       "production_parity": "Faltan decisiones equivalentes a producción con los valores y huellas seleccionados.",
       "independent_sessions": "La evaluación debe usar sesiones de grabación independientes del ajuste.",

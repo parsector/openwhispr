@@ -1,7 +1,7 @@
 const { randomUUID } = require("node:crypto");
 const thresholds = require("./speakerDecisionThresholds");
 const history = require("./speakerGlobalHistory");
-const { hasSupportedAdmission } = require("./speakerCalibrationPolicy");
+const { hasSupportedAdmission, validRowEvidence } = require("./speakerCalibrationPolicy");
 function ensure(db) {
   db.exec(`CREATE TABLE IF NOT EXISTS speaker_calibration_actions (
     id TEXT PRIMARY KEY, snapshot TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
@@ -13,6 +13,7 @@ function apply(database, report) {
     !report ||
     report.version !== 3 ||
     !hasSupportedAdmission(report) ||
+    !validRowEvidence(report.evidence, report.fingerprints) ||
     !["stored-centroid-current-profiles", "reconstructed-row-audio"].includes(report.method) ||
     !Object.keys(report.recommended || {}).length ||
     Object.keys(report.recommended).some(

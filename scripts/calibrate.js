@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const { sweepCalibration } = require('../src/helpers/speakerCalibration');
+const { windowExclusion } = require('../src/helpers/calibrationEvidenceWindow');
 
 function wavInfo(file) {
   const header = Buffer.alloc(44);
@@ -55,7 +56,7 @@ function embeddingWindow(file, start, end) {
       offset += 8 + length + length % 2;
     }
     if (dataOffset < 0 || rate !== 16000) throw Error('Resampled audio is missing 16 kHz PCM data');
-    const first = Math.floor(Math.max(start, end - 8) * rate);
+    const first = Math.floor(start * rate);
     const samples = Math.floor(end * rate) - first;
     const bytes = Buffer.alloc(samples * 2);
     const count = fs.readSync(fd, bytes, 0, bytes.length, dataOffset + first * 2);
@@ -67,7 +68,13 @@ function embeddingWindow(file, start, end) {
 }
 
 async function measureRows(base, labels) {
-  const rows = labels.rows.map(row => ({ ...row }));
+  const exclusions = [];
+  const rows = labels.rows.filter(row => {
+    const reason = windowExclusion(row);
+    if (reason) exclusions.push({ rowId: row.rowId, reason });
+    return !reason;
+  }).map(row => ({ ...row }));
+  if (!rows.length) throw Error(`No included bounded audio evidence; excluded ${exclusions.length} rows: ${exclusions.map(row => `${row.rowId} (${row.reason})`).join(', ')}`);
   const files = {};
   for (const [track, audio] of Object.entries(labels.audio)) {
     const file = path.resolve(base, audio.file);
@@ -143,7 +150,7 @@ async function measureRows(base, labels) {
     } finally { fs.closeSync(fd); }
     return [track, hash.digest('hex')];
   }));
-  return { rows, durationSeconds, audioSha256 };
+  return { rows, durationSeconds, audioSha256, exclusions };
 }
 
 async function main() {
@@ -160,7 +167,11 @@ async function main() {
       voicedDuration: labels.synthetic ? 'fixture values' : '20 ms RMS above 0.01 (uncalibrated energy proxy)',
       overlap: labels.synthetic ? 'fixture values' : 'cross-person transcript interval intersection (approximate)',
       currentAccuracy: 'rightPersonRate is accuracy over machine claims only on non-overlap rows; machineClaimRowsScored is the denominator and noMachineClaimRows counts rows excluded for no machine claim' },
-    ...result, recommended: {},
+    ...result, evidence: { ...result.evidence,
+      exclusions: measured.exclusions,
+      exclusionCounts: Object.fromEntries([...new Set(measured.exclusions.map(row => row.reason))]
+        .map(reason => [reason, measured.exclusions.filter(row => row.reason === reason).length])) },
+    recommended: {},
     interpretation: 'Leave-one-row-out owner-label centroids are an experiment, not production current-profile decisions. Voiced and overlap proxies cannot recover the original matched diarization-turn duration or overlap intervals.' };
   const reportPath = path.join(base, 'calibration-report.json');
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2) + '\n', { mode: 0o600 });

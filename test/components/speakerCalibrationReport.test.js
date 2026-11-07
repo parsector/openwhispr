@@ -162,3 +162,13 @@ test("too few scored examples hide the sweep table and explain its minimum", asy
   assert.match(html, /Threshold sweep unavailable: 1 scored examples; at least 12 are required/);
   assert.doesNotMatch(html, /<table/);
 });
+
+test("gap 6: an empty report explains absent audio without a fingerprint failure", async (t) => {
+  const render = await renderer(t);
+  const input = recommendationFixture();
+  input.rows = [];
+  const html = render(buildReport(input));
+  assert.match(html, /No included audio evidence is available for calibration\./);
+  assert.doesNotMatch(html, /Fingerprint integrity check failed for included evidence/);
+  assert.doesNotMatch(html, /Apply these values/);
+});

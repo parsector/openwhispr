@@ -1,4 +1,5 @@
 // Admission policy only; these constants do not change recognition or sweep scoring.
+const { windowExclusion } = require("./calibrationEvidenceWindow");
 const RECOMMENDATION_POLICY = Object.freeze({
   minimumReviewedRows: 30,
   minimumNotes: 3,
@@ -25,6 +26,7 @@ const ADMISSION_CRITERIA = Object.freeze([
   "analysis_rows",
   "model_fingerprint",
   "profile_fingerprint",
+  "audio_evidence",
   "audio_fingerprints",
   "production_parity",
   "independent_sessions",
@@ -58,8 +60,55 @@ function fingerprintIntegrity(rows, audioFingerprints) {
           : row.audioFingerprint !== verified
             ? "fingerprint_mismatch"
             : null;
-    return reason ? [{ noteId: row.noteId, rowId: row.rowId, reason }] : [];
+    return reason
+      ? [
+          {
+            noteId: row.noteId,
+            rowId: row.rowId,
+            ...(row.exemplarId ? { exemplarId: row.exemplarId } : {}),
+            evidenceKey: evidenceFingerprintKey(row),
+            reason,
+          },
+        ]
+      : [];
   });
+}
+
+// Reports, applied settings and reloads must bind the same complete row identity
+// to exactly one verified hash. Extra, missing and duplicate bindings are stale.
+function validRowEvidence(evidence, fingerprints) {
+  const rows = evidence?.revisions;
+  const audio = fingerprints?.audio;
+  if (
+    evidence?.audioFingerprintScope !== "row" ||
+    !Array.isArray(rows) ||
+    rows.length !== evidence.reviewedRows ||
+    !audio ||
+    typeof audio !== "object" ||
+    Array.isArray(audio)
+  )
+    return false;
+  if (
+    !rows.every(
+      (row) =>
+        row &&
+        row.noteId != null &&
+        typeof row.rowId === "string" &&
+        row.rowId &&
+        typeof row.revision === "string" &&
+        row.revision &&
+        row.evidenceKey === evidenceFingerprintKey(row) &&
+        !windowExclusion(row)
+    )
+  )
+    return false;
+  const keys = rows.map(evidenceFingerprintKey);
+  return (
+    new Set(keys).size === rows.length &&
+    Object.keys(audio).length === rows.length &&
+    keys.every((key) => Object.hasOwn(audio, key)) &&
+    fingerprintIntegrity(rows, audio).length === 0
+  );
 }
 
 function admitRecommendation({
@@ -122,8 +171,8 @@ function admitRecommendation({
     analysis_rows: analysis.rows >= policy.minimumAnalysisRows,
     model_fingerprint: fingerprint(modelFingerprint),
     profile_fingerprint: fingerprint(profileFingerprint),
-    audio_fingerprints:
-      rows.length > 0 && fingerprintIntegrity(rows, audioFingerprints).length === 0,
+    audio_evidence: rows.length > 0,
+    audio_fingerprints: fingerprintIntegrity(rows, audioFingerprints).length === 0,
     production_parity:
       validObservations &&
       validationEvidence?.source === "production-decisions" &&
@@ -183,6 +232,7 @@ module.exports = {
   RECOMMENDATION_POLICY,
   evidenceFingerprintKey,
   fingerprintIntegrity,
+  validRowEvidence,
   ADMISSION_CRITERIA,
   admitRecommendation,
   hasSupportedAdmission,

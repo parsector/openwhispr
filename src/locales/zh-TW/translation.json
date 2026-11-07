@@ -6072,6 +6072,7 @@
       "analysis_rows": "一致的診斷樣本數未達最低要求。",
       "model_fingerprint": "說話者模型指紋遺失或無效。",
       "profile_fingerprint": "聲紋指紋遺失或無效。",
+      "audio_evidence": "沒有可用於校準的已納入音訊證據。",
       "audio_fingerprints": "納入證據的指紋完整性檢查失敗。",
       "production_parity": "缺少使用所選設定和指紋的正式環境等效判定。",
       "independent_sessions": "評估必須使用與調整參數獨立的錄音工作階段。",

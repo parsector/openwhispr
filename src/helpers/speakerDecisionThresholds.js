@@ -1,6 +1,10 @@
 const fs = require("node:fs");
 const { randomUUID } = require("node:crypto");
-const { hasSupportedAdmission, RECOMMENDATION_POLICY } = require("./speakerCalibrationPolicy");
+const {
+  hasSupportedAdmission,
+  RECOMMENDATION_POLICY,
+  validRowEvidence,
+} = require("./speakerCalibrationPolicy");
 
 // Guess values until the owner explicitly applies a report from reviewed audio.
 const DEFAULTS = Object.freeze({
@@ -28,12 +32,8 @@ function current() {
 }
 function validAudioFingerprints(evidence, fingerprints) {
   const audio = fingerprints?.audio || {};
-  if (evidence.audioFingerprintScope === "row")
-    return evidence.revisions.every(
-      (row) =>
-        /^[a-f0-9]{64}$/.test(row.audioFingerprint || "") &&
-        row.audioFingerprint === audio[row.evidenceKey]
-    );
+  if (evidence.audioFingerprintScope === "row") return validRowEvidence(evidence, fingerprints);
+  if (evidence.resultType) return false;
   // Previously applied settings used note aggregates. Preserve their reload path.
   return (
     Object.keys(audio).length === evidence.notes &&
@@ -136,7 +136,7 @@ function apply(values, report = null) {
     report.evidence.exclusions.every((item) => typeof item.reason === "string" && item.reason) &&
     /^[a-f0-9]{64}$/i.test(report.fingerprints?.model || "") &&
     /^[a-f0-9]{64}$/i.test(report.fingerprints?.profiles || "") &&
-    validAudioFingerprints(report.evidence, report.fingerprints) &&
+    validRowEvidence(report.evidence, report.fingerprints) &&
     report.analyses?.calibration?.winner?.right + report.analyses?.calibration?.winner?.wrong > 0;
   const statuses = Object.fromEntries(
     Object.keys(LIMITS).map((key) => [
