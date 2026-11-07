@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.4] - 2026-11-07
+
+### Calibration
+
+- **Calibration counts only clearly matched speech**, using examples only when it can identify exactly which speech belongs to a row instead of guessing from a timestamp, and reporting rows it cannot place as excluded rather than scored.
+- **The report starts with what it can and cannot tell you**, listing what this version cannot evaluate separately from the limits of your audio evidence so an app limitation is no longer presented as a shortfall in your library.
+- **The diagnostic threshold table is tucked away under developer diagnostics** and hidden entirely when there are too few usable examples to fill it honestly.
+
 ## [1.13.3] - 2026-11-07
 
 ### Calibration
