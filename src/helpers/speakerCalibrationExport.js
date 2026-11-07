@@ -1,7 +1,10 @@
 const { createHash } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
-const { resolveMeetingAudioSpan } = require("./meetingAudioSpan.mjs");
+const {
+  resolveMeetingAudioSpan,
+  createMeetingAudioSpanContext,
+} = require("./meetingAudioSpan.mjs");
 
 function machineAssignment(row, related, personChanges) {
   const ordered = [...related].sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
@@ -44,30 +47,42 @@ function buildCalibrationLabels(note, audio, status = {}) {
   const actions = readSpeakerActionLog(note).actions;
   const transcriptRows = readTranscriptDocument(note.transcript).rows;
   const recordingId = status.recordingId ?? note.id;
-  const rows = transcriptRows.map((row) => {
-    const related = actions.filter(
-      (action) =>
-        ["correction", "split", "reconsideration"].includes(action.kind) &&
-        (
-          action.event?.affectedRowIds ||
+  const context = createMeetingAudioSpanContext(
+    transcriptRows,
+    recordingId,
+    status.startedAt,
+    status.tracks
+  );
+  const relatedByRow = new Map(),
+    peopleByRow = new Map();
+  const add = (map, id, action) => {
+    if (!map.has(id)) map.set(id, []);
+    map.get(id).push(action);
+  };
+  for (const action of actions) {
+    if (["correction", "split", "reconsideration"].includes(action.kind))
+      for (const id of new Set(
+        action.event?.affectedRowIds ||
           action.event?.rowIds ||
           (action.event?.rowId ? [action.event.rowId] : [])
-        ).includes(row.id)
-    );
+      ))
+        add(relatedByRow, id, action);
+    if (action.kind === "person" && action.action !== "reset")
+      for (const id of new Set((action.before || []).map((saved) => saved.id)))
+        add(peopleByRow, id, action);
+  }
+  const rows = transcriptRows.map((row) => {
+    const related = relatedByRow.get(row.id) || [];
     const resolved = resolveMeetingAudioSpan(
       row,
       transcriptRows,
       recordingId,
       status.startedAt,
-      status.tracks
+      status.tracks,
+      context
     );
     const firstCorrection = related.find((action) => action.event?.actor !== "machine");
-    const personChanges = actions.filter(
-      (action) =>
-        action.kind === "person" &&
-        action.action !== "reset" &&
-        action.before?.some((saved) => saved.id === row.id)
-    );
+    const personChanges = peopleByRow.get(row.id) || [];
     const machine = machineAssignment(row, related, personChanges);
     const ownerCorrectionActionIds = related
       .filter((action) => action.event?.actor !== "machine")

@@ -138,6 +138,7 @@ function clean(db, sample) {
 }
 function samples(db, profileId = null) {
   const durable = exemplarAudio.list(db, profileId);
+  const durableIds = new Set(durable.map((item) => item.id));
   return [
     ...durable,
     ...db
@@ -146,7 +147,7 @@ function samples(db, profileId = null) {
         ${profileId == null ? "" : "AND profile_id = ?"} ORDER BY approved_at, id`
       )
       .all(...(profileId == null ? [] : [profileId]))
-      .filter((sample) => !durable.some((item) => item.id === sample.id)),
+      .filter((sample) => !durableIds.has(sample.id)),
   ];
 }
 function reviewedRow(db, profileId, note, row, store) {

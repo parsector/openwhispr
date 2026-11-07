@@ -3,7 +3,7 @@ const path = require("path");
 const { randomUUID, createHash } = require("crypto");
 const { spawnSync, execFile } = require("child_process");
 const { getFFmpegPath } = require("./ffmpegUtils");
-const { encryptBytes, decryptBytes, refreshAudioKey } = require("./secretCrypto");
+const { encryptBytes, decryptBytes, refreshAudioKey, getWorkerKey } = require("./secretCrypto");
 const enrollmentTiming = require("./voiceEnrollmentTiming");
 const { exactCoverage, durationMatches } = require("./voiceAudioIntegrity");
 
@@ -177,7 +177,7 @@ class MeetingAudioStore {
     {
       database = null,
       now = Date.now,
-      encryption = { encryptBytes, decryptBytes, refreshAudioKey },
+      encryption = { encryptBytes, decryptBytes, refreshAudioKey, getWorkerKey },
       codec = defaultCodec,
       onEvicted = null,
       onChanged = null,
@@ -676,7 +676,18 @@ class MeetingAudioStore {
         step = steps.throw(error);
       }
     }
+    options.signal?.throwIfAborted();
     return step.value;
+  }
+
+  _readSpanChunk(noteId, chunk) {
+    const encrypted = fs.readFileSync(this._chunkFile(noteId, chunk.file));
+    const plaintext = this.encryption.decryptBytes(encrypted);
+    try {
+      return { ...unpack(plaintext), bytesRead: encrypted.length };
+    } catch (cause) {
+      throw Object.assign(new Error("Invalid audio packet", { cause }), { code: "audio_corrupt" });
+    }
   }
 
   *_spanSteps(noteId, track, startSeconds, endSeconds) {
@@ -736,22 +747,17 @@ class MeetingAudioStore {
     for (const chunk of state.chunks) {
       const chunkEnd = chunk.startSample + chunk.sampleCount;
       if (chunkEnd <= start || chunk.startSample >= end) continue;
-      let plaintext;
+      let unpacked;
       try {
-        const encrypted = fs.readFileSync(this._chunkFile(noteId, chunk.file));
-        bytesRead += encrypted.length;
-        try {
-          plaintext = this.encryption.decryptBytes(encrypted);
-        } catch (error) {
-          return error.code && error.code !== "audio_key_unavailable"
-            ? audioFailure(error)
-            : { state: "key_unavailable", reason: "audio_key_unavailable" };
-        }
+        unpacked = this._readSpanChunk(noteId, chunk);
+        bytesRead += unpacked.bytesRead;
       } catch (error) {
+        if (!error.code || error.code === "audio_key_unavailable")
+          return { state: "key_unavailable", reason: "audio_key_unavailable" };
         return audioFailure(error);
       }
       try {
-        const { entry, ogg } = unpack(plaintext);
+        const { entry, ogg } = unpacked;
         if (
           entry.file !== chunk.file ||
           entry.startSample !== chunk.startSample ||

@@ -2,7 +2,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { readTranscriptDocument } = require("./transcriptDocument");
 const { readSpeakerActionLog } = require("./speakerActionLog");
 const { buildCalibrationLabels } = require("./speakerCalibrationExport");
-const { classifyEvidence, overlapsRecording } = require("./voiceRecordingIdentity");
+const { classifyEvidence } = require("./voiceRecordingIdentity");
 const { admitRecommendation, RECOMMENDATION_POLICY } = require("./speakerCalibrationPolicy");
 const { completionDiagnostic } = require("./speakerCompletionDiagnostic");
 
@@ -251,7 +251,7 @@ function buildReport({
     recommended,
   };
 }
-function collectRows(database, audioStore, scope, budget) {
+function collectRows(database, audioStore, scope, budget, onProgress = () => {}) {
   const db = database.db;
   const selectedOrigins = new Set();
   const selectOrigin = (key) => {
@@ -265,15 +265,38 @@ function collectRows(database, audioStore, scope, budget) {
   const approvedEvidence = database.getVoiceExemplarAudio
     ? require("./voiceEnrollment").samples(db)
     : [];
+  const provenanceBySample = new Map();
+  const classifySample = (sample) => {
+    if (!provenanceBySample.has(sample.id))
+      provenanceBySample.set(sample.id, classifyEvidence(db, sample));
+    return provenanceBySample.get(sample.id);
+  };
+  const suppresses = require("./calibrationEvidenceIndex").evidenceIndex(
+    approvedEvidence,
+    classifySample
+  );
+  const provenanceByNote = new Map();
+  const classifyNote = (note) => {
+    if (!provenanceByNote.has(note.id))
+      provenanceByNote.set(
+        note.id,
+        classifyEvidence(
+          db,
+          { note_id: note.id, note_identity: note.client_note_id },
+          { store: audioStore }
+        )
+      );
+    return provenanceByNote.get(note.id);
+  };
   const exemplars = approvedEvidence.filter(
     (sample) =>
       sample.durable_audio &&
-      classifyEvidence(db, sample).state === "resolved" &&
+      classifySample(sample).state === "resolved" &&
       sample.valid !== 0 &&
       (scope.kind !== "range" ||
         (sample.meeting_date?.slice(0, 10) >= scope.from &&
           sample.meeting_date?.slice(0, 10) <= scope.to)) &&
-      selectOrigin(classifyEvidence(db, sample).recordingId)
+      selectOrigin(classifySample(sample).recordingId)
   );
   const where = scope.kind === "range" ? " AND date(created_at) BETWEEN date(?) AND date(?)" : "";
   const chosen = db
@@ -281,15 +304,7 @@ function collectRows(database, audioStore, scope, budget) {
       `SELECT id, client_note_id, transcript, speaker_action_log, created_at FROM notes WHERE note_type = 'meeting' AND deleted_at IS NULL AND transcript IS NOT NULL${where} ORDER BY created_at DESC LIMIT ?`
     )
     .all(...(scope.kind === "range" ? [scope.from, scope.to] : []), budget.notes)
-    .filter((note) =>
-      selectOrigin(
-        classifyEvidence(
-          db,
-          { note_id: note.id, note_identity: note.client_note_id },
-          { store: audioStore }
-        ).recordingId ?? null
-      )
-    );
+    .filter((note) => selectOrigin(classifyNote(note).recordingId ?? null));
   const rows = [],
     exclusions = [],
     missingVectorDiagnostics = [],
@@ -309,7 +324,7 @@ function collectRows(database, audioStore, scope, budget) {
       exemplarId: sample.id,
       contentHash: sample.content_hash,
       truePerson: person.display_name,
-      recordingId: classifyEvidence(db, sample).recordingId,
+      recordingId: classifySample(sample).recordingId,
       clusterId: `exemplar:${sample.id}`,
       vector: vectorOf(sample.embedding),
       vectorSource: "approved-exemplar",
@@ -322,11 +337,7 @@ function collectRows(database, audioStore, scope, budget) {
   }
   for (const note of chosen) {
     const status = audioStore.status(note.id);
-    const provenance = classifyEvidence(
-      db,
-      { note_id: note.id, note_identity: note.client_note_id },
-      { store: audioStore }
-    );
+    const provenance = classifyNote(note);
     if (status.state === "recording") continue;
     const labels = buildCalibrationLabels(note, {}, status).rows;
     const noteEmbeddings = database.getNoteSpeakerEmbeddings(note.id);
@@ -356,24 +367,7 @@ function collectRows(database, audioStore, scope, budget) {
     const rowsBeforeNote = rows.length;
     for (const label of labels) {
       const row = transcriptRows.get(label.rowId);
-      if (
-        approvedEvidence.some(
-          (sample) =>
-            (sample.note_id === note.id &&
-              sample.note_identity === note.client_note_id &&
-              JSON.parse(sample.row_ids).includes(label.rowId)) ||
-            overlapsRecording(
-              db,
-              sample,
-              note,
-              audioStore,
-              label.track,
-              label.from * 24000,
-              label.to * 24000
-            )
-        )
-      )
-        continue;
+      if (suppresses(note, provenance, label)) continue;
       if (
         !row ||
         row.deleted ||
@@ -427,6 +421,7 @@ function collectRows(database, audioStore, scope, budget) {
       !missingVectorDiagnostics.some((item) => item.noteId === note.id)
     )
       missingVectorDiagnostics.push(completionDisplay);
+    onProgress(rows.length);
   }
   return {
     rows,
@@ -449,7 +444,7 @@ function pcm16FromWav(wav) {
     result[i] = wav.readInt16LE(data + 8 + Math.floor((i * sampleRate) / 16000) * 2) / 32768;
   return result;
 }
-async function runJob(
+async function runJobLocal(
   job,
   database,
   audioStore,
@@ -467,7 +462,10 @@ async function runJob(
     missingVectorDiagnostics,
     noteCentroidCompletions,
     noteEmbeddingFingerprints,
-  } = collectRows(database, audioStore, scope, budget);
+  } = collectRows(database, audioStore, scope, budget, (totalRows) => {
+    job.progress.totalRows = totalRows;
+    job.onProgress?.();
+  });
   job.progress.totalRows = rows.length;
   let modelFingerprint = null;
   if (model.isAvailable()) {
@@ -477,7 +475,13 @@ async function runJob(
     modelFingerprint = hash.digest("hex");
   }
   const audioHashes = new Map();
-  for (const row of rows) {
+  // Group spans by source so the session can discard each recording's cache
+  // after its last row. Admission still sees the original evidence order.
+  const work = [...rows].sort(
+    (a, b) =>
+      a.noteId - b.noteId || String(a.track).localeCompare(String(b.track)) || a.from - b.from
+  );
+  for (const row of work) {
     if (job.cancelled) {
       job.state = "cancelled";
       return;
@@ -518,9 +522,12 @@ async function runJob(
         reason: "speaker_model_unavailable",
       });
     } else {
-      const span = audioStore.span(row.noteId, row.track, Math.max(row.from, row.to - 8), row.to);
+      const args = [row.noteId, row.track, Math.max(row.from, row.to - 8), row.to];
+      const span = audioStore.spanAsync
+        ? await audioStore.spanAsync(...args, { signal: job.abortController?.signal })
+        : audioStore.span(...args);
       if (span.wav) {
-        job.progress.bytesRead += span.bytesRead || span.wav.length;
+        job.progress.bytesRead += span.bytesRead ?? span.wav.length;
         if (span.partial)
           exclusions.push({ noteId: row.noteId, rowId: row.rowId, reason: "audio_partial" });
         else {
@@ -547,6 +554,7 @@ async function runJob(
     }
     job.progress.processedRows++;
     job.progress.elapsedMs = Date.now() - started;
+    job.onProgress?.();
     await new Promise((resolve) => setImmediate(resolve));
   }
   if (job.cancelled) {
@@ -586,7 +594,7 @@ async function runJob(
   job.progress.elapsedMs = Date.now() - started;
   job.state = "complete";
 }
-async function reportStillCurrent(
+async function reportStillCurrentLocal(
   report,
   database,
   audioStore,
@@ -615,9 +623,12 @@ async function reportStillCurrent(
       return false;
   }
   const notes = new Map();
+  const exemplars = new Map(
+    (database.getVoiceExemplarAudio?.() || []).map((item) => [item.id, item])
+  );
   for (const { noteId, rowId, revision, exemplarId, contentHash } of report.evidence.revisions) {
     if (exemplarId) {
-      const sample = database.getVoiceExemplarAudio?.().find((item) => item.id === exemplarId);
+      const sample = exemplars.get(exemplarId);
       if (
         !sample ||
         classifyEvidence(database.db, sample).state !== "resolved" ||
@@ -655,4 +666,40 @@ async function reportStillCurrent(
   }
   return true;
 }
-module.exports = { buildReport, collectRows, runJob, reportStillCurrent };
+async function runJob(job, database, audioStore, scope, budget, model, options) {
+  // Small in-memory unit fixtures can use the local engine. The app always
+  // supplies a file-backed database and runs every phase outside the main thread.
+  if (database.db?.name && database.db.name !== ":memory:" && audioStore.root)
+    return require("./calibrationWorkerClient").run(
+      job,
+      database,
+      audioStore,
+      scope,
+      budget,
+      model,
+      options
+    );
+  return runJobLocal(job, database, audioStore, scope, budget, model);
+}
+async function reportStillCurrent(report, database, audioStore, model, options = {}) {
+  if (database.db?.name && database.db.name !== ":memory:" && audioStore.root) {
+    const marker = () =>
+      `${database.db.prepare("SELECT total_changes() AS n").get().n}:${database.db.pragma("data_version", { simple: true })}`;
+    const before = marker();
+    const job = { state: "running", progress: {} };
+    await require("./calibrationWorkerClient").run(job, database, audioStore, null, null, model, {
+      ...options,
+      validateReport: report,
+    });
+    return job.validationCurrent && before === marker();
+  }
+  return reportStillCurrentLocal(report, database, audioStore, model);
+}
+module.exports = {
+  buildReport,
+  collectRows,
+  runJob,
+  runJobLocal,
+  reportStillCurrent,
+  reportStillCurrentLocal,
+};

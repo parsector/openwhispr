@@ -39,7 +39,8 @@ const {
   localDateKey,
   summarizeAnalyticsDays,
 } = require("./analytics");
-const { app } = require("electron");
+const { isMainThread } = require("node:worker_threads");
+const app = isMainThread ? require("electron").app : null;
 
 // Server-enforced trigger cap (openwhispr-api); enforced here so one oversized
 // trigger can't 400 the whole sync batch.

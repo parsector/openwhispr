@@ -1,7 +1,8 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const { app, safeStorage } = require("electron");
+const { isMainThread } = require("node:worker_threads");
+const { app, safeStorage } = isMainThread ? require("electron") : {};
 const debugLogger = require("./debugLogger");
 
 const SERVICE = "OpenWhispr";
@@ -204,6 +205,9 @@ function clearDeviceKey() {
 }
 
 module.exports = {
+  // Copy an already unlocked key to a local calibration worker. Never perform
+  // credential-store I/O on the UI thread merely to start a background job.
+  getWorkerKey: () => (mode === "keychain" && masterKey ? Buffer.from(masterKey) : null),
   encrypt,
   decrypt,
   isAvailable,

@@ -9,7 +9,68 @@ function seconds(value, startedAt) {
   return value > 1e12 ? (startedAt == null ? null : (value - startedAt) / 1000) : value;
 }
 
-function resolveMeetingAudioSpan(row, rows, recordingId, startedAt, tracks) {
+// Bulk readers reuse next-row and recorded-region indexes. A range-max tree
+// finds the first later onset above the resolver's existing tolerance, including
+// out-of-order/split rows, without scanning the rest of the transcript per row.
+function createMeetingAudioSpanContext(rows, recordingId, startedAt, tracks) {
+  const positions = new Map();
+  rows.forEach((row, i) => {
+    if (!positions.has(row.id)) positions.set(row.id, i);
+  });
+  const trees = new Map();
+  const regionsByTrack = new Map();
+  for (const track of ["mic", "system"]) {
+    let size = 1;
+    while (size < rows.length) size *= 2;
+    const tree = new Float64Array(size * 2).fill(-Infinity);
+    rows.forEach((candidate, i) => {
+      if (
+        candidate.source !== track ||
+        (candidate.recordingId != null && candidate.recordingId !== recordingId)
+      )
+        return;
+      const span = candidate.audioSpan;
+      const value =
+        span && span.recordingId === recordingId && span.trackId === track
+          ? span.startSample / RATE
+          : seconds(candidate.speechStart, startedAt);
+      if (value != null && Number.isFinite(value)) tree[size + i] = value;
+    });
+    for (let i = size - 1; i > 0; i--) tree[i] = Math.max(tree[i * 2], tree[i * 2 + 1]);
+    trees.set(track, { tree, size });
+    const regions = [];
+    for (const chunk of tracks?.[track]?.chunks || []) {
+      const lower = chunk.startSample / RATE,
+        upper = (chunk.startSample + chunk.sampleCount) / RATE;
+      const last = regions.at(-1);
+      if (last && lower <= last.to) last.to = Math.max(last.to, upper);
+      else regions.push({ from: lower, to: upper });
+    }
+    regionsByTrack.set(track, regions);
+  }
+  return {
+    nextStart(row, start, track) {
+      const position = positions.get(row.id);
+      if (position == null) return null;
+      const { tree, size } = trees.get(track);
+      const search = (node, from, to) => {
+        if (
+          to <= position + 1 ||
+          tree[node] < start - UNKNOWN_ONSET_WINDOW ||
+          tree[node] === -Infinity
+        )
+          return null;
+        if (to - from === 1) return tree[node];
+        const mid = (from + to) >>> 1;
+        return search(node * 2, from, mid) ?? search(node * 2 + 1, mid, to);
+      };
+      return search(1, 0, size);
+    },
+    regions: (track) => regionsByTrack.get(track),
+  };
+}
+
+function resolveMeetingAudioSpan(row, rows, recordingId, startedAt, tracks, context = null) {
   const span = row.audioSpan;
   const validSpan = !!span && span.recordingId === recordingId;
   const track = row.source;
@@ -41,9 +102,10 @@ function resolveMeetingAudioSpan(row, rows, recordingId, startedAt, tracks) {
     : (speechEnd ?? completion ?? start + UNKNOWN_ONSET_WINDOW);
   const details = { start, end, track, approximate: !validSpan };
   const anchor = validSpan ? start : (onset ?? completion ?? start);
-  const index = rows.findIndex((candidate) => candidate.id === row.id);
-  const nextStart =
-    index < 0
+  const index = context ? -1 : rows.findIndex((candidate) => candidate.id === row.id);
+  const nextStart = context
+    ? context.nextStart(row, start, track)
+    : index < 0
       ? null
       : rows
           .slice(index + 1)
@@ -67,8 +129,8 @@ function resolveMeetingAudioSpan(row, rows, recordingId, startedAt, tracks) {
   let to = Math.round(Math.min(end + MARGIN, nextStart ?? Infinity) * 1000) / 1000;
   if (tracks) {
     const chunks = tracks[track]?.chunks || [];
-    const regions = [];
-    for (const chunk of chunks) {
+    const regions = context ? context.regions(track) : [];
+    for (const chunk of context ? [] : chunks) {
       const lower = chunk.startSample / RATE;
       const upper = (chunk.startSample + chunk.sampleCount) / RATE;
       const last = regions.at(-1);
@@ -94,4 +156,4 @@ function resolveMeetingAudioSpan(row, rows, recordingId, startedAt, tracks) {
   return { ...details, from, to, reason: null };
 }
 
-export { resolveMeetingAudioSpan, RATE, MARGIN };
+export { resolveMeetingAudioSpan, createMeetingAudioSpanContext, RATE, MARGIN };

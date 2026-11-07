@@ -1,7 +1,8 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { app } = require("electron");
+const { isMainThread } = require("node:worker_threads");
+const app = isMainThread ? require("electron").app : null;
 
 const LOG_LEVELS = {
   trace: 10,
@@ -71,7 +72,7 @@ class DebugLogger {
 
     // Check if app is ready before accessing app.getPath()
     // This is critical because app.getPath() can hang or fail before app.whenReady()
-    if (!app.isReady()) {
+    if (!app?.isReady()) {
       // App not ready yet, will try again later via ensureFileLogging() or write()
       return;
     }

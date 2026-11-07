@@ -3310,6 +3310,11 @@ class IPCHandlers {
       require("./speakerDecisionThresholds").current()
     );
     let calibrationJob = null;
+    const calibrationRecovery = require("./calibrationWorkerClient").recover(
+      this.meetingAudioStore
+    );
+    // A failed cleanup is surfaced when starting a job, not an unhandled rejection.
+    calibrationRecovery.catch(() => {});
     ipcMain.handle("speaker-calibration-start", (_event, scope, budget) => {
       if (calibrationJob?.state === "running")
         return { success: false, error: "Calibration already running" };
@@ -3336,8 +3341,16 @@ class IPCHandlers {
       };
       const job = calibrationJob;
       setImmediate(() =>
-        require("./speakerInAppCalibration")
-          .runJob(job, this.databaseManager, this.meetingAudioStore, scope, bounded)
+        calibrationRecovery
+          .then(() =>
+            require("./speakerInAppCalibration").runJob(
+              job,
+              this.databaseManager,
+              this.meetingAudioStore,
+              scope,
+              bounded
+            )
+          )
           .then(() => {
             for (const item of job.report?.evidence?.missingVectorDiagnostics || []) {
               debugLogger.warn("Speaker calibration missing stored vectors", item, "speaker");
@@ -3362,7 +3375,10 @@ class IPCHandlers {
         }
     );
     ipcMain.handle("speaker-calibration-cancel", () => {
-      if (calibrationJob?.state === "running") calibrationJob.cancelled = true;
+      if (calibrationJob?.state === "running") {
+        calibrationJob.cancelled = true;
+        calibrationJob.abortController?.abort();
+      }
       return { success: true };
     });
     ipcMain.handle("speaker-calibration-apply", async (_event, _values, report) => {

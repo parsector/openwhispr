@@ -27,6 +27,7 @@ function fixture(t, options = {}) {
   let clock = Date.now();
   const key = crypto.randomBytes(32);
   const encryption = {
+    getWorkerKey: () => Buffer.from(key),
     encryptBytes(bytes) {
       const iv = crypto.randomBytes(12);
       const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
