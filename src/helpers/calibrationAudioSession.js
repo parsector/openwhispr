@@ -17,9 +17,17 @@ function createSession(store, directory, { cacheBytes = 32 * 1024 * 1024 } = {})
     decodedBytes = 0,
     currentNote;
   const limit = cacheBytes;
+  let spillAvailable = true;
   const spill = path.join(directory, "pcm-cache");
   fs.mkdirSync(spill, { mode: 0o700 });
-  session.metrics = { provenanceReads: 0, decodes: 0, sourceChunkReads: 0 };
+  session.metrics = {
+    provenanceReads: 0,
+    decodes: 0,
+    sourceChunkReads: 0,
+    get decodedBytes() {
+      return decodedBytes;
+    },
+  };
   session._manifest = (noteId) => {
     if (!manifests.has(noteId)) manifests.set(noteId, store._manifest(noteId, true));
     return manifests.get(noteId);
@@ -57,10 +65,25 @@ function createSession(store, directory, { cacheBytes = 32 * 1024 * 1024 } = {})
       if (decodedBytes > limit) {
         for (const [hash, value] of decoded) {
           if (!value.pcm) continue;
-          value.file = path.join(spill, hash);
-          fs.writeFileSync(value.file, store.encryption.encryptBytes(value.pcm), { mode: 0o600 });
+          const file = path.join(spill, hash);
+          if (spillAvailable) {
+            try {
+              fs.writeFileSync(file, store.encryption.encryptBytes(value.pcm), { mode: 0o600 });
+              value.file = file;
+            } catch {
+              // A full/unavailable disk must not defeat the memory bound or
+              // turn a partial file into a cache hit. Re-decode after eviction.
+              spillAvailable = false;
+              try {
+                fs.rmSync(file, { force: true });
+              } catch {
+                /* Job cleanup retries. */
+              }
+            }
+          }
           decodedBytes -= value.pcm.length;
           delete value.pcm;
+          if (!value.file) decoded.delete(hash);
           if (decodedBytes <= limit) break;
         }
       }
@@ -113,6 +136,7 @@ function createSession(store, directory, { cacheBytes = 32 * 1024 * 1024 } = {})
     inputs.clear();
     decoded.clear();
     manifests.clear();
+    inputBytes = decodedBytes = 0;
   };
   return session;
 }

@@ -108,6 +108,25 @@ function refreshAudioKey() {
   _ensureInit(false);
 }
 
+// The calibration worker has already attempted a read-only Keychain lookup.
+// Recover only the existing backup using Electron's non-blocking API. Do not
+// call _ensureInit/_initKeychain: even allowCreate=false can restore Keychain
+// entries, and their synchronous credential access would stall the UI thread.
+async function recoverWorkerKey() {
+  if (mode === "keychain" && masterKey) return Buffer.from(masterKey);
+  try {
+    const encrypted = await fs.promises.readFile(_backupPath());
+    if (!(await safeStorage.isAsyncEncryptionAvailable())) return null;
+    const { result } = await safeStorage.decryptStringAsync(encrypted);
+    const key = Buffer.from(result, "base64");
+    if (key.length === KEY_LEN) return key;
+    key.fill(0);
+  } catch {
+    // Missing, locked or unreadable backup: retain audio_key_unavailable.
+  }
+  return null;
+}
+
 function isAvailable() {
   _ensureInit();
   return mode !== "unavailable";
@@ -208,6 +227,7 @@ module.exports = {
   // Copy an already unlocked key to a local calibration worker. Never perform
   // credential-store I/O on the UI thread merely to start a background job.
   getWorkerKey: () => (mode === "keychain" && masterKey ? Buffer.from(masterKey) : null),
+  recoverWorkerKey,
   encrypt,
   decrypt,
   isAvailable,

@@ -18,11 +18,23 @@ const job = {
 };
 const started = Date.now();
 let pendingEmbedding;
+let pendingKey;
 parentPort.on("message", (message) => {
   if (message.type === "cancel") {
     job.cancelled = true;
     job.abortController.abort();
     pendingEmbedding?.reject(new Error("Calibration cancelled"));
+    clearTimeout(pendingKey?.timer);
+    pendingKey?.reject(new Error("Calibration cancelled"));
+    pendingKey = null;
+  } else if (message.type === "key") {
+    const pending = pendingKey;
+    pendingKey = null;
+    clearTimeout(pending?.timer);
+    const key = message.key && Buffer.from(message.key);
+    message.key?.fill(0);
+    if (pending) pending.resolve(key);
+    else key?.fill(0);
   } else if (message.type === "embedding" && pendingEmbedding) {
     const pending = pendingEmbedding;
     pendingEmbedding = null;
@@ -37,8 +49,10 @@ const publish = () => {
 job.onProgress = publish;
 const timer = setInterval(publish, 100);
 
-function encryption() {
+async function encryption() {
   let key = data.key && Buffer.from(data.key);
+  data.key?.fill(0);
+  data.key = null;
   // An untouched library may not have unlocked audio in the main process yet.
   // Read the existing credential in this worker; never create/replace a key.
   if (!key) {
@@ -49,6 +63,20 @@ function encryption() {
     } catch {
       /* A locked credential store remains an explicit refusal. */
     }
+  }
+  if (key && key.length !== 32) {
+    key.fill(0);
+    key = null;
+  }
+  if (!key) {
+    key = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingKey = null;
+        reject(new Error("Calibration key recovery timed out; restart calibration"));
+      }, 60000);
+      pendingKey = { resolve, reject, timer };
+      parentPort.postMessage({ type: "key" });
+    });
   }
   const requireKey = () => {
     if (key?.length !== 32)
@@ -101,7 +129,8 @@ async function main() {
       db: snapshot,
       activeAccountId: data.activeAccountId,
     });
-    cipher = encryption();
+    cipher = await encryption();
+    if (job.cancelled) return;
     const store = Object.assign(Object.create(MeetingAudioStore.prototype), {
       root: data.root,
       database,
@@ -165,6 +194,7 @@ async function main() {
   } finally {
     clearInterval(timer);
     clearTimeout(pendingEmbedding?.timer);
+    clearTimeout(pendingKey?.timer);
     source?.close();
     snapshot?.close();
     session?.close();

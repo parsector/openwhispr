@@ -15,33 +15,40 @@ async function run(job, database, store, scope, budget, model, options = {}) {
   const signal = job.abortController.signal;
   const started = Date.now();
   const base = jobsDirectory(store);
-  await fs.mkdir(base, { recursive: true, mode: 0o700 });
-  const directory = await fs.mkdtemp(path.join(base, "run-"));
+  let directory;
   let worker;
   let heartbeat;
   let lastMessage = Date.now();
   try {
-    if (job.cancelled) {
+    await fs.mkdir(base, { recursive: true, mode: 0o700 });
+    directory = await fs.mkdtemp(path.join(base, "run-"));
+    if (job.cancelled || signal.aborted) {
+      job.cancelled = true;
       job.state = "cancelled";
       return;
     }
     model ||= require("./speakerEmbeddings");
     const WorkerClass = options.WorkerClass || Worker;
-    worker = new WorkerClass(path.join(__dirname, "../workers/calibrationWorker.js"), {
-      workerData: {
-        databasePath: database.db.name,
-        activeAccountId: database.activeAccountId ?? null,
-        root: store.root,
-        now: store.now(),
-        directory,
-        scope,
-        budget,
-        key: store.encryption.getWorkerKey?.() ?? null,
-        modelPath: model.isAvailable() ? model.getModelPath() : null,
-        codecModule: options.codecModule,
-        validateReport: options.validateReport,
-      },
-    });
+    const key = store.encryption.getWorkerKey?.() ?? null;
+    try {
+      worker = new WorkerClass(path.join(__dirname, "../workers/calibrationWorker.js"), {
+        workerData: {
+          databasePath: database.db.name,
+          activeAccountId: database.activeAccountId ?? null,
+          root: store.root,
+          now: store.now(),
+          directory,
+          scope,
+          budget,
+          key,
+          modelPath: model.isAvailable() ? model.getModelPath() : null,
+          codecModule: options.codecModule,
+          validateReport: options.validateReport,
+        },
+      });
+    } finally {
+      key?.fill(0);
+    }
     await new Promise((resolve, reject) => {
       let finished = false;
       const finish = (error) => {
@@ -53,8 +60,16 @@ async function run(job, database, store, scope, budget, model, options = {}) {
       const cancel = () => {
         job.cancelled = true;
         job.state = "cancelled";
-        worker.postMessage({ type: "cancel" });
+        send({ type: "cancel" });
         finish();
+      };
+      const send = (message, transfer = []) => {
+        if (finished) return;
+        try {
+          worker.postMessage(message, transfer);
+        } catch (error) {
+          finish(error);
+        }
       };
       signal.addEventListener("abort", cancel, { once: true });
       heartbeat = setInterval(() => {
@@ -64,6 +79,7 @@ async function run(job, database, store, scope, budget, model, options = {}) {
           finish(new Error("Calibration worker stopped responding; restart calibration"));
       }, 100);
       worker.on("error", finish);
+      worker.on("messageerror", finish);
       worker.on("exit", (code) => {
         if (!finished) finish(new Error(`Calibration worker exited before completion (${code})`));
       });
@@ -74,6 +90,23 @@ async function run(job, database, store, scope, budget, model, options = {}) {
           Object.assign(job.progress, message.progress);
           job.progress.elapsedMs = Date.now() - started;
           job.onProgress?.();
+        } else if (message.type === "key") {
+          Promise.resolve()
+            .then(() => store.encryption.recoverWorkerKey?.() ?? null)
+            .then((key) => {
+              let bytes;
+              try {
+                if (finished) return;
+                // Transfer a dedicated buffer, then erase the broker's copy.
+                bytes = key && new Uint8Array(key);
+                send({ type: "key", key: bytes }, bytes ? [bytes.buffer] : []);
+              } finally {
+                key?.fill(0);
+                // A failed send leaves the transfer buffer attached locally.
+                if (bytes?.byteLength) bytes.fill(0);
+              }
+            })
+            .catch(finish);
         } else if (message.type === "embedding") {
           // ONNX is already isolated in its utility process. Keep that shared
           // lifecycle, but move PCM conversion and all other CPU work away.
@@ -81,12 +114,13 @@ async function run(job, database, store, scope, budget, model, options = {}) {
             .then(() => model.extractEmbeddingFromSamples(message.samples))
             .then(
               (vector) => {
-                if (!finished) worker.postMessage({ type: "embedding", vector });
+                send({ type: "embedding", vector });
               },
               (error) => {
-                if (!finished) worker.postMessage({ type: "embedding", error: error.message });
+                send({ type: "embedding", error: error.message });
               }
-            );
+            )
+            .catch(finish);
         } else if (message.type === "complete") {
           job.report = message.report;
           job.validationCurrent = message.validationCurrent;
@@ -112,7 +146,7 @@ async function run(job, database, store, scope, budget, model, options = {}) {
     // termination. Termination also interrupts synchronous report/SQLite work.
     if (job.cancelled && worker) await new Promise((resolve) => setTimeout(resolve, 25));
     await worker?.terminate();
-    await fs.rm(directory, { recursive: true, force: true });
+    if (directory) await fs.rm(directory, { recursive: true, force: true });
     job.progress.elapsedMs = Date.now() - started;
   }
 }
