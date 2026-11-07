@@ -10,7 +10,9 @@ async function fixture(
   approved = 90,
   libraryRoot = path.resolve(__dirname, "../..")
 ) {
-  const directory = fs.mkdtempSync(path.join(process.cwd(), "node_modules/.cache/calibration-"));
+  const parent = path.join(process.cwd(), "node_modules/.cache");
+  fs.mkdirSync(parent, { recursive: true });
+  const directory = fs.mkdtempSync(path.join(parent, "calibration-"));
   currentDirectory = directory;
   const load = Module._load;
   Module._load = function (request, parent, isMain) {
