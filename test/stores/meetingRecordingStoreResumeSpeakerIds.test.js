@@ -191,7 +191,7 @@ test("undo invalidates reconsidered identification windows before a delayed fina
   await store.stopRecording();
 });
 
-test("correction and adoption commits invalidate cached identification windows", async (t) => {
+test("row correction and unchanged adoption preserve unrelated identification windows", async (t) => {
   const { api, state } = createElectronAPI();
   const store = await loadStore(t, api);
   assert.equal(await store.startRecording(START_ARGS), true);
@@ -204,8 +204,9 @@ test("correction and adoption commits invalidate cached identification windows",
       startTime: now - 100, endTime: now + 100 });
     commit();
     state.segmentCallback({ text: label, source: "system", type: "final", timestamp: now });
-    assert.notEqual(segmentWithText(store, label).speakerAssessmentAvailable, true,
-      `${label} must retire the earlier identification window`);
+    assert.equal(segmentWithText(store, label).speakerAssessmentAvailable, true,
+      `${label} must retain an unaffected identification window`);
+    assert.equal(segmentWithText(store, label).speakerName, "Alex");
   }
   await store.stopRecording();
 });

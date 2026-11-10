@@ -6,6 +6,7 @@ const {
   createRendererServer,
   installBrowserGlobals,
   installHookDom,
+  installMicCaptureGlobals,
 } = require("../lib/rendererTestHarness");
 
 // Visit every element in the tree the component returned.
@@ -103,6 +104,57 @@ const NOTE = {
 };
 
 const ENHANCEMENT = { content: NOTE.enhanced_content, isStale: false, onChange() {} };
+
+for (const action of ["correction", "undo"]) {
+  test(`live ${action} in NoteEditor preserves sibling identification windows`, async t => {
+    let store;
+    t.after(() => store?.stopRecording());
+    installMicCaptureGlobals(t);
+    navigator.userAgent = "test";
+    const { render, click, latest, unmount, vite } = await loadNoteEditor(t);
+    const callbacks = {};
+    Object.assign(window.electronAPI, {
+      checkSystemAudioAccess: async () => ({ granted: true, status: "granted", mode: "native", strategy: "native" }),
+      meetingTranscriptionStart: async () => ({ success: true, systemAudioMode: "native", systemAudioStrategy: "native" }),
+      meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
+      meetingTranscriptionStop: async () => ({ success: true }),
+      meetingTranscriptionSend() {}, getNote: async () => null, updateNote: async () => ({ success: true }),
+      onMeetingTranscriptionSegment: cb => { callbacks.segment = cb; return () => {}; },
+      onMeetingSpeakerIdentified: cb => { callbacks.identify = cb; return () => {}; },
+    });
+    store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+    assert.equal(await store.startRecording({ noteId: NOTE.id, noteTitle: NOTE.title, folderId: null }), true);
+    const now = Date.now();
+    const evidence = { origin: "machine", decisionId: "accepted", eligibleProfileIds: [1], acceptedProfileId: 1, rejectionReason: null };
+    const final = (text, timestamp) => callbacks.segment({ type: "final", source: "system", text, timestamp });
+    final("affected", now);
+    callbacks.identify({ speakerId: "speaker_0", displayName: "A", speakerDecision: evidence, startTime: now - 100, endTime: now + 500 });
+    final("sibling", now + 1000);
+    callbacks.identify({ speakerId: "speaker_1", displayName: "Sibling", speakerDecision: evidence, startTime: now + 900, endTime: now + 1500 });
+    window.electronAPI.applySpeakerCorrection = async request => ({
+      success: true,
+      rows: request.rows.map(row => row.speaker === "speaker_0"
+        ? { ...row, speakerName: action === "undo" ? undefined : "B", speakerLocked: action !== "undo", speakerIsPlaceholder: action === "undo" }
+        : row),
+      mapping: { clusterId: "speaker_0", runId: store.getActiveRecordingSessionId(), value: action === "undo" ? null : { display_name: "B" } },
+    });
+    await render(undefined, { isRecording: true });
+    await click("transcript");
+    await React.act(async () => {
+      let chat;
+      walk(latest(), node => { if (node.props.onMapSpeaker) chat = node; });
+      assert.ok(chat);
+      if (action === "undo") await chat.props.onUndoCorrection("correction-id");
+      else await chat.props.onMapSpeaker("speaker_0", "B");
+    });
+    final("covered sibling", now + 1100);
+    const rows = () => store.useMeetingRecordingStore.getState().segments;
+    assert.equal(rows().find(row => row.text === "covered sibling").speakerName, "Sibling");
+    final("covered affected", now + 100);
+    assert.equal(rows().find(row => row.text === "covered affected").speakerName, action === "undo" ? undefined : "B");
+    await unmount();
+  });
+}
 
 test("imported and failed-analysis rows do not claim a post-final correction", async (t) => {
   const { render, click, latest, unmount } = await loadNoteEditor(t);

@@ -150,6 +150,25 @@ test('a close runner-up leaves the row uncertain and never names it', async t =>
   assert.equal(row.uncertainty.reason, 'close_match');
 });
 
+test('cached reconsideration cannot supersede a row veto while a clean sibling can graduate', async t => {
+  const f = fixture(t);
+  await f.graduate();
+  const scope = require('../../src/helpers/noteSpeakerScope');
+  const evidence = scope.decision(scope.readScope(f.db, f.noteId), {
+    runId: f.runId, path: 'row_evaluation', rejectionReason: 'close_match',
+  });
+  const vetoed = { ...f.row, id: 'vetoed-row', uncertainty: { reason: 'close_match' }, speakerDecision: evidence };
+  f.db.updateNote(f.noteId, { transcript: JSON.stringify({ version: 2, rows: [vetoed, f.row] }) });
+  const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
+  assert.equal(result.assignments.length, 1);
+  const rows = JSON.parse(f.db.getNote(f.noteId).transcript).rows;
+  assert.equal(rows[0].speakerName, undefined);
+  assert.deepEqual(rows[0].speakerDecision, evidence);
+  assert.equal(require('../../src/helpers/speakerRosterPolicy').recordedNameAllowed(rows[0]), false);
+  assert.equal(rows[1].speakerName, 'Alex');
+  assert.deepEqual(result.assignments[0].rows.map(row => row.id), ['live-row']);
+});
+
 test('an owner correction on the cluster wins over a later graduation', async t => {
   const f = fixture(t);
   const corrected = applySpeakerCorrection(f.db, f.identifier, { type: 'apply', noteId: f.noteId,

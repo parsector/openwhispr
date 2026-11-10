@@ -1,5 +1,5 @@
 const speakerScope = require("./noteSpeakerScope");
-const { eligible, humanProtected } = require("./speakerRosterPolicy");
+const { eligible, humanProtected, recordedNameAllowed } = require("./speakerRosterPolicy");
 // Reassess only unnamed, clean clusters in the current run. The identifier
 // supplies acoustic evidence; transcript rows supply the owner's decisions.
 const { randomUUID } = require("node:crypto");
@@ -82,7 +82,10 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
           !row.deleted &&
           row.diarizationRunId === runId &&
           row.speaker === speakerId &&
-          row.source === cohort
+          row.source === cohort &&
+          // This is cached cluster evidence, not a fresh evaluation of a
+          // previously vetoed span. Other rows in this cluster remain eligible.
+          (!row.speakerDecision || recordedNameAllowed(row))
       );
       const state = eligibilityState(identifier, speakerId, cluster);
       identifier.setEligibilityState(speakerId, state);

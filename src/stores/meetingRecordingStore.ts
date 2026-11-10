@@ -534,6 +534,7 @@ let stoppingSeed: {
 let preparePromise: Promise<void> | null = null;
 let ipcCleanups: Array<() => void> = [];
 let speakerIdentifications: SpeakerIdentification[] = [];
+let latestRosterNote: NoteItem | null = null;
 let nextPlaceholderSpeakerIndex = 0;
 // First speaker index this session owns; a resumed note's earlier sessions keep the
 // ids below it. Main may raise it (see _resolveMeetingSpeakerIndexBase).
@@ -710,6 +711,7 @@ function applySpeakerIdentification(
     segment.source !== (identification.cohort || "system") ||
     !isSegmentWithinIdentificationWindow(segment, identification) ||
     humanProtected(segment) ||
+    (segment.speakerDecision && !recordedNameAllowed(segment)) ||
     ["too_short", "overlapping_speech"].includes(segment.uncertainty?.reason || "")
   ) {
     return segment;
@@ -1052,6 +1054,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     sessionSeedLength = seed.length;
     sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
+    latestRosterNote = null;
     sessionSpeakerIndexBase = Math.max(maxSpeakerIndex + 1, sessionUnknownHighWater);
     nextPlaceholderSpeakerIndex = sessionSpeakerIndexBase;
     recentSystemSpeaker = null;
@@ -1496,7 +1499,6 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       );
       if (segmentCleanup) ipcCleanups.push(segmentCleanup);
 
-      let latestRosterNote: NoteItem | null = null;
       const retiredRosterRevisions = new Set<string>();
       const currentDecision = (decision?: SpeakerDecision) =>
         !decision ||
@@ -1691,6 +1693,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           next = next.map((seg) => {
             if (seg.speaker !== remove) return seg;
             if (humanProtected(seg) || seg.uncertainty?.reason === "too_short") return seg;
+            // Cluster membership may change, but a row's acoustic veto is not
+            // a cluster verdict. Only a new evaluation of that row replaces it.
+            if (seg.speakerDecision && !recordedNameAllowed(seg))
+              return normalizeTranscriptSegment({ ...seg, speaker: keep });
             return normalizeTranscriptSegment({
               ...seg,
               speaker: keep,
@@ -2258,7 +2264,6 @@ export function assignLiveSpeakerRows(
   displayName: string | null,
   corrected?: TranscriptSegment[]
 ): TranscriptSegment[] {
-  speakerIdentifications = [];
   const next =
     corrected ??
     useMeetingRecordingStore.getState().segments.map((segment) =>
@@ -2278,11 +2283,80 @@ export function assignLiveSpeakerRows(
 
 export function mergeCommittedSpeakerRows(
   committed: TranscriptSegment[],
-  { preserveIdentifications = false } = {}
+  { preserveIdentifications = false, restoreDecisions = false } = {}
 ): TranscriptSegment[] {
-  if (!preserveIdentifications) speakerIdentifications = [];
   const liveNow = useMeetingRecordingStore.getState().segments;
+  committed = committed.map((incoming) => {
+    const existing = liveNow.find((row) => row.id === incoming.id);
+    if (
+      restoreDecisions ||
+      !existing?.speakerDecision ||
+      recordedNameAllowed(existing) ||
+      humanProtected(incoming) ||
+      !recordedNameAllowed(incoming)
+    )
+      return incoming;
+    // A committed row evaluation can supersede a machine veto, but replay of
+    // the same audio (even with a new cluster/decision id) cannot. The caller
+    // must supply new row audio and a decision for the current note scope.
+    const audio = incoming.audioSpan;
+    const previousAudio = existing.audioSpan;
+    const fresh =
+      audio &&
+      (!previousAudio ||
+        audio.recordingId !== previousAudio.recordingId ||
+        audio.trackId !== previousAudio.trackId ||
+        audio.startSample !== previousAudio.startSample ||
+        audio.endSample !== previousAudio.endSample) &&
+      incoming.speakerDecision?.decisionId &&
+      incoming.speakerDecision.decisionId !== existing.speakerDecision.decisionId &&
+      (latestRosterNote
+        ? decisionCurrentForNote(incoming.speakerDecision, latestRosterNote)
+        : incoming.speakerDecision.noteId === existing.speakerDecision.noteId &&
+          incoming.speakerDecision.revision === existing.speakerDecision.revision &&
+          incoming.speakerDecision.rosterRevision === existing.speakerDecision.rosterRevision);
+    return fresh
+      ? incoming
+      : normalizeTranscriptSegment({
+          ...incoming,
+          audioSpan: existing.audioSpan,
+          speakerDecision: existing.speakerDecision,
+          uncertainty: existing.uncertainty,
+          machineReason: undefined,
+        });
+  });
   const committedById = new Map(committed.map((row) => [row.id, row]));
+  if (!preserveIdentifications) {
+    // Committing one span must not discard another window's evidence. Vetoes
+    // stay on the durable row; they do not invalidate shared cluster evidence.
+    speakerIdentifications = speakerIdentifications.map((item) => {
+      const changed = liveNow.find((row) => {
+        const incoming = committedById.get(row.id);
+        return (
+          incoming &&
+          incoming.speakerDecision &&
+          recordedNameAllowed(incoming) &&
+          !humanProtected(incoming) &&
+          row.speaker === item.speakerId &&
+          isSegmentWithinIdentificationWindow(row, item) &&
+          (row.speaker !== incoming.speaker ||
+            row.speakerName !== incoming.speakerName ||
+            row.speakerDecision?.decisionId !== incoming.speakerDecision.decisionId)
+        );
+      });
+      const incoming = changed && committedById.get(changed.id);
+      return incoming
+        ? {
+            ...item,
+            speakerId: incoming.speaker || item.speakerId,
+            displayName: incoming.speakerName,
+            suggestedName: incoming.suggestedName,
+            uncertainty: incoming.uncertainty,
+            speakerDecision: incoming.speakerDecision,
+          }
+        : item;
+    });
+  }
   const liveIds = new Set(liveNow.map((row) => row.id));
   const next = [
     ...liveNow.map((row) => committedById.get(row.id) || row),
@@ -2337,7 +2411,27 @@ export function unlockSpeaker(speakerId: string): void {
 }
 
 export function restoreSpeakerIdentityCache(speakerId: string, displayName: string | null): void {
-  speakerIdentifications = [];
+  const restoredDecision = (decision?: SpeakerDecision) =>
+    displayName || !decision
+      ? decision
+      : {
+          ...decision,
+          acceptedProfileId: null,
+          acceptedIdentity: null,
+          rejectionReason: "identity_restored_unknown",
+          path: "identity_restore",
+          previousDecision: decision,
+        };
+  speakerIdentifications = speakerIdentifications.map((item) =>
+    item.speakerId !== speakerId
+      ? item
+      : {
+          ...item,
+          displayName,
+          suggestedName: null,
+          speakerDecision: restoredDecision(item.speakerDecision),
+        }
+  );
   if (displayName) speakerLocks.set(speakerId, displayName);
   else speakerLocks.delete(speakerId);
   if (recentSystemSpeaker?.speakerId === speakerId) {
@@ -2345,6 +2439,7 @@ export function restoreSpeakerIdentityCache(speakerId: string, displayName: stri
       ...recentSystemSpeaker,
       speakerName: displayName,
       speakerIsPlaceholder: !displayName,
+      speakerDecision: restoredDecision(recentSystemSpeaker.speakerDecision),
     };
   }
   if (systemPartialSpeakerIdValue === speakerId) {

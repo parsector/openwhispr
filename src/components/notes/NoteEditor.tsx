@@ -946,7 +946,7 @@ export default function NoteEditor({
           // Merge after the await: a transcription row may have arrived during IPC.
           const liveNow = useMeetingRecordingStore.getState().segments;
           const committedById = new Map(committed.map((row) => [row.id, row]));
-          mergeCommittedSpeakerRows(committed);
+          mergeCommittedSpeakerRows(committed, { restoreDecisions: true });
           const saveDeferred = setSpeakerCorrectionPending(false);
           if (saveDeferred || liveNow.some((row) => !committedById.has(row.id))) {
             await persistLiveTranscript();
