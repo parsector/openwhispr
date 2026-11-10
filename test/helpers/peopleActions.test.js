@@ -871,3 +871,109 @@ test('run6: mapping-only legacy attribution is Unknown in both the editor and Pe
   assert.equal(review.profileId,null);
   assert.equal(review.reason,'unassessed');
 });
+
+test("run7: People review associates a corrected machine row only with its human assignee", (t) => {
+  const f = fixture(t);
+  if (!f) return;
+  const alice = f.person("Alice", 1),
+    bob = f.person("Bob", 2);
+  const note = f.note(
+    "correction",
+    [
+      {
+        id: "corrected",
+        text: "hello",
+        source: "system",
+        speaker: "speaker_0",
+      },
+    ],
+    [["speaker_0", alice]]
+  );
+  const scope = require("../../src/helpers/noteSpeakerScope");
+  const evidence = scope.decision(scope.readScope(f.db, note), {
+    path: "test",
+    profile: alice,
+  });
+  f.db.db.prepare("UPDATE notes SET transcript = ? WHERE id = ?").run(
+    JSON.stringify([
+      {
+        id: "corrected",
+        text: "hello",
+        source: "system",
+        speaker: "speaker_0",
+        speakerName: "Alice",
+        speakerDecision: evidence,
+      },
+    ]),
+    note
+  );
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  assert.equal(
+    applySpeakerCorrection(f.db, null, {
+      type: "apply",
+      noteId: note,
+      id: "human-bob",
+      scope: "row",
+      rowIds: ["corrected"],
+      name: "Bob",
+      profileId: bob.id,
+    }).success,
+    true
+  );
+  assert.equal(
+    f.rows(note)[0].speakerDecision.acceptedProfileId,
+    alice.id,
+    "historical decision is retained"
+  );
+  assert.deepEqual(
+    listReviewRows(f.db, alice.id).filter((r) => r.noteId === note),
+    []
+  );
+  const actual = listReviewRows(f.db, bob.id).filter((r) => r.noteId === note);
+  assert.deepEqual(
+    actual.map((r) => [r.rowId, r.speakerName, r.profileId]),
+    [["corrected", "Bob", bob.id]]
+  );
+});
+
+test("run7: manual resolution clears People legacy review classification and undo restores it", (t) => {
+  const f = fixture(t);
+  if (!f) return;
+  const note = f.note(
+    "legacy review",
+    [
+      {
+        id: "legacy-review",
+        text: "hello",
+        source: "system",
+        speakerName: "Outsider",
+      },
+    ],
+    []
+  );
+  f.db.updateNote(note, { participants: '[{"email":"a@example.com"}]' });
+  const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+  const review = () => listReviewRows(f.db, null, null, true).find((r) => r.noteId === note);
+  assert.equal(review().reason, "unassessed");
+  assert.equal(
+    applySpeakerCorrection(f.db, null, {
+      type: "apply",
+      noteId: note,
+      id: "resolve-review",
+      scope: "row",
+      rowIds: ["legacy-review"],
+      name: "My choice",
+    }).success,
+    true
+  );
+  assert.equal(review().reason, "person");
+  assert.equal(
+    applySpeakerCorrection(f.db, null, {
+      type: "undo",
+      noteId: note,
+      id: "resolve-review",
+    }).success,
+    true
+  );
+  assert.equal(review().reason, "unassessed");
+});

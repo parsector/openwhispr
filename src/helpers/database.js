@@ -2065,7 +2065,7 @@ class DatabaseManager {
           `SELECT id, participants, speaker_roster_revision, deleted_at, transcript, speaker_action_log, speaker_label_undo
         FROM notes WHERE speaker_label_undo IS NOT NULL OR transcript LIKE '%"corrections"%'
           OR transcript LIKE '%"speakerName"%'
-          OR (participants IS NOT NULL AND participants <> '[]' AND transcript IS NOT NULL)`
+          OR (participants IS NOT NULL AND transcript IS NOT NULL)`
         )
         .all();
       const saveSpeakerHistory = this.db

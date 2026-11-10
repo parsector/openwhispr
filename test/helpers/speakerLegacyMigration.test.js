@@ -52,3 +52,38 @@ test('run6: bulk import installs through the legacy policy before the first read
   assert.equal(raw.speakerName,undefined);
   assert.equal(raw.speakerDecision.rejectionReason,'legacy_not_evaluated');
 });
+
+for (const participants of [null, "[]", "[ ]"]) {
+  for (const route of ["projection", "startup"])
+    test(`run7: unrestricted undecided legacy attribution survives ${route} (${participants})`, (t) => {
+      const f = fixture(t);
+      const id = f.note("unrestricted legacy", []);
+      const transcript = JSON.stringify([
+        {
+          id: "legacy",
+          text: "hello",
+          source: "system",
+          speakerName: "Alice",
+          uncertainty: { reason: "close_match" },
+        },
+      ]);
+      f.db.db
+        .prepare("UPDATE notes SET transcript = ?, participants = ? WHERE id = ?")
+        .run(transcript, participants, id);
+      if (route === "projection") {
+        assert.equal(
+          f.db.getNote(id).transcript,
+          transcript,
+          "read projection must preserve legacy bytes"
+        );
+        return;
+      }
+      const reopened = new DatabaseManager();
+      t.after(() => reopened.db.close());
+      assert.equal(
+        reopened.db.prepare("SELECT transcript FROM notes WHERE id = ?").get(id).transcript,
+        transcript,
+        "startup must not permanently erase undecided legacy attribution"
+      );
+    });
+}

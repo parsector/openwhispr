@@ -1655,14 +1655,18 @@ function assembleReviewRows(database, selectedProfileId, includeAll, facts, stor
         row.uncertainty?.reason ||
         (changedRows.has(row.id) || row.changedAfterFinal || row.changedAfterFinalAnalysis
           ? "changed_after_final"
-          : !row.speakerAssessmentAvailable && !row.speakerLocked && !row.speakerName
+          : !row.speakerAssessmentAvailable && !humanProtected(row) && !row.speakerName
             ? "unassessed"
             : null);
       const profileId = recordedNameAllowed(row)
-        ? row.speakerDecision?.acceptedProfileId ||
-          rowProfile(row, map) ||
-          byName.get(normalized(row.speakerName)) ||
-          null
+        ? humanProtected(row)
+          ? row.speakerName && !row.speakerIsPlaceholder
+            ? row.suggestedProfileId || byName.get(normalized(row.speakerName)) || null
+            : null
+          : row.speakerDecision?.acceptedProfileId ||
+            rowProfile(row, map) ||
+            byName.get(normalized(row.speakerName)) ||
+            null
         : null;
       if (selectedProfileId != null ? profileId !== selectedProfileId : !includeAll && !reason)
         continue;

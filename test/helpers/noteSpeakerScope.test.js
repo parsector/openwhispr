@@ -378,3 +378,36 @@ test('a new automatic row keeps its current scope through optimistic transcript 
   assert.equal(f.db.updateNote(f.noteId,{transcript:writeTranscriptDocument([row])},{expectedTranscript:previous,reconcileTranscript:true}).success,true);
   assert.equal(f.rows().find(r=>r.id===row.id).speakerName,'Alex');
 });
+
+test("run7: identity-only import carries unevaluated provenance through roster refusal", (t) => {
+  const f = fixture(t);
+  const imported = {
+    id: "imported",
+    text: "hello",
+    source: "system",
+    speakerName: "Alex",
+    speakerAssignment: {
+      origin: "machine",
+      email: "a@example.com",
+      accepted: true,
+    },
+  };
+  const [installed] = enforceRows(f.db, f.noteId, [imported]);
+  assert.equal(installed.speakerDecision.acceptedProfileId, f.a.id);
+  assert.equal(installed.speakerDecision.acousticEvaluation, "not_evaluated");
+  assert.equal(installed.speakerDecision.candidateSetStatus, "not_recorded");
+  f.db.db
+    .prepare("UPDATE notes SET transcript = ? WHERE id = ?")
+    .run(writeTranscriptDocument([installed]), f.noteId);
+  assert.equal(
+    f.db.updateNote(f.noteId, { participants: '[{"email":"c@example.com"}]' }).success,
+    true
+  );
+  const refused = f.rows()[0];
+  assert.equal(refused.speakerName, undefined);
+  assert.equal(refused.speakerDecision.rejectionReason, "roster_changed");
+  assert.equal(refused.speakerDecision.acousticEvaluation, "not_evaluated");
+  assert.equal(refused.speakerDecision.candidateSetStatus, "not_recorded");
+  assert.equal(refused.speakerDecision.modelFingerprint, null);
+  assert.equal(refused.speakerDecision.acousticWinnerProfileId, null);
+});

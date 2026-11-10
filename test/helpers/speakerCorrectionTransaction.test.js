@@ -93,6 +93,26 @@ const correction = (
 });
 const rows = (f) => require("../../src/helpers/transcriptDocument").readTranscriptDocument(f.note.transcript).rows;
 
+test("run7: manual correction clears legacy review requirement and undo restores it", () => {
+  const f = fixture();
+  f.note.transcript = JSON.stringify([{ ...row("a"), speakerReviewRequired: true }]);
+  assert.equal(
+    applySpeakerCorrection(f.db, f.identifier, correction("resolve", "a", "My choice")).success,
+    true
+  );
+  assert.equal(rows(f)[0].speakerName, "My choice");
+  assert.equal(!!rows(f)[0].speakerReviewRequired, false);
+  assert.equal(
+    applySpeakerCorrection(f.db, f.identifier, {
+      type: "undo",
+      noteId: 1,
+      id: "resolve",
+    }).success,
+    true
+  );
+  assert.equal(rows(f)[0].speakerReviewRequired, true);
+});
+
 test("splitting a cluster keeps row ids and locks, gives a new number, and undoes in order", () => {
   const f = fixture();
   const { writeTranscriptDocument } = require("../../src/helpers/transcriptDocument");

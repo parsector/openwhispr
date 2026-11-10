@@ -3,6 +3,7 @@ import {
   recordedNameAllowed,
   eligible,
   decisionCurrentForNote,
+  resolveSpeakerRoster,
 } from "./speakerRosterPolicy.js";
 
 const ATTRIBUTION = [
@@ -279,9 +280,16 @@ export function resolveAutomaticSpeaker(
 ) {
   const restoring = restorationRowIds.includes(row.id);
   if (humanProtected(row) && !restoring) {
-    return { ...copyAttribution(incoming, row), speaker: row.speaker };
+    return {
+      ...copyAttribution(incoming, row),
+      speaker: row.speaker,
+      ...(row.speakerReviewRequired || incoming.speakerReviewRequired
+        ? { speakerReviewRequired: false }
+        : {}),
+    };
   }
-  if (humanProtected(incoming)) return incoming;
+  if (humanProtected(incoming))
+    return incoming.speakerReviewRequired ? { ...incoming, speakerReviewRequired: false } : incoming;
   if (requireStoredAttribution && !storedDecision && incoming.speakerDecision)
     return refusal(row, incoming, storedDecision, "row_binding");
   let next = incoming;
@@ -326,11 +334,11 @@ export function resolveAutomaticSpeaker(
     if (reason) return refusal(row, next, storedDecision, reason);
   }
   // Unknown-origin names under a restricted roster have no acoustic evidence.
-  const restricted =
-    scope &&
-    (scope.failure ||
-      scope.unrestricted === false ||
-      ("participants" in scope && scope.participants != null && scope.participants !== "[]"));
+  const rosterScope =
+    scope && ("participants" in scope || "id" in scope)
+      ? resolveSpeakerRoster(scope, null)
+      : scope;
+  const restricted = rosterScope && !rosterScope.unrestricted;
   if (
     !next.speakerDecision &&
     restricted &&
@@ -351,7 +359,7 @@ export function resolveAutomaticSpeaker(
         source: scope.source ?? "note",
         rawRoster: scope.rawRoster ?? scope.participants,
         rosterRevision: scope.rosterRevision ?? scope.speaker_roster_revision ?? 0,
-        revision: scope.revision,
+        revision: rosterScope.revision,
         eligibleProfileIds: [],
         acceptedProfileId: null,
         rejectionReason: "legacy_not_evaluated",
@@ -359,6 +367,24 @@ export function resolveAutomaticSpeaker(
       speakerReviewRequired: true,
     };
   }
+  // Project undecided historical attribution without applying today's acoustic
+  // checks. Changed identity proposals and machine imports still validate below.
+  if (
+    rosterScope?.unrestricted &&
+    !storedDecision &&
+    !next.speakerDecision &&
+    !row.speakerAssignment &&
+    !next.speakerAssignment &&
+    !changedMedia &&
+    row.id === next.id &&
+    row.speaker === next.speaker &&
+    row.speakerName === next.speakerName &&
+    row.speakerIsPlaceholder === next.speakerIsPlaceholder &&
+    row.speakerStatus === next.speakerStatus &&
+    row.suggestedName === next.suggestedName &&
+    row.suggestedProfileId === next.suggestedProfileId
+  )
+    return next;
   const evidence = next.speakerDecision;
   if (evidence && !currentSpeakerDecision(evidence, scope)) {
     if (inherited) return refusal(row, incoming, storedDecision, "revision");

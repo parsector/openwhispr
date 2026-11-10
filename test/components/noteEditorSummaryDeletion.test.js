@@ -1822,3 +1822,95 @@ test('run6: NoteEditor completion overlay is invalidated by an ordinary roster c
     assert.equal(chat().segments[0].speakerName,'Current member','an old overlay must not hide a legitimate current recovery');
   } finally {await unmount();}
 });
+
+test("run7: main and NoteEditor agree on every legacy roster form", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  const { enforceRows } = require("../../src/helpers/noteSpeakerScope");
+  const forms = [
+    null,
+    "[]",
+    "[ ]",
+    [],
+    "   ",
+    "{broken",
+    "{}",
+    '[{"email":"a@example.com"}]',
+    [{ email: "a@example.com" }],
+  ];
+  try {
+    for (const participants of forms) {
+      const row = {
+        id: "legacy-roster",
+        text: "hello",
+        source: "system",
+        speakerName: "Alice",
+      };
+      const note = { ...NOTE, participants, transcript: JSON.stringify([row]) };
+      const db = { getNote: () => note, getSpeakerProfiles: () => [] };
+      const main = enforceRows(db, note.id, [{ ...row }])[0];
+      await render(undefined, { note });
+      await click("transcript");
+      let editor;
+      walk(latest(), (node) => {
+        if (node.props.onMapSpeaker) editor = node.props.segments[0];
+      });
+      const attribution = (r) => [
+        r.speakerName,
+        r.speakerReviewRequired,
+        r.speakerDecision?.rejectionReason,
+      ];
+      assert.deepEqual(attribution(editor), attribution(main), JSON.stringify(participants));
+      const unrestricted =
+        participants === null ||
+        (Array.isArray(participants) && participants.length === 0) ||
+        ["[]", "[ ]"].includes(participants);
+      assert.equal(
+        editor.speakerName,
+        unrestricted ? "Alice" : undefined,
+        JSON.stringify(participants)
+      );
+    }
+  } finally {
+    await unmount();
+  }
+});
+
+test("run7: NoteEditor suppresses legacy review count for human resolution and restores it on undo", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  const legacy = {
+    id: "resolved-review",
+    text: "hello",
+    source: "system",
+    speakerReviewRequired: true,
+  };
+  const count = () => {
+    let found = false;
+    walk(latest(), (node) => {
+      if (node.props.children === "notes.speaker.reviewStretches") found = true;
+    });
+    return found;
+  };
+  try {
+    await render(undefined, {
+      note: { ...NOTE, transcript: JSON.stringify([legacy]) },
+    });
+    await click("transcript");
+    assert.equal(count(), true);
+    const resolved = {
+      ...legacy,
+      speakerName: "My choice",
+      speakerLocked: true,
+      speakerLockSource: "user",
+    };
+    await render(undefined, {
+      note: { ...NOTE, transcript: JSON.stringify([resolved]) },
+    });
+    assert.equal(count(), false);
+    await render(undefined, {
+      note: { ...NOTE, transcript: JSON.stringify([legacy]) },
+    });
+    assert.equal(count(), true);
+  } finally {
+    await unmount();
+  }
+});

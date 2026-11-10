@@ -265,10 +265,10 @@ function enforceRows(
           evidence.modelFingerprint = recorded.modelFingerprint;
       }
       evidence.previousDecision = recorded || null;
-      if (!recorded) {
-        evidence.candidateSetStatus = "not_recorded";
-        evidence.acousticEvaluation = "not_evaluated";
-      }
+      // Scope validation does not evaluate audio or record an acoustic candidate
+      // set. A derived refusal carries only the provenance its source had.
+      evidence.candidateSetStatus = recorded?.candidateSetStatus ?? "not_recorded";
+      evidence.acousticEvaluation = recorded?.acousticEvaluation ?? "not_evaluated";
       veto(row, evidence, current);
       row.speakerBoundary = {
         refusalReason: stale ? "revision" : unsafe ? "audio" : "profile",

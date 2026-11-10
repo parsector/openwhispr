@@ -11,6 +11,7 @@ const FIELDS = [
   "uncertainty",
   "machineReason",
   "speakerDecision",
+  "speakerReviewRequired",
 ];
 const {
   readTranscriptDocument,
@@ -169,6 +170,7 @@ function applySpeakerCorrection(database, identifier, request) {
           speakerStatus: "locked",
           speakerLocked: true,
           speakerLockSource: "user",
+          speakerReviewRequired: false,
           correctionRevision: initialAttribution ? 0 : (Number(row.correctionRevision) || 0) + 1,
           suggestedName: undefined,
           suggestedProfileId: chosenProfileId ?? undefined,

@@ -75,6 +75,49 @@ test("an unrecorded automatic legacy name needs review under a declared roster; 
 });
 module.exports = { fixture };
 
+for (const participants of [
+  null,
+  "[]",
+  "[ ]",
+  [],
+  "   ",
+  "{broken",
+  "{}",
+  '[{"email":"a@example.com"}]',
+  [{ email: "a@example.com" }],
+]) {
+  test(`run7: shared roster parsing agrees in main and renderer (${JSON.stringify(participants)})`, () => {
+    const note = { id: 42, participants };
+    const row = { id: "legacy", speakerName: "Alice" };
+    const db = { getNote: () => note, getSpeakerProfiles: () => [] };
+    const main = enforceRows(db, 42, [{ ...row }])[0];
+    const editor = resolveAutomaticSpeaker(row, null, note, row);
+    assert.deepEqual(editor, main);
+  });
+}
+
+for (const route of ["boundary", "main commit", "new identification"]) {
+  test(`run7: unrestricted legacy exception still validates unsafe new proposals (${route})`, () => {
+    const db = {
+      getNote: () => ({ id: 42, participants: "[]" }),
+      getSpeakerProfiles: () => [],
+    };
+    const prior = {
+      id: "legacy",
+      speakerName: "Alice",
+      uncertainty: { reason: "close_match" },
+    };
+    const incoming = { ...prior, speakerName: "Proposed" };
+    const actual =
+      route === "boundary"
+        ? resolveAutomaticSpeaker(prior, null, readScope(db, 42), incoming)
+        : route === "main commit"
+          ? enforceRows(db, 42, [incoming], { storedRows: [prior] })[0]
+          : enforceRows(db, 42, [incoming], { includeUnrecorded: true })[0];
+    assert.equal(actual.speakerName, undefined);
+  });
+}
+
 const { prepareSpeakerRowEvaluations } = require("../../src/helpers/speakerRowEvaluation");
 const { createHash } = require("node:crypto");
 function audioFixture() {
