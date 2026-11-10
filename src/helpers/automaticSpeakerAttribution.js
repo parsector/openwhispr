@@ -367,10 +367,12 @@ export function resolveAutomaticSpeaker(
       speakerReviewRequired: true,
     };
   }
-  // Project undecided historical attribution without applying today's acoustic
-  // checks. Changed identity proposals and machine imports still validate below.
+  // Context-free normalization cannot decide a historical row's note scope.
+  // Preserve unchanged undecided attribution until contextual installation;
+  // restricted rosters were vetoed above. Proposals and machine imports still
+  // validate below.
   if (
-    rosterScope?.unrestricted &&
+    (!scope || rosterScope?.unrestricted) &&
     !storedDecision &&
     !next.speakerDecision &&
     !row.speakerAssignment &&

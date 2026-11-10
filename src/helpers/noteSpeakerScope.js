@@ -135,6 +135,7 @@ function enforceRows(
     includeUnrecorded = false,
     noteOverride,
     storedRows = null,
+    historicalImport = false,
     restorationRowIds = [],
     evaluations = new Map(),
   } = {}
@@ -168,8 +169,15 @@ function enforceRows(
   let importedIdentities;
   const stored = new Map((storedRows || []).map((row) => [row.id, row]));
   const finish = (row) => {
+    // A raw historical import has no local predecessor. Only an unrestricted
+    // parsed roster may preserve its undecided attribution as history; machine
+    // assignments and recorded decisions still use the normal proposal path.
+    const historical =
+      historicalImport && current.unrestricted && !row.speakerDecision && !row.speakerAssignment;
     const own =
-      stored.get(row.id) || stored.get(row.parentRowId) || (storedRows ? { id: row.id } : row);
+      stored.get(row.id) ||
+      stored.get(row.parentRowId) ||
+      (!storedRows || historical ? row : { id: row.id });
     const evaluated = evaluations.get(row.id);
     if (evaluated && row.speakerDecision && recordedNameAllowed(row)) {
       row.speakerDecision = { ...row.speakerDecision, evaluation: evaluated.evaluation };

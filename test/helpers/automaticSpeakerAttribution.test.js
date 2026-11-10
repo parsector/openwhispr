@@ -478,3 +478,22 @@ test("omitting stored audio metadata cannot remove its binding before a later sw
   assert.equal(actual.speakerName, undefined);
   assert.equal(actual.speakerDecision.acceptedProfileId, null);
 });
+
+test("run8: null scope preserves only unchanged undecided legacy attribution", () => {
+  for (const history of [{ uncertainty: { reason: "close_match" } }, { overlap: true }]) {
+    const row = { id: "r", text: "Hello", speakerName: "Alice", ...history };
+    assert.deepEqual(resolveAutomaticSpeaker(row, null, null, { ...row, text: "Edited" }), {
+      ...row,
+      text: "Edited",
+    });
+    const proposed = resolveAutomaticSpeaker(row, null, null, { ...row, speakerName: "Proposed" });
+    assert.equal(proposed.speakerName, undefined);
+    assert.equal(proposed.speakerBoundary.refusalReason, "scope_missing");
+    const db = { getNote: () => ({ id: 42, participants: "[]" }), getSpeakerProfiles: () => [] };
+    assert.equal(
+      enforceRows(db, 42, [{ ...row }], { storedRows: [] })[0].speakerName,
+      undefined,
+      "ordinary new proposals do not get historical-import authority"
+    );
+  }
+});

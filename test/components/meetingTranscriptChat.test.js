@@ -388,3 +388,51 @@ test("original unnumbered mic rows show the resolved recorder and preserve named
   assert.ok(corrected.includes("Corrected"));
   assert.ok(!corrected.includes("Alice Recorder"));
 });
+
+test("run8: chat normalization keeps projected legacy, human and recorded attribution", async () => {
+  const { resolveAutomaticSpeaker } = require("../../src/helpers/automaticSpeakerAttribution");
+  const { normalizeTranscriptSegments } = require("../../src/utils/transcriptSpeakerState.ts");
+  for (const participants of [
+    null,
+    "[]",
+    "[ ]",
+    "   ",
+    "{broken",
+    "null",
+    "{}",
+    '[{"email":"a@example.com"}]',
+  ]) {
+    const rows = [
+      { id: "r", text: "Hello", speakerName: "Alice", uncertainty: { reason: "close_match" } },
+      { id: "human", text: "Human words", speakerName: "Chosen", speakerLockSource: "user" },
+      {
+        id: "recorded",
+        text: "Recorded words",
+        speakerName: "Recorded",
+        speakerDecision: {
+          decisionId: "accepted",
+          noteId: 42,
+          rosterRevision: 0,
+          source: participants == null ? "none" : "note",
+          rawRoster: participants,
+          eligibleProfileIds: [1],
+          acceptedProfileId: 1,
+          rejectionReason: null,
+        },
+      },
+    ];
+    const projected = rows.map((row) =>
+      resolveAutomaticSpeaker(row, row.speakerDecision, { id: 42, participants }, row)
+    );
+    const normalized = normalizeTranscriptSegments(projected);
+    const unrestricted = participants == null || ["[]", "[ ]"].includes(participants);
+    assert.equal(normalized[0].speakerName, unrestricted ? "Alice" : undefined);
+    if (!unrestricted) assert.equal(normalized[0].speakerReviewRequired, true);
+    assert.equal(normalized[1].speakerName, "Chosen");
+    assert.deepEqual(normalized[2].speakerDecision, rows[2].speakerDecision);
+    const html = await renderChat({ segments: projected });
+    assert.equal(html.includes("Alice"), unrestricted);
+    assert.ok(html.includes("Chosen"));
+    assert.ok(html.includes("Recorded"));
+  }
+});

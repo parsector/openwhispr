@@ -4455,7 +4455,7 @@ class DatabaseManager {
                     this,
                     Number(result.lastInsertRowid),
                     row.transcript,
-                    { path: "bulk_import", storedRows: [] }
+                    { path: "bulk_import", storedRows: [], historicalImport: true }
                   ),
                   result.lastInsertRowid
                 );

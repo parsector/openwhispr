@@ -84,3 +84,23 @@ test('run6: a new transcription identity never inherits a veto through fuzzy tex
   assert.equal(actual.find(r=>r.id==='replacement')?.speakerName,'A');
   assert.equal(actual.length,1);
 });
+
+test("run8: context-free parsing, chat normalization and serialization preserve undecided legacy attribution", () => {
+  const { parseTranscriptSegments } = require("../../src/utils/parseTranscriptSegments.ts");
+  const {
+    normalizeTranscriptSegments,
+    serializeTranscriptSegments,
+  } = require("../../src/utils/transcriptSpeakerState.ts");
+  const { readTranscriptDocument } = require("../../src/helpers/transcriptDocument");
+  for (const history of [{ uncertainty: { reason: "close_match" } }, { overlap: true }]) {
+    const row = { id: "r", text: "Hello", speakerName: "Alice", ...history };
+    const parsed = parseTranscriptSegments(JSON.stringify([row]), "note");
+    const chat = normalizeTranscriptSegments(parsed);
+    const saved = readTranscriptDocument(serializeTranscriptSegments(chat)).rows;
+    for (const actual of [parsed[0], chat[0], saved[0]]) {
+      assert.equal(actual.speakerName, "Alice");
+      assert.equal(actual.speakerDecision, undefined);
+      assert.deepEqual(actual.uncertainty, row.uncertainty);
+    }
+  }
+});

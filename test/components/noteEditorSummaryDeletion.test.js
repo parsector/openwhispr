@@ -1914,3 +1914,40 @@ test("run7: NoteEditor suppresses legacy review count for human resolution and r
     await unmount();
   }
 });
+
+test("run8: NoteEditor opens uncertain legacy names under the real note scope", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  window.requestAnimationFrame = (callback) => setTimeout(callback, 0);
+  window.cancelAnimationFrame = clearTimeout;
+  const forms = [null, "[]", "[ ]", "   ", "{broken", "null", "{}", '[{"email":"a@example.com"}]'];
+  try {
+    for (const [index, participants] of forms.entries()) {
+      const row = {
+        id: "r",
+        text: "Hello",
+        speakerName: "Alice",
+        uncertainty: { reason: "close_match" },
+      };
+      await render(undefined, {
+        note: { ...NOTE, id: index + 1, participants, transcript: JSON.stringify([row]) },
+      });
+      await click("transcript");
+      let actual;
+      walk(latest(), (node) => {
+        if (node.props.onMapSpeaker) actual = node.props.segments[0];
+      });
+      const unrestricted = index < 3;
+      assert.equal(
+        actual.speakerName,
+        unrestricted ? "Alice" : undefined,
+        JSON.stringify(participants)
+      );
+      if (!unrestricted) {
+        assert.equal(actual.speakerReviewRequired, true);
+        assert.equal(actual.speakerDecision.rejectionReason, "legacy_not_evaluated");
+      }
+    }
+  } finally {
+    await unmount();
+  }
+});

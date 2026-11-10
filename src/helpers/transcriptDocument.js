@@ -395,12 +395,14 @@ function reconcileCloudTranscript(cloudRaw, localRaw, { noteId = "unknown" } = {
       const own = rows[ownIndex];
       // A live row cannot resurrect a locally deleted row. Text changes on
       // an existing id still arrive; attribution and history remain local.
-      rows[ownIndex] = resolveAutomaticSpeaker(own, own.speakerDecision, null, {
+      // Scope validation belongs to the contextual sync installation. A text
+      // merge must preserve every local attribution field, including history.
+      rows[ownIndex] = {
         ...own,
         ...(incoming.text !== undefined && { text: incoming.text }),
         ...(incoming.timestamp !== undefined && { timestamp: incoming.timestamp }),
         ...(incoming.source !== undefined && { source: incoming.source }),
-      });
+      };
     }
   }
   return {
