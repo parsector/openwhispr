@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.13.5] - 2026-11-10
+
+### Speakers
+
+- **Automatic names stay within the note's participants.** Only people matched by email to declared participants can be named automatically; other voices stay Unknown. Manual names remain authoritative.
+- **No participants, same behaviour.** Notes without declared participants keep existing naming, including names in older transcripts and imported notes.
+- **Unassessed names go to review.** On notes with declared participants, automatic names that were never assessed appear as Unknown and are offered for review.
+- **Rejected matches leave no contact email behind.** The contact's email no longer follows a rejected match into exports or sync.
+- **Long transcripts stay responsive.** Re-evaluating speakers no longer slows down as the note grows.
+
 ## [1.13.4] - 2026-11-07
 
 ### Calibration
