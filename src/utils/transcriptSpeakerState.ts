@@ -1,3 +1,4 @@
+import { recordedNameAllowed } from "../helpers/speakerRosterPolicy";
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import { allocateUnknownNumbers, writeTranscriptDocument } from "../helpers/transcriptDocument";
 
@@ -14,6 +15,7 @@ const SPEAKER_STATE_FIELDS = [
   "speakerLocked",
   "speakerLockSource",
   "machineReason",
+  "speakerDecision",
 ] as const;
 
 type SpeakerStateField = (typeof SPEAKER_STATE_FIELDS)[number];
@@ -68,6 +70,14 @@ export const isTranscriptSpeakerLocked = (segment: TranscriptSegment) =>
   canonicalizeTranscriptSpeakerStatus(segment.speakerStatus) === "locked";
 
 export const normalizeTranscriptSegment = (segment: TranscriptSegment): TranscriptSegment => {
+  if (!recordedNameAllowed(segment))
+    segment = {
+      ...segment,
+      speakerName: undefined,
+      suggestedName: undefined,
+      suggestedProfileId: undefined,
+      speakerIsPlaceholder: true,
+    };
   const speakerStatus = pickSpeakerStatus(segment);
   const speakerLocked =
     !!segment.speakerLocked || segment.speakerLockSource === "user" || speakerStatus === "locked";
@@ -119,7 +129,8 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
   const preserveMachineName =
     existing.machineReason === "approved_voice" &&
     existing.speaker === incoming.speaker &&
-    !isTranscriptSpeakerLocked(existing);
+    !isTranscriptSpeakerLocked(existing) &&
+    !incoming.speakerDecision?.rejectionReason;
 
   for (const field of SPEAKER_STATE_FIELDS) {
     if (mergedFields[field] === undefined && existingFields[field] !== undefined) {
@@ -340,6 +351,7 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       speakerLocked: segment.speakerLocked,
       speakerLockSource: segment.speakerLockSource,
       machineReason: segment.machineReason,
+      speakerDecision: segment.speakerDecision,
     })),
     Math.max(noteHighWater, ...normalized.map((segment) => segment.unknownNumberHighWater || 0), 0)
   );
@@ -353,7 +365,8 @@ export const resolveMappedSpeakerName = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string | undefined => {
-  if (isTranscriptSpeakerLocked(segment) || segment.diarizationRunId)
+  if (!recordedNameAllowed(segment)) return undefined;
+  if (isTranscriptSpeakerLocked(segment) || segment.diarizationRunId || segment.speakerDecision)
     return segment.speakerIsPlaceholder ? undefined : segment.speakerName;
   const mapped =
     segment.speaker && !(segment.speaker === "you" && segment.recorderName)
@@ -375,8 +388,10 @@ export const resolveSegmentSpeakerName = (
   segment: TranscriptSegment,
   speakerMappings?: Record<string, string>
 ): string | undefined =>
-  resolveMappedSpeakerName(segment, speakerMappings) ||
-  (segment.speakerIsPlaceholder ? undefined : segment.speakerName);
+  recordedNameAllowed(segment)
+    ? resolveMappedSpeakerName(segment, speakerMappings) ||
+      (segment.speakerIsPlaceholder ? undefined : segment.speakerName)
+    : undefined;
 
 // Naming a speaker "You" is how the user marks their own voice. The name is
 // stored in the UI language it was saved in, so English "You" counts in every

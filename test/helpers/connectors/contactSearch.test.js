@@ -444,3 +444,38 @@ test("the note chat's lookup works without a Gmail login", async () => {
     { name: null, email: "dana@example.com" },
   ]);
 });
+
+test("roster vetoed automatic cluster cannot become an inferred attendee via a stale mapping", async () => {
+  const { createNoteAttendeesLookup } = await load();
+  const lookup = createNoteAttendeesLookup({
+    getContactLookupSources:()=>({}),getCalendarEventById:()=>null,getGmailAddress:async()=>null,
+    getSpeakerMappings:()=>[{speaker_id:"speaker_0",profile_id:3}],
+    getSpeakerProfiles:()=>[{id:3,email:"c@example.com",display_name:"C"}],
+    getNote:()=>({participants:"[]",transcript:JSON.stringify([{speaker:"speaker_0",speakerDecision:{acceptedProfileId:null,eligibleProfileIds:[],rejectionReason:"outside_roster"}}])}),
+  });
+  assert.deepEqual(await lookup({noteId:42,participants:[]}), []);
+});
+
+test("roster accepted row uses its recorded identity rather than a stale outsider mapping",async()=>{
+  const {createNoteAttendeesLookup}=await load();
+  const lookup=createNoteAttendeesLookup({
+    getContactLookupSources:()=>({}),getCalendarEventById:()=>null,getGmailAddress:async()=>null,
+    getSpeakerMappings:()=>[{speaker_id:'speaker_0',profile_id:3}],
+    getSpeakerProfiles:()=>[{id:1,email:'a@example.com',display_name:'A'},{id:3,email:'c@example.com',display_name:'C'}],
+    getNote:()=>({transcript:JSON.stringify([{speaker:'speaker_0',speakerName:'A',speakerDecision:{acceptedProfileId:1,eligibleProfileIds:[1],rejectionReason:null}}])}),
+  });
+  assert.deepEqual(await lookup({noteId:42,participants:[]}),[{name:'A',email:'a@example.com'}]);
+});
+
+test("roster explicit Unknown locks prevent stale mappings becoming attendance",async()=>{
+  const {createNoteAttendeesLookup}=await load();
+  for(const lock of [{speakerLocked:true},{speakerLockSource:'user'},{speakerStatus:'locked'},{speakerStatus:'user_locked'}]){
+    const lookup=createNoteAttendeesLookup({
+      getContactLookupSources:()=>({}),getCalendarEventById:()=>null,getGmailAddress:async()=>null,
+      getSpeakerMappings:()=>[{speaker_id:'speaker_0',profile_id:3}],
+      getSpeakerProfiles:()=>[{id:3,email:'c@example.com',display_name:'C'}],
+      getNote:()=>({transcript:JSON.stringify([{speaker:'speaker_0',speakerIsPlaceholder:true,...lock}])}),
+    });
+    assert.deepEqual(await lookup({noteId:42,participants:[]}),[]);
+  }
+});

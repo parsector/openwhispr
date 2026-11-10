@@ -3687,7 +3687,10 @@
       "addAttendees": "Teilnehmer hinzufügen",
       "addPlaceholder": "Teilnehmer hinzufügen...",
       "typeEmail": "E-Mail eingeben zum Hinzufügen...",
-      "me": "(ich)"
+      "me": "(ich)",
+      "recognitionScope": "Dieses Meeting führt {{participants}} auf. Deshalb können nur diese Personen automatisch erkannt werden. Andere oder unsichere Stimmen bleiben unbekannt und können jederzeit manuell benannt werden.",
+      "recognitionGlobal": "Diese Notiz führt keine Teilnehmer auf. Jede bekannte Stimme kann wie bisher automatisch benannt werden. Stimmen können jederzeit manuell benannt werden.",
+      "recognitionUnavailable": "Für diese Teilnehmerliste ist keine automatische Erkennung möglich. Stimmen bleiben unbekannt und können jederzeit manuell benannt werden."
     },
     "eventLink": {
       "selectEvent": "Kalenderereignis auswählen",

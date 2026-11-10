@@ -3268,7 +3268,10 @@
       "addAttendees": "Agregar asistentes",
       "addPlaceholder": "Agregar asistentes...",
       "typeEmail": "Escribe un correo para agregar...",
-      "me": "(yo)"
+      "me": "(yo)",
+      "recognitionScope": "Esta reunión incluye a {{participants}}, por lo que solo estas personas pueden reconocerse automáticamente. Las demás voces o las dudosas permanecen como desconocidas y siempre puedes nombrarlas manualmente.",
+      "recognitionGlobal": "Esta nota no incluye participantes. Cualquier voz conocida puede nombrarse automáticamente, como hasta ahora. Siempre puedes nombrar las voces manualmente.",
+      "recognitionUnavailable": "El reconocimiento automático no está disponible para esta lista de participantes. Las voces permanecen como desconocidas y siempre puedes nombrarlas manualmente."
     },
     "eventLink": {
       "selectEvent": "Seleccionar evento del calendario",

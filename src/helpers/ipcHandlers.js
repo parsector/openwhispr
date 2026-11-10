@@ -1,3 +1,5 @@
+const speakerScope = require("./noteSpeakerScope");
+const rosterPolicy = require("./speakerRosterPolicy");
 const { textLength } = require("./logRedaction");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
@@ -7871,6 +7873,7 @@ class IPCHandlers {
         findContacts: (query) =>
           searchContacts(this.databaseManager.getContactLookupSources(), query),
         noteAttendees: createNoteAttendeesLookup({
+          getNote: (id) => this.databaseManager.getNote(id),
           getContactLookupSources: () => this.databaseManager.getContactLookupSources(),
           getCalendarEventById: (id) => this.databaseManager.getCalendarEventById(id),
           getSpeakerMappings: (noteId) => this.databaseManager.getSpeakerMappings(noteId),
@@ -10055,7 +10058,7 @@ class IPCHandlers {
             const enrichedIdentification = {
               ...identification,
               displayName,
-              suggestedName: meetingOneOnOneAttendee?.displayName,
+              suggestedName: undefined,
               startTime,
               endTime,
             };
@@ -10072,11 +10075,10 @@ class IPCHandlers {
               ) {
                 const patch = {
                   speaker: identification.speakerId,
-                  speakerName: identification.uncertainty
-                    ? undefined
-                    : displayName || seg.speakerName,
+                  speakerName: identification.uncertainty ? undefined : displayName || undefined,
                   speakerIsPlaceholder: !displayName,
-                  suggestedName: meetingOneOnOneAttendee?.displayName,
+                  suggestedName: undefined,
+                  speakerDecision: identification.speakerDecision,
                   uncertainty: identification.uncertainty,
                 };
                 if (cohort === "mic") applyProvisionalSpeaker(seg, patch);
@@ -10087,6 +10089,7 @@ class IPCHandlers {
           },
           {
             getSpeakerProfiles: getLiveSpeakerProfiles,
+            getSpeakerScope: () => speakerScope.readScope(this.databaseManager, meetingNoteId),
             onEvidenceChanged: () => {
               if (
                 meetingNoteId != null &&
@@ -10125,12 +10128,14 @@ class IPCHandlers {
           const merges = await liveSpeakerIdentifier.recluster();
           if (!merges.length) return;
 
-          for (const { keep, remove, displayName } of merges) {
+          for (const { keep, remove, displayName, speakerDecision } of merges) {
             for (const seg of meetingDiarizationSegments) {
               if (seg.speaker === remove) {
                 if (!canAutoRelabelSpeaker(seg)) continue;
                 seg.speaker = keep;
-                if (displayName) seg.speakerName = displayName;
+                seg.speakerName = displayName || undefined;
+                seg.speakerIsPlaceholder = !displayName;
+                seg.speakerDecision = speakerDecision;
               }
             }
           }
@@ -14930,149 +14935,135 @@ class IPCHandlers {
     return evidence;
   }
 
-  _retroactiveMapping(profile) {
+  _retroactiveMapping(profile, onlyNoteId = null) {
     if (!profile.embedding?.length || profile.sample_count === 0) return;
-    setImmediate(async () => {
+    setImmediate(() => {
       try {
-        const speakerEmbeddings = require("./speakerEmbeddings");
-        const noteIds = this.databaseManager.getNotesWithUnmappedSpeakers();
-
-        const profileEmb = new Float32Array(
-          profile.embedding.buffer,
-          profile.embedding.byteOffset,
-          profile.embedding.byteLength / 4
-        );
-
-        for (const noteId of noteIds) {
-          const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
-          const existing = this.databaseManager.getSpeakerMappings(noteId);
-          const mappedSpeakers = new Set(existing.map((m) => m.speaker_id));
-          for (const emb of embeddings) {
-            if (mappedSpeakers.has(emb.speaker_id)) continue;
-
-            const speakerEmb = new Float32Array(
+        const embeddings = require("./speakerEmbeddings");
+        const profiles = this.databaseManager.getSpeakerProfiles(true);
+        for (const noteId of onlyNoteId != null
+          ? [onlyNoteId]
+          : this.databaseManager.getNotesWithUnmappedSpeakers()) {
+          const scope = speakerScope.readScope(this.databaseManager, noteId, profiles);
+          const note = this.databaseManager.getNote(noteId);
+          if (!note?.transcript) continue;
+          const doc = require("./transcriptDocument").readTranscriptDocument(note.transcript);
+          let changed = false;
+          for (const emb of this.databaseManager.getNoteSpeakerEmbeddings(noteId)) {
+            const vector = new Float32Array(
               emb.embedding.buffer,
               emb.embedding.byteOffset,
               emb.embedding.byteLength / 4
             );
-            const similarity = speakerEmbeddings.cosineSimilarity(profileEmb, speakerEmb);
-
-            if (similarity > 0.6) {
-              const note = this.databaseManager.getNote(noteId);
-              if (note?.transcript) {
-                try {
-                  const segments = require("./transcriptDocument").readTranscriptDocument(
-                    note.transcript
-                  ).rows;
-                  let changed = false;
-                  for (const seg of segments) {
-                    if (seg.speaker === emb.speaker_id && !seg.speakerName) {
-                      if (canAutoRelabelSpeaker(seg)) {
-                        applySuggestedSpeaker(seg, {
-                          suggestedName: profile.display_name,
-                          suggestedProfileId: profile.id,
-                        });
-                        changed = true;
-                      }
-                    }
-                  }
-                  if (changed) {
-                    this.databaseManager.updateNote(noteId, {
-                      transcript: require("./transcriptDocument").writeTranscriptDocument(
-                        segments,
-                        require("./transcriptDocument").readTranscriptDocument(note.transcript)
-                          .unknownNumberHighWater
-                      ),
-                    });
-                  }
-                } catch (_) {}
-              }
+            const ranked = profiles
+              .map((p) => ({
+                profile: p,
+                score: embeddings.cosineSimilarity(
+                  vector,
+                  new Float32Array(
+                    p.embedding.buffer,
+                    p.embedding.byteOffset,
+                    p.embedding.byteLength / 4
+                  )
+                ),
+              }))
+              .sort((a, b) => b.score - a.score);
+            const best = ranked[0];
+            if (best?.profile.id !== profile.id) continue;
+            const reason = require("./speakerUncertainty").matchReason(
+              { name: best.profile.display_name, score: best.score },
+              ranked[1] && { name: ranked[1].profile.display_name, score: ranked[1].score }
+            );
+            for (const row of doc.rows) {
+              if (row.speaker !== emb.speaker_id || row.speakerName || isSpeakerLocked(row))
+                continue;
+              const allowed = rosterPolicy.mayAutoName(row, best.profile, scope, {
+                acousticAccepted: best.score > 0.6 && !reason,
+              });
+              const evidence = speakerScope.decision(scope, {
+                runId: row.diarizationRunId,
+                path: "retroactive",
+                profile: best.profile,
+                profiles,
+                scores: { best: best.score, runnerUp: ranked[1]?.score ?? 0 },
+                rejectionReason: allowed ? null : "retroactive_rejected",
+              });
+              if (allowed)
+                applySuggestedSpeaker(row, {
+                  suggestedName: profile.display_name,
+                  suggestedProfileId: profile.id,
+                  speakerDecision: evidence,
+                });
+              else speakerScope.veto(row, evidence);
+              changed = true;
             }
           }
+          if (changed)
+            this.databaseManager.updateNote(
+              noteId,
+              {
+                transcript: require("./transcriptDocument").writeTranscriptDocument(
+                  doc.rows,
+                  doc.unknownNumberHighWater
+                ),
+              },
+              { reconcileTranscript: true }
+            );
         }
-      } catch (err) {
-        debugLogger.warn("Retroactive speaker mapping failed", { error: err.message });
+      } catch (error) {
+        debugLogger.warn("Retroactive speaker mapping failed", { error: error.message });
       }
     });
   }
 
   _tryAutoLabelOneOnOne(noteId) {
-    setImmediate(async () => {
-      try {
-        const note = this.databaseManager.getNote(noteId);
-        const other = this._resolveOneOnOneOtherParticipant(note?.participants);
-        if (!other) return;
-        const { displayName, email } = other;
-
-        const embeddings = this.databaseManager.getNoteSpeakerEmbeddings(noteId);
-        if (!embeddings.length) return;
-
-        const existingMappings = this.databaseManager.getSpeakerMappings(noteId);
-        const mappedSpeakers = new Set(existingMappings.map((m) => m.speaker_id));
-
-        const transcript = note.transcript
-          ? require("./transcriptDocument").readTranscriptDocument(note.transcript).rows
-          : [];
-        const systemSpeakers = new Set(
-          transcript.filter((s) => s.source !== "mic" && s.speaker).map((s) => s.speaker)
-        );
-
-        const unmapped = embeddings.filter(
-          (e) => !mappedSpeakers.has(e.speaker_id) && systemSpeakers.has(e.speaker_id)
-        );
-        if (!unmapped.length) return;
-
-        const unmappedSystemSpeakers = new Set(unmapped.map((e) => e.speaker_id));
-        let changed = false;
-        for (const seg of transcript) {
-          if (!unmappedSystemSpeakers.has(seg.speaker)) continue;
-          if (seg.speakerName && !seg.speakerIsPlaceholder) continue;
-          if (!canAutoRelabelSpeaker(seg)) continue;
-          applySuggestedSpeaker(seg, { suggestedName: displayName });
-          changed = true;
-        }
-
-        if (changed) {
-          this.databaseManager.updateNote(noteId, {
-            transcript: require("./transcriptDocument").writeTranscriptDocument(
-              transcript,
-              require("./transcriptDocument").readTranscriptDocument(note.transcript)
-                .unknownNumberHighWater
-            ),
-          });
-          const updated = this.databaseManager.getNote(noteId);
-          if (updated) broadcastToWindows("note-updated", updated);
-        }
-
-        debugLogger.info(
-          "Suggested 1-on-1 meeting speakers",
-          { noteId, displayName, speakerCount: unmapped.length },
-          "speaker"
-        );
-      } catch (err) {
-        debugLogger.warn("Auto-label 1-on-1 failed", { noteId, error: err.message }, "speaker");
-      }
-    });
+    const scope = speakerScope.readScope(this.databaseManager, noteId);
+    const profiles = this.databaseManager.getSpeakerProfiles?.(true) || [];
+    for (const profile of profiles)
+      if (rosterPolicy.eligible(scope, profile.id)) this._retroactiveMapping(profile, noteId);
   }
 
-  _applySpeakerName(segments, speakerId, displayName) {
-    if (!displayName) {
-      return;
-    }
-
+  _applySpeakerName(segments, speakerId, displayName, context = {}) {
+    const { profile, scope, runId, evidence } = context;
+    const current = speakerScope.readScope(this.databaseManager, scope?.noteId);
     for (const segment of segments) {
-      if (segment.speaker !== speakerId) {
+      if (segment.speaker !== speakerId || isSpeakerLocked(segment)) continue;
+      const allowed =
+        rosterPolicy.mayAutoName(segment, profile, scope, {
+          acousticAccepted: !!displayName && !evidence?.rejectionReason,
+          currentRevision: current.revision,
+        }) &&
+        (!evidence || evidence.revision === current.revision);
+      if (!allowed) {
+        speakerScope.veto(
+          segment,
+          speakerScope.decision(current, {
+            runId,
+            path: "live_reconciliation",
+            profile,
+            profiles: profile ? [profile] : [],
+            rejectionReason:
+              evidence?.revision && evidence.revision !== current.revision
+                ? "roster_changed"
+                : "reconciliation_rejected",
+          })
+        );
         continue;
       }
-
-      // A stop-time label already attached to this row outranks the live pass.
       if (segment.speakerName) continue;
-
       applyConfirmedSpeaker(segment, {
         speakerName: displayName,
         speakerIsPlaceholder: false,
         suggestedName: undefined,
         suggestedProfileId: undefined,
+        speakerDecision:
+          evidence ||
+          speakerScope.decision(scope, {
+            runId,
+            path: "live_reconciliation",
+            profile,
+            profiles: [profile],
+          }),
       });
     }
   }
@@ -15094,6 +15085,8 @@ class IPCHandlers {
         displayName: data?.displayName || null,
         profileId: data?.profileId ?? null,
         noteId: data?.noteId ?? null,
+        speakerDecision: data?.speakerDecision,
+        humanAssigned: data?.humanAssigned,
         embedding: Array.isArray(data?.embedding) ? new Float32Array(data.embedding) : null,
       }))
       .filter((entry) => entry.embedding);
@@ -15152,7 +15145,7 @@ class IPCHandlers {
         if (hasLockedRow || allAbstained || finalNameDiffers || existingTarget) {
           continue;
         }
-        if (liveMapping) {
+        if (liveMapping && (bestEntry.humanAssigned || !bestEntry.speakerDecision)) {
           displayName = liveMapping.display_name || displayName;
           profileId = liveMapping.profile_id ?? profileId;
           this.databaseManager.transferLegacySpeakerMapping(
@@ -15165,7 +15158,15 @@ class IPCHandlers {
         }
       }
 
-      this._applySpeakerName(enrichedSegments, mappedId, displayName);
+      const scope = speakerScope.readScope(this.databaseManager, bestEntry.noteId);
+      const profiles = this.databaseManager.getSpeakerProfiles?.(true) || [];
+      const profile = profiles.find((p) => p.id === profileId);
+      this._applySpeakerName(enrichedSegments, mappedId, displayName, {
+        profile,
+        scope,
+        evidence: bestEntry.speakerDecision,
+        runId: bestEntry.speakerDecision?.runId,
+      });
     }
 
     return reconciledSpeakers;
@@ -15241,6 +15242,7 @@ class IPCHandlers {
     retractedSegments = [],
     otherTrackAudio = null
   ) {
+    const recognitionScope = speakerScope.readScope(this.databaseManager, noteId);
     const startMs =
       (Number.isFinite(audioStartedAt) && audioStartedAt) ||
       transcriptSegments.find((segment) => segment.source === diarizedSource)?.timestamp ||
@@ -15302,6 +15304,38 @@ class IPCHandlers {
       ...transcriptSegments.filter((_, index) => isEchoDuplicate(index)),
     ].map(({ text, source, timestamp }) => ({ text, source, timestamp }));
     const send = (payload, evidence = { clusters: 0, vectorsWritten: 0, cause: null }) => {
+      if (payload.segments) {
+        // Re-read human decisions after every await, including failed/skip paths.
+        const saved = this.databaseManager?.getNote?.(noteId);
+        const locked = new Map(
+          require("./transcriptDocument")
+            .readTranscriptDocument(saved?.transcript)
+            .rows.filter(isSpeakerLocked)
+            .map((row) => [row.id, row])
+        );
+        payload.segments = payload.segments.map((row) => {
+          const own = locked.get(row.id) || locked.get(row.parentRowId);
+          return own
+            ? {
+                ...row,
+                speaker: own.speaker,
+                speakerName: own.speakerName,
+                speakerIsPlaceholder: own.speakerIsPlaceholder,
+                suggestedName: own.suggestedName,
+                suggestedProfileId: own.suggestedProfileId,
+                speakerLocked: true,
+                speakerStatus: "locked",
+                speakerLockSource: "user",
+              }
+            : row;
+        });
+        speakerScope.enforceRows(this.databaseManager, noteId, payload.segments, {
+          runId: sessionId,
+          path: "final_commit",
+          scope: recognitionScope,
+          includeUnrecorded: true,
+        });
+      }
       debugLogger.info(
         "Meeting speaker centroid completion",
         JSON.stringify({
@@ -15670,6 +15704,28 @@ class IPCHandlers {
                   }
                 }
 
+                const eligibleWinner = rosterPolicy.eligible(recognitionScope, bestProfile?.id);
+                const rawEvidence = speakerScope.decision(recognitionScope, {
+                  runId: sessionId,
+                  path: "final",
+                  profile: bestProfile,
+                  profiles,
+                  scores: { best: bestSim, runnerUp: runnerUpSim },
+                  rejectionReason: !eligibleWinner
+                    ? "outside_roster"
+                    : bestProfile?.voice_usable !== 1
+                      ? "voice_not_approved"
+                      : null,
+                });
+                for (const seg of enrichedSegments)
+                  if (seg.speaker === mappedId && !isSpeakerLocked(seg))
+                    seg.speakerDecision = rawEvidence;
+                if (!eligibleWinner || bestProfile?.voice_usable !== 1) {
+                  for (const seg of enrichedSegments)
+                    if (seg.speaker === mappedId) speakerScope.veto(seg, rawEvidence);
+                  continue;
+                }
+
                 const cohort = require("./speakerCohortNormalization").rankProfiles(
                   emb,
                   Object.entries(speakerEmbeddingsMap)
@@ -15699,7 +15755,27 @@ class IPCHandlers {
                       seg.speakerName = undefined;
                       seg.speakerIsPlaceholder = true;
                       seg.speakerStatus = "provisional";
-                      if (cohort.cohortBest.raw > 0.5)
+                      const cohortProfile = profiles.find((p) => p.id === cohort.cohortBest.id);
+                      const allowed = rosterPolicy.mayAutoName(
+                        seg,
+                        cohortProfile,
+                        recognitionScope,
+                        { acousticAccepted: cohort.cohortBest.raw > 0.5 }
+                      );
+                      seg.speakerDecision = speakerScope.decision(recognitionScope, {
+                        runId: sessionId,
+                        path: "final_cohort",
+                        profile: cohortProfile,
+                        profiles,
+                        scores: {
+                          raw: cohort.cohortBest.raw,
+                          normalized: cohort.cohortBest.normalized,
+                        },
+                        rejectionReason: allowed ? null : "cohort_rejected",
+                      });
+                      seg.suggestedName = undefined;
+                      seg.suggestedProfileId = undefined;
+                      if (allowed)
                         applySuggestedSpeaker(seg, {
                           suggestedName: cohort.cohortBest.display_name,
                           suggestedProfileId: cohort.cohortBest.id,
@@ -15729,6 +15805,18 @@ class IPCHandlers {
                       seg.speakerName = undefined;
                       seg.speakerIsPlaceholder = true;
                       seg.speakerStatus = "provisional";
+                      seg.suggestedName = undefined;
+                      seg.suggestedProfileId = undefined;
+                      seg.speakerDecision = {
+                        ...rawEvidence,
+                        acceptedProfileId: null,
+                        rejectionReason: reason.reason,
+                      };
+                      if (
+                        seg.uncertainty?.candidates &&
+                        !rosterPolicy.eligible(recognitionScope, runnerUp?.id)
+                      )
+                        seg.uncertainty = { reason: seg.uncertainty.reason };
                     }
                   }
                   continue;
@@ -15740,7 +15828,12 @@ class IPCHandlers {
                   bestProfile.voice_usable === 1
                 ) {
                   for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId && seg.uncertainty?.reason !== "too_short") {
+                    if (
+                      seg.speaker === mappedId &&
+                      rosterPolicy.mayAutoName(seg, bestProfile, recognitionScope, {
+                        acousticAccepted: true,
+                      })
+                    ) {
                       applyConfirmedSpeaker(seg, {
                         speakerName: bestProfile.display_name,
                         speakerIsPlaceholder: false,
@@ -15750,7 +15843,7 @@ class IPCHandlers {
                       seg.speakerAssessmentAvailable = true;
                     }
                   }
-                } else if (bestProfile && bestSim > 0.5) {
+                } else if (bestProfile && bestSim > 0.5 && bestProfile.voice_usable === 1) {
                   for (const seg of enrichedSegments) {
                     if (seg.speaker === mappedId && seg.uncertainty?.reason !== "too_short") {
                       if (isSpeakerLocked(seg)) {

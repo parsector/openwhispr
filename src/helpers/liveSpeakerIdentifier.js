@@ -1,4 +1,6 @@
 const fs = require("fs");
+const rosterPolicy = require("./speakerRosterPolicy");
+const speakerScope = require("./noteSpeakerScope");
 const debugLogger = require("./debugLogger");
 const speakerEmbeddings = require("./speakerEmbeddings");
 const { MAX_EMBEDDING_SECONDS } = speakerEmbeddings;
@@ -179,6 +181,9 @@ class LiveSpeakerIdentifier {
     this.queue = Promise.resolve();
     this.onSpeakerIdentified = null;
     this.getSpeakerProfiles = null;
+    this.getSpeakerScope = null;
+    this.transientDecisions = new Map();
+    this.humanClusters = new Set();
     this.pcmRemainder = Buffer.alloc(0);
     this.audioRemainder = new Float32Array(0);
     this.vadStateInputs = [];
@@ -190,6 +195,8 @@ class LiveSpeakerIdentifier {
     this.sampleCursor = 0;
     this.segmentStartSample = 0;
     this.segmentEndSample = 0;
+    this.transientDecisions = new Map();
+    this.humanClusters = new Set();
     this.transientEmbeddings = new Map();
     this.transientCounts = new Map();
     this.transientDisplayNames = new Map();
@@ -227,6 +234,7 @@ class LiveSpeakerIdentifier {
   }
 
   getTransientState() {
+    this._revalidateNames();
     const state = {};
 
     for (const [speakerId, embedding] of this.transientEmbeddings.entries()) {
@@ -236,6 +244,8 @@ class LiveSpeakerIdentifier {
         profileId: this.transientProfileIds.get(speakerId) ?? null,
         noteId: this.transientNoteIds.get(speakerId) ?? null,
         cohort: this.transientCohorts.get(speakerId) || "system",
+        speakerDecision: this.transientDecisions.get(speakerId),
+        humanAssigned: this.humanClusters.has(speakerId),
       };
     }
 
@@ -268,11 +278,22 @@ class LiveSpeakerIdentifier {
     if (this.clusterEligibility.get(speakerId) !== "eligible-unmatched") return null;
     const centroid = this.transientEmbeddings.get(speakerId);
     if (!centroid) return null;
-    let profiles;
+    let profiles = [];
+    const rejected = (reason, best = null, runnerUp = 0) => ({
+      reason,
+      speakerDecision: speakerScope.decision(this._scope(), {
+        runId: this.activeRunId,
+        path: "live_reconsideration",
+        profile: best?.profile,
+        profiles,
+        scores: best ? { best: best.similarity, runnerUp } : null,
+        rejectionReason: reason,
+      }),
+    });
     try {
       profiles = this.getSpeakerProfiles?.() || [];
     } catch {
-      return { reason: "profile_unavailable" };
+      return rejected("profile_unavailable");
     }
     const ranked = profiles
       .filter((profile) => profile.voice_usable === 1 && profile.embedding)
@@ -289,7 +310,7 @@ class LiveSpeakerIdentifier {
       }))
       .sort((a, b) => b.similarity - a.similarity);
     const best = ranked[0];
-    if (!best || best.similarity < matchFloor()) return { reason: "no_match" };
+    if (!best || best.similarity < matchFloor()) return rejected("no_match", best);
     let runnerUp = ranked[1]?.similarity || 0;
     for (const [id, other] of this.transientEmbeddings)
       if (
@@ -298,8 +319,20 @@ class LiveSpeakerIdentifier {
           (this.transientCohorts.get(speakerId) || "system")
       )
         runnerUp = Math.max(runnerUp, speakerEmbeddings.cosineSimilarity(centroid, other));
-    if (best.similarity - runnerUp < anchorMargin()) return { reason: "close_match" };
-    return { profile: best.profile };
+    if (best.similarity - runnerUp < anchorMargin()) return rejected("close_match", best, runnerUp);
+    const scope = this._scope();
+    const accepted = rosterPolicy.eligible(scope, best.profile.id);
+    const evidence = speakerScope.decision(scope, {
+      runId: this.activeRunId,
+      path: "live_reconsideration",
+      profile: best.profile,
+      profiles,
+      scores: { best: best.similarity, runnerUp },
+      rejectionReason: accepted ? null : "outside_roster",
+    });
+    return accepted
+      ? { profile: best.profile, speakerDecision: evidence }
+      : { reason: "outside_roster", speakerDecision: evidence };
   }
 
   hasActiveAnchor(noteId, runId) {
@@ -334,7 +367,12 @@ class LiveSpeakerIdentifier {
       const profile = profiles.find(
         (item) => item.id === anchor.profileId && item.voice_usable === 1
       );
-      if (!profile?.embedding || !Buffer.from(profile.embedding).equals(anchor.profileBytes)) {
+      if (
+        !rosterPolicy.eligible(this._scope(), anchor.profileId) ||
+        anchor.revision !== this._scope().revision ||
+        !profile?.embedding ||
+        !Buffer.from(profile.embedding).equals(anchor.profileBytes)
+      ) {
         this.invalidateAnchor(id);
         removed.push(id);
       }
@@ -371,8 +409,7 @@ class LiveSpeakerIdentifier {
       )
     )
       return refused("not_current_meeting");
-    if (rows.some((row) => row.speakerLocked || row.speakerLockSource === "user"))
-      return refused("locked");
+    if (rows.some(rosterPolicy.humanProtected)) return refused("locked");
     if (rows.some((row) => row.overlap || row.uncertainty?.reason === "overlapping_speech"))
       return refused("overlapping");
     if (
@@ -387,6 +424,7 @@ class LiveSpeakerIdentifier {
     }
     const profile = profiles.find((item) => item.id === profileId && item.voice_usable === 1);
     if (!profile) return refused("not_graduated");
+    if (!rosterPolicy.eligible(this._scope(), profileId)) return refused("outside_roster");
     if (
       (this.transientVoicedSamples.get(speakerId) || 0) < anchorMinSamples() ||
       (this.transientObservations.get(speakerId) || 0) < 2
@@ -416,6 +454,7 @@ class LiveSpeakerIdentifier {
       noteId,
       cohort,
       profileBytes: Buffer.from(profile.embedding),
+      revision: this._scope().revision,
     });
     this.clusterEligibility.set(speakerId, "anchored");
     return state;
@@ -427,6 +466,7 @@ class LiveSpeakerIdentifier {
     const {
       onSpeakerIdentified = null,
       getSpeakerProfiles = null,
+      getSpeakerScope = null,
       onEvidenceChanged = null,
       maxSpeakers = MAX_SPEAKER_COUNT,
       enabled = true,
@@ -436,6 +476,7 @@ class LiveSpeakerIdentifier {
     this.onSpeakerIdentified =
       typeof onSpeakerIdentified === "function" ? onSpeakerIdentified : null;
     this.getSpeakerProfiles = typeof getSpeakerProfiles === "function" ? getSpeakerProfiles : null;
+    this.getSpeakerScope = typeof getSpeakerScope === "function" ? getSpeakerScope : null;
     this.onEvidenceChanged = typeof onEvidenceChanged === "function" ? onEvidenceChanged : null;
     this.maxSpeakers = clampMaxSpeakers(maxSpeakers);
     this.enabled = enabled !== false;
@@ -473,6 +514,9 @@ class LiveSpeakerIdentifier {
     this._resetMeetingState();
     this.onSpeakerIdentified = null;
     this.getSpeakerProfiles = null;
+    this.getSpeakerScope = null;
+    this.transientDecisions = new Map();
+    this.humanClusters = new Set();
     this.onEvidenceChanged = null;
     return transientState;
   }
@@ -489,6 +533,7 @@ class LiveSpeakerIdentifier {
     const speakers = [...this.transientEmbeddings.entries()];
     if (speakers.length < 2) return [];
 
+    this._revalidateNames();
     const merges = [];
     const removed = new Set();
 
@@ -565,6 +610,9 @@ class LiveSpeakerIdentifier {
 
         if (!this.transientDisplayNames.get(keepId) && this.transientDisplayNames.get(removeId)) {
           this.transientDisplayNames.set(keepId, this.transientDisplayNames.get(removeId));
+          if (this.humanClusters.has(removeId)) this.humanClusters.add(keepId);
+          if (this.transientDecisions.has(removeId))
+            this.transientDecisions.set(keepId, this.transientDecisions.get(removeId));
         }
         this.transientDisplayNames.delete(removeId);
 
@@ -583,10 +631,36 @@ class LiveSpeakerIdentifier {
         }
 
         removed.add(removeId);
+        const scope = this._scope();
+        const profileId = this.transientProfileIds.get(keepId);
+        let evidence = this.transientDecisions.get(keepId);
+        let displayName = this.transientDisplayNames.get(keepId) || null;
+        if (this.humanClusters.has(keepId)) {
+          // The corrected rows keep their lock. Merging a different cluster
+          // does not extend that human decision to its previously unnamed rows.
+          let profiles = [];
+          try {
+            profiles = this.getSpeakerProfiles?.() || [];
+          } catch {
+            /* fail closed */
+          }
+          const profile = profiles.find((item) => item.id === profileId);
+          const allowed = rosterPolicy.mayAutoName({}, profile, scope, { acousticAccepted: true });
+          evidence = speakerScope.decision(scope, {
+            runId: this.activeRunId,
+            path: "live_merge",
+            profile,
+            profiles,
+            scores: { similarity },
+            rejectionReason: allowed ? null : "outside_roster",
+          });
+          if (!allowed) displayName = null;
+        }
         merges.push({
           keep: keepId,
           remove: removeId,
-          displayName: this.transientDisplayNames.get(keepId) || null,
+          displayName,
+          speakerDecision: evidence,
           similarity,
         });
 
@@ -629,7 +703,7 @@ class LiveSpeakerIdentifier {
     this.enabled = enabled !== false;
   }
 
-  mapSpeaker(liveId, profileId, displayName, noteId) {
+  mapSpeaker(liveId, profileId, displayName, noteId, automaticDecision = null) {
     if (!liveId || !this.transientEmbeddings.has(liveId)) {
       // Labeling a speaker in a past note routes here with no live session, so
       // only an active session losing a mapping is worth flagging.
@@ -642,6 +716,11 @@ class LiveSpeakerIdentifier {
       }
       return false;
     }
+
+    if (automaticDecision) {
+      this.humanClusters.delete(liveId);
+      this.transientDecisions.set(liveId, automaticDecision);
+    } else this.humanClusters.add(liveId);
 
     if (profileId != null) {
       this.transientProfileIds.set(liveId, profileId);
@@ -662,6 +741,8 @@ class LiveSpeakerIdentifier {
 
   unmapSpeaker(liveId, noteId) {
     if (noteId != null && this.transientNoteIds.get(liveId) !== noteId) return false;
+    this.humanClusters.delete(liveId);
+    this.transientDecisions.delete(liveId);
     this.transientDisplayNames.delete(liveId);
     this.transientProfileIds.delete(liveId);
     this.transientNoteIds.delete(liveId);
@@ -765,6 +846,8 @@ class LiveSpeakerIdentifier {
     this.sampleCursor = 0;
     this.segmentStartSample = 0;
     this.segmentEndSample = 0;
+    this.transientDecisions = new Map();
+    this.humanClusters = new Set();
     this.transientEmbeddings = new Map();
     this.transientCounts = new Map();
     this.transientDisplayNames = new Map();
@@ -1017,6 +1100,7 @@ class LiveSpeakerIdentifier {
       speakerId: resolved.speakerId,
       displayName: resolved.displayName || null,
       uncertainty: resolved.uncertainty,
+      speakerDecision: resolved.speakerDecision,
       startTime: Math.max(0, this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS),
       endTime: this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS,
     });
@@ -1049,12 +1133,7 @@ class LiveSpeakerIdentifier {
     }
 
     const speakerId = resolved.speakerId;
-    const displayName = resolved.uncertainty
-      ? null
-      : resolved.displayName ||
-        this.currentSegmentSpeakerName ||
-        this.transientDisplayNames.get(speakerId) ||
-        null;
+    const displayName = resolved.uncertainty ? null : resolved.displayName || null;
 
     if (this.enabled) {
       this.onSpeakerIdentified?.({
@@ -1062,6 +1141,7 @@ class LiveSpeakerIdentifier {
         speakerId,
         displayName,
         uncertainty: resolved.uncertainty,
+        speakerDecision: resolved.speakerDecision,
         startTime: Math.max(0, this.segmentStartSample / SAMPLE_RATE - LIVE_WINDOW_PADDING_SECONDS),
         endTime: this.segmentEndSample / SAMPLE_RATE + LIVE_WINDOW_PADDING_SECONDS,
       });
@@ -1130,12 +1210,92 @@ class LiveSpeakerIdentifier {
       }
     }
 
-    return bestSimilarity >= matchFloor() && bestSimilarity - secondBestSimilarity >= matchMargin()
-      ? bestProfile
-      : null;
+    const acousticAccepted =
+      bestSimilarity >= matchFloor() && bestSimilarity - secondBestSimilarity >= matchMargin();
+    const scope = this._scope();
+    const accepted =
+      acousticAccepted &&
+      rosterPolicy.eligible(scope, bestProfile?.id) &&
+      bestProfile?.voice_usable === 1;
+    this.lastProfileDecision = speakerScope.decision(scope, {
+      runId: this.activeRunId,
+      path: "live",
+      profile: bestProfile,
+      profiles,
+      scores: { best: bestSimilarity, runnerUp: secondBestSimilarity },
+      rejectionReason: accepted
+        ? null
+        : !acousticAccepted
+          ? "acoustic_rejected"
+          : !rosterPolicy.eligible(scope, bestProfile?.id)
+            ? "outside_roster"
+            : "voice_not_approved",
+    });
+    return accepted ? bestProfile : null;
+  }
+
+  _scope() {
+    try {
+      return this.getSpeakerScope?.() || rosterPolicy.resolveSpeakerRoster(null, null);
+    } catch {
+      return rosterPolicy.resolveSpeakerRoster(null, null);
+    }
+  }
+
+  _revalidateNames() {
+    const scope = this._scope();
+    for (const [id] of this.transientDisplayNames) {
+      if (this.humanClusters.has(id)) continue;
+      const evidence = this.transientDecisions.get(id);
+      if (
+        !rosterPolicy.eligible(scope, this.transientProfileIds.get(id)) ||
+        (evidence && evidence.revision !== scope.revision)
+      ) {
+        this.transientDisplayNames.delete(id);
+        this.transientProfileIds.delete(id);
+        this.invalidateAnchor(id);
+        if (this.currentSegmentSpeakerId === id) this.currentSegmentSpeakerName = null;
+        this.transientDecisions.set(
+          id,
+          speakerScope.decision(scope, {
+            runId: this.activeRunId,
+            path: "live_carry_forward",
+            rejectionReason: "roster_changed",
+          })
+        );
+      }
+    }
   }
 
   _resolveSpeakerForEmbedding(embedding, options = {}) {
+    this._revalidateNames();
+    this.lastProfileDecision = null;
+    const result = this._resolveSpeakerForEmbeddingUnchecked(embedding, options);
+    if (this.humanClusters.has(result.speakerId)) return result;
+    const scope = this._scope();
+    let evidence = this.lastProfileDecision || this.transientDecisions.get(result.speakerId);
+    if (!evidence)
+      evidence = speakerScope.decision(scope, {
+        runId: this.activeRunId,
+        path: "live_carry_forward",
+        rejectionReason: "no_match",
+      });
+    this.transientDecisions.set(result.speakerId, evidence);
+    if (scope.noteId != null) this.transientNoteIds.set(result.speakerId, scope.noteId);
+    if (
+      !rosterPolicy.eligible(scope, this.transientProfileIds.get(result.speakerId)) ||
+      evidence.revision !== scope.revision ||
+      evidence.rejectionReason
+    ) {
+      result.displayName = null;
+      this.transientDisplayNames.delete(result.speakerId);
+      this.transientProfileIds.delete(result.speakerId);
+    }
+    result.speakerDecision = evidence;
+    return result;
+  }
+
+  _resolveSpeakerForEmbeddingUnchecked(embedding, options = {}) {
     const { updateCentroid = false, voicedSamples = 0, cohort = "system" } = options;
     this.revalidateAnchors();
     const comparable = [...this.anchors].filter(

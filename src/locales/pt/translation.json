@@ -3216,7 +3216,10 @@
       "addAttendees": "Adicionar participantes",
       "addPlaceholder": "Adicionar participantes...",
       "typeEmail": "Digite um e-mail para adicionar...",
-      "me": "(eu)"
+      "me": "(eu)",
+      "recognitionScope": "Esta reunião inclui {{participants}}, por isso só essas pessoas podem ser reconhecidas automaticamente. Outras vozes ou vozes incertas ficam como desconhecidas e podem sempre ser nomeadas manualmente.",
+      "recognitionGlobal": "Esta nota não inclui participantes. Qualquer voz conhecida pode ser nomeada automaticamente, como antes. Pode sempre nomear as vozes manualmente.",
+      "recognitionUnavailable": "O reconhecimento automático não está disponível para esta lista de participantes. As vozes ficam como desconhecidas e podem sempre ser nomeadas manualmente."
     },
     "eventLink": {
       "selectEvent": "Selecionar evento do calendário",

@@ -449,3 +449,13 @@ test("Escape on the attendees view still closes the dropdown", async (t) => {
 
   assert.equal(attendeeInput(), false);
 });
+
+test('speaker explanation reflects an inherited event roster when the note has no declared roster',async t=>{
+  await mount(t,{participants:[],linkedEventId:STANDUP.id,linkedEvent:STANDUP,
+    automaticNamingScope:{roster:[dana,eve],unrestricted:false,failure:null}});
+  assert.equal(bodyText().includes('notes.participants.recognitionScope'),true);
+});
+test('speaker explanation never promises global recognition for a malformed roster',async t=>{
+  await mount(t,{participants:[],automaticNamingScope:{roster:[],unrestricted:false,failure:'malformed_roster'}});
+  assert.equal(bodyText().includes('notes.participants.recognitionUnavailable'),true);
+});

@@ -774,3 +774,37 @@ test('a soft-deleted note is rewritten and logged so restoring it cannot revive 
   assert.equal(undoPersonAction(f.db, result.id).success, true);
   assert.equal(f.rows(deleted)[0].speakerName, 'Mistyped');
 });
+
+test('roster vetoed cluster has no People usage through a stale mapping', t => {
+  const f = fixture(t); if (!f) return;
+  const c = f.person('C', 1);
+  const id = f.note('Scoped meeting', [{id:'row',source:'system',speaker:'speaker_0',speakerName:'C',
+    speakerDecision:{acceptedProfileId:null,eligibleProfileIds:[],revision:'old',rejectionReason:'outside_roster'}}], [['speaker_0',c]]);
+  const person = listPeople(f.db).find(p => p.id === c.id);
+  assert.equal(person.segmentCount, 0);
+  assert.equal(person.noteCount, 0);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM person_attendance WHERE note_id=?').get(id).n, 0);
+});
+
+test('roster scoped profile retrieval is read-only and leaves diagnostic global retrieval intact',t=>{
+  const f=fixture(t);if(!f)return;
+  const a=f.db.createNamedSpeakerProfile('A','a@example.com');
+  const c=f.db.createNamedSpeakerProfile('C','c@example.com');
+  const id=f.note('Scoped',[],[]);
+  f.db.updateNote(id,{participants:JSON.stringify([{email:' A@EXAMPLE.COM '}])});
+  const global=f.db.getSpeakerProfiles().map(p=>p.id);
+  assert.deepEqual(global,[a.id,c.id]);
+  assert.deepEqual(f.db.getSpeakerProfiles(false,{noteId:id}).map(p=>p.id),[a.id]);
+  assert.deepEqual(f.db.getSpeakerProfiles().map(p=>p.id),global);
+  assert.deepEqual(f.db.getSpeakerProfiles(false,{noteId:-1}),[]);
+  assert.equal(f.db.db.prepare('SELECT COUNT(*) AS n FROM person_attendance').get().n,0);
+});
+
+test('roster every explicit Unknown lock prevents People usage through a stale mapping',t=>{
+  const f=fixture(t);if(!f)return;
+  const c=f.person('C',1);
+  for(const lock of [{speakerLocked:true},{speakerLockSource:'user'},{speakerStatus:'locked'},{speakerStatus:'user_locked'}])
+    f.note('Unknown',[{id:'row',speaker:'speaker_0',speakerIsPlaceholder:true,...lock}],[['speaker_0',c]]);
+  assert.equal(listPeople(f.db).find(p=>p.id===c.id).segmentCount,0);
+  assert.equal(listPeople(f.db).find(p=>p.id===c.id).noteCount,0);
+});

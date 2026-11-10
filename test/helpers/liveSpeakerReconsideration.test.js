@@ -28,7 +28,7 @@ function fixture(t) {
   const ownDir = dir;
   const db = new Database();
   t.after(() => { db.db.close(); fs.rmSync(ownDir, { recursive: true, force: true }); });
-  const person = db.createNamedSpeakerProfile('Alex');
+  const person = db.createNamedSpeakerProfile('Alex', 'alex@example.com');
   let clock = Date.now();
   const { audio, record } = retainedSpeakerAudio(db, ownDir, () => clock);
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };
@@ -41,12 +41,14 @@ function fixture(t) {
     db.updateNote(id, { transcript: JSON.stringify({ version: 2, rows }) });
   }
   const noteId = db.saveNote('Live', '', 'meeting').note.id;
+  db.updateNote(noteId, { participants: JSON.stringify([{email:'alex@example.com'}]) });
   const runId = 'run-live';
   const row = { id: 'live-row', text: 'Hello', source: 'system', diarizationRunId: runId,
     speaker: 'speaker_3', speakerIsPlaceholder: true, speakerStatus: 'suggested',
     audioSpan: { recordingId: noteId, trackId: 'system', startSample: 0, endSample: 96000 } };
   db.updateNote(noteId, { transcript: JSON.stringify({ version: 2, rows: [row] }) });
   const identifier = new LiveSpeakerIdentifier();
+  identifier.getSpeakerScope = () => require('../../src/helpers/noteSpeakerScope').readScope(db, noteId);
   identifier.running = true;
   identifier.activeRunId = runId;
   identifier.nextLiveIndex = 3;
@@ -158,4 +160,57 @@ test('an owner correction on the cluster wins over a later graduation', async t 
   const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
   assert.deepEqual(result.skipped, [{ speakerId: 'speaker_3', reason: 'confirmed-by-owner' }]);
   assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, 'Sam');
+});
+
+test('roster reconsideration vetoes a cached eligible match after the participant is removed', async t => {
+  const f = fixture(t);
+  await f.graduate();
+  const stale = {noteId:f.noteId,source:'note',revision:'old',roster:[{email:'alex@example.com'}],eligibleProfileIds:[f.person.id]};
+  f.identifier.getSpeakerScope = () => stale;
+  f.db.updateNote(f.noteId, { participants: '[]' });
+  const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
+  assert.deepEqual(result.assignments, []);
+  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, undefined);
+});
+
+test('roster reconsideration cannot name an approved outsider', async t => {
+  const f = fixture(t);
+  await f.graduate();
+  f.db.updateNote(f.noteId, { participants: JSON.stringify([{email:'invited@example.com'}]) });
+  const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
+  assert.deepEqual(result.assignments, []);
+  const row=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerDecision.rejectionReason, 'outside_roster');
+});
+
+test('roster reconsideration records the snapshot even when no approved voice matches', t => {
+  const f=fixture(t);
+  const result=reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId);
+  assert.deepEqual(result.assignments,[]);
+  const row=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  assert.equal(row.speakerDecision.rejectionReason,'no_match');
+  assert.equal(row.speakerDecision.runId,f.runId);
+  assert.deepEqual(row.speakerDecision.roster,[{email:'alex@example.com'}]);
+});
+
+test('roster owner A/B vetoes reconsideration winner C without promoting A',async t=>{
+  const f=fixture(t);
+  await f.graduate();
+  const a=f.db.createNamedSpeakerProfile('A','a@example.com');
+  const b=f.db.createNamedSpeakerProfile('B','b@example.com');
+  f.db.updateNote(f.noteId,{participants:JSON.stringify([{email:a.email},{email:b.email}])});
+  f.identifier.getSpeakerProfiles=()=>[
+    {...a,voice_usable:1,embedding:vector(.7,Math.sqrt(.51))},
+    {...b,voice_usable:1,embedding:vector(.3,-Math.sqrt(.91))},
+    {...f.person,voice_usable:1,embedding:vector(.95,Math.sqrt(.0975))},
+  ];
+  const result=reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId);
+  assert.deepEqual(result.assignments,[]);
+  const row=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  assert.equal(row.speakerName,undefined);
+  assert.equal(row.suggestedName,undefined);
+  assert.equal(row.speakerDecision.acousticWinnerProfileId,f.person.id);
+  assert.ok(Math.abs(row.speakerDecision.scores.best-.95)<1e-6);
+  assert.ok(Math.abs(row.speakerDecision.scores.runnerUp-.7)<1e-6);
 });

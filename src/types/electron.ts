@@ -509,6 +509,7 @@ export interface NoteItem {
   participants_sync_operation?: "set" | null;
   calendar_event_id: string | null;
   participants: string | null;
+  speaker_roster_revision?: number;
   diarization_enabled: number | null;
   expected_speaker_count: number | null;
   cloud_id: string | null;
@@ -4073,6 +4074,7 @@ declare global {
       onMeetingSpeakerIdentified?: (
         callback: (data: {
           cohort: "mic" | "system";
+          speakerDecision?: import("./speakerRoster").SpeakerDecision;
           speakerId: string;
           displayName?: string | null;
           suggestedName?: string | null;
@@ -4089,7 +4091,12 @@ declare global {
         runId: string;
         rows: import("../stores/meetingRecordingStore").TranscriptSegment[];
       }) => Promise<{
-        assignments: Array<{ speakerId: string; displayName: string; actionId: string }>;
+        assignments: Array<{
+          speakerId: string;
+          displayName: string;
+          actionId: string;
+          rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
+        }>;
         rows: import("../stores/meetingRecordingStore").TranscriptSegment[];
       }>;
       onMeetingSpeakersMerged?: (
@@ -4099,6 +4106,7 @@ declare global {
             remove: string;
             displayName?: string | null;
             similarity: number;
+            speakerDecision?: import("./speakerRoster").SpeakerDecision;
           }>
         ) => void
       ) => () => void;

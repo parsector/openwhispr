@@ -1,8 +1,11 @@
 const { i18nMain } = require("./i18nMain");
+const { recordedNameAllowed } = require("./speakerRosterPolicy");
 const { isSpeakerLocked } = require("./speakerAssignmentPolicy");
 
 function resolveSpeaker(seg, speakerMappings) {
-  if (seg.speakerLocked || seg.speakerLockSource === "user" || seg.diarizationRunId) {
+  if (!recordedNameAllowed(seg))
+    return i18nMain.t("notes.speaker.unknownNumber", { n: seg.unknownNumber || 1 });
+  if (isSpeakerLocked(seg) || seg.diarizationRunId || seg.speakerDecision) {
     if (seg.speakerName && !seg.speakerIsPlaceholder) {
       const name = seg.speakerName.trim().toLowerCase();
       const isSelfName =
@@ -59,6 +62,7 @@ function speakerKey(seg) {
     seg.speaker ? "" : seg.source || "",
     seg.recorderName || "",
     isSpeakerLocked(seg),
+    recordedNameAllowed(seg),
   ].join("\u0000");
 }
 

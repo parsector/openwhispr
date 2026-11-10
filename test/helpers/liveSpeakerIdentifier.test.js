@@ -89,6 +89,7 @@ test("mic-only captured speech identifies a graduated voice in the mic cohort", 
   identifier._getVadProbability = async () => 1;
   assert.equal(await identifier.start({
     getSpeakerProfiles: () => [{ id: 1, display_name: "Alex", embedding: voiceA, voice_usable: 1 }],
+    getSpeakerScope: () => ({noteId:42,source:"note",revision:"alex",roster:[{email:"alex@example.com"}],eligibleProfileIds:[1]}),
     onSpeakerIdentified: (result) => {
       for (const row of rows)
         if (result.cohort === row.source && result.displayName) row.speakerName = result.displayName;
@@ -112,6 +113,7 @@ test("interleaved mic and system capture keeps separate clocks and clusters", as
   const events = [];
   await identifier.start({
     getSpeakerProfiles: () => [{ id: 1, display_name: "Alex", embedding: voiceA, voice_usable: 1 }],
+    getSpeakerScope: () => ({noteId:42,source:"note",revision:"alex",roster:[{email:"alex@example.com"}],eligibleProfileIds:[1]}),
     onSpeakerIdentified: (event) => events.push(event),
   });
   const chunk = Buffer.alloc(24000 * 2 * 2, 1);
@@ -264,6 +266,8 @@ test("an unidentified cluster still merges into an identified one", () => {
   const identifier = new LiveSpeakerIdentifier();
 
   seedSimilarIdentifiedPair(identifier);
+  identifier.getSpeakerProfiles = () => [{id:1,display_name:"Alice",embedding:voiceA,voice_usable:1}];
+  identifier.getSpeakerScope = () => ({noteId:42,source:"note",revision:"alice",roster:[],eligibleProfileIds:[1]});
   assert.equal(identifier.mapSpeaker("speaker_0", 1, "Alice", null), true);
 
   const merges = identifier._performRecluster();
@@ -296,10 +300,11 @@ test("a profile-matched voice remains separate at the requested cap", () => {
   const identifier = new LiveSpeakerIdentifier();
   identifier.setMaxSpeakers(1);
   identifier.getSpeakerProfiles = () => [
-    { id: 1, display_name: "Alice", embedding: voiceA },
-    { id: 2, display_name: "Bob", embedding: voiceB },
+    { id: 1, display_name: "Alice", embedding: voiceA, voice_usable: 1 },
+    { id: 2, display_name: "Bob", embedding: voiceB, voice_usable: 1 },
   ];
 
+  identifier.getSpeakerScope = () => ({noteId:42,source:"note",revision:"ab",roster:[],eligibleProfileIds:[1,2]});
   const alice = identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: true });
   assert.equal(alice.displayName, "Alice");
 
@@ -583,4 +588,68 @@ test("undo clears a live name and profile before the next identification", () =>
   const next = identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: true });
   assert.equal(next.displayName, null);
   assert.equal(identifier.transientProfileIds.has(first.speakerId), false);
+});
+
+// The roster is a veto after the global acoustic decision, never a candidate filter.
+test("note roster A/B vetoes acoustic winner C in live recognition and carry-forward", () => {
+  const { LiveSpeakerIdentifier } = loadIdentifier();
+  const identifier = new LiveSpeakerIdentifier();
+  const profiles = [
+    { id: 1, display_name: "A", email: "a@example.com", embedding: unit([0.7, Math.sqrt(0.51), 0]), voice_usable: 1 },
+    { id: 2, display_name: "B", email: "b@example.com", embedding: unit([0.3, 0, Math.sqrt(0.91)]), voice_usable: 1 },
+    { id: 3, display_name: "C", email: "c@example.com", embedding: unit([0.95, Math.sqrt(0.0975), 0]), voice_usable: 1 },
+  ];
+  identifier.getSpeakerProfiles = () => profiles;
+  identifier.getSpeakerScope = () => ({ noteId: 42, source: "note", revision: "ab", roster: [{email:"a@example.com"}, {email:"b@example.com"}], eligibleProfileIds: [1, 2] });
+  const result = identifier._resolveSpeakerForEmbedding(voiceA, { updateCentroid: true });
+  assert.equal(result.displayName, null, "C wins acoustically but must remain Unknown; A is not promoted");
+  identifier.transientProfileIds.set(result.speakerId, 3);
+  identifier.transientDisplayNames.set(result.speakerId, "C");
+  assert.equal(identifier._resolveSpeakerForEmbedding(voiceA).displayName, null, "cached C must also be vetoed");
+});
+
+test("roster missing note context fails closed even for a perfect known voice",()=>{
+  const { LiveSpeakerIdentifier }=loadIdentifier();
+  const identifier=new LiveSpeakerIdentifier();
+  identifier.getSpeakerProfiles=()=>[{id:3,display_name:"C",embedding:voiceA,voice_usable:1}];
+  assert.equal(identifier._resolveSpeakerForEmbedding(voiceA).displayName,null);
+});
+test("roster live withdrawal revokes a carried name while preserving distinct voices",()=>{
+  const { LiveSpeakerIdentifier }=loadIdentifier();
+  const identifier=new LiveSpeakerIdentifier();
+  const profiles=[{id:1,display_name:"A",email:"a@example.com",embedding:voiceA,voice_usable:1},
+    {id:3,display_name:"C",email:"c@example.com",embedding:voiceB,voice_usable:1}];
+  identifier.getSpeakerProfiles=()=>profiles;
+  let ids=[1,3];
+  identifier.getSpeakerScope=()=>({noteId:42,source:"note",revision:JSON.stringify(ids),roster:[],eligibleProfileIds:ids});
+  const c=identifier._resolveSpeakerForEmbedding(voiceB,{updateCentroid:true});
+  assert.equal(c.displayName,"C");
+  ids=[1];
+  assert.equal(identifier._resolveSpeakerForEmbedding(voiceB).displayName,null);
+  const a=identifier._resolveSpeakerForEmbedding(voiceA,{updateCentroid:true});
+  assert.equal(a.displayName,"A");
+  assert.notEqual(a.speakerId,c.speakerId);
+});
+
+test("roster live automatic decisions carry their owning note into final reconciliation",()=>{
+  const {LiveSpeakerIdentifier}=loadIdentifier();
+  const identifier=new LiveSpeakerIdentifier();
+  identifier.getSpeakerProfiles=()=>[{id:1,display_name:"A",email:"a@example.com",embedding:voiceA,voice_usable:1}];
+  identifier.getSpeakerScope=()=>({noteId:42,source:"note",revision:"a",roster:[{email:"a@example.com"}],eligibleProfileIds:[1]});
+  const result=identifier._resolveSpeakerForEmbedding(voiceA,{updateCentroid:true});
+  assert.equal(result.displayName,"A");
+  assert.equal(identifier.getTransientState()[result.speakerId].noteId,42);
+});
+
+test("roster manual outsider correction cannot name another cluster through automatic merging",()=>{
+  const {LiveSpeakerIdentifier}=loadIdentifier();
+  const identifier=new LiveSpeakerIdentifier();
+  seedSimilarIdentifiedPair(identifier);
+  identifier.getSpeakerScope=()=>({noteId:42,source:'note',revision:'ab',roster:[],eligibleProfileIds:[1,2]});
+  identifier.mapSpeaker('speaker_0',3,'C',42);
+  const merges=identifier._performRecluster();
+  assert.equal(merges.length,1);
+  assert.equal(merges[0].displayName,null);
+  assert.equal(merges[0].speakerDecision.rejectionReason,'outside_roster');
+  assert.equal(identifier.transientDisplayNames.get('speaker_0'),'C');
 });

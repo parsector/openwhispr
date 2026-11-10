@@ -1,3 +1,4 @@
+import { humanProtected } from "./speakerRosterPolicy.js";
 // The note owns the counter even when its last row is removed. Old notes are
 // arrays; version 2 stores note metadata beside the rows.
 function readTranscriptDocument(raw) {
@@ -418,8 +419,10 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
     if (!own) return row;
     seen.add(row.id);
     const protectedAssignment =
-      own.speakerLockSource === "user" ||
-      (own.machineReason === "approved_voice" && own.speaker === row.speaker);
+      humanProtected(own) ||
+      (own.machineReason === "approved_voice" &&
+        own.speaker === row.speaker &&
+        !row.speakerDecision?.rejectionReason);
     return protectedAssignment
       ? {
           ...row,
@@ -432,6 +435,7 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
           suggestedName: own.suggestedName,
           suggestedProfileId: own.suggestedProfileId,
           machineReason: own.machineReason,
+          speakerDecision: own.speakerDecision,
         }
       : row;
   });
@@ -439,7 +443,7 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
     ...current.rows.filter(
       (row) =>
         !seen.has(row.id) &&
-        (row.speakerLockSource === "user" || row.machineReason === "approved_voice" || row.deleted)
+        (humanProtected(row) || row.machineReason === "approved_voice" || row.deleted)
     )
   );
   return writeTranscriptDocument(

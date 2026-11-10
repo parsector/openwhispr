@@ -1211,6 +1211,33 @@ class DatabaseManager {
         if (!err.message.includes("duplicate column")) throw err;
       }
       try {
+        this.db.exec(
+          "ALTER TABLE notes ADD COLUMN speaker_roster_revision INTEGER NOT NULL DEFAULT 0"
+        );
+      } catch (err) {
+        if (!err.message.includes("duplicate column")) throw err;
+      }
+      this.db.exec(`CREATE TRIGGER IF NOT EXISTS note_speaker_roster_revision
+        AFTER UPDATE OF participants, calendar_event_id ON notes
+        WHEN OLD.participants IS NOT NEW.participants OR OLD.calendar_event_id IS NOT NEW.calendar_event_id
+        BEGIN UPDATE notes SET speaker_roster_revision = speaker_roster_revision + 1 WHERE id = NEW.id; END`);
+      // INSERT OR REPLACE is used by calendar sync. Measure the old attendee
+      // value before replacement, so remove/re-add races cannot reuse a scope.
+      this.db.exec(`CREATE TRIGGER IF NOT EXISTS event_insert_speaker_roster_revision
+        BEFORE INSERT ON calendar_events
+        WHEN NOT EXISTS (SELECT 1 FROM calendar_events WHERE id = NEW.id)
+          OR (SELECT attendees FROM calendar_events WHERE id = NEW.id) IS NOT NEW.attendees
+        BEGIN UPDATE notes SET speaker_roster_revision = speaker_roster_revision + 1
+          WHERE participants IS NULL AND calendar_event_id = NEW.id; END;
+        CREATE TRIGGER IF NOT EXISTS event_update_speaker_roster_revision
+        AFTER UPDATE OF attendees ON calendar_events WHEN OLD.attendees IS NOT NEW.attendees
+        BEGIN UPDATE notes SET speaker_roster_revision = speaker_roster_revision + 1
+          WHERE participants IS NULL AND calendar_event_id = NEW.id; END;
+        CREATE TRIGGER IF NOT EXISTS event_delete_speaker_roster_revision
+        AFTER DELETE ON calendar_events
+        BEGIN UPDATE notes SET speaker_roster_revision = speaker_roster_revision + 1
+          WHERE participants IS NULL AND calendar_event_id = OLD.id; END`);
+      try {
         this.db.exec("ALTER TABLE notes ADD COLUMN diarization_enabled INTEGER");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
@@ -4449,6 +4476,21 @@ class DatabaseManager {
 
   _withSpeakerDisplayNames(note) {
     if (!note?.transcript) return note;
+    // Sync and calendar changes can bypass updateNote. Scope recorded machine
+    // decisions on read as well; historical rows without evidence stay intact.
+    if (note.transcript.includes('"speakerDecision"'))
+      note = {
+        ...note,
+        transcript: require("./noteSpeakerScope").enforceTranscript(
+          this,
+          note.id,
+          note.transcript,
+          {
+            path: "read",
+            noteOverride: note,
+          }
+        ),
+      };
     const rows = this.db
       .prepare("SELECT speaker_id, display_name FROM speaker_mappings WHERE note_id = ?")
       .all(note.id);
@@ -4641,6 +4683,29 @@ class DatabaseManager {
         );
         if (updates.transcript === null)
           return { success: false, error: "stale_automatic_transcript" };
+      }
+      const rosterEdited = ["participants", "calendar_event_id"].some(
+        (key) => updates[key] !== undefined && updates[key] !== previous[key]
+      );
+      const scopedNote = {
+        ...previous,
+        ...updates,
+        speaker_roster_revision: (previous.speaker_roster_revision || 0) + (rosterEdited ? 1 : 0),
+      };
+      const proposedTranscript = updates.transcript ?? (rosterEdited ? previous.transcript : null);
+      if (
+        typeof proposedTranscript === "string" &&
+        proposedTranscript.includes('"speakerDecision"')
+      ) {
+        updates.transcript = require("./noteSpeakerScope").enforceTranscript(
+          this,
+          id,
+          proposedTranscript,
+          {
+            path: "database_commit",
+            noteOverride: scopedNote,
+          }
+        );
       }
       if (
         typeof updates.transcript === "string" &&
@@ -7732,7 +7797,7 @@ class DatabaseManager {
     return require("./voiceExemplarAudio").list(this.db, profileId);
   }
 
-  getSpeakerProfiles(includeEmbedding = false, { includeProvisional = false } = {}) {
+  getSpeakerProfiles(includeEmbedding = false, { includeProvisional = false, noteId } = {}) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const query = includeEmbedding
@@ -7742,7 +7807,13 @@ class DatabaseManager {
             EXISTS (SELECT 1 FROM voice_exemplars WHERE profile_id = speaker_profiles.id))`
         : `SELECT id, display_name, email, sample_count, voice_usable, created_at, updated_at
            FROM speaker_profiles`;
-      const profiles = this.db.prepare(query).all();
+      let profiles = this.db.prepare(query).all();
+      if (noteId !== undefined) {
+        const scope = require("./noteSpeakerScope").readScope(this, noteId);
+        profiles = profiles.filter((profile) =>
+          require("./speakerRosterPolicy").eligible(scope, profile.id)
+        );
+      }
       if (!includeEmbedding)
         return profiles.map((profile) => {
           const { result } = require("./voiceEnrollment").resolveProfile(this.db, profile.id);

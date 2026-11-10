@@ -10,6 +10,7 @@ const FIELDS = [
   "suggestedProfileId",
   "uncertainty",
   "machineReason",
+  "speakerDecision",
 ];
 const {
   readTranscriptDocument,
@@ -42,6 +43,7 @@ const SPLIT_FIELDS = [
   "speakerLocked",
   "speakerLockSource",
   "machineReason",
+  "speakerDecision",
 ];
 const mappingKey = (runId, clusterId) => `run:${runId || "legacy"}:${clusterId}`;
 const snapshot = (row) =>

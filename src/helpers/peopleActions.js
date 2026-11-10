@@ -1,3 +1,8 @@
+const {
+  recordedNameAllowed,
+  humanProtected,
+  candidateSetEvidence,
+} = require("./speakerRosterPolicy");
 const { randomUUID, createHash } = require("node:crypto");
 const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
 const {
@@ -393,14 +398,20 @@ function listPeople(database) {
   }
   for (const note of notes(db)) {
     const map = mappingByNote.get(note.id) || [];
-    for (const row of readTranscriptDocument(note.transcript).rows) {
-      if (row.deleted) continue;
-      const id =
-        row.speakerLockSource === "user" &&
-        !row.suggestedProfileId &&
-        !row.speakerName &&
-        row.speakerIsPlaceholder
-          ? null
+    const rows = require("./noteSpeakerScope").enforceRows(
+      database,
+      note.id,
+      readTranscriptDocument(note.transcript).rows,
+      { path: "people_usage" }
+    );
+    for (const row of rows) {
+      if (row.deleted || !recordedNameAllowed(row)) continue;
+      const id = humanProtected(row)
+        ? row.speakerName && !row.speakerIsPlaceholder
+          ? row.suggestedProfileId || byName.get(normalized(row.speakerName))
+          : null
+        : row.speakerDecision
+          ? row.speakerDecision.acceptedProfileId
           : rowProfile(row, map) || byName.get(normalized(row.speakerName));
       const hit = usage.get(id);
       if (!hit) continue;
@@ -416,7 +427,14 @@ function listPeople(database) {
       if (!hit.lastHeard || heard > hit.lastHeard) hit.lastHeard = heard;
     }
     for (const item of map)
-      if (usage.has(item.profile_id)) {
+      if (
+        usage.has(item.profile_id) &&
+        !rows.some(
+          (row) =>
+            row.speaker === (item.speaker_id || item.cluster_id) &&
+            (row.speakerDecision || humanProtected(row))
+        )
+      ) {
         const hit = usage.get(item.profile_id);
         hit.notes.add(note.id);
         if (note.note_type === "meeting") hit.meetings.add(note.id);
@@ -1631,6 +1649,7 @@ function assembleReviewRows(database, selectedProfileId, includeAll, facts, stor
         profileId,
         reason: reason || "person",
         candidates: row.uncertainty?.candidates || null,
+        speakerDecision: candidateSetEvidence(row),
         timestamp: note.created_at,
         eligibilityReason,
         position,

@@ -27,7 +27,7 @@ function fixture(t) {
   const ownDir = dir;
   const db = new Database();
   t.after(() => { db.db.close(); fs.rmSync(ownDir, { recursive: true, force: true }); });
-  const person = db.createNamedSpeakerProfile('Alex');
+  const person = db.createNamedSpeakerProfile('Alex', 'alex@example.com');
   let reviewClock = Date.now();
   const { audio, record } = retainedSpeakerAudio(db, ownDir, () => reviewClock);
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };
@@ -40,7 +40,9 @@ function fixture(t) {
     db.updateNote(id, { transcript: JSON.stringify({ version: 2, rows }) });
   };
   const liveNoteId = db.saveNote('Live', '', 'meeting').note.id;
+  db.updateNote(liveNoteId, { participants: JSON.stringify([{email:'alex@example.com'}]) });
   const identifier = new LiveSpeakerIdentifier();
+  identifier.getSpeakerScope = () => require('../../src/helpers/noteSpeakerScope').readScope(db, liveNoteId);
   identifier.activeRunId = 'run-live';
   identifier.running = true;
   identifier.getSpeakerProfiles = () => db.getSpeakerProfiles(true);
@@ -74,6 +76,7 @@ test('approved voice named in a live meeting becomes a local comparison and undo
   const probe = unit(0.02, 1);
   const baseline = new LiveSpeakerIdentifier();
   baseline.getSpeakerProfiles = f.identifier.getSpeakerProfiles;
+  baseline.getSpeakerScope = f.identifier.getSpeakerScope;
   baseline._resolveSpeakerForEmbedding(unit(0.8, 0.6), { updateCentroid: true, voicedSamples: 16000 * 4 });
   baseline.mapSpeaker('speaker_0', f.person.id, 'Alex', f.liveNoteId);
   assert.notEqual(baseline._resolveSpeakerForEmbedding(probe).displayName, 'Alex');
@@ -113,6 +116,7 @@ test('a mic anchor stays in the mic cohort and cannot name a system row', async 
   identifier.running = true;
   identifier.activeRunId = 'run-live';
   identifier.getSpeakerProfiles = f.identifier.getSpeakerProfiles;
+  identifier.getSpeakerScope = f.identifier.getSpeakerScope;
   const anchorVoice = unit(0.8, 0.6);
   identifier._resolveSpeakerForEmbedding(anchorVoice, { cohort: 'mic', updateCentroid: true, voicedSamples: 16000 * 4 });
   identifier._resolveSpeakerForEmbedding(anchorVoice, { cohort: 'mic', updateCentroid: true, voicedSamples: 16000 * 4 });
@@ -217,4 +221,18 @@ test('a split or voice reset drops a live anchor', async t => {
   assert.equal(reset.success, true);
   g.identifier.reconcilePeopleMutation({ type: 'reset', profileId: g.person.id });
   assert.equal(g.identifier.getAnchorState('speaker_0'), null);
+});
+
+test('roster withdrawal invalidates an anchor without overwriting the human correction', async t => {
+  const f = fixture(t);
+  await graduate(f);
+  const voice = unit(0.8, 0.6);
+  f.identifier._resolveSpeakerForEmbedding(voice, { updateCentroid: true, voicedSamples: 16000 * 4 });
+  f.identifier._resolveSpeakerForEmbedding(voice, { updateCentroid: true, voicedSamples: 16000 * 4 });
+  f.identifier.mapSpeaker('speaker_0', f.person.id, 'Alex', f.liveNoteId);
+  assert.equal(f.identifier.activateAnchor({speakerId:'speaker_0',profileId:f.person.id,noteId:f.liveNoteId,runId:'run-live',cohort:'system',rows:[f.row]}).state, 'active');
+  f.db.updateNote(f.liveNoteId, {participants: JSON.stringify([{email:'other@example.com'}])});
+  f.identifier.revalidateAnchors();
+  assert.equal(f.identifier.getAnchorState('speaker_0'), null);
+  assert.equal(f.identifier.transientDisplayNames.get('speaker_0'), 'Alex');
 });

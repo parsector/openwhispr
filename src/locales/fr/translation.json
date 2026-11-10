@@ -3687,7 +3687,10 @@
       "addAttendees": "Ajouter des participants",
       "addPlaceholder": "Ajouter des participants...",
       "typeEmail": "Saisissez un e-mail pour ajouter...",
-      "me": "(moi)"
+      "me": "(moi)",
+      "recognitionScope": "Cette réunion liste {{participants}} : seules ces personnes peuvent être reconnues automatiquement. Les autres voix ou les voix incertaines restent inconnues et peuvent toujours être nommées manuellement.",
+      "recognitionGlobal": "Cette note ne liste aucun participant. Toute voix connue peut être nommée automatiquement, comme auparavant. Vous pouvez toujours nommer les voix manuellement.",
+      "recognitionUnavailable": "La reconnaissance automatique est indisponible pour cette liste de participants. Les voix restent inconnues et peuvent toujours être nommées manuellement."
     },
     "eventLink": {
       "selectEvent": "Sélectionner un événement",

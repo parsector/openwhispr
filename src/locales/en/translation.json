@@ -3839,7 +3839,10 @@
       "addAttendees": "Add attendees",
       "addPlaceholder": "Add attendees...",
       "typeEmail": "Type an email to add...",
-      "me": "(me)"
+      "me": "(me)",
+      "recognitionScope": "This meeting lists {{participants}}, so only they can be recognised automatically. Other or uncertain voices stay Unknown and can always be named manually.",
+      "recognitionGlobal": "This note lists no participants. Any known voice may be named automatically, as before. You can always name voices manually.",
+      "recognitionUnavailable": "Automatic recognition is unavailable for this participant list. Voices stay Unknown and can always be named manually."
     },
     "eventLink": {
       "selectEvent": "Select calendar event",

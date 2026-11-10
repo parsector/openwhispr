@@ -1,3 +1,5 @@
+const { readTranscriptDocument } = require("../transcriptDocument");
+const { humanProtected, recordedNameAllowed } = require("../speakerRosterPolicy");
 const { parseEventTime } = require("../calendarAvailability");
 const { isValidEmailAddress } = require("./emailCompose");
 
@@ -119,13 +121,33 @@ function createNoteAttendeesLookup({
   getSpeakerMappings,
   getSpeakerProfiles,
   getGmailAddress,
+  getNote = () => null,
 }) {
   return async ({ noteId, participants, calendarEventId, selfEmail }) => {
     const sources = getContactLookupSources();
     const gmailAddress = await getGmailAddress();
-    const speakers = noteId
-      ? identifiedSpeakers(getSpeakerMappings(noteId), getSpeakerProfiles())
+    // A recorded automatic decision owns its rows; legacy cluster mappings
+    // cannot turn a veto into attendance. Manual corrections keep their scope.
+    const rows = readTranscriptDocument(noteId ? getNote(noteId)?.transcript : null).rows;
+    const mappings = noteId
+      ? getSpeakerMappings(noteId).filter(
+          (mapping) =>
+            !rows.some(
+              (row) =>
+                row.speaker === mapping.speaker_id && (row.speakerDecision || humanProtected(row))
+            )
+        )
       : [];
+    const rowMappings = rows
+      .filter((row) => !row.deleted && recordedNameAllowed(row))
+      .map((row) => ({
+        profile_id: humanProtected(row)
+          ? row.speakerName && !row.speakerIsPlaceholder
+            ? row.suggestedProfileId
+            : null
+          : row.speakerDecision?.acceptedProfileId,
+      }));
+    const speakers = identifiedSpeakers([...mappings, ...rowMappings], getSpeakerProfiles());
     const calendarEvent = calendarEventId ? getCalendarEventById(calendarEventId) : null;
     return personAttendees(
       {

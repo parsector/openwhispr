@@ -562,3 +562,50 @@ test("a self correction during resumed recording leaves earlier recorders alone"
   assert.equal(segments[1].speakerName, "Bob Corrected");
   await store.stopRecording();
 });
+
+test("roster edit retires cached identifications and rejects delayed live names", async t => {
+  const {api,state}=createElectronAPI();
+  let onNoteUpdated, onSpeaker;
+  api.onNoteUpdated=callback=>{onNoteUpdated=callback;return ()=>{};};
+  api.onMeetingSpeakerIdentified=callback=>{onSpeaker=callback;return ()=>{};};
+  const store=await loadStore(t,api);
+  assert.equal(await store.startRecording(START_ARGS),true);
+  const now=Date.now();
+  const decision={candidateSetStatus:'recorded',noteId:NOTE_ID,source:'note',revision:JSON.stringify([1,'note','[{"email":"c@example.com"}]',null,[[3,'c@example.com']]]),rawRoster:'[{"email":"c@example.com"}]',roster:[{email:'c@example.com'}],eligibleProfileIds:[3],acceptedProfileId:3,rejectionReason:null,rosterRevision:1,linkedEventId:null};
+  state.segmentCallback({text:'hello',source:'system',timestamp:now});
+  onSpeaker({cohort:'system',speakerId:'speaker_0',displayName:'C',startTime:now-100,endTime:now+100,speakerDecision:decision});
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName,'C');
+  onNoteUpdated?.({id:NOTE_ID,participants:'[{"email":"a@example.com"}]',speaker_roster_revision:2,transcript:'[]'});
+  onSpeaker({cohort:'system',speakerId:'speaker_0',displayName:'C',startTime:now-100,endTime:now+200,speakerDecision:decision});
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName,undefined);
+  assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName,null);
+  await store.stopRecording();
+});
+
+test("roster late reconsideration and merge replies cannot restore a withdrawn live name",async t=>{
+  const {api,state}=createElectronAPI();
+  let onNoteUpdated,onSpeaker,onEvidence,onMerge,runId;
+  api.onNoteUpdated=cb=>{onNoteUpdated=cb;return ()=>{};};
+  api.onMeetingSpeakerIdentified=cb=>{onSpeaker=cb;return ()=>{};};
+  api.onMeetingSpeakerEvidenceChanged=cb=>{onEvidence=cb;return ()=>{};};
+  api.onMeetingSpeakersMerged=cb=>{onMerge=cb;return ()=>{};};
+  api.meetingTranscriptionStart=async opts=>{runId=opts.sessionId;return {success:true,systemAudioMode:'native',systemAudioStrategy:'native'};};
+  const gate=deferred();
+  api.reconsiderLiveSpeakers=()=>gate.promise;
+  const store=await loadStore(t,api);
+  assert.equal(await store.startRecording(START_ARGS),true);
+  const now=Date.now();
+  const d={candidateSetStatus:'recorded',noteId:NOTE_ID,source:'note',revision:'old',rawRoster:'[{"email":"c@example.com"}]',roster:[],eligibleProfileIds:[3],acceptedProfileId:3,rejectionReason:null,rosterRevision:1,linkedEventId:null};
+  state.segmentCallback({text:'hello',source:'system',timestamp:now});
+  onSpeaker({cohort:'system',speakerId:'speaker_0',displayName:'C',startTime:now-100,endTime:now+100,speakerDecision:d});
+  const oldRow={...store.useMeetingRecordingStore.getState().segments.at(-1)};
+  const pending=onEvidence({noteId:NOTE_ID,runId});
+  onNoteUpdated?.({id:NOTE_ID,participants:'[{"email":"a@example.com"}]',speaker_roster_revision:2,transcript:'[]'});
+  gate.resolve({assignments:[{speakerId:'speaker_0',displayName:'C',rows:[oldRow]}],rows:[oldRow]});
+  await pending;
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName,undefined);
+  onMerge([{keep:'speaker_1',remove:'speaker_0',displayName:'C',speakerDecision:d,similarity:1}]);
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName,undefined);
+  assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName,null);
+  await store.stopRecording();
+});

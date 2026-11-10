@@ -3216,7 +3216,10 @@
       "addAttendees": "添加参会者",
       "addPlaceholder": "添加参会者...",
       "typeEmail": "输入邮箱以添加...",
-      "me": "（我）"
+      "me": "（我）",
+      "recognitionScope": "此会议列出了{{participants}}，因此只有这些参与者可以被自动识别。其他或不确定的声音将保持为未知，您随时可以手动命名。",
+      "recognitionGlobal": "此笔记未列出参与者。与以前一样，任何已知声音都可能被自动命名。您随时可以手动命名。",
+      "recognitionUnavailable": "此参与者列表无法用于自动识别。声音将保持为未知，您随时可以手动命名。"
     },
     "eventLink": {
       "selectEvent": "选择日历事件",

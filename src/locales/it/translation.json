@@ -3216,7 +3216,10 @@
       "addAttendees": "Aggiungi partecipanti",
       "addPlaceholder": "Aggiungi partecipanti...",
       "typeEmail": "Digita un'email per aggiungere...",
-      "me": "(io)"
+      "me": "(io)",
+      "recognitionScope": "Questa riunione elenca {{participants}}, quindi solo queste persone possono essere riconosciute automaticamente. Le altre voci o quelle incerte restano sconosciute e possono sempre essere nominate manualmente.",
+      "recognitionGlobal": "Questa nota non elenca partecipanti. Qualsiasi voce conosciuta può essere nominata automaticamente, come prima. Puoi sempre nominare le voci manualmente.",
+      "recognitionUnavailable": "Il riconoscimento automatico non è disponibile per questo elenco di partecipanti. Le voci restano sconosciute e possono sempre essere nominate manualmente."
     },
     "eventLink": {
       "selectEvent": "Seleziona evento del calendario",

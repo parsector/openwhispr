@@ -1,3 +1,4 @@
+import { resolveSpeakerRoster } from "../../helpers/speakerRosterPolicy";
 import {
   useState,
   useRef,
@@ -1505,6 +1506,7 @@ export default function NoteEditor({
             <NoteParticipants
               noteId={note.id}
               participants={parsedParticipants}
+              automaticNamingScope={resolveSpeakerRoster(note, linkedEvent)}
               dateLabel={shortDate || undefined}
               dateTitle={noteDate}
               noteCreatedAt={note.created_at}

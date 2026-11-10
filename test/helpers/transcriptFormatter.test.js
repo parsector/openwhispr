@@ -508,3 +508,11 @@ for (const [language, youLabel] of [
     });
   });
 }
+
+test("roster veto prevents export from restoring a stale C mapping", () => {
+  const row = {id:"row",source:"system",speaker:"speaker_0",speakerName:"C",text:"hello",timestamp:0,
+    speakerDecision:{acceptedProfileId:null,eligibleProfileIds:[1,2],rejectionReason:"outside_roster"}};
+  const {formatJson} = require("../../src/helpers/transcriptFormatter");
+  const result = JSON.parse(formatJson({title:"meeting",created_at:"2026-11-10"},[row],{speaker_0:"C"}));
+  assert.equal(result.segments[0].speaker, "Unknown speaker 1");
+});

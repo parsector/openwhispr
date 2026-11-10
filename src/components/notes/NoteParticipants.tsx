@@ -24,6 +24,11 @@ const MAX_STACKED_AVATARS = 2;
 interface NoteParticipantsProps {
   noteId: number;
   participants: CalendarAttendee[];
+  automaticNamingScope?: {
+    roster: Array<{ displayName?: string; email?: string }>;
+    unrestricted: boolean;
+    failure: string | null;
+  };
   /** When present the capsule leads with the note's date, so date and people read as one fact. */
   dateLabel?: string;
   dateTitle?: string;
@@ -47,6 +52,7 @@ const EVENT_ACTION_CLASS =
 export default function NoteParticipants({
   noteId,
   participants,
+  automaticNamingScope,
   dateLabel,
   dateTitle,
   noteCreatedAt,
@@ -220,6 +226,13 @@ export default function NoteParticipants({
     return Array.from(groups.entries());
   }, [localParticipants]);
 
+  const recognitionNames = (automaticNamingScope?.roster || localParticipants)
+    .map((p) => p.displayName || p.email)
+    .filter(Boolean);
+  const recognitionUnavailable =
+    automaticNamingScope?.failure ||
+    (automaticNamingScope && !automaticNamingScope.unrestricted && !recognitionNames.length);
+
   const chipLabel =
     localParticipants.length > 0
       ? `${localParticipants.length} ${localParticipants.length === 1 ? t("notes.participants.attendee", "attendee") : t("notes.participants.attendees", "attendees")}`
@@ -368,6 +381,18 @@ export default function NoteParticipants({
               </div>
             )}
 
+            <p className="px-3 py-2 text-xs text-foreground/60 border-b border-border/70">
+              {recognitionUnavailable
+                ? t("notes.participants.recognitionUnavailable")
+                : recognitionNames.length
+                  ? t("notes.participants.recognitionScope", {
+                      participants: new Intl.ListFormat(locale, {
+                        style: "long",
+                        type: "conjunction",
+                      }).format(recognitionNames),
+                    })
+                  : t("notes.participants.recognitionGlobal")}
+            </p>
             <div className="p-2 border-b border-border/70">
               <input
                 dir="auto"

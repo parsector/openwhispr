@@ -102,3 +102,13 @@ test("final analysis keeps a same-cluster name recognised after voice approval",
   assert.equal(merged.machineReason, "approved_voice");
   assert.equal(merged.speakerIsPlaceholder, false);
 });
+
+test("roster veto prevents a stale mapping and cached name from restoring C in the UI", async () => {
+  const { resolveSegmentSpeakerName } = await load();
+  const row = {source:"system",speaker:"speaker_0",speakerName:"C",speakerDecision:{acceptedProfileId:null,eligibleProfileIds:[1,2],rejectionReason:"outside_roster"}};
+  assert.equal(resolveSegmentSpeakerName(row, {speaker_0:"C"}), undefined);
+  for (const lock of [{speakerLocked:true},{speakerLockSource:"user"},{speakerStatus:"locked"},{speakerStatus:"user_locked"}]) {
+    assert.equal(resolveSegmentSpeakerName({...row,...lock}, {speaker_0:"A"}), "C");
+    assert.equal(resolveSegmentSpeakerName({...row,...lock,speakerName:undefined,speakerIsPlaceholder:true}, {speaker_0:"C"}), undefined);
+  }
+});

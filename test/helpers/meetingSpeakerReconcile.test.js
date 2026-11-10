@@ -260,7 +260,7 @@ test("attendee suggestion and live reconciliation preserve a user-locked Unknown
   assert.equal(writes.length, 0);
 });
 
-test("one-on-one roster attaches a suggestion without confirming or mapping the voice", async () => {
+test("one-on-one roster alone cannot suggest a name without approved acoustic evidence", async () => {
   const { IPCHandlers } = loadHandlers();
   const row = { id: "row-2", source: "system", speaker: "speaker_0", speakerStatus: "provisional" };
   const note = {
@@ -286,13 +286,13 @@ test("one-on-one roster attaches a suggestion without confirming or mapping the 
   const [updated] = require("../../src/helpers/transcriptDocument").readTranscriptDocument(
     note.transcript
   ).rows;
-  assert.equal(updated.suggestedName, "Alice");
+  assert.equal(updated.suggestedName, undefined);
   assert.equal(updated.speakerName, undefined);
-  assert.equal(updated.speakerStatus, "suggested");
+  assert.equal(updated.speakerStatus, "provisional");
   assert.equal(calls.length, 0);
 });
 
-test("attaching an email offers a suggestion without claiming an unranked voice", async () => {
+test("attaching an email cannot suggest an unranked voice", async () => {
   const { IPCHandlers } = loadHandlers();
   const vector = Buffer.from(new Float32Array([1, 0, 0, 0]).buffer);
   const note = {
@@ -318,8 +318,8 @@ test("attaching an email offers a suggestion without claiming an unranked voice"
     note.transcript
   ).rows;
   assert.equal(saved.speakerName, undefined);
-  assert.equal(saved.suggestedName, "Alex");
-  assert.equal(saved.speakerStatus, "suggested");
+  assert.equal(saved.suggestedName, undefined);
+  assert.equal(saved.speakerStatus, undefined);
 });
 
 test("live reconciliation cannot restore a name to a short provisional row", () => {
@@ -713,4 +713,210 @@ test("empty centroid extraction is recorded before a completed diarisation is an
   assert.equal(completion.cause, "embedding_extraction_failed");
   assert.deepEqual(payload.centroidPersistence, completion);
   assert.equal(completion.vectorsWritten, 0);
+});
+
+const rosterProfiles = () => [
+  { id: 1, display_name: "A", email: "a@example.com", voice_usable: 1, sample_count: 3, embedding: Buffer.from(new Float32Array([.7, Math.sqrt(.51), 0]).buffer) },
+  { id: 2, display_name: "B", email: "b@example.com", voice_usable: 1, sample_count: 3, embedding: Buffer.from(new Float32Array([.3, 0, Math.sqrt(.91)]).buffer) },
+  { id: 3, display_name: "C", email: "c@example.com", voice_usable: 1, sample_count: 3, embedding: Buffer.from(new Float32Array([.95, Math.sqrt(.0975), 0]).buffer) },
+];
+const declaredAB = JSON.stringify([{email:"a@example.com"}, {email:"b@example.com"}]);
+function rosterHandlers() {
+  const { IPCHandlers } = loadHandlers();
+  const note = { id: NOTE_ID, participants: declaredAB, transcript: "[]" };
+  const profiles = rosterProfiles();
+  const writes = [];
+  const databaseManager = {
+    getNote: () => note,
+    getSpeakerProfiles: () => profiles,
+    getSpeakerMappings: () => [],
+    getNotesWithUnmappedSpeakers: () => [NOTE_ID],
+    getNoteSpeakerEmbeddings: () => [{ speaker_id: "speaker_0", embedding: Buffer.from(new Float32Array([1,0,0]).buffer) }],
+    updateNote: (_id, patch) => { writes.push(patch); Object.assign(note, patch); return {success:true}; },
+    saveNoteSpeakerEmbeddings: () => ({ success: true }),
+  };
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), {
+    databaseManager, speakerDiarizationEnabled: true, _diarizationSpeakerReservations: new Map(),
+  });
+  return {handlers,note,profiles,writes};
+}
+async function rosterFinal(t, f, { enabled = true, fail = false, beforeCentroids, voice = [1,0,0], extra = [] } = {}) {
+  const DiarizationManager = loadDiarizationManager();
+  const embeddings = require("../../src/helpers/speakerEmbeddings");
+  t.mock.method(embeddings, "isAvailable", () => true);
+  t.mock.method(embeddings, "extractClusterCentroids", async () => {
+    beforeCentroids?.();
+    return new Map([["speaker_00", new Float32Array(voice)], ...extra]);
+  });
+  f.handlers.speakerDiarizationEnabled = enabled;
+  f.handlers.diarizationManager = Object.assign(new DiarizationManager(), {
+    isAvailable: () => true,
+    convertRawPcmToWav: async () => { if (fail) throw Error("fixture failure"); return "/nonexistent/roster.wav"; },
+    diarize: async () => [{start:0,end:4,speaker:"speaker_00"}, ...extra.map(([speaker], i) => ({ start:5+i*5,end:9+i*5,speaker }))],
+  });
+  return new Promise(resolve => f.handlers._startOrSkipDiarization("roster-run", "/nonexistent/roster.pcm", 0,
+    [{id:"row",source:"system",timestamp:1,text:"hello", speaker:"speaker_0", speakerName:"C"},
+      ...extra.map((_,i) => ({id:`extra-${i}`,source:"system",timestamp:6+i*5,text:"other"}))],
+    {isDestroyed:()=>false,webContents:{send:(_channel,payload)=>resolve(payload)}}, null, null, NOTE_ID));
+}
+
+test("roster owner regression: final global winner C is Unknown without promoting A", async t => {
+  const f = rosterHandlers();
+  const result = await rosterFinal(t, f);
+  assert.equal(result.segments[0].speakerName, undefined);
+  assert.equal(result.segments[0].suggestedName, undefined);
+  assert.equal(result.segments[0].speakerDecision.rejectionReason, "outside_roster");
+});
+test("roster positive: acoustic participant A remains recognised with the actual roster snapshot", async t => {
+  const f = rosterHandlers();
+  f.profiles[0].embedding = Buffer.from(new Float32Array([1,0,0]).buffer);
+  f.profiles[2].embedding = Buffer.from(new Float32Array([0,0,1]).buffer);
+  const result = await rosterFinal(t, f);
+  assert.equal(result.segments[0].speakerName, "A");
+  assert.deepEqual(result.segments[0].speakerDecision.roster, JSON.parse(declaredAB));
+});
+test("roster reconciliation cannot inherit C from a live cluster", () => {
+  const f = rosterHandlers();
+  const row = {id:"row",speaker:"speaker_0",source:"system"};
+  f.handlers._reconcileLiveSpeakerState({speaker_0:{displayName:"C",profileId:3,noteId:NOTE_ID,embedding:[1,0,0]}}, {speaker_0:[1,0,0]}, [row]);
+  assert.equal(row.speakerName, undefined);
+});
+test("roster skipped and failed final paths veto cached C", async t => {
+  for (const options of [{enabled:false},{fail:true}]) {
+    const f = rosterHandlers();
+    const result = await rosterFinal(t, f, options);
+    assert.equal(result.segments[0].speakerName, undefined);
+    assert.equal(result.segments[0].speakerIsPlaceholder, true);
+  }
+});
+test("roster delayed retroactive job cannot suggest outsider C", async () => {
+  const f = rosterHandlers();
+  f.note.transcript = JSON.stringify([{id:"row",source:"system",speaker:"speaker_0",text:"hello"}]);
+  f.note.participants = JSON.stringify([...JSON.parse(declaredAB), {email:"c@example.com"}]);
+  f.handlers._retroactiveMapping(f.profiles[2]);
+  f.note.participants = declaredAB;
+  await new Promise(resolve => setImmediate(resolve));
+  const row = require("../../src/helpers/transcriptDocument").readTranscriptDocument(f.note.transcript).rows[0];
+  assert.equal(row.suggestedName, undefined);
+});
+test("roster final arriving after participant removal cannot retain a previously valid name", async t => {
+  const f = rosterHandlers();
+  f.profiles[0].embedding = Buffer.from(new Float32Array([1,0,0]).buffer);
+  f.profiles[2].embedding = Buffer.from(new Float32Array([0,0,1]).buffer);
+  const result = await rosterFinal(t, f, {beforeCentroids:()=>{f.note.participants=JSON.stringify([{email:"b@example.com"}]);}});
+  assert.equal(result.segments[0].speakerName, undefined);
+});
+
+for (const [label, participants, event, expected] of [
+  ["declared beats a larger event", declaredAB, {attendees: JSON.stringify([{email:"c@example.com"}])}, undefined],
+  ["explicit empty ignores event", "[]", {attendees: declaredAB}, "C"],
+  ["absent without event keeps global naming", null, null, "C"],
+  ["absent uses only linked event", null, {attendees: declaredAB}, undefined],
+  ["malformed fails closed", "{broken", {attendees:"[]"}, undefined],
+  ["JSON null fails closed", "null", null, undefined],
+  ["missing linked event fails closed", null, undefined, undefined],
+  ["email case and whitespace", JSON.stringify([{email:" C@EXAMPLE.COM "}]), null, "C"],
+  ["display name is insufficient", JSON.stringify([{displayName:"C"}]), null, undefined],
+  ["unprofiled participant", JSON.stringify([{email:"new@example.com"}]), null, undefined],
+  ["resource", JSON.stringify([{email:"c@example.com",resource:true}]), null, undefined],
+  ["declined guest", JSON.stringify([{email:"c@example.com",responseStatus:"declined"}]), null, undefined],
+  ["declined self", JSON.stringify([{email:"c@example.com",responseStatus:"declined",self:true}]), null, "C"],
+]) test(`roster precedence and identity: ${label}`, async t => {
+  const f = rosterHandlers();
+  f.note.participants = participants;
+  if (event !== null) { f.note.calendar_event_id = "linked"; f.handlers.databaseManager.getCalendarEventById = () => event; }
+  const result = await rosterFinal(t,f);
+  assert.equal(result.segments[0].speakerName, expected);
+  assert.equal(result.segments[0].speakerDecision.candidateSetStatus,"recorded");
+});
+
+test("roster identity: duplicate names never resolve a different email or ambiguous legacy link", async t => {
+  const f = rosterHandlers();
+  f.profiles[0].display_name = "C";
+  f.note.participants = JSON.stringify([{email:"a@example.com",displayName:"C",profileId:3}]);
+  assert.equal((await rosterFinal(t,f)).segments[0].speakerName, undefined);
+});
+test("roster identity: duplicate profile emails fail closed", async t => {
+  const f = rosterHandlers();
+  f.profiles[0].email = "c@example.com";
+  f.note.participants = JSON.stringify([{email:"c@example.com"}]);
+  assert.equal((await rosterFinal(t,f)).segments[0].speakerName, undefined);
+});
+test("roster outsider remains a distinct unknown cluster beyond the participant count", async t => {
+  const f = rosterHandlers();
+  f.note.participants = JSON.stringify([{email:"a@example.com"}]);
+  f.profiles[0].embedding = Buffer.from(new Float32Array([0,0,1]).buffer);
+  f.profiles[1].embedding = Buffer.from(new Float32Array([0,1,0]).buffer);
+  const result = await rosterFinal(t,f,{extra:[["speaker_01",new Float32Array([0,0,1])]]});
+  assert.equal(result.segments.length,2);
+  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[1].speakerName,"A");
+  assert.notEqual(result.segments[0].speaker,result.segments[1].speaker);
+});
+test("roster added during final recognition needs a new acoustic run", async t => {
+  const f=rosterHandlers();
+  const result=await rosterFinal(t,f,{beforeCentroids:()=>{f.note.participants=JSON.stringify([{email:"c@example.com"}]);}});
+  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[0].speakerDecision.rejectionReason,"roster_changed");
+});
+for (const lock of [{speakerLocked:true},{speakerLockSource:"user"},{speakerStatus:"locked"},{speakerStatus:"user_locked"}]) {
+  for (const name of ["C", undefined]) test(`roster late final respects ${JSON.stringify(lock)} and ${name || "explicit Unknown"}`,async t=>{
+    const f=rosterHandlers();
+    const result=await rosterFinal(t,f,{beforeCentroids:()=>{f.note.transcript=JSON.stringify([{id:"row",source:"system",speaker:"speaker_0",speakerName:name,speakerIsPlaceholder:!name,...lock}]);}});
+    assert.equal(result.segments[0].speakerName,name);
+    assert.equal(result.segments[0].speakerLocked,true);
+    assert.equal(f.note.participants,declaredAB);
+  });
+}
+
+test("roster cohort suggestion cannot name outsider C when raw winner A is invited", async t => {
+  const f=rosterHandlers();
+  f.profiles[0].embedding=Buffer.from(new Float32Array([.9,Math.sqrt(.19),0]).buffer);
+  f.profiles[1].embedding=Buffer.from(new Float32Array([.2,0,Math.sqrt(.96)]).buffer);
+  f.profiles[2].embedding=Buffer.from(new Float32Array([.8,-.6,0]).buffer);
+  const result=await rosterFinal(t,f,{extra:[["speaker_01",new Float32Array([0,1,0])]]});
+  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[0].suggestedName,undefined);
+  assert.equal(result.segments[0].speakerDecision.path,"final_cohort");
+});
+
+test("roster direct reconciliation veto clears cached outsider names and suggestions",()=>{
+  const f=rosterHandlers();
+  const row={speaker:"speaker_0",source:"system",speakerName:"C",suggestedName:"C",suggestedProfileId:3};
+  f.handlers._reconcileLiveSpeakerState({speaker_0:{displayName:"C",profileId:3,noteId:NOTE_ID,embedding:[1,0,0]}},{speaker_0:[1,0,0]},[row]);
+  assert.equal(row.speakerName,undefined);
+  assert.equal(row.suggestedName,undefined);
+});
+test("roster provenance records the unchanged global acoustic comparison and reconstructable snapshots",async t=>{
+  const f=rosterHandlers();
+  const options=[];
+  f.handlers.databaseManager.getSpeakerProfiles=(...args)=>{options.push(args);return f.profiles;};
+  const result=await rosterFinal(t,f);
+  const d=result.segments[0].speakerDecision;
+  assert.equal(d.runId,"roster-run");
+  assert.equal(d.source,"note");
+  assert.equal(d.rawRoster,declaredAB);
+  assert.deepEqual(d.roster,JSON.parse(declaredAB));
+  assert.deepEqual(d.eligibleProfileIds,[1,2]);
+  assert.equal(d.policyVersion,1);
+  assert.equal(d.acousticWinnerProfileId,3);
+  assert.equal(d.acceptedProfileId,null);
+  assert.equal(d.origin,"machine");
+  assert.equal(d.path,"final");
+  assert.ok(Math.abs(d.scores.best-.95)<1e-6);
+  assert.ok(Math.abs(d.scores.runnerUp-.7)<1e-6);
+  assert.deepEqual(d.profileFingerprints.map(p=>p.id),[1,2,3]);
+  assert.ok(d.profileFingerprints.every(p=>/^[a-f0-9]{64}$/.test(p.fingerprint)));
+  assert.ok(options.some(args=>args[0]===true && args[1]?.includeProvisional===true));
+  assert.ok(options.every(args=>args[1]?.noteId===undefined));
+});
+
+test("roster participant without approved voice stays Unknown without an outsider or provisional suggestion",async t=>{
+  const f=rosterHandlers();
+  f.note.participants=JSON.stringify([{email:'c@example.com'}]);
+  f.profiles[2].voice_usable=0;
+  const result=await rosterFinal(t,f);
+  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[0].suggestedName,undefined);
+  assert.equal(result.segments[0].speakerDecision.rejectionReason,'voice_not_approved');
 });

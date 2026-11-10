@@ -1,3 +1,9 @@
+import {
+  humanProtected,
+  recordedNameAllowed,
+  decisionCurrentForNote,
+} from "../helpers/speakerRosterPolicy";
+import type { SpeakerDecision } from "../types/speakerRoster";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import { create } from "zustand";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
@@ -113,11 +119,13 @@ export interface TranscriptSegment {
   speakerLocked?: boolean;
   speakerLockSource?: TranscriptSpeakerLockSource;
   machineReason?: "approved_voice";
+  speakerDecision?: SpeakerDecision;
 }
 
 export const SIDE_PANEL_BREAKPOINT_PX = 1024;
 
 interface SpeakerIdentification {
+  speakerDecision?: SpeakerDecision;
   cohort: "mic" | "system";
   speakerId: string;
   displayName?: string | null;
@@ -128,6 +136,7 @@ interface SpeakerIdentification {
 }
 
 interface RecentSystemSpeaker {
+  speakerDecision?: SpeakerDecision;
   speakerId: string;
   speakerName: string | null;
   speakerIsPlaceholder: boolean;
@@ -700,8 +709,7 @@ function applySpeakerIdentification(
   if (
     segment.source !== (identification.cohort || "system") ||
     !isSegmentWithinIdentificationWindow(segment, identification) ||
-    segment.speakerLocked ||
-    segment.speakerLockSource === "user" ||
+    humanProtected(segment) ||
     ["too_short", "overlapping_speech"].includes(segment.uncertainty?.reason || "")
   ) {
     return segment;
@@ -710,6 +718,7 @@ function applySpeakerIdentification(
   return normalizeTranscriptSegment({
     ...segment,
     speaker: identification.speakerId,
+    speakerDecision: identification.speakerDecision,
     speakerName: identification.uncertainty ? undefined : identification.displayName || undefined,
     suggestedName: identification.uncertainty
       ? undefined
@@ -742,7 +751,8 @@ function rememberSystemSpeaker(
   speakerId: string | null,
   speakerName: string | null,
   speakerIsPlaceholder: boolean,
-  updatedAt = Date.now()
+  updatedAt = Date.now(),
+  speakerDecision?: SpeakerDecision
 ) {
   recentSystemSpeaker = speakerId
     ? {
@@ -750,6 +760,7 @@ function rememberSystemSpeaker(
         speakerName,
         speakerIsPlaceholder,
         updatedAt,
+        speakerDecision,
       }
     : null;
 }
@@ -806,6 +817,7 @@ function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment
       ...segment,
       speaker: recent.speakerId,
       speakerName: recent.speakerName ?? undefined,
+      speakerDecision: recent.speakerDecision,
       speakerIsPlaceholder: recent.speakerIsPlaceholder,
       speakerStatus: "provisional",
     });
@@ -827,6 +839,7 @@ function assignProvisionalSpeaker(segment: TranscriptSegment): TranscriptSegment
       ...segment,
       speaker: previousSystemSegment.speaker,
       speakerName: previousSystemSegment.speakerName,
+      speakerDecision: previousSystemSegment.speakerDecision,
       speakerIsPlaceholder: true,
       speakerStatus: "provisional",
     });
@@ -1483,8 +1496,86 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
       );
       if (segmentCleanup) ipcCleanups.push(segmentCleanup);
 
+      let latestRosterNote: NoteItem | null = null;
+      const retiredRosterRevisions = new Set<string>();
+      const currentDecision = (decision?: SpeakerDecision) =>
+        !decision ||
+        (!retiredRosterRevisions.has(decision.revision) &&
+          (!latestRosterNote || decisionCurrentForNote(decision, latestRosterNote)));
+      const scopeIncomingRow = (row: TranscriptSegment): TranscriptSegment =>
+        humanProtected(row) || currentDecision(row.speakerDecision)
+          ? row
+          : normalizeTranscriptSegment({
+              ...row,
+              speakerName: undefined,
+              suggestedName: undefined,
+              suggestedProfileId: undefined,
+              speakerIsPlaceholder: true,
+              speakerDecision: {
+                ...row.speakerDecision,
+                acceptedProfileId: null,
+                rejectionReason: "roster_changed",
+              },
+            });
+      const rosterCleanup = window.electronAPI?.onNoteUpdated?.((note) => {
+        if (
+          activeRecordingSessionId !== sessionId ||
+          note.id !== useMeetingRecordingStore.getState().recordingNoteId
+        )
+          return;
+        latestRosterNote = note;
+        const committed = parseSeedSegments(note.transcript || "", note.id);
+        for (const row of committed) {
+          if (row.speakerDecision?.rejectionReason && row.speakerDecision.previousDecision)
+            retiredRosterRevisions.add(row.speakerDecision.previousDecision.revision);
+        }
+        const vetoed = new Set(
+          committed
+            .filter((row) => row.speakerDecision && !recordedNameAllowed(row))
+            .map((row) => row.speaker)
+        );
+        const current = useMeetingRecordingStore.getState().segments;
+        const next = current.map((row) => {
+          if (humanProtected(row) || !row.speakerDecision) return row;
+          if (decisionCurrentForNote(row.speakerDecision, note) && !vetoed.has(row.speaker))
+            return row;
+          retiredRosterRevisions.add(row.speakerDecision.revision);
+          vetoed.add(row.speaker);
+          return normalizeTranscriptSegment({
+            ...row,
+            speakerName: undefined,
+            suggestedName: undefined,
+            suggestedProfileId: undefined,
+            speakerIsPlaceholder: true,
+            speakerDecision: {
+              ...row.speakerDecision,
+              acceptedProfileId: null,
+              rejectionReason: "roster_changed",
+            },
+          });
+        });
+        if (!vetoed.size) return;
+        speakerIdentifications = speakerIdentifications.filter(
+          (item) => !vetoed.has(item.speakerId)
+        );
+        if (recentSystemSpeaker && vetoed.has(recentSystemSpeaker.speakerId))
+          recentSystemSpeaker = null;
+        if (systemPartialSpeakerIdValue && vetoed.has(systemPartialSpeakerIdValue))
+          setSystemPartialSpeakerIdentity(null, null);
+        segmentsRefValue = next;
+        useMeetingRecordingStore.setState({ segments: next });
+        mergeCommittedSpeakerRows(committed);
+      });
+      if (rosterCleanup) ipcCleanups.push(rosterCleanup);
+
       const speakerCleanup = window.electronAPI?.onMeetingSpeakerIdentified?.((data) => {
         if (activeRecordingSessionId !== sessionId) return;
+        if (
+          data.speakerDecision &&
+          (retiredRosterRevisions.has(data.speakerDecision.revision) ||
+            (latestRosterNote && !decisionCurrentForNote(data.speakerDecision, latestRosterNote)))
+        )
+          return;
         reserveSpeakerIndex(data.speakerId);
         const superseded = speakerIdentifications.some(
           (item) =>
@@ -1499,7 +1590,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               data.speakerId,
               data.displayName ?? null,
               !data.displayName,
-              data.endTime
+              data.endTime,
+              data.speakerDecision
             );
           }
         }
@@ -1531,15 +1623,22 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
             rows: useMeetingRecordingStore.getState().segments,
           });
           if (activeRecordingSessionId !== sessionId || !result?.rows?.length) return;
-          mergeCommittedSpeakerRows(result.rows);
+          mergeCommittedSpeakerRows(result.rows.map(scopeIncomingRow));
           for (const assignment of result.assignments || []) {
+            if (!currentDecision(assignment.rows?.[0]?.speakerDecision)) continue;
             speakerIdentifications = speakerIdentifications.map((item) =>
               item.speakerId === assignment.speakerId
-                ? { ...item, displayName: assignment.displayName }
+                ? {
+                    ...item,
+                    displayName: assignment.displayName,
+                    speakerDecision: assignment.rows?.[0]?.speakerDecision,
+                  }
                 : item
             );
-            if (recentSystemSpeaker?.speakerId === assignment.speakerId)
+            if (recentSystemSpeaker?.speakerId === assignment.speakerId) {
               recentSystemSpeaker.speakerName = assignment.displayName;
+              recentSystemSpeaker.speakerDecision = assignment.rows?.[0]?.speakerDecision;
+            }
             if (systemPartialSpeakerIdValue === assignment.speakerId)
               setSystemPartialSpeakerIdentity(assignment.speakerId, assignment.displayName);
           }
@@ -1549,29 +1648,49 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       const mergeCleanup = window.electronAPI?.onMeetingSpeakersMerged?.((merges) => {
         if (activeRecordingSessionId !== sessionId) return;
+        const scopedMerges = merges.map((merge) =>
+          currentDecision(merge.speakerDecision)
+            ? merge
+            : {
+                ...merge,
+                displayName: null,
+                speakerDecision: {
+                  ...merge.speakerDecision,
+                  acceptedProfileId: null,
+                  rejectionReason: "roster_changed",
+                },
+              }
+        );
         let next = useMeetingRecordingStore.getState().segments;
-        for (const { keep, remove, displayName } of merges) {
+        for (const { keep, remove, displayName, speakerDecision } of scopedMerges) {
           next = next.map((seg) => {
             if (seg.speaker !== remove) return seg;
-            if (seg.speakerLocked || seg.uncertainty?.reason === "too_short") return seg;
+            if (humanProtected(seg) || seg.uncertainty?.reason === "too_short") return seg;
             return normalizeTranscriptSegment({
               ...seg,
               speaker: keep,
-              speakerName: displayName ?? seg.speakerName,
+              speakerName: displayName || undefined,
+              speakerDecision,
+              speakerIsPlaceholder: !displayName,
             });
           });
         }
         segmentsRefValue = next;
         useMeetingRecordingStore.setState({ segments: next });
 
-        for (const { keep, remove, displayName } of merges) {
+        for (const { keep, remove, displayName, speakerDecision } of scopedMerges) {
           if (recentSystemSpeaker?.speakerId === remove) {
             recentSystemSpeaker.speakerId = keep;
-            if (displayName) recentSystemSpeaker.speakerName = displayName;
+            recentSystemSpeaker.speakerName = displayName || null;
+            recentSystemSpeaker.speakerDecision = speakerDecision;
           }
 
           for (const id of speakerIdentifications) {
-            if (id.speakerId === remove) id.speakerId = keep;
+            if (id.speakerId === remove) {
+              id.speakerId = keep;
+              id.displayName = displayName || null;
+              id.speakerDecision = speakerDecision;
+            }
           }
         }
       });

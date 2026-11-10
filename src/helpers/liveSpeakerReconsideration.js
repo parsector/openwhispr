@@ -1,3 +1,5 @@
+const speakerScope = require("./noteSpeakerScope");
+const { eligible, humanProtected } = require("./speakerRosterPolicy");
 // Reassess only unnamed, clean clusters in the current run. The identifier
 // supplies acoustic evidence; transcript rows supply the owner's decisions.
 const { randomUUID } = require("node:crypto");
@@ -18,6 +20,7 @@ const FIELDS = [
   "suggestedProfileId",
   "uncertainty",
   "machineReason",
+  "speakerDecision",
 ];
 const snapshot = (row) =>
   Object.fromEntries(FIELDS.filter((key) => row[key] !== undefined).map((key) => [key, row[key]]));
@@ -31,7 +34,7 @@ function eligibilityState(identifier, speakerId, rows) {
   if (identifier.getAnchorState(speakerId) === "active") return "anchored";
   if (rows.some((row) => row.speakerLockSource === "user" && row.speakerName))
     return "confirmed-by-owner";
-  if (rows.some((row) => row.speakerLocked || row.speakerStatus === "locked")) return "locked";
+  if (rows.some(humanProtected)) return "locked";
   if (rows.some((row) => row.overlap || row.uncertainty?.reason === "overlapping_speech"))
     return "uncertain-overlap";
   if (
@@ -91,6 +94,10 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
       if (!match?.profile) {
         const reason = match?.reason || "no_match";
         skipped.push({ speakerId, reason });
+        if (match?.speakerDecision) {
+          for (const row of cluster) speakerScope.veto(row, match.speakerDecision);
+          changed = true;
+        }
         if (reason === "close_match")
           for (const row of cluster) {
             if (row.uncertainty?.reason !== "close_match" || row.speakerStatus !== "provisional") {
@@ -102,6 +109,34 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
         continue;
       }
       const profile = match.profile;
+      const scope = speakerScope.readScope(database, noteId);
+      if (
+        !eligible(scope, profile.id) ||
+        (match.speakerDecision && match.speakerDecision.revision !== scope.revision)
+      ) {
+        for (const row of cluster)
+          speakerScope.veto(
+            row,
+            speakerScope.decision(scope, {
+              runId,
+              path: "live_reconsideration",
+              profile,
+              rejectionReason: "outside_roster",
+              profiles: [profile],
+            })
+          );
+        changed = true;
+        skipped.push({ speakerId, reason: "outside_roster" });
+        continue;
+      }
+      const evidence =
+        match.speakerDecision ||
+        speakerScope.decision(scope, {
+          runId,
+          path: "live_reconsideration",
+          profile,
+          profiles: [profile],
+        });
       const id = randomUUID();
       const snapshots = {};
       const sequence = log.nextSequence;
@@ -114,6 +149,7 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
         row.suggestedProfileId = profile.id;
         row.uncertainty = undefined;
         row.machineReason = "approved_voice";
+        row.speakerDecision = evidence;
         snapshots[row.id] = { previous, next: snapshot(row) };
       }
       const event = {
@@ -136,6 +172,7 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
         displayName: profile.display_name,
         profileId: profile.id,
         actionId: id,
+        speakerDecision: evidence,
         rows: cluster.map((row) => row),
       });
       changed = true;
@@ -165,7 +202,8 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
       assignment.speakerId,
       assignment.profileId,
       assignment.displayName,
-      noteId
+      noteId,
+      assignment.speakerDecision
     );
   return result;
 }
