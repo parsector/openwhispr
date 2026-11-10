@@ -14494,19 +14494,29 @@ class IPCHandlers {
       liveSpeakerIdentifier.hasActiveAnchor(noteId, runId)
     );
 
-    ipcMain.handle("reconsider-live-speakers", (_event, request) => {
+    ipcMain.handle("reconsider-live-speakers", async (_event, request) => {
       if (
         request?.noteId !== this._activeMeetingNoteId ||
         request?.runId !== liveSpeakerIdentifier.activeRunId
       )
         return { assignments: [], rows: [], skipped: [{ reason: "not_current_meeting" }] };
       try {
+        const evaluations = await require("./speakerRowEvaluation").prepareSpeakerRowEvaluations(
+          this.databaseManager,
+          liveSpeakerIdentifier,
+          request.noteId,
+          request.runId,
+          request.rows,
+          this.meetingAudioStore,
+          require("./speakerEmbeddings")
+        );
         const result = require("./liveSpeakerReconsideration").reconsiderLiveClusters(
           this.databaseManager,
           liveSpeakerIdentifier,
           request.noteId,
           request.runId,
-          request.rows
+          request.rows,
+          evaluations
         );
         if (result.changed) {
           const note = this.databaseManager.getNote(request.noteId);
@@ -14946,13 +14956,22 @@ class IPCHandlers {
 
   _retroactiveMapping(profile, onlyNoteId = null) {
     if (!profile.embedding?.length || profile.sample_count === 0) return;
-    setImmediate(() => {
+    setImmediate(async () => {
       try {
         const embeddings = require("./speakerEmbeddings");
         const profiles = this.databaseManager.getSpeakerProfiles(true);
         for (const noteId of onlyNoteId != null
           ? [onlyNoteId]
           : this.databaseManager.getNotesWithUnmappedSpeakers()) {
+          const evaluations = await require("./speakerRowEvaluation").prepareSpeakerRowEvaluations(
+            this.databaseManager,
+            { getSpeakerProfiles: () => profiles },
+            noteId,
+            null,
+            [],
+            this.meetingAudioStore,
+            embeddings
+          );
           const scope = speakerScope.readScope(this.databaseManager, noteId, profiles);
           const note = this.databaseManager.getNote(noteId);
           if (!note?.transcript) continue;
@@ -14964,28 +14983,30 @@ class IPCHandlers {
               emb.embedding.byteOffset,
               emb.embedding.byteLength / 4
             );
-            const ranked = profiles
-              .map((p) => ({
-                profile: p,
-                score: embeddings.cosineSimilarity(
-                  vector,
-                  new Float32Array(
-                    p.embedding.buffer,
-                    p.embedding.byteOffset,
-                    p.embedding.byteLength / 4
-                  )
-                ),
-              }))
-              .sort((a, b) => b.score - a.score);
-            const best = ranked[0];
-            if (best?.profile.id !== profile.id) continue;
-            const reason = require("./speakerUncertainty").matchReason(
-              { name: best.profile.display_name, score: best.score },
-              ranked[1] && { name: ranked[1].profile.display_name, score: ranked[1].score }
-            );
             for (const row of doc.rows) {
               if (row.speaker !== emb.speaker_id || row.speakerName || isSpeakerLocked(row))
                 continue;
+              const evaluation = evaluations.get(row.id);
+              const rowVector = evaluation?.embedding || vector;
+              const ranked = profiles
+                .map((p) => ({
+                  profile: p,
+                  score: embeddings.cosineSimilarity(
+                    rowVector,
+                    new Float32Array(
+                      p.embedding.buffer,
+                      p.embedding.byteOffset,
+                      p.embedding.byteLength / 4
+                    )
+                  ),
+                }))
+                .sort((a, b) => b.score - a.score);
+              const best = ranked[0];
+              if (best?.profile.id !== profile.id) continue;
+              const reason = require("./speakerUncertainty").matchReason(
+                { name: best.profile.display_name, score: best.score },
+                ranked[1] && { name: ranked[1].profile.display_name, score: ranked[1].score }
+              );
               const allowed = rosterPolicy.mayAutoName(row, best.profile, scope, {
                 acousticAccepted: best.score > 0.6 && !reason,
               });
@@ -15003,13 +15024,39 @@ class IPCHandlers {
                 },
                 rejectionReason: allowed ? null : "retroactive_rejected",
               });
-              if (allowed)
-                applySuggestedSpeaker(row, {
-                  suggestedName: profile.display_name,
-                  suggestedProfileId: profile.id,
-                  speakerDecision: evidence,
-                });
-              else speakerScope.veto(row, evidence);
+              if (evaluation && evaluation.previousDecisionId === row.speakerDecision?.decisionId) {
+                evidence.evaluation = {
+                  rowId: row.id,
+                  previousDecisionId: row.speakerDecision.decisionId,
+                  audioContentHash: evaluation.audioContentHash,
+                  audioSpan: { ...row.audioSpan },
+                  revision: scope.revision,
+                  rosterRevision: scope.rosterRevision,
+                  profileFingerprint: speakerScope.profileFingerprint(best.profile),
+                };
+              }
+              const incoming = {
+                ...row,
+                speakerDecision: evidence,
+                ...(evaluation ? { audioContentHash: evaluation.audioContentHash } : {}),
+                ...(allowed
+                  ? {
+                      suggestedName: profile.display_name,
+                      suggestedProfileId: profile.id,
+                      speakerStatus: "suggested",
+                    }
+                  : {}),
+              };
+              Object.assign(
+                row,
+                require("./automaticSpeakerAttribution").resolveAutomaticSpeaker(
+                  row,
+                  row.speakerDecision,
+                  scope,
+                  incoming
+                )
+              );
+              if (!allowed) speakerScope.veto(row, row.speakerDecision);
               changed = true;
             }
           }
@@ -15350,6 +15397,8 @@ class IPCHandlers {
         speakerScope.enforceRows(this.databaseManager, noteId, payload.segments, {
           runId: sessionId,
           path: "final_commit",
+          storedRows: require("./transcriptDocument").readTranscriptDocument(saved?.transcript)
+            .rows,
           scope: recognitionScope,
           includeUnrecorded: true,
         });

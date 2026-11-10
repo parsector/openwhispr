@@ -1,3 +1,4 @@
+import { restoreTranscriptSpeakerRows } from "../../utils/transcriptSpeakerState";
 import { resolveSpeakerRoster } from "../../helpers/speakerRosterPolicy";
 import {
   useState,
@@ -673,6 +674,10 @@ export default function NoteEditor({
     onNewChatUnsent: setChatDraft,
   });
 
+  const speakerScopeNoteRef = useRef(note);
+  useEffect(() => {
+    speakerScopeNoteRef.current = note;
+  }, [note]);
   const speakerProfileRequestRef = useRef(0);
   const speakerMappingRequestRef = useRef(0);
   const refreshSpeakerProfiles = useCallback(() => {
@@ -946,13 +951,23 @@ export default function NoteEditor({
           // Merge after the await: a transcription row may have arrived during IPC.
           const liveNow = useMeetingRecordingStore.getState().segments;
           const committedById = new Map(committed.map((row) => [row.id, row]));
-          mergeCommittedSpeakerRows(committed, { restoreDecisions: true });
+          mergeCommittedSpeakerRows(committed, {
+            affectedRowIds: result.affectedRowIds || [],
+            noteScope: speakerScopeNoteRef.current,
+          });
           const saveDeferred = setSpeakerCorrectionPending(false);
           if (saveDeferred || liveNow.some((row) => !committedById.has(row.id))) {
             await persistLiveTranscript();
           }
         } else {
-          setDiarizedSegments(committed);
+          setDiarizedSegments(
+            restoreTranscriptSpeakerRows(
+              before,
+              committed,
+              speakerScopeNoteRef.current,
+              result.affectedRowIds || []
+            )
+          );
         }
         if (
           result.mapping &&

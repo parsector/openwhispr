@@ -702,3 +702,51 @@ test("roster late reconsideration and merge replies cannot restore a withdrawn l
   assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName,null);
   await store.stopRecording();
 });
+
+for (const cause of ["cached final", "diarization_skipped", "diarization_failed"]) {
+  test(`${cause} cannot reaccept an identical vetoed row at completion`, async (t) => {
+    const { api, state, notes } = createElectronAPI();
+    await loadStore(t, api);
+    const decision = {
+      decisionId: "veto",
+      noteId: NOTE_ID,
+      revision: "r",
+      source:"none",rawRoster:null,rosterRevision:0,
+      eligibleProfileIds: [1],
+      acceptedProfileId: null,
+      rejectionReason: "no_match",
+    };
+    const row = {
+      id: "same-row",
+      text: "hello",
+      source: "system",
+      speaker: "speaker_0",
+      speakerIsPlaceholder: true,
+      speakerDecision: decision,
+      audioSpan: { recordingId: 1, trackId: "system", startSample: 0, endSample: 96000 },
+    };
+    notes.get(NOTE_ID).transcript = JSON.stringify([row]);
+    state.diarizationCallback({
+      noteId: NOTE_ID,
+      sessionId: "late",
+      centroidPersistence: { cause },
+      segments: [
+        {
+          ...row,
+          speakerName: "A",
+          speakerIsPlaceholder: false,
+          speakerDecision: {
+            ...decision,
+            decisionId: "cached",
+            acceptedProfileId: 1,
+            rejectionReason: null,
+          },
+        },
+      ],
+    });
+    await settle();
+    const actual = JSON.parse(notes.get(NOTE_ID).transcript).rows[0];
+    assert.equal(actual.speakerName, undefined);
+    assert.equal(actual.speakerDecision.rejectionReason, "no_match");
+  });
+}

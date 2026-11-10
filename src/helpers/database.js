@@ -4693,6 +4693,9 @@ class DatabaseManager {
           {
             path: "database_commit",
             noteOverride: scopedNote,
+            storedRows: require("./transcriptDocument").readTranscriptDocument(previous.transcript)
+              .rows,
+            restorationRowIds: options?.speakerRestorationRowIds || [],
           }
         );
       }

@@ -185,6 +185,12 @@ test("undo invalidates reconsidered identification windows before a delayed fina
     timestamp: now, speaker: "speaker_0", speakerName: "Sam", speakerDecision: acceptedDecision }],
     assignments: [{ speakerId: "speaker_0", displayName: "Sam", rows: [{ speakerDecision: acceptedDecision }] }] };
   await state.evidenceCallback({ noteId: NOTE_ID, runId: store.getActiveRecordingSessionId() });
+  // Undo supplies each affected row's own restored decision before removing
+  // the human mapping. Mapping absence is not a cluster-wide acoustic veto.
+  store.mergeCommittedSpeakerRows([{...segmentsOf(store).find(row => row.id === "reconsidered"),
+    speakerName:undefined, speakerIsPlaceholder:true,
+    speakerDecision:{...acceptedDecision,acceptedProfileId:null,rejectionReason:"no_match"}}],
+    {affectedRowIds:["reconsidered"]});
   store.restoreSpeakerIdentityCache("speaker_0", null);
   state.segmentCallback({ text: "delayed", source: "system", type: "final", timestamp: now });
   assert.notEqual(segmentWithText(store, "delayed").speakerName, "Sam");

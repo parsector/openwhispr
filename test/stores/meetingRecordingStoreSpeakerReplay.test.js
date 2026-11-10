@@ -23,6 +23,7 @@ const accepted = {
   acceptedProfileId: 1,
   acceptedIdentity: { email: "a@example.com" },
   rejectionReason: null,
+  profileFingerprints: [{ id: 1, fingerprint: "current-profile" }],
 };
 const veto = {
   ...accepted,
@@ -100,6 +101,7 @@ for (const replay of ["identification", "cached windows", "cluster merge"]) {
       speakerName: undefined,
       speakerIsPlaceholder: true,
       audioSpan: { recordingId: 1, trackId: "system", startSample: 0, endSample: 32000 },
+      audioContentHash: "row-audio",
       uncertainty: { reason: "close_match" },
       speakerDecision: veto,
     };
@@ -141,11 +143,15 @@ for (const replay of ["identification", "cached windows", "cluster merge"]) {
         audioSpan: { endSample: 32000, startSample: 0, trackId: "system", recordingId: 1 },
       },
     ]);
-    assert.equal(recordedNameAllowed(f.rows()[0]), false, "serialized field order is not new audio");
+    assert.equal(
+      recordedNameAllowed(f.rows()[0]),
+      false,
+      "serialized field order is not new audio"
+    );
     const fresh = {
       ...cachedCommit,
       uncertainty: undefined,
-      audioSpan: { recordingId: 1, trackId: "system", startSample: 0, endSample: 96000 },
+      audioSpan: { recordingId: 1, trackId: "system", startSample: 0, endSample: 32000 },
     };
     f.store.mergeCommittedSpeakerRows([
       { ...fresh, speakerDecision: { ...accepted, rosterRevision: 99 } },
@@ -155,7 +161,7 @@ for (const replay of ["identification", "cached windows", "cluster merge"]) {
       false,
       "fresh audio still requires the current roster"
     );
-    // A committed evaluation of this row with new audio can still replace a machine veto.
+    // A fresh evaluation of the same canonical audio can replace a machine veto.
     f.store.mergeCommittedSpeakerRows([
       {
         ...fresh,
@@ -163,6 +169,14 @@ for (const replay of ["identification", "cached windows", "cluster merge"]) {
           ...accepted,
           decisionId: "fresh-row-evaluation",
           previousDecision: veto,
+          evaluation: {
+            rowId: rejected.id,
+            previousDecisionId: veto.decisionId,
+            audioContentHash: "row-audio",
+            revision: accepted.revision,
+            rosterRevision: accepted.rosterRevision,
+            profileFingerprint: "current-profile",
+          },
         },
       },
     ]);
@@ -213,7 +227,10 @@ for (const path of [
         runId: f.store.getActiveRecordingSessionId(),
       });
     } else {
-      f.store.mergeCommittedSpeakerRows([changed], { restoreDecisions: path.includes("restore") });
+      f.store.mergeCommittedSpeakerRows(
+        [changed],
+        path.includes("restore") ? { affectedRowIds: [changed.id] } : {}
+      );
       if (path.includes("restore"))
         f.store.restoreSpeakerIdentityCache("speaker_0", path === "undo restore" ? null : "B");
     }
@@ -221,9 +238,144 @@ for (const path of [
     assert.equal(f.rows().find((row) => row.text === "covered sibling").speakerName, "Sibling");
     f.final("covered affected", f.now + 100);
     const affected = f.rows().find((row) => row.text === "covered affected");
-    assert.equal(affected.speakerName, path === "undo restore" ? undefined : "B");
+    assert.equal(affected.speakerName, "B");
     assert.equal(affected.speakerAssessmentAvailable, true);
-    if (path === "undo restore") assert.equal(recordedNameAllowed(affected), false);
-    else assert.deepEqual(affected.speakerDecision, changedDecision);
+    assert.deepEqual(affected.speakerDecision, changedDecision);
+  });
+}
+
+for (const change of ["track", "recording", "sample"]) {
+  test(`coordinate-only supersession (${change}) is refused`, async (t) => {
+    const f = await fixture(t);
+    f.final("vetoed", f.now);
+    const span = { recordingId: 1, trackId: "system", startSample: 0, endSample: 96000 };
+    const rejected = {
+      ...f.rows()[0],
+      audioSpan: span,
+      speakerDecision: veto,
+      speakerIsPlaceholder: true,
+    };
+    f.store.mergeCommittedSpeakerRows([rejected]);
+    const changed = {
+      ...span,
+      ...(change === "track"
+        ? { trackId: "mic" }
+        : change === "recording"
+          ? { recordingId: 2 }
+          : { endSample: 95999 }),
+    };
+    f.store.mergeCommittedSpeakerRows([
+      {
+        ...rejected,
+        audioSpan: changed,
+        speakerName: "A",
+        speakerIsPlaceholder: false,
+        speakerDecision: accepted,
+      },
+    ]);
+    assert.equal(f.rows()[0].speakerName, undefined);
+    assert.equal(f.rows()[0].speakerDecision.rejectionReason, "close_match");
+  });
+}
+
+test("splitting one accepted row partitions its shared cache window and undo keeps sibling evidence", async (t) => {
+  const f = await fixture(t);
+  f.final("selected", f.now);
+  f.final("sibling", f.now + 1000);
+  f.identify("speaker_0", f.now - 100, f.now + 1500);
+  const [selected, sibling] = f.rows();
+  f.store.mergeCommittedSpeakerRows(
+    [
+      {
+        ...selected,
+        speaker: "speaker_1",
+        speakerName: undefined,
+        speakerIsPlaceholder: true,
+        uncertainty: { reason: "possible_mixed_speakers" },
+      },
+      sibling,
+    ],
+    { affectedRowIds: [selected.id] }
+  );
+  f.final("sibling replay", f.now + 1100);
+  const replay = f.rows().find((row) => row.text === "sibling replay");
+  assert.equal(replay.speakerName, "A");
+  assert.equal(replay.speaker, "speaker_0");
+  f.store.restoreSpeakerIdentityCache("speaker_0", null);
+  f.final("sibling after undo", f.now + 1200);
+  assert.equal(f.rows().find((row) => row.text === "sibling after undo").speakerName, "A");
+});
+
+test("restoration cannot bypass a veto outside the action affected rows", async (t) => {
+  const f = await fixture(t);
+  f.final("affected", f.now);
+  f.final("unaffected", f.now + 1000);
+  const rejected = f
+    .rows()
+    .map((row) => ({ ...row, speakerDecision: veto, speakerIsPlaceholder: true }));
+  f.store.mergeCommittedSpeakerRows(rejected);
+  f.store.mergeCommittedSpeakerRows(
+    rejected.map((row) => ({
+      ...row,
+      speakerName: "A",
+      speakerIsPlaceholder: false,
+      speakerDecision: accepted,
+    })),
+    { restoreDecisions: true, affectedRowIds: [rejected[0].id] }
+  );
+  assert.equal(f.rows()[1].speakerName, undefined);
+});
+
+for (const fresh of [false, true]) {
+  test(`reconsideration ${fresh ? "with" : "without"} fresh canonical row evaluation ${fresh ? "names the row" : "keeps its veto"}`, async (t) => {
+    const f = await fixture(t);
+    f.final("vetoed", f.now);
+    f.identify("speaker_0", f.now - 100, f.now + 500);
+    const row = {
+      ...f.rows()[0],
+      speakerName: undefined,
+      speakerIsPlaceholder: true,
+      speakerDecision: veto,
+      audioContentHash: "canonical-row",
+      audioSpan: { recordingId: 1, trackId: "system", startSample: 0, endSample: 96000 },
+    };
+    f.callbacks.NoteUpdated({
+      id: NOTE_ID,
+      participants: "[]",
+      speaker_roster_revision: 0,
+      transcript: JSON.stringify([row]),
+    });
+    const evidence = {
+      ...accepted,
+      decisionId: "new-evaluation",
+      ...(fresh
+        ? {
+            evaluation: {
+              rowId: row.id,
+              previousDecisionId: veto.decisionId,
+              audioContentHash: "canonical-row",
+              revision: accepted.revision,
+              rosterRevision: accepted.rosterRevision,
+              profileFingerprint: "current-profile",
+            },
+          }
+        : {}),
+    };
+    const changed = {
+      ...row,
+      speakerName: "A",
+      speakerIsPlaceholder: false,
+      speakerDecision: evidence,
+    };
+    f.callbacks.reconsidered = {
+      rows: [changed],
+      assignments: [{ speakerId: "speaker_0", displayName: "A", rows: [changed] }],
+    };
+    await f.callbacks.MeetingSpeakerEvidenceChanged({
+      noteId: NOTE_ID,
+      runId: f.store.getActiveRecordingSessionId(),
+    });
+    assert.equal(f.rows()[0].speakerName, fresh ? "A" : undefined);
+    assert.equal(humanProtected(f.rows()[0]), false);
   });
 }

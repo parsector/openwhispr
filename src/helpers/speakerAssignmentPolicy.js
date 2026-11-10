@@ -1,3 +1,4 @@
+const { resolveAutomaticSpeaker } = require("./automaticSpeakerAttribution");
 const SPEAKER_STATUS = Object.freeze({
   PROVISIONAL: "provisional",
   CONFIRMED: "confirmed",
@@ -49,9 +50,14 @@ function applySpeakerUpdate(segment, patch, status) {
     return segment;
   }
 
-  Object.assign(segment, patch);
-
-  segment.speakerStatus = status;
+  Object.assign(
+    segment,
+    resolveAutomaticSpeaker(segment, segment.speakerDecision, null, {
+      ...segment,
+      ...patch,
+      speakerStatus: status,
+    })
+  );
   return segment;
 }
 

@@ -111,4 +111,4 @@ async function proposeClusterSplit(rows, selectedIds, noteId, audioStore, extrac
   return partitionClusterByVoice(ids, selectedIds, embeddings);
 }
 
-module.exports = { partitionClusterByVoice, proposeClusterSplit };
+module.exports = { partitionClusterByVoice, proposeClusterSplit, wavTo16kSamples };

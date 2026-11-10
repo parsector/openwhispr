@@ -1,3 +1,4 @@
+import { resolveAutomaticSpeaker } from "./automaticSpeakerAttribution.js";
 import { humanProtected, recordedNameAllowed, normalizedEmail } from "./speakerRosterPolicy.js";
 // The note owns the counter even when its last row is removed. Old notes are
 // arrays; version 2 stores note metadata beside the rows.
@@ -394,12 +395,12 @@ function reconcileCloudTranscript(cloudRaw, localRaw, { noteId = "unknown" } = {
       const own = rows[ownIndex];
       // A live row cannot resurrect a locally deleted row. Text changes on
       // an existing id still arrive; attribution and history remain local.
-      rows[ownIndex] = {
+      rows[ownIndex] = resolveAutomaticSpeaker(own, own.speakerDecision, null, {
         ...own,
         ...(incoming.text !== undefined && { text: incoming.text }),
         ...(incoming.timestamp !== undefined && { timestamp: incoming.timestamp }),
         ...(incoming.source !== undefined && { source: incoming.source }),
-      };
+      });
     }
   }
   return {
@@ -448,29 +449,34 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
   }
   const seen = new Set();
   const rows = proposed.rows.map((row) => {
-    const own = byId.get(row.id);
-    if (!own) return row;
+    const own = byId.get(row.id) || byId.get(row.parentRowId);
+    if (!own) return resolveAutomaticSpeaker(row, null, null, row);
     seen.add(row.id);
     const protectedAssignment =
       humanProtected(own) ||
       (own.machineReason === "approved_voice" &&
         own.speaker === row.speaker &&
         !row.speakerDecision?.rejectionReason);
-    return protectedAssignment
-      ? {
-          ...row,
-          speakerName: own.speakerName,
-          speakerIsPlaceholder: own.speakerIsPlaceholder,
-          speakerStatus: own.speakerStatus,
-          speakerLocked: own.speakerLocked,
-          speakerLockSource: own.speakerLockSource,
-          quarantinedCorrections: own.quarantinedCorrections,
-          suggestedName: own.suggestedName,
-          suggestedProfileId: own.suggestedProfileId,
-          machineReason: own.machineReason,
-          speakerDecision: own.speakerDecision,
-        }
-      : row;
+    return resolveAutomaticSpeaker(
+      own,
+      own.speakerDecision,
+      null,
+      protectedAssignment
+        ? {
+            ...row,
+            speakerName: own.speakerName,
+            speakerIsPlaceholder: own.speakerIsPlaceholder,
+            speakerStatus: own.speakerStatus,
+            speakerLocked: own.speakerLocked,
+            speakerLockSource: own.speakerLockSource,
+            quarantinedCorrections: own.quarantinedCorrections,
+            suggestedName: own.suggestedName,
+            suggestedProfileId: own.suggestedProfileId,
+            machineReason: own.machineReason,
+            speakerDecision: own.speakerDecision,
+          }
+        : row
+    );
   });
   rows.push(
     ...current.rows.filter(

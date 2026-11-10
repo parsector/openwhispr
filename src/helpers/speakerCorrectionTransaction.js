@@ -83,6 +83,7 @@ function applySpeakerCorrection(database, identifier, request) {
       if (row?.id && !byId.has(row.id)) byId.set(row.id, row);
     let rows = [...byId.values()];
     let splitReport = null;
+    let affectedRowIds = [];
     if (request.type === "apply") {
       const { scope, target, name, profileId, email } = request;
       if (
@@ -144,7 +145,7 @@ function applySpeakerCorrection(database, identifier, request) {
         : null;
       // The empty string is the durable run-mapping sentinel for explicit Unknown.
       const after = key ? { display_name: name ?? "", profile_id: chosenProfileId } : null;
-      const affectedRowIds = affected.map((row) => row.id);
+      affectedRowIds = affected.map((row) => row.id);
       const affectedSet = new Set(affectedRowIds);
       const snapshots = {};
       const timestamp = new Date().toISOString();
@@ -270,6 +271,7 @@ function applySpeakerCorrection(database, identifier, request) {
         changed.push(next);
         return next;
       });
+      affectedRowIds = [...selected];
       const event = {
         id,
         noteId,
@@ -310,6 +312,7 @@ function applySpeakerCorrection(database, identifier, request) {
           .prepare("UPDATE notes SET deleted_at = NULL, sync_status = 'pending' WHERE id = ?")
           .run(noteId);
       const event = action.event;
+      affectedRowIds = event.affectedRowIds || event.rowIds || Object.keys(event.snapshots || {});
       if (event.clusterId) invalidatedClusters.add(event.clusterId);
       for (const row of rows)
         if (event.affectedRowIds?.includes(row.id) || event.rowIds?.includes(row.id))
@@ -363,15 +366,23 @@ function applySpeakerCorrection(database, identifier, request) {
     }
     // Old notes may still contain the pre-log row copy. This write moves its
     // events into the log and removes every duplicate in the same transaction.
+    require("./noteSpeakerScope").enforceRows(database, noteId, rows, {
+      storedRows: saved,
+      restorationRowIds: affectedRowIds,
+    });
     const transcript = writeTranscriptDocument(
       rows.map(({ corrections, ...row }) => row),
       readTranscriptDocument(note.transcript).unknownNumberHighWater
     );
-    const result = database.updateNote(noteId, {
-      transcript,
-      speaker_action_log: JSON.stringify(nextLog),
-      speaker_label_undo: null,
-    });
+    const result = database.updateNote(
+      noteId,
+      {
+        transcript,
+        speaker_action_log: JSON.stringify(nextLog),
+        speaker_label_undo: null,
+      },
+      { speakerRestorationRowIds: affectedRowIds }
+    );
     if (!result?.success) throw Error(result?.error || "transcript_failed");
     if (request.type !== "undo") {
       const changedRows =
@@ -408,7 +419,10 @@ function applySpeakerCorrection(database, identifier, request) {
     }
     return {
       success: true,
-      rows: readTranscriptDocument(transcript).rows,
+      rows: readTranscriptDocument(
+        result.note?.transcript ?? database.getNote(noteId)?.transcript ?? transcript
+      ).rows,
+      affectedRowIds,
       mapping: committedMapping,
       report: splitReport,
     };

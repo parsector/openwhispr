@@ -31,6 +31,20 @@ export interface SpeakerDecision {
   rejectionReason: string | null;
   profileFingerprints: Array<{ id: number; fingerprint: string | null }>;
   modelFingerprint: string | null;
+  evaluation?: {
+    rowId: string;
+    previousDecisionId: string;
+    audioContentHash: string;
+    audioSpan?: {
+      recordingId: string | number;
+      trackId: string;
+      startSample: number;
+      endSample: number;
+    };
+    revision: string;
+    rosterRevision: number;
+    profileFingerprint: string;
+  };
   previousDecision?: SpeakerDecision | null;
   rawDecision?: SpeakerDecision;
 }

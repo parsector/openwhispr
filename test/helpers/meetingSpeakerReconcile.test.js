@@ -988,3 +988,105 @@ test("roster participant without approved voice stays Unknown without an outside
   assert.equal(result.segments[0].suggestedName,undefined);
   assert.equal(result.segments[0].speakerDecision.rejectionReason,'voice_not_approved');
 });
+
+test("retroactive cached mapping and reconsideration agree that a durable veto needs a fresh row evaluation", async () => {
+  const f = rosterHandlers();
+  f.profiles[0].embedding = Buffer.from(new Float32Array([1, 0, 0]).buffer);
+  f.profiles[2].embedding = Buffer.from(new Float32Array([0, 0, 1]).buffer);
+  const scope = require("../../src/helpers/noteSpeakerScope");
+  const evidence = scope.decision(scope.readScope(f.handlers.databaseManager, NOTE_ID), {
+    runId: "run",
+    path: "evaluation",
+    profiles: f.profiles,
+    rejectionReason: "no_match",
+  });
+  const row = {
+    id: "vetoed",
+    text: "hello",
+    source: "system",
+    speaker: "speaker_0",
+    diarizationRunId: "run",
+    speakerIsPlaceholder: true,
+    speakerDecision: evidence,
+  };
+  f.note.transcript = JSON.stringify([row]);
+  f.handlers._retroactiveMapping(f.profiles[0]);
+  await new Promise((resolve) => setImmediate(resolve));
+  const retro = require("../../src/helpers/transcriptDocument").readTranscriptDocument(
+    f.note.transcript
+  ).rows[0];
+  assert.equal(retro.speakerName, undefined);
+  assert.equal(retro.suggestedName, undefined);
+  assert.deepEqual(retro.speakerDecision, evidence);
+  f.handlers.databaseManager.db = { transaction: (fn) => fn };
+  const identifier = {
+    running: true,
+    activeRunId: "run",
+    transientEmbeddings: new Map([["speaker_0", new Float32Array([1, 0, 0])]]),
+    transientCohorts: new Map(),
+    getSpeakerProfiles: () => f.profiles,
+  };
+  const result = require("../../src/helpers/liveSpeakerReconsideration").reconsiderLiveClusters(
+    f.handlers.databaseManager,
+    identifier,
+    NOTE_ID,
+    "run"
+  );
+  assert.deepEqual(result.assignments, []);
+});
+
+for (const cause of ["skipped", "failed"]) {
+  test(`main ${cause} final preserves an identical persisted row veto over cached accepted evidence`, async () => {
+    const f = rosterHandlers();
+    const scope = require("../../src/helpers/noteSpeakerScope");
+    const accepted = scope.decision(scope.readScope(f.handlers.databaseManager, NOTE_ID), {
+      runId: "run",
+      path: "live",
+      profile: f.profiles[0],
+      profiles: f.profiles,
+    });
+    const row = {
+      id: "same",
+      text: "hello",
+      source: "system",
+      timestamp: 1,
+      speaker: "speaker_0",
+      speakerName: "A",
+      speakerDecision: accepted,
+    };
+    const veto = {
+      ...accepted,
+      decisionId: "row-veto",
+      acceptedProfileId: null,
+      acceptedIdentity: null,
+      rejectionReason: "no_match",
+    };
+    f.note.transcript = JSON.stringify([
+      { ...row, speakerName: undefined, speakerIsPlaceholder: true, speakerDecision: veto },
+    ]);
+    f.handlers.speakerDiarizationEnabled = cause !== "skipped";
+    f.handlers.diarizationManager = Object.assign(new (loadDiarizationManager())(), {
+      isAvailable: () => true,
+      convertRawPcmToWav: async () => {
+        throw Error("fixture failure");
+      },
+    });
+    const result = await new Promise((resolve) =>
+      f.handlers._startOrSkipDiarization(
+        "run",
+        "/nonexistent/final.pcm",
+        0,
+        [row],
+        {
+          isDestroyed: () => false,
+          webContents: { send: (_channel, payload) => resolve(payload) },
+        },
+        null,
+        null,
+        NOTE_ID
+      )
+    );
+    assert.equal(result.segments[0].speakerName, undefined);
+    assert.deepEqual(result.segments[0].speakerDecision, veto);
+  });
+}

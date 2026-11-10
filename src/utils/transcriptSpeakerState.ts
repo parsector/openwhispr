@@ -1,3 +1,4 @@
+import { resolveAutomaticSpeaker } from "../helpers/automaticSpeakerAttribution";
 import { recordedNameAllowed } from "../helpers/speakerRosterPolicy";
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import { allocateUnknownNumbers, writeTranscriptDocument } from "../helpers/transcriptDocument";
@@ -70,6 +71,7 @@ export const isTranscriptSpeakerLocked = (segment: TranscriptSegment) =>
   canonicalizeTranscriptSpeakerStatus(segment.speakerStatus) === "locked";
 
 export const normalizeTranscriptSegment = (segment: TranscriptSegment): TranscriptSegment => {
+  segment = resolveAutomaticSpeaker(segment, segment.speakerDecision, null, segment);
   if (!recordedNameAllowed(segment))
     segment = {
       ...segment,
@@ -100,7 +102,10 @@ export const normalizeTranscriptSegments = (segments: TranscriptSegment[], noteH
 export const applyTranscriptSpeakerPatch = (
   segment: TranscriptSegment,
   patch: Partial<Pick<TranscriptSegment, SpeakerStateField>>
-) => normalizeTranscriptSegment({ ...segment, ...patch });
+) =>
+  normalizeTranscriptSegment(
+    resolveAutomaticSpeaker(segment, segment.speakerDecision, null, { ...segment, ...patch })
+  );
 
 export const lockTranscriptSpeaker = (
   segment: TranscriptSegment,
@@ -181,7 +186,9 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
     }
   }
 
-  return normalizeTranscriptSegment(merged);
+  return normalizeTranscriptSegment(
+    resolveAutomaticSpeaker(existing, existing.speakerDecision, null, merged)
+  );
 };
 
 export const mergeTranscriptSegments = (
@@ -231,6 +238,7 @@ export const mergeTranscriptSegments = (
       isTranscriptSpeakerLocked(parent)
     )
       return;
+    if (parent) segment = resolveAutomaticSpeaker(parent, parent.speakerDecision, null, segment);
     const findUnused = (candidates?: number[]) =>
       candidates?.find((candidateIndex) => !usedIndexes.has(candidateIndex));
 
@@ -313,12 +321,41 @@ export const mergeTranscriptSegments = (
   return normalizeTranscriptSegments([...preserved, ...unmatchedIncoming], noteHighWater);
 };
 
+// Install an action response only within the committed action's affected set.
+// Rows that arrived while IPC was pending keep their own evidence and locks.
+export const restoreTranscriptSpeakerRows = (
+  existing: TranscriptSegment[],
+  committed: TranscriptSegment[],
+  scope: unknown,
+  affectedRowIds: string[]
+): TranscriptSegment[] => {
+  const affected = new Set(affectedRowIds);
+  const byId = new Map(existing.map((row) => [row.id, row]));
+  const incoming = new Map(committed.map((row) => [row.id, row]));
+  const rows = existing.map((row) =>
+    affected.has(row.id) && incoming.has(row.id)
+      ? normalizeTranscriptSegment(
+          resolveAutomaticSpeaker(row, row.speakerDecision, scope, incoming.get(row.id), {
+            restorationRowIds: affectedRowIds,
+          })
+        )
+      : row
+  );
+  return [
+    ...rows,
+    ...committed
+      .filter((row) => !byId.has(row.id))
+      .map((row) => normalizeTranscriptSegment(resolveAutomaticSpeaker(row, null, scope, row))),
+  ];
+};
+
 export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteHighWater = 0) => {
   const normalized = normalizeTranscriptSegments(segments, noteHighWater);
   return writeTranscriptDocument(
     normalized.map((segment) => ({
       id: segment.id || crypto.randomUUID(),
       audioSpan: segment.audioSpan,
+      audioContentHash: segment.audioContentHash,
       wordTimings: segment.wordTimings,
       parentRowId: segment.parentRowId,
       splitStartWord: segment.splitStartWord,

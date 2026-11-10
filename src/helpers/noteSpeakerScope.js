@@ -1,3 +1,7 @@
+const {
+  resolveAutomaticSpeaker,
+  currentSpeakerDecision,
+} = require("./automaticSpeakerAttribution");
 const { createHash, randomUUID } = require("node:crypto");
 const fs = require("node:fs");
 const {
@@ -15,7 +19,7 @@ const hash = (value) => createHash("sha256").update(value).digest("hex");
 function readScope(database, noteId, profiles = null, noteOverride = null) {
   try {
     const note = noteOverride || (noteId != null ? database?.getNote?.(noteId) : null);
-    const identities = database?.db
+    const identities = database?.db?.prepare
       ? database.db.prepare("SELECT id, email FROM speaker_profiles ORDER BY id").all()
       : profiles || database?.getSpeakerProfiles?.() || [];
     return resolveSpeakerRoster(note, null, identities);
@@ -103,44 +107,52 @@ function veto(row, evidence) {
   return row;
 }
 
-function sameRosterRevision(recorded, current) {
-  if (recorded?.revision === current.revision) return true;
-  // Existing evidence included the calendar id in the revision tuple. Ignore
-  // only that retired field, preserving the generation and identity checks.
-  try {
-    const legacy = JSON.parse(recorded?.revision);
-    if (!Array.isArray(legacy) || legacy.length !== 6) return false;
-    if (
-      recorded.source === "linked_event" &&
-      current.source === "none" &&
-      current.unrestricted &&
-      recorded.noteId === current.noteId &&
-      recorded.rosterRevision === current.rosterRevision
-    )
-      return true;
-    legacy.splice(3, 1);
-    return JSON.stringify(legacy) === current.revision;
-  } catch {
-    return false;
-  }
-}
-
 // Recheck at every commit, including saves from a renderer holding an old final
 // result. Never rewrite historical unrecorded rows merely because they are read.
 function enforceRows(
   database,
   noteId,
   rows,
-  { runId, path = "commit", scope, profiles, includeUnrecorded = false, noteOverride } = {}
+  {
+    runId,
+    path = "commit",
+    scope,
+    profiles,
+    includeUnrecorded = false,
+    noteOverride,
+    storedRows = [],
+    restorationRowIds = [],
+  } = {}
 ) {
   const current = readScope(database, noteId, profiles, noteOverride);
+  // Fingerprints are checked against the library at installation time, so an
+  // evaluation made before a profile edit cannot supersede a veto.
+  try {
+    current.profileFingerprints = (profiles || database?.getSpeakerProfiles?.(true) || []).map(
+      (profile) => ({ id: profile.id, fingerprint: profileFingerprint(profile) })
+    );
+  } catch {
+    current.profileFingerprints = [];
+  }
+
+  const stored = new Map(storedRows.map((row) => [row.id, row]));
+  const finish = (row) => {
+    const own = stored.get(row.id) || stored.get(row.parentRowId) || row;
+    Object.assign(
+      row,
+      resolveAutomaticSpeaker(own, own.speakerDecision, current, row, { restorationRowIds })
+    );
+  };
   for (const row of rows) {
-    if (humanProtected(row)) continue;
+    if (humanProtected(row)) {
+      Object.assign(row, resolveAutomaticSpeaker(row, row.speakerDecision, current, row));
+      continue;
+    }
     if (!row.speakerDecision && row.speakerAssignment?.origin === "machine") {
       const assignment = row.speakerAssignment;
       let matches = [];
       try {
-        const identities = database?.db
+        const identities = database?.db?.prepare
           ? database.db.prepare("SELECT id, email FROM speaker_profiles ORDER BY id").all()
           : profiles || database?.getSpeakerProfiles?.() || [];
         const email = normalizedEmail(assignment.email);
@@ -167,11 +179,15 @@ function enforceRows(
       row.speakerDecision.modelFingerprint = null;
     }
     const recorded = row.speakerDecision;
-    if (!recorded && !includeUnrecorded) continue;
+    if (!recorded && !includeUnrecorded) {
+      finish(row);
+      continue;
+    }
     const profileId = recorded?.acceptedProfileId ?? row.suggestedProfileId;
-    const stale = !sameRosterRevision(recorded || scope, current);
+    const stale = !currentSpeakerDecision(recorded || scope, current);
     if (recorded?.rejectionReason && !stale) {
       veto(row, recorded);
+      finish(row);
       continue;
     }
     const unsafe =
@@ -203,6 +219,7 @@ function enforceRows(
       evidence.previousDecision = recorded || null;
       veto(row, evidence);
     }
+    finish(row);
   }
   return rows;
 }

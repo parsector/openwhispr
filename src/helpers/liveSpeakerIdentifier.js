@@ -274,9 +274,9 @@ class LiveSpeakerIdentifier {
     this.clusterEligibility.set(speakerId, "owner-rejected");
   }
 
-  matchEligibleCluster(speakerId) {
+  matchEligibleCluster(speakerId, rowEmbedding = null) {
     if (this.clusterEligibility.get(speakerId) !== "eligible-unmatched") return null;
-    const centroid = this.transientEmbeddings.get(speakerId);
+    const centroid = rowEmbedding || this.transientEmbeddings.get(speakerId);
     if (!centroid) return null;
     let profiles = [];
     const rejected = (reason, best = null, runnerUp = 0) => ({

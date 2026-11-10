@@ -63,7 +63,7 @@ function fixture(t) {
       assert.equal((await enrollment.decide(db, audio, extractor, candidate.id, 'approve', token)).success, true);
     }
   };
-  return { db, person, noteId, runId, row, identifier, graduate };
+  return { db, person, noteId, runId, row, identifier, graduate, audio, record };
 }
 
 test('speaker_3 gains an approved voice in the current meeting without changing its centroid', async t => {
@@ -232,4 +232,84 @@ test('roster owner A/B vetoes reconsideration winner C without promoting A',asyn
   assert.equal(row.speakerDecision.acousticWinnerProfileId,f.person.id);
   assert.ok(Math.abs(row.speakerDecision.scores.best-.95)<1e-6);
   assert.ok(Math.abs(row.speakerDecision.scores.runnerUp-.7)<1e-6);
+});
+
+for (const change of ["enrollment", "roster expansion"]) {
+  test(`a veto is reevaluated after ${change}, but cached evidence alone leaves it Unknown`, async (t) => {
+    const f = fixture(t);
+    const scope = require("../../src/helpers/noteSpeakerScope");
+    if (change === "roster expansion") {
+      await f.graduate();
+      f.db.updateNote(f.noteId, {
+        participants: JSON.stringify([{ email: "outsider@example.com" }]),
+      });
+    }
+    reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
+    const vetoed = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+    assert.ok(vetoed.speakerDecision.rejectionReason);
+    assert.equal(
+      reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId).assignments.length,
+      0
+    );
+    if (change === "enrollment") await f.graduate();
+    else
+      f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: "alex@example.com" }]) });
+    const pending = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+    const evaluations = new Map([[pending.id, {embedding:vector(1),audioContentHash:"canonical-live-audio",
+      previousDecisionId:pending.speakerDecision.decisionId}]]);
+    const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId, [], evaluations);
+    assert.equal(result.assignments.length, 1);
+    const actual = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+    assert.equal(actual.speakerName, "Alex");
+    assert.equal(actual.speakerDecision.revision, scope.readScope(f.db, f.noteId).revision);
+  });
+}
+
+test("reconsideration evaluates retained row audio and commits its canonical content hash", async (t) => {
+  const f = fixture(t);
+  const recordingId = f.record(f.noteId, 1);
+  f.row.audioSpan.recordingId = recordingId;
+  f.db.updateNote(f.noteId, { transcript: JSON.stringify([f.row]) });
+  reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
+  await f.graduate();
+  const { prepareSpeakerRowEvaluations } = require("../../src/helpers/speakerRowEvaluation");
+  let contentHash;
+  const extractor = {
+    isAvailable: () => true,
+    extractEmbeddingFromSamples: async (samples) => {
+      contentHash = require("node:crypto")
+        .createHash("sha256")
+        .update(Buffer.from(samples.buffer, samples.byteOffset, samples.byteLength))
+        .digest("hex");
+      return vector(1);
+    },
+  };
+  const evaluations = await prepareSpeakerRowEvaluations(
+    f.db,
+    f.identifier,
+    f.noteId,
+    f.runId,
+    [],
+    f.audio,
+    extractor
+  );
+  assert.equal(evaluations.size, 1);
+  const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId, [], evaluations);
+  assert.equal(result.assignments.length, 1);
+  const actual = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  assert.equal(actual.speakerName, "Alex");
+  assert.equal(actual.audioContentHash, contentHash);
+  assert.equal(actual.speakerDecision.evaluation.audioContentHash, contentHash);
+});
+
+test('a refused row evaluation cannot publish an accepted cluster assignment', async t => {
+  const f = fixture(t);
+  reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId);
+  const row = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  f.db.updateNote(f.noteId,{transcript:JSON.stringify([{...row,audioContentHash:'canonical'}])});
+  await f.graduate();
+  const evaluations = new Map([[row.id,{embedding:vector(1),audioContentHash:'different-content',previousDecisionId:row.speakerDecision.decisionId}]]);
+  const result = reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId,[],evaluations);
+  assert.deepEqual(result.assignments,[]);
+  assert.equal(f.identifier.transientDisplayNames.has('speaker_3'),false);
 });

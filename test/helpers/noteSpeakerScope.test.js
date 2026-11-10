@@ -327,3 +327,46 @@ test("a read-time veto remains stable for optimistic final saves after sync edit
   );
   assert.equal(f.rows()[0].speakerName, undefined);
 });
+
+for (const alteration of ["track", "recording", "sample", "profile", "content", "genuine"]) {
+  test(`row supersession requires canonical audio and current profile: ${alteration}`, (t) => {
+    const f = fixture(t);
+    f.db.getSpeakerProfiles = () => [f.profile];
+    const veto = {
+      ...f.evidence,
+      decisionId: "vetoed",
+      acceptedProfileId: null,
+      rejectionReason: "no_match",
+    };
+    const row = {
+      ...f.row,
+      speakerName: undefined,
+      speakerIsPlaceholder: true,
+      audioContentHash: "canonical",
+      speakerDecision: veto,
+      audioSpan: { recordingId: 1, trackId: "system", startSample: 0, endSample: 96000 },
+    };
+    const incoming = {
+      ...row,
+      speakerName: "Alex",
+      speakerIsPlaceholder: false,
+      speakerDecision: { ...f.evidence, decisionId: "evaluated" },
+    };
+    if (alteration === "track") incoming.audioSpan = { ...row.audioSpan, trackId: "mic" };
+    if (alteration === "recording") incoming.audioSpan = { ...row.audioSpan, recordingId: 2 };
+    if (alteration === "sample") incoming.audioSpan = { ...row.audioSpan, endSample: 95999 };
+    if (["genuine", "profile", "content"].includes(alteration))
+      incoming.speakerDecision.evaluation = {
+        rowId: row.id,
+        previousDecisionId: veto.decisionId,
+        audioContentHash: alteration === "content" ? "other" : "canonical",
+        rosterRevision: f.scope.rosterRevision,
+        revision: f.scope.revision,
+        profileFingerprint:
+          alteration === "profile" ? "old-profile" : profileFingerprint(f.profile),
+      };
+    const [actual] = enforceRows(f.db, f.noteId, [incoming], { storedRows: [row] });
+    assert.equal(actual.speakerName, alteration === "genuine" ? "Alex" : undefined);
+    assert.equal(require("../../src/helpers/speakerRosterPolicy").humanProtected(actual), false);
+  });
+}

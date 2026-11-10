@@ -4417,6 +4417,7 @@ declare global {
         success: boolean;
         error?: string;
         rows?: import("../stores/meetingRecordingStore").TranscriptSegment[];
+        affectedRowIds?: string[];
         mapping?: {
           runId?: string;
           clusterId: string;

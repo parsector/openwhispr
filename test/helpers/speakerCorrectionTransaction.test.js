@@ -360,3 +360,42 @@ test('undoing an old run never replaces the active run cache with its historical
   assert.equal(f.mappings.get('run1:speaker_0'), undefined);
   assert.equal(f.mappings.get('run2:speaker_0').display_name, 'Sam');
 });
+
+test("undo after roster change returns the validated committed rows", () => {
+  const f = fixture();
+  const scope = require("../../src/helpers/noteSpeakerScope");
+  f.note.id = 1;
+  f.note.participants = JSON.stringify([{ email: "a@example.com" }]);
+  const profiles = [
+    { id: 1, email: "a@example.com" },
+    { id: 2, email: "b@example.com" },
+  ];
+  f.db.getSpeakerProfiles = () => profiles;
+  const decision = scope.decision(scope.readScope(f.db, 1), {
+    runId: "run1",
+    path: "evaluation",
+    profile: profiles[0],
+  });
+  f.note.transcript = JSON.stringify([
+    { ...row("a"), speakerName: "A", speakerDecision: decision },
+  ]);
+  const update = f.db.updateNote;
+  f.db.updateNote = (id, patch) =>
+    update(id, { ...patch, transcript: scope.enforceTranscript(f.db, id, patch.transcript) });
+  assert.equal(
+    applySpeakerCorrection(f.db, f.identifier, correction("rename", "a", "Manual outsider"))
+      .success,
+    true
+  );
+  f.note.participants = JSON.stringify([{ email: "b@example.com" }]);
+  f.note.speaker_roster_revision = 1;
+  const result = applySpeakerCorrection(f.db, f.identifier, {
+    type: "undo",
+    noteId: 1,
+    id: "rename",
+  });
+  assert.equal(result.success, true);
+  assert.deepEqual(result.rows, rows(f));
+  assert.equal(result.rows[0].speakerName, undefined);
+  assert.equal(result.rows[0].speakerDecision.rejectionReason, "roster_changed");
+});

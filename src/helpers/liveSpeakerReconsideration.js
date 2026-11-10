@@ -1,3 +1,5 @@
+const { resolveAutomaticSpeaker } = require("./automaticSpeakerAttribution");
+const { needsSpeakerReevaluation } = require("./speakerRowEvaluation");
 const speakerScope = require("./noteSpeakerScope");
 const { eligible, humanProtected, recordedNameAllowed } = require("./speakerRosterPolicy");
 // Reassess only unnamed, clean clusters in the current run. The identifier
@@ -58,7 +60,14 @@ function eligibilityState(identifier, speakerId, rows) {
   return "eligible-unmatched";
 }
 
-function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = []) {
+function reconsiderLiveClusters(
+  database,
+  identifier,
+  noteId,
+  runId,
+  liveRows = [],
+  evaluations = new Map()
+) {
   if (!identifier.running || identifier.activeRunId !== runId || !runId || !noteId)
     return { assignments: [], skipped: [{ reason: "not_current_meeting" }] };
   const result = database.db.transaction(() => {
@@ -75,25 +84,45 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
     const assignments = [],
       skipped = [];
     let changed = false;
+    const currentScope = speakerScope.readScope(database, noteId);
+    const profiles = identifier.getSpeakerProfiles?.() || [];
+    const jobs = [];
     for (const [speakerId] of identifier.transientEmbeddings) {
       const cohort = identifier.transientCohorts.get(speakerId) || "system";
-      const cluster = rows.filter(
+      const members = rows.filter(
         (row) =>
           !row.deleted &&
           row.diarizationRunId === runId &&
           row.speaker === speakerId &&
-          row.source === cohort &&
-          // This is cached cluster evidence, not a fresh evaluation of a
-          // previously vetoed span. Other rows in this cluster remain eligible.
-          (!row.speakerDecision || recordedNameAllowed(row))
+          row.source === cohort
       );
+      const clean = [];
+      for (const row of members) {
+        if (!row.speakerDecision || recordedNameAllowed(row) || humanProtected(row)) {
+          clean.push(row);
+          continue;
+        }
+        if (!needsSpeakerReevaluation(row, currentScope, profiles)) continue;
+        const reevaluation = evaluations.get(row.id);
+        if (
+          !reevaluation?.embedding ||
+          !reevaluation.audioContentHash ||
+          reevaluation.previousDecisionId !== row.speakerDecision.decisionId
+        )
+          continue;
+        jobs.push({ speakerId, cluster: [row], reevaluation });
+      }
+      if (clean.length || !members.length) jobs.push({ speakerId, cluster: clean });
+    }
+    for (const { speakerId, cluster, reevaluation } of jobs) {
+      const cohort = identifier.transientCohorts.get(speakerId) || "system";
       const state = eligibilityState(identifier, speakerId, cluster);
       identifier.setEligibilityState(speakerId, state);
       if (state !== "eligible-unmatched") {
         skipped.push({ speakerId, reason: state });
         continue;
       }
-      const match = identifier.matchEligibleCluster(speakerId);
+      const match = identifier.matchEligibleCluster(speakerId, reevaluation?.embedding);
       if (!match?.profile) {
         const reason = match?.reason || "no_match";
         skipped.push({ speakerId, reason });
@@ -132,7 +161,7 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
         skipped.push({ speakerId, reason: "outside_roster" });
         continue;
       }
-      const evidence =
+      let evidence =
         match.speakerDecision ||
         speakerScope.decision(scope, {
           runId,
@@ -140,20 +169,46 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
           profile,
           profiles: [profile],
         });
+      if (reevaluation) {
+        const row = cluster[0];
+        evidence = {
+          ...evidence,
+          evaluation: {
+            rowId: row.id,
+            previousDecisionId: row.speakerDecision.decisionId,
+            audioContentHash: reevaluation.audioContentHash,
+            audioSpan: { ...row.audioSpan },
+            revision: scope.revision,
+            rosterRevision: scope.rosterRevision,
+            profileFingerprint: speakerScope.profileFingerprint(profile),
+          },
+        };
+      }
       const id = randomUUID();
       const snapshots = {};
       const sequence = log.nextSequence;
       for (const row of cluster) {
         const previous = snapshot(row);
-        row.speakerName = profile.display_name;
-        row.speakerIsPlaceholder = false;
-        row.speakerStatus = cohort === "mic" ? "provisional" : "confirmed";
-        row.suggestedName = undefined;
-        row.suggestedProfileId = profile.id;
-        row.uncertainty = undefined;
-        row.machineReason = "approved_voice";
-        row.speakerDecision = evidence;
+        const incoming = {
+          ...row,
+          speakerName: profile.display_name,
+          speakerIsPlaceholder: false,
+          speakerStatus: cohort === "mic" ? "provisional" : "confirmed",
+          suggestedName: undefined,
+          suggestedProfileId: profile.id,
+          uncertainty: undefined,
+          machineReason: "approved_voice",
+          speakerDecision: evidence,
+          ...(reevaluation ? { audioContentHash: reevaluation.audioContentHash } : {}),
+        };
+        Object.assign(row, resolveAutomaticSpeaker(row, row.speakerDecision, scope, incoming));
+        if (!row.speakerName || !recordedNameAllowed(row)) continue;
         snapshots[row.id] = { previous, next: snapshot(row) };
+      }
+      const admitted = cluster.filter((row) => snapshots[row.id]);
+      if (!admitted.length) {
+        skipped.push({ speakerId, reason: "row_veto" });
+        continue;
       }
       const event = {
         id,
@@ -163,7 +218,7 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
         sequence,
         diarizationRunId: runId,
         clusterId: speakerId,
-        affectedRowIds: cluster.map((row) => row.id),
+        affectedRowIds: admitted.map((row) => row.id),
         snapshots,
       };
       const nextLog = appendAction(log, { kind: "reconsideration", id, event });
@@ -176,7 +231,7 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
         profileId: profile.id,
         actionId: id,
         speakerDecision: evidence,
-        rows: cluster.map((row) => row),
+        rows: admitted.map((row) => row),
       });
       changed = true;
     }
@@ -188,7 +243,21 @@ function reconsiderLiveClusters(database, identifier, noteId, runId, liveRows = 
         speaker_label_undo: null,
       });
       if (!result?.success) throw Error(result?.error || "transcript_failed");
-      for (const assignment of assignments) {
+      const committed = new Map(
+        readTranscriptDocument(
+          result.note?.transcript || database.getNote(noteId).transcript
+        ).rows.map((row) => [row.id, row])
+      );
+      for (let i = 0; i < rows.length; i++) rows[i] = committed.get(rows[i].id) || rows[i];
+      for (let i = assignments.length - 1; i >= 0; i--) {
+        const assignment = assignments[i];
+        assignment.rows = assignment.rows
+          .map((row) => committed.get(row.id) || row)
+          .filter((row) => row.speakerName && recordedNameAllowed(row));
+        if (!assignment.rows.length) {
+          assignments.splice(i, 1);
+          continue;
+        }
         history.add(database.db, {
           id: assignment.actionId,
           kind: "reconsideration",

@@ -133,6 +133,7 @@ for (const action of ["correction", "undo"]) {
     callbacks.identify({ speakerId: "speaker_1", displayName: "Sibling", speakerDecision: evidence, startTime: now + 900, endTime: now + 1500 });
     window.electronAPI.applySpeakerCorrection = async request => ({
       success: true,
+      affectedRowIds:request.rows.filter(row=>row.speaker === "speaker_0").map(row=>row.id),
       rows: request.rows.map(row => row.speaker === "speaker_0"
         ? { ...row, speakerName: action === "undo" ? undefined : "B", speakerLocked: action !== "undo", speakerIsPlaceholder: action === "undo" }
         : row),
@@ -265,7 +266,7 @@ async function loadNoteEditor(t, permission) {
           await globalThis.window.electronAPI.updateNote?.(request.noteId, {
             transcript: JSON.stringify(rows),
           });
-          return { success: true, rows };
+          return { success: true, rows, affectedRowIds:rows.filter(row=>row.speakerLocked).map(row=>row.id) };
         },
       },
     },
@@ -1592,5 +1593,206 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     assert.deepEqual(messages(), [], `${policy.status}: no banner`);
     assert.equal(recordReason(), expected);
   }
+  await unmount();
+});
+
+for (const response of ["committed Unknown", "stale accepted A"]) {
+  test(`NoteEditor undo after roster change installs ${response} safely within its affected rows`, async (t) => {
+    let store;
+    t.after(() => store?.stopRecording());
+    installMicCaptureGlobals(t);
+    navigator.userAgent = "test";
+    const { render, click, latest, unmount, vite } = await loadNoteEditor(t);
+    const callbacks = {};
+    Object.assign(window.electronAPI, {
+      checkSystemAudioAccess: async () => ({
+        granted: true,
+        status: "granted",
+        mode: "native",
+        strategy: "native",
+      }),
+      meetingTranscriptionStart: async () => ({
+        success: true,
+        systemAudioMode: "native",
+        systemAudioStrategy: "native",
+      }),
+      meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
+      meetingTranscriptionStop: async () => ({ success: true }),
+      meetingTranscriptionSend() {},
+      getNote: async () => null,
+      updateNote: async () => ({ success: true }),
+      onMeetingTranscriptionSegment: (cb) => {
+        callbacks.segment = cb;
+        return () => {};
+      },
+      onMeetingSpeakerIdentified: (cb) => {
+        callbacks.identify = cb;
+        return () => {};
+      },
+      onNoteUpdated: (cb) => {
+        callbacks.updated = cb;
+        return () => {};
+      },
+    });
+    store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+    await store.startRecording({ noteId: NOTE.id, noteTitle: NOTE.title, folderId: null });
+    const accepted = {
+      origin: "machine",
+      decisionId: "old-A",
+      noteId: NOTE.id,
+      source: "note",
+      revision: "A",
+      rawRoster: JSON.stringify([{ email: "a@example.com" }]),
+      rosterRevision: 0,
+      eligibleProfileIds: [1],
+      acceptedProfileId: 1,
+      rejectionReason: null,
+    };
+    const now = Date.now();
+    callbacks.segment({ type: "final", source: "system", text: "affected", timestamp: now });
+    callbacks.segment({
+      type: "final",
+      source: "system",
+      text: "unaffected",
+      timestamp: now + 1000,
+    });
+    callbacks.identify({
+      speakerId: "speaker_0",
+      displayName: "A",
+      speakerDecision: accepted,
+      startTime: now - 100,
+      endTime: now + 1500,
+    });
+    const before = store.useMeetingRecordingStore.getState().segments;
+    const veto = {
+      ...accepted,
+      decisionId: "roster-veto",
+      revision: "B",
+      rawRoster: JSON.stringify([{ email: "b@example.com" }]),
+      rosterRevision: 1,
+      eligibleProfileIds: [2],
+      acceptedProfileId: null,
+      rejectionReason: "roster_changed",
+    };
+    const unknown = before.map((row) => ({
+      ...row,
+      speakerName: undefined,
+      speakerIsPlaceholder: true,
+      speakerDecision: veto,
+    }));
+    callbacks.updated({
+      id: NOTE.id,
+      participants: veto.rawRoster,
+      speaker_roster_revision: 1,
+      transcript: JSON.stringify(unknown),
+    });
+    window.electronAPI.applySpeakerCorrection = async () => ({
+      success: true,
+      affectedRowIds: [before[0].id],
+      rows: unknown.map((row, i) =>
+        i === 1 || response === "stale accepted A"
+          ? { ...row, speakerName: "A", speakerIsPlaceholder: false, speakerDecision: accepted }
+          : row
+      ),
+    });
+    await render(undefined, { isRecording: true });
+    await click("transcript");
+    await React.act(async () => {
+      let chat;
+      walk(latest(), (node) => {
+        if (node.props.onUndoCorrection) chat = node;
+      });
+      assert.ok(chat);
+      await chat.props.onUndoCorrection("undo-A");
+    });
+    for (const row of store.useMeetingRecordingStore.getState().segments) {
+      assert.equal(row.speakerName, undefined);
+      assert.equal(row.speakerDecision.rejectionReason, "roster_changed");
+    }
+    await unmount();
+  });
+}
+
+test("NoteEditor stopped undo revalidates restored automatic decisions against current participants", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  const accepted = {
+    origin: "machine",
+    decisionId: "old-A",
+    noteId: NOTE.id,
+    source: "note",
+    revision: "A",
+    rawRoster: JSON.stringify([{ email: "a@example.com" }]),
+    rosterRevision: 0,
+    eligibleProfileIds: [1],
+    acceptedProfileId: 1,
+    rejectionReason: null,
+  };
+  const note = {
+    ...NOTE,
+    participants: JSON.stringify([{ email: "b@example.com" }]),
+    speaker_roster_revision: 1,
+    transcript: JSON.stringify([
+      {
+        id: "vetoed",
+        text: "hello",
+        source: "system",
+        speaker: "speaker_0",
+        speakerIsPlaceholder: true,
+        speakerDecision: {
+          ...accepted,
+          acceptedProfileId: null,
+          rejectionReason: "roster_changed",
+        },
+      },
+    ]),
+  };
+  window.electronAPI.applySpeakerCorrection = async (request) => ({
+    success: true,
+    affectedRowIds: request.rows.map((row) => row.id),
+    rows: request.rows.map((row) => ({
+      ...row,
+      speakerName: "A",
+      speakerIsPlaceholder: false,
+      speakerDecision: accepted,
+    })),
+  });
+  await render(undefined, { note });
+  await click("transcript");
+  const chat = () => {
+    let result;
+    walk(latest(), (node) => {
+      if (node.props.onUndoCorrection) result = node;
+    });
+    return result;
+  };
+  await React.act(async () => {
+    await chat().props.onUndoCorrection("undo-A");
+  });
+  assert.equal(chat().props.segments[0].speakerName, undefined);
+  assert.equal(chat().props.segments[0].speakerDecision.rejectionReason, "roster_changed");
+  await unmount();
+});
+
+test('NoteEditor undo uses the current scope when participants change during its IPC wait', async t => {
+  const {render,click,latest,unmount} = await loadNoteEditor(t);
+  const rawRoster = JSON.stringify([{email:'a@example.com'}]);
+  const evidence = {origin:'machine',decisionId:'A',noteId:NOTE.id,source:'note',revision:'A',rawRoster,rosterRevision:0,eligibleProfileIds:[1],acceptedProfileId:1,rejectionReason:null};
+  const row = {id:'locked-row',text:'hello',source:'system',speaker:'speaker_0',speakerName:'Manual outsider',speakerLocked:true,speakerStatus:'locked',speakerLockSource:'user',speakerDecision:evidence};
+  const noteA = {...NOTE,participants:rawRoster,speaker_roster_revision:0,transcript:JSON.stringify([row])};
+  let reply;
+  window.electronAPI.applySpeakerCorrection = request => new Promise(resolve => {
+    reply = () => resolve({success:true,affectedRowIds:request.rows.map(row=>row.id),rows:request.rows.map(row=>({...row,
+      speakerName:'A',speakerLocked:false,speakerLockSource:undefined,speakerStatus:'confirmed',speakerDecision:evidence}))});
+  });
+  await render(undefined,{note:noteA});
+  await click('transcript');
+  const chat = () => {let result;walk(latest(),node=>{if(node.props.onUndoCorrection)result=node;});return result;};
+  let pending;
+  await React.act(async()=>{pending = chat().props.onUndoCorrection('undo-A'); await Promise.resolve();});
+  assert.ok(reply);
+  await render(undefined,{note:{...noteA,participants:JSON.stringify([{email:'b@example.com'}]),speaker_roster_revision:1}});
+  await React.act(async()=>{reply();await pending;});
+  assert.equal(chat().props.segments[0].speakerName,undefined);
+  assert.equal(chat().props.segments[0].speakerDecision.rejectionReason,'roster_changed');
   await unmount();
 });
