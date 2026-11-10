@@ -1535,22 +1535,22 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           )
             retiredRosterRevisions.add(row.speakerDecision.previousDecision.revision);
         }
-        const vetoed = new Set(
+        const vetoedById = new Map(
           committed
             .filter((row) => row.speakerDecision && !recordedNameAllowed(row))
-            .map((row) => row.speaker)
+            .map((row) => [row.id, row.speakerDecision])
         );
+        // A span-level veto belongs to one durable row. Only a changed scope
+        // invalidates independent rows and the shared cluster identity caches.
+        const invalidatedSpeakers = new Set<string | undefined>();
         const current = useMeetingRecordingStore.getState().segments;
         const next = current.map((row) => {
           if (humanProtected(row) || !row.speakerDecision) return row;
           const stale = !decisionCurrentForNote(row.speakerDecision, note);
-          if (!stale && !vetoed.has(row.speaker)) return row;
+          const committedVeto = vetoedById.get(row.id);
+          if (!stale && !committedVeto) return row;
           if (stale) retiredRosterRevisions.add(row.speakerDecision.revision);
-          vetoed.add(row.speaker);
-          const committedVeto = committed.find(
-            (saved) =>
-              saved.speaker === row.speaker && saved.speakerDecision && !recordedNameAllowed(saved)
-          )?.speakerDecision;
+          if (stale) invalidatedSpeakers.add(row.speaker);
           return normalizeTranscriptSegment({
             ...row,
             speakerName: undefined,
@@ -1562,21 +1562,22 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               : {
                   ...row.speakerDecision,
                   acceptedProfileId: null,
+                  acceptedIdentity: null,
                   rejectionReason: "roster_changed",
                 },
           });
         });
-        if (!vetoed.size) return;
+        if (!vetoedById.size && !invalidatedSpeakers.size) return;
         speakerIdentifications = speakerIdentifications.filter(
-          (item) => !vetoed.has(item.speakerId)
+          (item) => !invalidatedSpeakers.has(item.speakerId)
         );
-        if (recentSystemSpeaker && vetoed.has(recentSystemSpeaker.speakerId))
+        if (recentSystemSpeaker && invalidatedSpeakers.has(recentSystemSpeaker.speakerId))
           recentSystemSpeaker = null;
-        if (systemPartialSpeakerIdValue && vetoed.has(systemPartialSpeakerIdValue))
+        if (systemPartialSpeakerIdValue && invalidatedSpeakers.has(systemPartialSpeakerIdValue))
           setSystemPartialSpeakerIdentity(null, null);
         segmentsRefValue = next;
         useMeetingRecordingStore.setState({ segments: next });
-        mergeCommittedSpeakerRows(committed);
+        mergeCommittedSpeakerRows(committed, { preserveIdentifications: true });
       });
       if (rosterCleanup) ipcCleanups.push(rosterCleanup);
 
@@ -2275,14 +2276,21 @@ export function assignLiveSpeakerRows(
   return next;
 }
 
-export function mergeCommittedSpeakerRows(committed: TranscriptSegment[]): TranscriptSegment[] {
+export function mergeCommittedSpeakerRows(
+  committed: TranscriptSegment[],
+  { preserveIdentifications = false } = {}
+): TranscriptSegment[] {
+  if (!preserveIdentifications) speakerIdentifications = [];
   const liveNow = useMeetingRecordingStore.getState().segments;
   const committedById = new Map(committed.map((row) => [row.id, row]));
   const liveIds = new Set(liveNow.map((row) => row.id));
-  return assignLiveSpeakerRows(new Set(), null, [
+  const next = [
     ...liveNow.map((row) => committedById.get(row.id) || row),
     ...committed.filter((row) => !liveIds.has(row.id)),
-  ]);
+  ];
+  segmentsRefValue = next;
+  useMeetingRecordingStore.setState({ segments: next, transcript: buildTranscriptText(next) });
+  return next;
 }
 
 /** Ends a recording this window's policy now refuses and reports the reason. */

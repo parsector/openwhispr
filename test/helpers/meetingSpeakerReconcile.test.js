@@ -787,6 +787,20 @@ test("roster positive: acoustic participant A remains recognised with the actual
   assert.equal(result.segments[0].speakerName, "A");
   assert.deepEqual(result.segments[0].speakerDecision.roster, JSON.parse(declaredAB));
 });
+test("final acoustic rejection clears the candidate's accepted identity", async t => {
+  const f = rosterHandlers();
+  f.note.participants = "[]";
+  f.profiles[0].embedding = Buffer.from(new Float32Array([.55, Math.sqrt(1 - .55 ** 2), 0]).buffer);
+  f.profiles[1].embedding = Buffer.from(new Float32Array([.1, 0, Math.sqrt(.99)]).buffer);
+  f.profiles[2].embedding = Buffer.from(new Float32Array([0, 0, 1]).buffer);
+  const result = await rosterFinal(t, f);
+  const row = result.segments[0];
+  assert.equal(row.speakerDecision.rejectionReason, "not_sure");
+  assert.equal(row.speakerDecision.acceptedProfileId, null);
+  assert.equal(row.speakerDecision.acceptedIdentity, null);
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.suggestedName, undefined);
+});
 test("roster reconciliation cannot inherit C from a live cluster", () => {
   const f = rosterHandlers();
   const row = {id:"row",speaker:"speaker_0",source:"system"};
@@ -901,6 +915,37 @@ test("roster cohort suggestion cannot name outsider C when raw winner A is invit
   assert.deepEqual(d.rawDecision.scores, d.scores);
   assert.equal(d.effectiveThresholds.similarityFloor, require('../../src/helpers/speakerDecisionThresholds').effectiveFloor());
   assert.equal(d.cohortSelection.rawFloor, .5);
+});
+
+test("cohort provenance records a below-floor raw winner as rejected", async (t) => {
+  const f = rosterHandlers();
+  const thresholds = require("../../src/helpers/speakerDecisionThresholds");
+  t.mock.method(thresholds, "effectiveFloor", () => .65);
+  // matchReason captures the configured floor on load; use the real check
+  // with this test's floor, then retire that module before restoring mocks.
+  const uncertaintyPath = require.resolve("../../src/helpers/speakerUncertainty");
+  delete require.cache[uncertaintyPath];
+  t.after(() => { delete require.cache[uncertaintyPath]; });
+  f.profiles[0].embedding = Buffer.from(new Float32Array([.62, Math.sqrt(1 - .62 ** 2), 0]).buffer);
+  f.profiles[1].embedding = Buffer.from(new Float32Array([.58, -Math.sqrt(1 - .58 ** 2), 0]).buffer);
+  f.profiles[2].embedding = Buffer.from(new Float32Array([0, 0, 1]).buffer);
+  const result = await rosterFinal(t, f, {
+    extra: [["speaker_01", new Float32Array([0, 1, 0])]],
+  });
+  const d = result.segments[0].speakerDecision;
+  assert.equal(d.path, "final_cohort");
+  assert.equal(d.rawDecision.acousticWinnerProfileId, 1);
+  assert.ok(Math.abs(d.rawDecision.scores.best - .62) < 1e-6);
+  assert.equal(d.rawDecision.effectiveThresholds.similarityFloor, .65);
+  assert.equal(d.rawDecision.acceptedProfileId, null);
+  assert.equal(d.rawDecision.acceptedIdentity, null);
+  assert.equal(d.rawDecision.rejectionReason, "not_sure");
+  assert.equal(d.cohortSelection.profileId, 2);
+  assert.equal(d.cohortSelection.accepted, true);
+  assert.equal(d.acceptedProfileId, 2);
+  assert.deepEqual(d.acceptedIdentity, { email: "b@example.com" });
+  assert.equal(d.rejectionReason, null);
+  assert.equal(result.segments[0].suggestedName, "B");
 });
 
 test("roster direct reconciliation veto clears cached outsider names and suggestions",()=>{

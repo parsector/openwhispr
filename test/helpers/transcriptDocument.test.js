@@ -25,6 +25,39 @@ test("public serialization cannot resurrect a veto through a legacy mapping", ()
   assert.equal(exported.speakerIsPlaceholder, true);
 });
 
+test("public serialization discloses identity only for accepted visibly named rows", () => {
+  for (const row of [
+    {
+      speakerName: "Private contact",
+      speakerDecision: {
+        acceptedProfileId: null,
+        acceptedIdentity: { email: "private@example.com" },
+        eligibleProfileIds: [7],
+        rejectionReason: "not_sure",
+      },
+    },
+    {
+      speakerIsPlaceholder: true,
+      speakerDecision: {
+        acceptedProfileId: 7,
+        acceptedIdentity: { email: "private@example.com" },
+        eligibleProfileIds: [7],
+        rejectionReason: null,
+      },
+    },
+    {
+      speakerName: "Private contact",
+      speakerAssignment: { origin: "machine", accepted: false, email: "private@example.com" },
+    },
+  ]) {
+    const serialized = publicTranscript(writeTranscriptDocument([{ id: "row", text: "hello", ...row }]));
+    const exported = readTranscriptDocument(serialized).rows[0];
+    assert.equal(serialized.includes("private@example.com"), false);
+    assert.equal(exported.speakerName, undefined);
+    assert.deepEqual(exported.speakerAssignment, { origin: "machine", accepted: false });
+  }
+});
+
 test("public serialization respects every human lock, including explicit Unknown", () => {
   for (const lock of [
     { speakerLocked: true },

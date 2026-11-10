@@ -15723,6 +15723,11 @@ class IPCHandlers {
                 }
 
                 const eligibleWinner = rosterPolicy.eligible(recognitionScope, bestProfile?.id);
+                const { matchReason } = require("./speakerUncertainty");
+                const reason = matchReason(
+                  bestProfile && { name: bestProfile.display_name, score: bestSim },
+                  runnerUp && { name: runnerUp.display_name, score: runnerUpSim }
+                );
                 const rawEvidence = speakerScope.decision(recognitionScope, {
                   runId: sessionId,
                   path: "final",
@@ -15738,7 +15743,7 @@ class IPCHandlers {
                     ? "outside_roster"
                     : bestProfile?.voice_usable !== 1
                       ? "voice_not_approved"
-                      : null,
+                      : reason?.reason || null,
                 });
                 for (const seg of enrichedSegments)
                   if (seg.speaker === mappedId && !isSpeakerLocked(seg))
@@ -15820,11 +15825,6 @@ class IPCHandlers {
                     seg.speakerAssessmentAvailable = true;
                 }
 
-                const { matchReason } = require("./speakerUncertainty");
-                const reason = matchReason(
-                  bestProfile && { name: bestProfile.display_name, score: bestSim },
-                  runnerUp && { name: runnerUp.display_name, score: runnerUpSim }
-                );
                 if (reason) {
                   for (const seg of enrichedSegments) {
                     if (seg.speaker === mappedId && !isSpeakerLocked(seg)) {
@@ -15839,6 +15839,7 @@ class IPCHandlers {
                       seg.speakerDecision = {
                         ...rawEvidence,
                         acceptedProfileId: null,
+                        acceptedIdentity: null,
                         rejectionReason: reason.reason,
                       };
                       if (

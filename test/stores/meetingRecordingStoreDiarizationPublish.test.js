@@ -584,6 +584,53 @@ test('ordinary rejection stays local and does not retire an unchanged roster rev
   await store.stopRecording();
 });
 
+test("an unsafe saved row preserves an accepted sibling and its identity caches", async (t) => {
+  let store;
+  t.after(() => store?.stopRecording());
+  const { api, state } = createElectronAPI();
+  let onNoteUpdated, onSpeaker;
+  api.onNoteUpdated = (callback) => { onNoteUpdated = callback; return () => {}; };
+  api.onMeetingSpeakerIdentified = (callback) => { onSpeaker = callback; return () => {}; };
+  store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const now = Date.now();
+  const accepted = {
+    candidateSetStatus: "recorded", noteId: NOTE_ID, source: "note", revision: "unchanged",
+    rawRoster: "[]", roster: [], eligibleProfileIds: [1], acceptedProfileId: 1,
+    acceptedIdentity: { email: "a@example.com" }, rejectionReason: null,
+    rosterRevision: 0, linkedEventId: null,
+  };
+  state.segmentCallback({ text: "unsafe", source: "system", timestamp: now });
+  state.segmentCallback({ text: "clear sibling", source: "system", timestamp: now + 1000 });
+  onSpeaker({
+    cohort: "system", speakerId: "speaker_0", displayName: "A",
+    startTime: now - 100, endTime: now + 5000, speakerDecision: accepted,
+  });
+  const [unsafe, sibling] = store.useMeetingRecordingStore.getState().segments;
+  assert.equal(sibling.speakerName, "A");
+  const rejected = {
+    ...unsafe, speakerName: undefined, speakerIsPlaceholder: true,
+    uncertainty: { reason: "too_short" },
+    speakerDecision: {
+      ...accepted, acceptedProfileId: null, acceptedIdentity: null, rejectionReason: "unsafe_span",
+    },
+  };
+  // The accepted sibling has not been saved yet; it shares only the cluster.
+  onNoteUpdated({
+    id: NOTE_ID, participants: "[]", speaker_roster_revision: 0,
+    transcript: JSON.stringify([rejected]),
+  });
+  const rows = store.useMeetingRecordingStore.getState().segments;
+  assert.equal(rows.find((row) => row.id === unsafe.id).speakerDecision.rejectionReason, "unsafe_span");
+  assert.equal(rows.find((row) => row.id === sibling.id).speakerName, "A");
+  assert.deepEqual(rows.find((row) => row.id === sibling.id).speakerDecision, accepted);
+  assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName, "A");
+  state.segmentCallback({ text: "still clear", source: "system", timestamp: now + 2000 });
+  const cached = store.useMeetingRecordingStore.getState().segments.at(-1);
+  assert.equal(cached.speakerName, "A");
+  assert.deepEqual(cached.speakerDecision, accepted);
+});
+
 test('live identification and merge names require automatic evidence on unprotected rows', async t => {
   const { api, state } = createElectronAPI();
   let onSpeaker, onMerge, onEvidence;

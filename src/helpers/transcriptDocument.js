@@ -252,14 +252,18 @@ function writeTranscriptDocument(rows, highWater = 0) {
 // profile ids, acoustic vectors, or the local candidate set.
 function portableAssignment(row, displayedName) {
   if (humanProtected(row) || row.speakerAssignment?.origin === "human") return { origin: "human" };
-  if (row.speakerDecision || row.diarizationRunId || row.speakerAssignment?.origin === "machine")
+  if (row.speakerDecision || row.diarizationRunId || row.speakerAssignment?.origin === "machine") {
+    const accepted = !!displayedName && !row.speakerIsPlaceholder && recordedNameAllowed(row);
     return {
       origin: "machine",
-      accepted: !!displayedName && recordedNameAllowed(row),
-      email: normalizedEmail(
-        row.speakerDecision?.acceptedIdentity?.email || row.speakerAssignment?.email
-      ),
+      accepted,
+      ...(accepted && {
+        email: normalizedEmail(
+          row.speakerDecision?.acceptedIdentity?.email || row.speakerAssignment?.email
+        ),
+      }),
     };
+  }
   return undefined;
 }
 
@@ -310,6 +314,7 @@ function publicTranscript(raw, speakerMappings = {}) {
                 !row.speaker.startsWith("speaker_")
                   ? row.speaker
                   : undefined));
+      const assignment = portableAssignment(row, displayedName);
       return {
         ...Object.fromEntries(
           fields
@@ -321,9 +326,7 @@ function publicTranscript(raw, speakerMappings = {}) {
             })
             .map((field) => [field, field === "speakerName" ? displayedName : row[field]])
         ),
-        ...(portableAssignment(row, displayedName) && {
-          speakerAssignment: portableAssignment(row, displayedName),
-        }),
+        ...(assignment && { speakerAssignment: assignment }),
       };
     });
   return JSON.stringify({ version: 2, rows: visible });
@@ -411,14 +414,16 @@ function reconcileCloudTranscript(cloudRaw, localRaw, { noteId = "unknown" } = {
 }
 
 function publicRow(row, id) {
-  const assignment = portableAssignment(row, row.speakerName);
+  const displayedName =
+    recordedNameAllowed(row) && !row.speakerIsPlaceholder ? row.speakerName : undefined;
+  const assignment = portableAssignment(row, displayedName);
   return {
     ...Object.fromEntries(
       ["id", "text", "source", "timestamp", "speakerName", "speakerIsPlaceholder", "unknownNumber"]
         .filter(
           (key) =>
             key === "id" ||
-            (row[key] !== undefined && !(key === "speakerName" && row.speakerIsPlaceholder))
+            (row[key] !== undefined && !(key === "speakerName" && displayedName === undefined))
         )
         .map((key) => [key, key === "id" ? id : row[key]])
     ),
