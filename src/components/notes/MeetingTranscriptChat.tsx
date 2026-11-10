@@ -1046,7 +1046,9 @@ const SegmentRow = memo(function SegmentRow({
       style={isNewest ? { animation: "agent-message-in 200ms ease-out both" } : undefined}
     >
       {labelElement}
-      {(segment.uncertainty ||
+      {(segment.speakerReviewRequired ||
+        segment.speakerDecision?.acousticEvaluation === "not_evaluated" ||
+        segment.uncertainty ||
         segment.changedAfterFinal ||
         segment.machineReason ||
         rowChangeNote ||
@@ -1059,10 +1061,11 @@ const SegmentRow = memo(function SegmentRow({
           {segment.importedUnlabeled && !segment.speakerName && (
             <span>{t("notes.speaker.importedUnlabeled")}</span>
           )}
-          {!segment.importedUnlabeled &&
-            !segment.speakerAssessmentAvailable &&
-            !segment.speakerLocked &&
-            !segment.speakerName && <span>{t("notes.speaker.notAssessed")}</span>}
+          {!segment.speakerLocked &&
+            (segment.speakerDecision?.acousticEvaluation === "not_evaluated" ||
+              (!segment.importedUnlabeled &&
+                !segment.speakerAssessmentAvailable &&
+                !segment.speakerName)) && <span>{t("notes.speaker.notAssessed")}</span>}
           {!!segment.quarantinedCorrections?.length && (
             <span>
               {t("notes.speaker.correctionHistoryUnresolved", {
@@ -1473,13 +1476,19 @@ export function MeetingTranscriptChat({
   }, [noteId]);
   const hasContent = segments.length > 0 || Boolean(micPartial) || Boolean(systemPartial);
   const reviewCount = segments.filter(
-    (segment) => segment.uncertainty || segment.quarantinedCorrections?.length
+    (segment) =>
+      segment.uncertainty || segment.speakerReviewRequired || segment.quarantinedCorrections?.length
   ).length;
   const shownIndexes = useMemo(() => {
     if (!reviewOnly) return segments.map((_, index) => index);
     const indexes = new Set<number>();
     segments.forEach((segment, index) => {
-      if (!segment.uncertainty && !segment.quarantinedCorrections?.length) return;
+      if (
+        !segment.uncertainty &&
+        !segment.speakerReviewRequired &&
+        !segment.quarantinedCorrections?.length
+      )
+        return;
       if (index > 0) indexes.add(index - 1);
       indexes.add(index);
       if (index + 1 < segments.length) indexes.add(index + 1);

@@ -70,6 +70,7 @@ test(
     const openRows = dialog.getByRole("button", { name: "Open row" });
     await openRows.first().focus();
     assert.equal(await dialog.getByText('Candidate set not recorded', { exact: true }).count(), 1);
+    assert.equal(await dialog.getByText('Not assessed', { exact: true }).count(), 1);
     await page.waitForFunction(() => typeof window.finishReviewPage === "function");
     await page.evaluate(() => window.finishReviewPage());
     await page.waitForFunction(

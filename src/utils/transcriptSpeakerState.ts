@@ -119,7 +119,11 @@ export const lockTranscriptSpeaker = (
     speakerLockSource: "user",
   });
 
-const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSegment) => {
+const mergeSpeakerFields = (
+  existing: TranscriptSegment,
+  incoming: TranscriptSegment,
+  scope: unknown
+) => {
   const merged = {
     ...incoming,
     ...(existing.recorderName ? { recorderName: existing.recorderName } : {}),
@@ -187,7 +191,7 @@ const mergeSpeakerFields = (existing: TranscriptSegment, incoming: TranscriptSeg
   }
 
   return normalizeTranscriptSegment(
-    resolveAutomaticSpeaker(existing, existing.speakerDecision, null, merged)
+    resolveAutomaticSpeaker(existing, existing.speakerDecision, scope, merged)
   );
 };
 
@@ -195,7 +199,8 @@ export const mergeTranscriptSegments = (
   existingSegments: TranscriptSegment[],
   incomingSegments: TranscriptSegment[],
   noteHighWater = 0,
-  preserveMatchedNumbers = false
+  preserveMatchedNumbers = false,
+  scope: unknown = null
 ) => {
   if (incomingSegments.length === 0) {
     return normalizeTranscriptSegments(existingSegments, noteHighWater);
@@ -238,7 +243,7 @@ export const mergeTranscriptSegments = (
       isTranscriptSpeakerLocked(parent)
     )
       return;
-    if (parent) segment = resolveAutomaticSpeaker(parent, parent.speakerDecision, null, segment);
+    if (parent) segment = resolveAutomaticSpeaker(parent, parent.speakerDecision, scope, segment);
     const findUnused = (candidates?: number[]) =>
       candidates?.find((candidateIndex) => !usedIndexes.has(candidateIndex));
 
@@ -294,18 +299,29 @@ export const mergeTranscriptSegments = (
         );
         return;
       }
+      if (existing.id !== segment.id && existing.speakerDecision) {
+        // A new automatic transcription may replace this display row, but
+        // fuzzy text/time correspondence conveys no attribution or veto.
+        usedIndexes.add(matchIndex);
+        enrichedByIndex.set(matchIndex, normalizeTranscriptSegment(segment));
+        return;
+      }
       usedIndexes.add(matchIndex);
       enrichedByIndex.set(
         matchIndex,
-        mergeSpeakerFields(existing, {
-          ...segment,
-          id: existingSegments[matchIndex].id,
-          unknownNumber:
-            preserveMatchedNumbers || segment.speaker === existingSegments[matchIndex].speaker
-              ? existingSegments[matchIndex].unknownNumber
-              : undefined,
-          unknownNumberHighWater: existingSegments[matchIndex].unknownNumberHighWater,
-        })
+        mergeSpeakerFields(
+          existing,
+          {
+            ...segment,
+            id: existingSegments[matchIndex].id,
+            unknownNumber:
+              preserveMatchedNumbers || segment.speaker === existingSegments[matchIndex].speaker
+                ? existingSegments[matchIndex].unknownNumber
+                : undefined,
+            unknownNumberHighWater: existingSegments[matchIndex].unknownNumberHighWater,
+          },
+          scope
+        )
       );
     } else {
       unmatchedIncoming.push(

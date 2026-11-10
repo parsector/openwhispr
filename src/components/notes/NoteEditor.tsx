@@ -1,3 +1,4 @@
+import { resolveAutomaticSpeaker } from "../../helpers/automaticSpeakerAttribution";
 import { restoreTranscriptSpeakerRows } from "../../utils/transcriptSpeakerState";
 import { resolveSpeakerRoster } from "../../helpers/speakerRosterPolicy";
 import {
@@ -488,7 +489,25 @@ export default function NoteEditor({
       cancelled = true;
     };
   }, [conflictEditorId, conflictSpaceId]);
-  const [diarizedSegments, setDiarizedSegments] = useState<TranscriptSegment[] | null>(null);
+  const overlayScope = JSON.stringify([
+    note.id,
+    note.participants,
+    note.speaker_roster_revision ?? 0,
+  ]);
+  const overlayScopeRef = useRef({ scope: overlayScope, transcript: note.transcript });
+  overlayScopeRef.current = { scope: overlayScope, transcript: note.transcript };
+  const [diarizedOverlay, setDiarizedOverlay] = useState<{
+    scope: string;
+    transcript?: string | null;
+    segments: TranscriptSegment[];
+  } | null>(null);
+  const diarizedSegments =
+    diarizedOverlay?.scope === overlayScope && diarizedOverlay.transcript === note.transcript
+      ? diarizedOverlay.segments
+      : null;
+  const setDiarizedSegments = useCallback((segments: TranscriptSegment[] | null) => {
+    setDiarizedOverlay(segments ? { ...overlayScopeRef.current, segments } : null);
+  }, []);
   const [reviewOnly, setReviewOnly] = useState(false);
   const [speakerMappings, setSpeakerMappings] = useState<Record<string, string>>({});
   const [speakerCorrectionError, setSpeakerCorrectionError] = useState<string | null>(null);
@@ -558,9 +577,18 @@ export default function NoteEditor({
     () => parseTranscriptSegmentsWithMigration(note.transcript || "", note.client_note_id),
     [note.client_note_id, note.transcript]
   );
-  const displaySegments = diarizedSegments?.length ? diarizedSegments : storedTranscript.segments;
+  // Project the overlay against the current note on every roster generation.
+  // An async correction/completion cannot outlive its declared roster.
+  const displaySegments = useMemo(
+    () =>
+      (diarizedSegments?.length ? diarizedSegments : storedTranscript.segments).map((row) =>
+        resolveAutomaticSpeaker(row, row.speakerDecision, note, row)
+      ),
+    [diarizedSegments, storedTranscript.segments, note]
+  );
   const reviewCount = displaySegments.filter(
-    (segment) => segment.uncertainty || segment.quarantinedCorrections?.length
+    (segment) =>
+      segment.uncertainty || segment.speakerReviewRequired || segment.quarantinedCorrections?.length
   ).length;
   const canUndoCloudLabels = (() => {
     if (!note.speaker_action_log) return !!note.speaker_label_undo;
@@ -784,7 +812,7 @@ export default function NoteEditor({
         editorRef.current?.commands.focus();
       });
     }
-  }, [note.id, note.title, defaultViewMode, scheduleUiUpdate]);
+  }, [note.id, note.title, defaultViewMode, scheduleUiUpdate, setDiarizedSegments]);
 
   useEffect(() => {
     refreshSpeakerMappings(note.id);
@@ -865,7 +893,7 @@ export default function NoteEditor({
     const enriched = completedDiarization.segments;
     if (enriched.length === 0) return;
     setDiarizedSegments(enriched);
-  }, [completedDiarization, note.id]);
+  }, [completedDiarization, note.id, setDiarizedSegments]);
 
   const persistDisplaySegments = useCallback(
     async (nextSegments: TranscriptSegment[], updateOverlay = true) => {
@@ -882,7 +910,7 @@ export default function NoteEditor({
       }
       if (updateOverlay) setDiarizedSegments(nextSegments);
     },
-    [note.id, note.transcript, t]
+    [note.id, note.transcript, t, setDiarizedSegments]
   );
 
   const commitSpeakerCorrection = useCallback(
@@ -993,7 +1021,16 @@ export default function NoteEditor({
         releaseCorrection();
       }
     },
-    [displaySegments, isRecording, isDiarizing, note.id, note.note_type, refreshSpeakerProfiles, t]
+    [
+      displaySegments,
+      isRecording,
+      isDiarizing,
+      note.id,
+      note.note_type,
+      refreshSpeakerProfiles,
+      t,
+      setDiarizedSegments,
+    ]
   );
 
   const handleMapSpeaker = useCallback(
@@ -1423,7 +1460,7 @@ export default function NoteEditor({
         setSpeakerCorrectionError(t("notes.speaker.correctionSaveFailed"));
       }
     },
-    [note.id, onFlushPendingSaves, t]
+    [note.id, onFlushPendingSaves, t, setDiarizedSegments]
   );
 
   // Keep the local edits, overwriting the cloud revision the user just saw.

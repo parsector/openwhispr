@@ -118,14 +118,14 @@ for (const action of ["correction", "undo"]) {
       meetingTranscriptionStart: async () => ({ success: true, systemAudioMode: "native", systemAudioStrategy: "native" }),
       meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
       meetingTranscriptionStop: async () => ({ success: true }),
-      meetingTranscriptionSend() {}, getNote: async () => null, updateNote: async () => ({ success: true }),
+      meetingTranscriptionSend() {}, getNote: async () => ({...NOTE,participants:'[]',speaker_roster_revision:0,transcript:'[]'}), updateNote: async () => ({ success: true }),
       onMeetingTranscriptionSegment: cb => { callbacks.segment = cb; return () => {}; },
       onMeetingSpeakerIdentified: cb => { callbacks.identify = cb; return () => {}; },
     });
     store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
     assert.equal(await store.startRecording({ noteId: NOTE.id, noteTitle: NOTE.title, folderId: null }), true);
     const now = Date.now();
-    const evidence = { origin: "machine", decisionId: "accepted", eligibleProfileIds: [1], acceptedProfileId: 1, rejectionReason: null };
+    const evidence = { origin: "machine", decisionId: "accepted", noteId: NOTE.id, source: "note", rawRoster: "[]", rosterRevision: 0, eligibleProfileIds: [1], acceptedProfileId: 1, rejectionReason: null };
     const final = (text, timestamp) => callbacks.segment({ type: "final", source: "system", text, timestamp });
     final("affected", now);
     callbacks.identify({ speakerId: "speaker_0", displayName: "A", speakerDecision: evidence, startTime: now - 100, endTime: now + 500 });
@@ -1517,16 +1517,17 @@ test("diarization keeps stored recorder labels separate from viewer-local self m
     { speaker_id: "speaker_2", display_name: "You" },
   ];
   const segments = [
-    { id: "original", source: "mic", speaker: "speaker_0", speakerName: "You", text: "Original" },
+    { id: "original", source: "mic", speaker: "speaker_0", speakerName: "You", speakerLockSource: "user", text: "Original" },
     {
       id: "appended",
       source: "mic",
       speaker: "speaker_1",
       speakerName: "You",
       recorderName: "Carol Recorder",
+      speakerLockSource: "user",
       text: "Appended",
     },
-    { id: "viewer", source: "mic", speaker: "speaker_2", text: "Viewer" },
+    { id: "viewer", source: "mic", speaker: "speaker_2", speakerAssignment: { origin: "human" }, text: "Viewer" },
   ];
   await render(undefined, {
     note: {
@@ -1795,4 +1796,29 @@ test('NoteEditor undo uses the current scope when participants change during its
   assert.equal(chat().props.segments[0].speakerName,undefined);
   assert.equal(chat().props.segments[0].speakerDecision.rejectionReason,'roster_changed');
   await unmount();
+});
+
+test('run6: NoteEditor completion overlay is invalidated by an ordinary roster change', async t=>{
+  const { render, click, latest, unmount, vite }=await loadNoteEditor(t);
+  const store=await vite.ssrLoadModule('/stores/meetingRecordingStore.ts');
+  const note={...NOTE,participants:'[]',speaker_roster_revision:0,transcript:JSON.stringify([{id:'overlay',text:'hello',source:'system'}])};
+  const decision={candidateSetStatus:'recorded',decisionId:'accepted',noteId:note.id,source:'note',rawRoster:'[]',rosterRevision:0,eligibleProfileIds:[1],acceptedProfileId:1,rejectionReason:null};
+  const segments=[{id:'overlay',text:'hello',source:'system',speakerName:'A',speakerDecision:decision}];
+  const chat=()=>{let found;walk(latest(),node=>{if(node.props.onMapSpeaker)found=node;});return found.props;};
+  try {
+    await render(undefined,{note});await click('transcript');
+    await React.act(async()=>store.useMeetingRecordingStore.setState({completedDiarization:{noteId:note.id,segments}}));
+    assert.equal(chat().segments[0].speakerName,'A');
+    const current={...segments[0],speakerName:'Re-evaluated member',speakerDecision:{...decision,decisionId:'new-evaluation'}};
+    await render(undefined,{note:{...note,transcript:JSON.stringify({version:2,rows:[current]})}});
+    assert.equal(chat().segments[0].speakerName,'Re-evaluated member','same-roster enrollment recovery must invalidate an old overlay');
+
+    await render(undefined,{note:{...note,participants:'[{"email":"other@example.com"}]',speaker_roster_revision:1}});
+    assert.equal(chat().segments[0].speakerName,undefined);
+    assert.equal(chat().segments[0].speakerDecision?.acceptedProfileId ?? null,null);
+    const participants='[{"email":"other@example.com"}]';
+    const recovered={...segments[0],speakerName:'Current member',speakerDecision:{...decision,decisionId:'recovered',rawRoster:participants,rosterRevision:1,acceptedProfileId:2,eligibleProfileIds:[2]}};
+    await render(undefined,{note:{...note,participants,speaker_roster_revision:1,transcript:JSON.stringify({version:2,rows:[recovered]})}});
+    assert.equal(chat().segments[0].speakerName,'Current member','an old overlay must not hide a legitimate current recovery');
+  } finally {await unmount();}
 });

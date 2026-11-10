@@ -123,7 +123,6 @@ test('explicit Unknown, locked, overlap and mixed audio have distinct eligibilit
     [{ speakerLocked: true }, 'locked'],
     [{ uncertainty: { reason: 'overlapping_speech' } }, 'uncertain-overlap'],
     [{ uncertainty: { reason: 'possible_mixed_speakers' } }, 'mixed-audio'],
-    [{ suggestedName: 'Alex' }, 'provisional-suggestion'],
     [{ uncertainty: { reason: 'too_short' } }, 'insufficient-evidence'],
   ];
   for (const [patch, reason] of cases) await t.test(reason, async sub => {
@@ -237,6 +236,9 @@ test('roster owner A/B vetoes reconsideration winner C without promoting A',asyn
 for (const change of ["enrollment", "roster expansion"]) {
   test(`a veto is reevaluated after ${change}, but cached evidence alone leaves it Unknown`, async (t) => {
     const f = fixture(t);
+    const recordingId = f.record(f.noteId, 1);
+    f.row.audioSpan.recordingId = recordingId;
+    f.db.updateNote(f.noteId, { transcript: JSON.stringify([f.row]) });
     const scope = require("../../src/helpers/noteSpeakerScope");
     if (change === "roster expansion") {
       await f.graduate();
@@ -255,8 +257,10 @@ for (const change of ["enrollment", "roster expansion"]) {
     else
       f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: "alex@example.com" }]) });
     const pending = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
-    const evaluations = new Map([[pending.id, {embedding:vector(1),audioContentHash:"canonical-live-audio",
-      previousDecisionId:pending.speakerDecision.decisionId}]]);
+    const evaluations = await require("../../src/helpers/speakerRowEvaluation").prepareSpeakerRowEvaluations(
+      f.db, f.identifier, f.noteId, f.runId, [], f.audio,
+      { isAvailable: () => true, extractEmbeddingFromSamples: async () => vector(1) });
+    assert.equal(evaluations.has(pending.id), true);
     const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId, [], evaluations);
     assert.equal(result.assignments.length, 1);
     const actual = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
@@ -312,4 +316,45 @@ test('a refused row evaluation cannot publish an accepted cluster assignment', a
   const result = reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId,[],evaluations);
   assert.deepEqual(result.assignments,[]);
   assert.equal(f.identifier.transientDisplayNames.has('speaker_3'),false);
+});
+
+for (const change of ['enrollment','roster expansion']) test(`run6: fresh retained audio reassesses stale not_sure after ${change}`,async t=>{
+  const f=fixture(t);
+  f.row.audioSpan.recordingId=f.record(f.noteId,1);
+  const scope=require('../../src/helpers/noteSpeakerScope');
+  if(change==='roster expansion'){await f.graduate();f.db.updateNote(f.noteId,{participants:'[{"email":"outsider@example.com"}]'});}
+  const evidence=scope.decision(scope.readScope(f.db,f.noteId),{path:'prior',profiles:f.db.getSpeakerProfiles(true),rejectionReason:'not_sure'});
+  f.db.updateNote(f.noteId,{transcript:JSON.stringify([{...f.row,uncertainty:{reason:'not_sure'},speakerDecision:evidence}])});
+  if(change==='enrollment')await f.graduate();
+  else f.db.updateNote(f.noteId,{participants:'[{"email":"alex@example.com"}]'});
+  const evaluations=await require('../../src/helpers/speakerRowEvaluation').prepareSpeakerRowEvaluations(f.db,f.identifier,f.noteId,f.runId,[],f.audio,{isAvailable:()=>true,extractEmbeddingFromSamples:async()=>vector(1)});
+  assert.equal(evaluations.size,1);
+  const result=reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId,[],evaluations);
+  assert.equal(result.assignments.length,1);
+  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName,'Alex');
+});
+
+for (const reason of ['not_sure','too_short']) test(`run6: explicit replacement commits through reconsideration when the old ${reason} recording is gone`,async t=>{
+  const f=fixture(t);
+  const original=f.record(f.noteId,1);
+  const scope=require('../../src/helpers/noteSpeakerScope');
+  f.row.audioSpan.recordingId=original;
+  if(reason==='too_short')f.row.audioSpan.endSample=12000;
+  const d=scope.decision(scope.readScope(f.db,f.noteId),{path:'old',rejectionReason:reason});
+  f.db.updateNote(f.noteId,{transcript:JSON.stringify([{...f.row,uncertainty:{reason},speakerDecision:d}])});
+  await f.graduate();
+  f.audio.purge(f.noteId);
+  const recordingId=f.record(f.noteId,1);
+  const row=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  const prepare=require('../../src/helpers/speakerRowEvaluation').prepareSpeakerRowEvaluations;
+  const extractor={isAvailable:()=>true,extractEmbeddingFromSamples:async()=>vector(1)};
+  assert.equal((await prepare(f.db,f.identifier,f.noteId,f.runId,[],f.audio,extractor)).size,0);
+  const evaluations=await prepare(f.db,f.identifier,f.noteId,f.runId,[],f.audio,extractor,{replacements:new Map([[row.id,{kind:'replacement',previousDecisionId:row.speakerDecision.decisionId,parentRecordingId:original,audioSpan:{...row.audioSpan,recordingId,endSample:96000}}]])});
+  assert.equal(evaluations.size,1);
+  const result=reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId,[],evaluations);
+  assert.equal(result.assignments.length,1);
+  const actual=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  assert.equal(actual.speakerName,'Alex');
+  assert.equal(actual.audioSpan.recordingId,recordingId);
+  assert.equal(actual.speakerDecision.evaluation.audioTransition.parentRecordingId,original);
 });

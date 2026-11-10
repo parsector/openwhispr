@@ -10084,9 +10084,10 @@ class IPCHandlers {
                   speakerDecision: identification.speakerDecision,
                   uncertainty: identification.uncertainty,
                 };
-                if (cohort === "mic") applyProvisionalSpeaker(seg, patch);
-                else if (displayName) applyConfirmedSpeaker(seg, patch);
-                else applySuggestedSpeaker(seg, patch);
+                const scope = speakerScope.readScope(this.databaseManager, meetingNoteId);
+                if (cohort === "mic") applyProvisionalSpeaker(seg, patch, scope);
+                else if (displayName) applyConfirmedSpeaker(seg, patch, scope);
+                else applySuggestedSpeaker(seg, patch, scope);
               }
             }
           },
@@ -10137,17 +10138,7 @@ class IPCHandlers {
           }));
           if (!merges.length) return;
 
-          for (const { keep, remove, displayName, speakerDecision } of merges) {
-            for (const seg of meetingDiarizationSegments) {
-              if (seg.speaker === remove) {
-                if (!canAutoRelabelSpeaker(seg)) continue;
-                seg.speaker = keep;
-                seg.speakerName = displayName || undefined;
-                seg.speakerIsPlaceholder = !displayName;
-                seg.speakerDecision = speakerDecision;
-              }
-            }
-          }
+          this._applySpeakerClusterMerges(meetingDiarizationSegments, merges, meetingNoteId);
 
           win.webContents.send("meeting-speakers-merged", merges);
         }, 30_000);
@@ -14508,7 +14499,14 @@ class IPCHandlers {
           request.runId,
           request.rows,
           this.meetingAudioStore,
-          require("./speakerEmbeddings")
+          require("./speakerEmbeddings"),
+          {
+            replacements: new Map(
+              (Array.isArray(request.audioReplacements) ? request.audioReplacements : []).map(
+                (replacement) => [replacement.rowId, replacement]
+              )
+            ),
+          }
         );
         const result = require("./liveSpeakerReconsideration").reconsiderLiveClusters(
           this.databaseManager,
@@ -14963,6 +14961,60 @@ class IPCHandlers {
         for (const noteId of onlyNoteId != null
           ? [onlyNoteId]
           : this.databaseManager.getNotesWithUnmappedSpeakers()) {
+          const scope = speakerScope.readScope(this.databaseManager, noteId, profiles);
+          scope.profileFingerprints = profiles.map((p) => ({
+            id: p.id,
+            fingerprint: speakerScope.profileFingerprint(p),
+          }));
+          const note = this.databaseManager.getNote(noteId);
+          if (!note?.transcript) continue;
+          const doc = require("./transcriptDocument").readTranscriptDocument(note.transcript);
+          const evaluate = (rowVector, row, reevaluating = false) => {
+            const ranked = profiles
+              .map((p) => ({
+                profile: p,
+                score: embeddings.cosineSimilarity(
+                  rowVector,
+                  new Float32Array(
+                    p.embedding.buffer,
+                    p.embedding.byteOffset,
+                    p.embedding.byteLength / 4
+                  )
+                ),
+              }))
+              .sort((a, b) => b.score - a.score);
+            const best = ranked[0];
+            if (!best) return null;
+            const reason = require("./speakerUncertainty").matchReason(
+              { name: best.profile.display_name, score: best.score },
+              ranked[1] && { name: ranked[1].profile.display_name, score: ranked[1].score }
+            );
+            const allowed = rosterPolicy.mayAutoName(
+              reevaluating && ["not_sure", "close_match"].includes(row.uncertainty?.reason)
+                ? { ...row, uncertainty: undefined }
+                : row,
+              best.profile,
+              scope,
+              {
+                acousticAccepted: best.score > 0.6 && !reason,
+              }
+            );
+            const evidence = speakerScope.decision(scope, {
+              runId: row.diarizationRunId,
+              path: "retroactive",
+              profile: best.profile,
+              runnerUpProfileId: ranked[1]?.profile.id ?? null,
+              profiles,
+              scores: { best: best.score, runnerUp: ranked[1]?.score ?? 0 },
+              effectiveThresholds: {
+                ...require("./speakerDecisionThresholds").current().values,
+                similarityFloor: require("./speakerDecisionThresholds").effectiveFloor(),
+                retroactiveFloor: 0.6,
+              },
+              rejectionReason: allowed ? null : "retroactive_rejected",
+            });
+            return { best, profile: allowed ? best.profile : null, speakerDecision: evidence };
+          };
           const evaluations = await require("./speakerRowEvaluation").prepareSpeakerRowEvaluations(
             this.databaseManager,
             { getSpeakerProfiles: () => profiles },
@@ -14970,12 +15022,9 @@ class IPCHandlers {
             null,
             [],
             this.meetingAudioStore,
-            embeddings
+            embeddings,
+            { evaluateEmbedding: (vector, row) => evaluate(vector, row, true) }
           );
-          const scope = speakerScope.readScope(this.databaseManager, noteId, profiles);
-          const note = this.databaseManager.getNote(noteId);
-          if (!note?.transcript) continue;
-          const doc = require("./transcriptDocument").readTranscriptDocument(note.transcript);
           let changed = false;
           for (const emb of this.databaseManager.getNoteSpeakerEmbeddings(noteId)) {
             const vector = new Float32Array(
@@ -14988,57 +15037,16 @@ class IPCHandlers {
                 continue;
               const evaluation = evaluations.get(row.id);
               const rowVector = evaluation?.embedding || vector;
-              const ranked = profiles
-                .map((p) => ({
-                  profile: p,
-                  score: embeddings.cosineSimilarity(
-                    rowVector,
-                    new Float32Array(
-                      p.embedding.buffer,
-                      p.embedding.byteOffset,
-                      p.embedding.byteLength / 4
-                    )
-                  ),
-                }))
-                .sort((a, b) => b.score - a.score);
-              const best = ranked[0];
-              if (best?.profile.id !== profile.id) continue;
-              const reason = require("./speakerUncertainty").matchReason(
-                { name: best.profile.display_name, score: best.score },
-                ranked[1] && { name: ranked[1].profile.display_name, score: ranked[1].score }
-              );
-              const allowed = rosterPolicy.mayAutoName(row, best.profile, scope, {
-                acousticAccepted: best.score > 0.6 && !reason,
-              });
-              const evidence = speakerScope.decision(scope, {
-                runId: row.diarizationRunId,
-                path: "retroactive",
-                profile: best.profile,
-                runnerUpProfileId: ranked[1]?.profile.id ?? null,
-                profiles,
-                scores: { best: best.score, runnerUp: ranked[1]?.score ?? 0 },
-                effectiveThresholds: {
-                  ...require("./speakerDecisionThresholds").current().values,
-                  similarityFloor: require("./speakerDecisionThresholds").effectiveFloor(),
-                  retroactiveFloor: 0.6,
-                },
-                rejectionReason: allowed ? null : "retroactive_rejected",
-              });
-              if (evaluation && evaluation.previousDecisionId === row.speakerDecision?.decisionId) {
-                evidence.evaluation = {
-                  rowId: row.id,
-                  previousDecisionId: row.speakerDecision.decisionId,
-                  audioContentHash: evaluation.audioContentHash,
-                  audioSpan: { ...row.audioSpan },
-                  revision: scope.revision,
-                  rosterRevision: scope.rosterRevision,
-                  profileFingerprint: speakerScope.profileFingerprint(best.profile),
-                };
-              }
+              const match = evaluation?.match || evaluate(rowVector, row);
+              if (match?.best?.profile.id !== profile.id) continue;
+              const evidence = match.speakerDecision;
+              const allowed = !!match.profile;
               const incoming = {
                 ...row,
                 speakerDecision: evidence,
-                ...(evaluation ? { audioContentHash: evaluation.audioContentHash } : {}),
+                ...(evaluation
+                  ? { audioContentHash: evaluation.audioContentHash, uncertainty: undefined }
+                  : {}),
                 ...(allowed
                   ? {
                       suggestedName: profile.display_name,
@@ -15047,16 +15055,18 @@ class IPCHandlers {
                     }
                   : {}),
               };
-              Object.assign(
-                row,
-                require("./automaticSpeakerAttribution").resolveAutomaticSpeaker(
+              if (evaluation) Object.assign(row, incoming);
+              else
+                Object.assign(
                   row,
-                  row.speakerDecision,
-                  scope,
-                  incoming
-                )
-              );
-              if (!allowed) speakerScope.veto(row, row.speakerDecision);
+                  require("./automaticSpeakerAttribution").resolveAutomaticSpeaker(
+                    row,
+                    row.speakerDecision,
+                    scope,
+                    incoming
+                  )
+                );
+              if (!allowed) speakerScope.veto(row, row.speakerDecision, scope);
               changed = true;
             }
           }
@@ -15069,7 +15079,7 @@ class IPCHandlers {
                   doc.unknownNumberHighWater
                 ),
               },
-              { reconcileTranscript: true }
+              { reconcileTranscript: evaluations.size === 0, speakerEvaluations: evaluations }
             );
         }
       } catch (error) {
@@ -15083,6 +15093,31 @@ class IPCHandlers {
     const profiles = this.databaseManager.getSpeakerProfiles?.(true) || [];
     for (const profile of profiles)
       if (rosterPolicy.eligible(scope, profile.id)) this._retroactiveMapping(profile, noteId);
+  }
+
+  _applySpeakerClusterMerges(rows, merges, noteId) {
+    const scope = speakerScope.readScope(this.databaseManager, noteId);
+    const { resolveAutomaticSpeaker } = require("./automaticSpeakerAttribution");
+    const saved = new Map(
+      require("./transcriptDocument")
+        .readTranscriptDocument(this.databaseManager.getNote(noteId)?.transcript)
+        .rows.map((row) => [row.id, row])
+    );
+    for (const { keep, remove, displayName, speakerDecision } of merges)
+      for (const row of rows) {
+        if (row.speaker !== remove || isSpeakerLocked(row)) continue;
+        const own = saved.get(row.id) || saved.get(row.parentRowId) || row;
+        Object.assign(
+          row,
+          resolveAutomaticSpeaker(own, own.speakerDecision, scope, {
+            ...row,
+            speaker: keep,
+            speakerName: displayName || undefined,
+            speakerIsPlaceholder: !displayName,
+            speakerDecision,
+          })
+        );
+      }
   }
 
   _applySpeakerName(segments, speakerId, displayName, context = {}) {
@@ -15111,25 +15146,30 @@ class IPCHandlers {
               evidence?.revision && evidence.revision !== current.revision
                 ? "roster_changed"
                 : "reconciliation_rejected",
-          })
+          }),
+          current
         );
         continue;
       }
       if (segment.speakerName) continue;
-      applyConfirmedSpeaker(segment, {
-        speakerName: displayName,
-        speakerIsPlaceholder: false,
-        suggestedName: undefined,
-        suggestedProfileId: undefined,
-        speakerDecision:
-          evidence ||
-          speakerScope.decision(scope, {
-            runId,
-            path: "live_reconciliation",
-            profile,
-            profiles: [profile],
-          }),
-      });
+      applyConfirmedSpeaker(
+        segment,
+        {
+          speakerName: displayName,
+          speakerIsPlaceholder: false,
+          suggestedName: undefined,
+          suggestedProfileId: undefined,
+          speakerDecision:
+            evidence ||
+            speakerScope.decision(scope, {
+              runId,
+              path: "live_reconciliation",
+              profile,
+              profiles: [profile],
+            }),
+        },
+        current
+      );
     }
   }
 
@@ -15397,8 +15437,10 @@ class IPCHandlers {
         speakerScope.enforceRows(this.databaseManager, noteId, payload.segments, {
           runId: sessionId,
           path: "final_commit",
-          storedRows: require("./transcriptDocument").readTranscriptDocument(saved?.transcript)
-            .rows,
+          storedRows: [
+            ...kept,
+            ...require("./transcriptDocument").readTranscriptDocument(saved?.transcript).rows,
+          ],
           scope: recognitionScope,
           includeUnrecorded: true,
         });
@@ -15737,6 +15779,10 @@ class IPCHandlers {
               includeProvisional: true,
             });
 
+            recognitionScope.profileFingerprints = profiles.map((p) => ({
+              id: p.id,
+              fingerprint: speakerScope.profileFingerprint(p),
+            }));
             if (profiles.length > 0) {
               for (const [mappedId, embArr] of Object.entries(speakerEmbeddingsMap)) {
                 if (
@@ -15794,12 +15840,10 @@ class IPCHandlers {
                       ? "voice_not_approved"
                       : reason?.reason || null,
                 });
-                for (const seg of enrichedSegments)
-                  if (seg.speaker === mappedId && !isSpeakerLocked(seg))
-                    seg.speakerDecision = rawEvidence;
                 if (!eligibleWinner || bestProfile?.voice_usable !== 1) {
                   for (const seg of enrichedSegments)
-                    if (seg.speaker === mappedId) speakerScope.veto(seg, rawEvidence);
+                    if (seg.speaker === mappedId)
+                      speakerScope.veto(seg, rawEvidence, recognitionScope);
                   continue;
                 }
 
@@ -15828,10 +15872,6 @@ class IPCHandlers {
                       !isSpeakerLocked(seg) &&
                       seg.uncertainty?.reason !== "too_short"
                     ) {
-                      seg.speakerAssessmentAvailable = true;
-                      seg.speakerName = undefined;
-                      seg.speakerIsPlaceholder = true;
-                      seg.speakerStatus = "provisional";
                       const cohortProfile = profiles.find((p) => p.id === cohort.cohortBest.id);
                       const allowed = rosterPolicy.mayAutoName(
                         seg,
@@ -15839,30 +15879,48 @@ class IPCHandlers {
                         recognitionScope,
                         { acousticAccepted: cohort.cohortBest.raw > 0.5 }
                       );
-                      seg.speakerDecision = {
-                        ...rawEvidence,
-                        path: "final_cohort",
-                        rawDecision: rawEvidence,
-                        acceptedProfileId: allowed ? cohortProfile.id : null,
-                        acceptedIdentity: allowed
-                          ? { email: rosterPolicy.normalizedEmail(cohortProfile.email) }
-                          : null,
-                        cohortSelection: {
-                          profileId: cohortProfile?.id ?? null,
-                          raw: cohort.cohortBest.raw,
-                          normalized: cohort.cohortBest.normalized,
-                          rawFloor: 0.5,
-                          accepted: allowed,
+                      const proposal = {
+                        ...seg,
+                        speakerAssessmentAvailable: true,
+                        speakerName: undefined,
+                        speakerIsPlaceholder: true,
+                        speakerStatus: "provisional",
+                        suggestedName: undefined,
+                        suggestedProfileId: undefined,
+                        speakerDecision: {
+                          ...rawEvidence,
+                          path: "final_cohort",
+                          rawDecision: rawEvidence,
+                          acceptedProfileId: allowed ? cohortProfile.id : null,
+                          acceptedIdentity: allowed
+                            ? { email: rosterPolicy.normalizedEmail(cohortProfile.email) }
+                            : null,
+                          cohortSelection: {
+                            profileId: cohortProfile?.id ?? null,
+                            raw: cohort.cohortBest.raw,
+                            normalized: cohort.cohortBest.normalized,
+                            rawFloor: 0.5,
+                            accepted: allowed,
+                          },
+                          rejectionReason: allowed ? null : "cohort_rejected",
                         },
-                        rejectionReason: allowed ? null : "cohort_rejected",
+                        ...(allowed
+                          ? {
+                              suggestedName: cohort.cohortBest.display_name,
+                              suggestedProfileId: cohort.cohortBest.id,
+                              speakerStatus: "suggested",
+                            }
+                          : {}),
                       };
-                      seg.suggestedName = undefined;
-                      seg.suggestedProfileId = undefined;
-                      if (allowed)
-                        applySuggestedSpeaker(seg, {
-                          suggestedName: cohort.cohortBest.display_name,
-                          suggestedProfileId: cohort.cohortBest.id,
-                        });
+                      Object.assign(
+                        seg,
+                        require("./automaticSpeakerAttribution").resolveAutomaticSpeaker(
+                          seg,
+                          seg.speakerDecision,
+                          recognitionScope,
+                          proposal
+                        )
+                      );
                     }
                   continue;
                 }
@@ -15876,27 +15934,41 @@ class IPCHandlers {
 
                 if (reason) {
                   for (const seg of enrichedSegments) {
-                    if (seg.speaker === mappedId && !isSpeakerLocked(seg)) {
-                      if (!["too_short", "overlapping_speech"].includes(seg.uncertainty?.reason))
-                        seg.uncertainty = reason;
-                      seg.speakerAssessmentAvailable = true;
-                      seg.speakerName = undefined;
-                      seg.speakerIsPlaceholder = true;
-                      seg.speakerStatus = "provisional";
-                      seg.suggestedName = undefined;
-                      seg.suggestedProfileId = undefined;
-                      seg.speakerDecision = {
-                        ...rawEvidence,
-                        acceptedProfileId: null,
-                        acceptedIdentity: null,
-                        rejectionReason: reason.reason,
-                      };
-                      if (
-                        seg.uncertainty?.candidates &&
-                        !rosterPolicy.eligible(recognitionScope, runnerUp?.id)
+                    if (seg.speaker !== mappedId || isSpeakerLocked(seg)) continue;
+                    let uncertainty = ["too_short", "overlapping_speech"].includes(
+                      seg.uncertainty?.reason
+                    )
+                      ? seg.uncertainty
+                      : reason;
+                    if (
+                      uncertainty?.candidates &&
+                      !rosterPolicy.eligible(recognitionScope, runnerUp?.id)
+                    )
+                      uncertainty = { reason: uncertainty.reason };
+                    Object.assign(
+                      seg,
+                      require("./automaticSpeakerAttribution").resolveAutomaticSpeaker(
+                        seg,
+                        seg.speakerDecision,
+                        recognitionScope,
+                        {
+                          ...seg,
+                          uncertainty,
+                          speakerAssessmentAvailable: true,
+                          speakerName: undefined,
+                          speakerIsPlaceholder: true,
+                          speakerStatus: "provisional",
+                          suggestedName: undefined,
+                          suggestedProfileId: undefined,
+                          speakerDecision: {
+                            ...rawEvidence,
+                            acceptedProfileId: null,
+                            acceptedIdentity: null,
+                            rejectionReason: reason.reason,
+                          },
+                        }
                       )
-                        seg.uncertainty = { reason: seg.uncertainty.reason };
-                    }
+                    );
                   }
                   continue;
                 }
@@ -15913,12 +15985,17 @@ class IPCHandlers {
                         acousticAccepted: true,
                       })
                     ) {
-                      applyConfirmedSpeaker(seg, {
-                        speakerName: bestProfile.display_name,
-                        speakerIsPlaceholder: false,
-                        suggestedName: undefined,
-                        suggestedProfileId: undefined,
-                      });
+                      applyConfirmedSpeaker(
+                        seg,
+                        {
+                          speakerName: bestProfile.display_name,
+                          speakerDecision: rawEvidence,
+                          speakerIsPlaceholder: false,
+                          suggestedName: undefined,
+                          suggestedProfileId: undefined,
+                        },
+                        recognitionScope
+                      );
                       seg.speakerAssessmentAvailable = true;
                     }
                   }
@@ -15928,10 +16005,15 @@ class IPCHandlers {
                       if (isSpeakerLocked(seg)) {
                         continue;
                       }
-                      applySuggestedSpeaker(seg, {
-                        suggestedName: bestProfile.display_name,
-                        suggestedProfileId: bestProfile.id,
-                      });
+                      applySuggestedSpeaker(
+                        seg,
+                        {
+                          suggestedName: bestProfile.display_name,
+                          speakerDecision: rawEvidence,
+                          suggestedProfileId: bestProfile.id,
+                        },
+                        recognitionScope
+                      );
                       seg.speakerAssessmentAvailable = true;
                     }
                   }

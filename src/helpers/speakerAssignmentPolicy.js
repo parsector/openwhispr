@@ -41,7 +41,7 @@ function canAutoRelabelSpeaker(segment) {
   );
 }
 
-function applySpeakerUpdate(segment, patch, status) {
+function applySpeakerUpdate(segment, patch, status, scope) {
   if (!canAutoRelabelSpeaker(segment)) {
     if (!isSpeakerLocked(segment)) return segment;
     segment.speakerStatus = SPEAKER_STATUS.LOCKED;
@@ -52,7 +52,7 @@ function applySpeakerUpdate(segment, patch, status) {
 
   Object.assign(
     segment,
-    resolveAutomaticSpeaker(segment, segment.speakerDecision, null, {
+    resolveAutomaticSpeaker(segment, segment.speakerDecision, scope, {
       ...segment,
       ...patch,
       speakerStatus: status,
@@ -61,20 +61,20 @@ function applySpeakerUpdate(segment, patch, status) {
   return segment;
 }
 
-function applyProvisionalSpeaker(segment, patch = {}) {
-  return applySpeakerUpdate(segment, patch, SPEAKER_STATUS.PROVISIONAL);
+function applyProvisionalSpeaker(segment, patch = {}, scope) {
+  return applySpeakerUpdate(segment, patch, SPEAKER_STATUS.PROVISIONAL, scope);
 }
 
-function applyConfirmedSpeaker(segment, patch = {}) {
-  return applySpeakerUpdate(segment, patch, SPEAKER_STATUS.CONFIRMED);
+function applyConfirmedSpeaker(segment, patch = {}, scope) {
+  return applySpeakerUpdate(segment, patch, SPEAKER_STATUS.CONFIRMED, scope);
 }
 
-function applySuggestedSpeaker(segment, patch = {}) {
+function applySuggestedSpeaker(segment, patch = {}, scope) {
   if (!canAutoRelabelSpeaker(segment)) {
     return segment;
   }
 
-  return applySpeakerUpdate(segment, patch, SPEAKER_STATUS.SUGGESTED);
+  return applySpeakerUpdate(segment, patch, SPEAKER_STATUS.SUGGESTED, scope);
 }
 
 module.exports = {

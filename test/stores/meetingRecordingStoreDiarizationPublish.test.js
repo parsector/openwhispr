@@ -28,7 +28,7 @@ function createElectronAPI({ stopDiarizationSessionId = null } = {}) {
     // synchronous skip-diarization send.
     onStop: null,
   };
-  const notes = new Map([[NOTE_ID, { id: NOTE_ID, transcript: "", deleted_at: null }]]);
+  const notes = new Map([[NOTE_ID, { id: NOTE_ID, participants: "[]", speaker_roster_revision: 0, transcript: "", deleted_at: null }]]);
   const api = {
     checkSystemAudioAccess: async () => ({
       granted: true,
@@ -657,7 +657,9 @@ test('live identification and merge names require automatic evidence on unprotec
 });
 
 test("roster edit retires cached identifications and rejects delayed live names", async t => {
-  const {api,state}=createElectronAPI();
+  const {api,state,notes}=createElectronAPI();
+  notes.get(NOTE_ID).participants='[{"email":"c@example.com"}]';
+  notes.get(NOTE_ID).speaker_roster_revision=1;
   let onNoteUpdated, onSpeaker;
   api.onNoteUpdated=callback=>{onNoteUpdated=callback;return ()=>{};};
   api.onMeetingSpeakerIdentified=callback=>{onSpeaker=callback;return ()=>{};};
@@ -717,7 +719,7 @@ for (const cause of ["cached final", "diarization_skipped", "diarization_failed"
       rejectionReason: "no_match",
     };
     const row = {
-      id: "same-row",
+      id: "cd3ea3ab-a9a8-4f78-a4b2-8b90ef90bdb9",
       text: "hello",
       source: "system",
       speaker: "speaker_0",
@@ -750,3 +752,90 @@ for (const cause of ["cached final", "diarization_skipped", "diarization_failed"
     assert.equal(actual.speakerDecision.rejectionReason, "no_match");
   });
 }
+
+test('run6: a 2000-row completion retry parses its base once', async t => {
+  const { api, state, notes } = createElectronAPI();
+  const { store } = await loadModules(t, api);
+  const rows = Array.from({length:2000}, (_,i)=>({id:`perf-${i}`,text:`line ${i}`,source:'system',timestamp:i,speaker:'speaker_0'}));
+  notes.get(NOTE_ID).transcript=JSON.stringify({version:2,rows});
+  let attempts=0;
+  const done=deferred();
+  api.updateNote=async (_id,patch)=>{
+    if (++attempts===1) return {success:false,error:'transcript_changed'};
+    notes.get(NOTE_ID).transcript=patch.transcript;
+    done.resolve();
+    return {success:true};
+  };
+  let parses=0;
+  const parse=JSON.parse;
+  t.mock.method(JSON,'parse',(...args)=>{parses++;return parse(...args);});
+  const start=performance.now();
+  state.diarizationCallback({noteId:NOTE_ID,sessionId:'perf',segments:rows});
+  await done.promise;
+  const elapsed=performance.now()-start;
+  console.log(`RUN6_RETRY rows=2000 ms=${elapsed.toFixed(1)} parses=${parses}`);
+  assert.equal(attempts,2);
+  const output=JSON.parse(notes.get(NOTE_ID).transcript).rows;
+  assert.equal(output.length,2000);
+  assert.equal(new Set(output.map(row=>row.text)).size,2000);
+  assert.ok(parses<100,`full JSON parses: ${parses}`);
+  assert.ok(elapsed<2500,`retry took ${elapsed}ms`);
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording,false);
+});
+
+test('run6: recording seed resolves the current declared roster', async t=>{
+  const {api,notes}=createElectronAPI();
+  notes.get(NOTE_ID).participants='[{"email":"a@example.com"}]';
+  const store=await loadStore(t,api);
+  await store.startRecording({...START_ARGS,seedSegments:[{id:'seed',text:'hello',source:'system',speakerName:'Outsider'}]});
+  const row=store.useMeetingRecordingStore.getState().segments[0];
+  assert.equal(row.speakerName,undefined);
+  assert.equal(row.speakerDecision.rejectionReason,'legacy_not_evaluated');
+  await store.stopRecording();
+});
+
+for (const timing of ['before read','during commit']) test(`run6: resumed-recording completion resolves current scope for its live installation (${timing})`,async t=>{
+  const {api,state,notes}=createElectronAPI({stopDiarizationSessionId:'first'});
+  let noteUpdated;
+  api.onNoteUpdated=callback=>{noteUpdated=callback;return ()=>{};};
+  api.getNote=async id=>({...notes.get(id)});
+  const {store,parseSeedSegments}=await loadModules(t,api);
+  state.stopTranscript='First sentence.';
+  await store.startRecording(START_ARGS);await store.stopRecording();
+  state.stopTranscript='';
+  await store.startRecording({...START_ARGS,seedSegments:parseSeedSegments(notes.get(NOTE_ID).transcript)});
+  const note=notes.get(NOTE_ID);
+  const changeRoster=()=>{note.participants='[{"email":"other@example.com"}]';note.speaker_roster_revision=1;};
+  if(timing==='before read')changeRoster();
+  else {
+    const update=api.updateNote;
+    let edited=false;
+    api.updateNote=async(id,patch,options)=>{
+      const result=await update(id,patch);
+      const snapshot={...notes.get(id)};
+      if(!edited && options?.reconcileTranscript){edited=true;changeRoster();noteUpdated({...note});}
+      return {...result,note:snapshot};
+    };
+  }
+  const d={candidateSetStatus:'recorded',decisionId:'old-acceptance',noteId:NOTE_ID,source:'note',rawRoster:'[]',rosterRevision:0,acceptedProfileId:1,eligibleProfileIds:[1],rejectionReason:null};
+  state.diarizationCallback({noteId:NOTE_ID,sessionId:'first',segments:[{id:'earlier',text:'First sentence.',source:'system',speaker:'speaker_0',speakerName:'Outsider',speakerDecision:d}]});
+  await settle();
+  const row=store.useMeetingRecordingStore.getState().segments.find(r=>r.text==='First sentence.');
+  assert.ok(row);
+  assert.equal(row.speakerName,undefined);
+  assert.equal(row.speakerDecision.rejectionReason,'roster_changed');
+  await store.stopRecording();
+});
+
+test('run6: recording seed cannot overwrite the canonical stored veto with supplied evidence',async t=>{
+  const {api,notes}=createElectronAPI();
+  const id='bf99d416-46c6-4ca9-a057-68a1c5ca5bb9';
+  const d={decisionId:'canonical-veto',noteId:NOTE_ID,source:'note',rawRoster:'[]',rosterRevision:0,eligibleProfileIds:[1],acceptedProfileId:null,rejectionReason:'no_match'};
+  const row={id,text:'stored',source:'system',speaker:'speaker_0',speakerDecision:d};
+  notes.get(NOTE_ID).transcript=JSON.stringify({version:2,rows:[row]});
+  const store=await loadStore(t,api);
+  await store.startRecording({...START_ARGS,seedSegments:[{...row,speakerName:'Forged',speakerDecision:{...d,acceptedProfileId:1,rejectionReason:null}}]});
+  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerName,undefined);
+  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerDecision.decisionId,'canonical-veto');
+  await store.stopRecording();
+});

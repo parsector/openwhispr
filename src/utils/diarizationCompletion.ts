@@ -98,6 +98,7 @@ export function mergeSessionDiarization(params: {
   segments: Array<Omit<TranscriptSegment, "id"> & { id?: string }>;
   removedSegments?: RemovedTranscriptSegment[];
   unknownNumberHighWater?: number;
+  noteScope?: unknown;
 }): { segments: TranscriptSegment[]; removedCount: number } {
   const { existing, seedLength, fallbackTranscript, segments, removedSegments } = params;
   const complete = (rows: TranscriptSegment[]) => {
@@ -133,7 +134,13 @@ export function mergeSessionDiarization(params: {
     return {
       segments: complete([
         ...existing.slice(0, seededCount),
-        ...mergeTranscriptSegments([], incoming, params.unknownNumberHighWater, true),
+        ...mergeTranscriptSegments(
+          [],
+          incoming,
+          params.unknownNumberHighWater,
+          true,
+          params.noteScope
+        ),
         ...sessionRows.slice(1),
       ]),
       removedCount: 1 - incoming.length,
@@ -143,7 +150,13 @@ export function mergeSessionDiarization(params: {
   return {
     segments: complete([
       ...existing.slice(0, seededCount),
-      ...mergeTranscriptSegments(keptRows, incoming, params.unknownNumberHighWater, true),
+      ...mergeTranscriptSegments(
+        keptRows,
+        incoming,
+        params.unknownNumberHighWater,
+        true,
+        params.noteScope
+      ),
     ]),
     removedCount: sessionRows.length - keptRows.length,
   };

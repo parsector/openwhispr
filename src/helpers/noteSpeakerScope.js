@@ -8,6 +8,7 @@ const {
   resolveSpeakerRoster,
   eligible,
   humanProtected,
+  recordedNameAllowed,
   normalizedEmail,
   SPEAKER_ROSTER_POLICY_VERSION,
 } = require("./speakerRosterPolicy");
@@ -22,7 +23,7 @@ function readScope(database, noteId, profiles = null, noteOverride = null) {
     const identities = database?.db?.prepare
       ? database.db.prepare("SELECT id, email FROM speaker_profiles ORDER BY id").all()
       : profiles || database?.getSpeakerProfiles?.() || [];
-    return resolveSpeakerRoster(note, null, identities);
+    return resolveSpeakerRoster(note && { ...note, deleted_at: null }, null, identities);
   } catch {
     return resolveSpeakerRoster(null, null);
   }
@@ -64,6 +65,7 @@ function decision(
     scores = null,
     effectiveThresholds = null,
     rejectionReason = null,
+    profileFingerprints,
   }
 ) {
   return {
@@ -90,25 +92,37 @@ function decision(
     path,
     scores,
     rejectionReason,
-    profileFingerprints: profiles.map((p) => ({ id: p.id, fingerprint: profileFingerprint(p) })),
+    profileFingerprints:
+      profileFingerprints ||
+      scope.profileFingerprints ||
+      profiles.map((p) => ({ id: p.id, fingerprint: profileFingerprint(p) })),
+    acousticEvaluation: "evaluated",
     modelFingerprint: modelFingerprint(),
   };
 }
-function veto(row, evidence) {
-  if (humanProtected(row)) return row;
-  row.speakerName = undefined;
-  row.speakerIsPlaceholder = true;
-  row.suggestedName = undefined;
-  row.suggestedProfileId = undefined;
-  row.speakerStatus = "provisional";
-  row.machineReason = undefined;
-  if (row.uncertainty?.candidates) row.uncertainty = { reason: row.uncertainty.reason };
-  row.speakerDecision = evidence;
+function veto(row, evidence, scope) {
+  Object.assign(
+    row,
+    resolveAutomaticSpeaker(row, row.speakerDecision, scope, {
+      ...row,
+      speakerName: undefined,
+      speakerIsPlaceholder: true,
+      suggestedName: undefined,
+      suggestedProfileId: undefined,
+      speakerStatus: "provisional",
+      machineReason: undefined,
+      uncertainty: row.uncertainty?.candidates
+        ? { reason: row.uncertainty.reason }
+        : row.uncertainty,
+      speakerDecision: evidence,
+    })
+  );
   return row;
 }
 
 // Recheck at every commit, including saves from a renderer holding an old final
-// result. Never rewrite historical unrecorded rows merely because they are read.
+// result. Restricted legacy names become reviewable Unknowns; known human
+// choices remain authoritative.
 function enforceRows(
   database,
   noteId,
@@ -120,24 +134,48 @@ function enforceRows(
     profiles,
     includeUnrecorded = false,
     noteOverride,
-    storedRows = [],
+    storedRows = null,
     restorationRowIds = [],
+    evaluations = new Map(),
   } = {}
 ) {
   const current = readScope(database, noteId, profiles, noteOverride);
   // Fingerprints are checked against the library at installation time, so an
   // evaluation made before a profile edit cannot supersede a veto.
+  let currentProfiles = [];
   try {
-    current.profileFingerprints = (profiles || database?.getSpeakerProfiles?.(true) || []).map(
-      (profile) => ({ id: profile.id, fingerprint: profileFingerprint(profile) })
-    );
+    currentProfiles = profiles || database?.getSpeakerProfiles?.(true) || [];
+    current.profileFingerprints = currentProfiles.map((profile) => ({
+      id: profile.id,
+      fingerprint: profileFingerprint(profile),
+    }));
   } catch {
     current.profileFingerprints = [];
   }
 
-  const stored = new Map(storedRows.map((row) => [row.id, row]));
+  try {
+    current.speaker_mapping_labels = database?.db?.prepare
+      ? Object.fromEntries(
+          database.db
+            .prepare("SELECT speaker_id, display_name FROM speaker_mappings WHERE note_id = ?")
+            .all(noteId)
+            .map((mapping) => [mapping.speaker_id, mapping.display_name])
+        )
+      : noteOverride?.speaker_mapping_labels || {};
+  } catch {
+    current.speaker_mapping_labels = {};
+  }
+  let importedIdentities;
+  const stored = new Map((storedRows || []).map((row) => [row.id, row]));
   const finish = (row) => {
-    const own = stored.get(row.id) || stored.get(row.parentRowId) || row;
+    const own =
+      stored.get(row.id) || stored.get(row.parentRowId) || (storedRows ? { id: row.id } : row);
+    const evaluated = evaluations.get(row.id);
+    if (evaluated && row.speakerDecision && recordedNameAllowed(row)) {
+      row.speakerDecision = { ...row.speakerDecision, evaluation: evaluated.evaluation };
+      row.audioContentHash = evaluated.audioContentHash;
+      row.audioSpan = evaluated.audioSpan;
+    }
     Object.assign(
       row,
       resolveAutomaticSpeaker(own, own.speakerDecision, current, row, { restorationRowIds })
@@ -152,9 +190,10 @@ function enforceRows(
       const assignment = row.speakerAssignment;
       let matches = [];
       try {
-        const identities = database?.db?.prepare
+        importedIdentities ||= database?.db?.prepare
           ? database.db.prepare("SELECT id, email FROM speaker_profiles ORDER BY id").all()
           : profiles || database?.getSpeakerProfiles?.() || [];
+        const identities = importedIdentities;
         const email = normalizedEmail(assignment.email);
         if (email) matches = identities.filter((p) => normalizedEmail(p.email) === email);
       } catch {
@@ -177,6 +216,15 @@ function enforceRows(
       // This device checked identity and scope, not the original audio/model.
       row.speakerDecision.acousticWinnerProfileId = null;
       row.speakerDecision.modelFingerprint = null;
+      row.speakerDecision.acousticEvaluation = "not_evaluated";
+      row.speakerDecision.candidateSetStatus = "not_recorded";
+    }
+    const prior = stored.get(row.id) || stored.get(row.parentRowId);
+    if (prior?.speakerDecision && !recordedNameAllowed(prior) && recordedNameAllowed(row)) {
+      // A proposed supersession must reach the boundary intact. Replacing its
+      // decision here would erase the very binding/revision failure we audit.
+      finish(row);
+      continue;
     }
     const recorded = row.speakerDecision;
     if (!recorded && !includeUnrecorded) {
@@ -186,7 +234,7 @@ function enforceRows(
     const profileId = recorded?.acceptedProfileId ?? row.suggestedProfileId;
     const stale = !currentSpeakerDecision(recorded || scope, current);
     if (recorded?.rejectionReason && !stale) {
-      veto(row, recorded);
+      veto(row, recorded, current);
       finish(row);
       continue;
     }
@@ -204,7 +252,7 @@ function enforceRows(
         runId: runId || recorded?.runId,
         path,
         rejectionReason: stale ? "roster_changed" : unsafe ? "unsafe_span" : "outside_roster",
-        profiles: profiles || [],
+        profileFingerprints: current.profileFingerprints,
       });
       // Read projections participate in expectedTranscript comparisons. The
       // same saved decision and roster must produce the same veto on each read.
@@ -217,7 +265,16 @@ function enforceRows(
           evidence.modelFingerprint = recorded.modelFingerprint;
       }
       evidence.previousDecision = recorded || null;
-      veto(row, evidence);
+      if (!recorded) {
+        evidence.candidateSetStatus = "not_recorded";
+        evidence.acousticEvaluation = "not_evaluated";
+      }
+      veto(row, evidence, current);
+      row.speakerBoundary = {
+        refusalReason: stale ? "revision" : unsafe ? "audio" : "profile",
+        proposedDecisionId: recorded?.decisionId ?? null,
+        controllingDecisionId: evidence.decisionId,
+      };
     }
     finish(row);
   }
@@ -225,11 +282,14 @@ function enforceRows(
 }
 function enforceTranscript(database, noteId, raw, options) {
   const doc = readTranscriptDocument(raw);
-  return writeTranscriptDocument(
-    enforceRows(database, noteId, doc.rows, options),
-    doc.unknownNumberHighWater
-  );
+  const before = JSON.stringify(doc.rows);
+  const rows = enforceRows(database, noteId, doc.rows, options);
+  // A read projection is not a format migration. Preserve optimistic-save
+  // tokens and legacy history references when attribution did not change.
+  if (JSON.stringify(rows) === before) return raw;
+  return writeTranscriptDocument(rows, doc.unknownNumberHighWater);
 }
+
 module.exports = {
   readScope,
   decision,

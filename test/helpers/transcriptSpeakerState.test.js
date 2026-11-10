@@ -76,3 +76,11 @@ test("renderer final split child inherits its parent machine veto", () => {
     undefined
   );
 });
+
+test('run6: a new transcription identity never inherits a veto through fuzzy text or time',()=>{
+  const old={id:'old',text:'hello',source:'system',timestamp:1,speakerIsPlaceholder:true,speakerDecision:{decisionId:'veto',acceptedProfileId:null,eligibleProfileIds:[1],rejectionReason:'not_sure'}};
+  const replacement={id:'replacement',text:'hello',source:'system',timestamp:1,speakerName:'A',speakerDecision:{decisionId:'new',acceptedProfileId:1,eligibleProfileIds:[1],rejectionReason:null}};
+  const actual=mergeTranscriptSegments([old],[replacement]);
+  assert.equal(actual.find(r=>r.id==='replacement')?.speakerName,'A');
+  assert.equal(actual.length,1);
+});

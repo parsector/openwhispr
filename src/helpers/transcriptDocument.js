@@ -437,7 +437,7 @@ function mergeLocalTranscriptState(cloudRaw, localRaw) {
   return reconcileCloudTranscript(cloudRaw, localRaw).transcript;
 }
 
-function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
+function reconcileAutomaticTranscript(proposedRaw, currentRaw, scope = null) {
   const proposed = readTranscriptDocument(proposedRaw);
   const current = readTranscriptDocument(currentRaw);
   const byId = new Map(current.rows.filter((row) => row.id).map((row) => [row.id, row]));
@@ -450,7 +450,7 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
   const seen = new Set();
   const rows = proposed.rows.map((row) => {
     const own = byId.get(row.id) || byId.get(row.parentRowId);
-    if (!own) return resolveAutomaticSpeaker(row, null, null, row);
+    if (!own) return resolveAutomaticSpeaker(row, null, scope, row);
     seen.add(row.id);
     const protectedAssignment =
       humanProtected(own) ||
@@ -460,7 +460,7 @@ function reconcileAutomaticTranscript(proposedRaw, currentRaw) {
     return resolveAutomaticSpeaker(
       own,
       own.speakerDecision,
-      null,
+      scope,
       protectedAssignment
         ? {
             ...row,

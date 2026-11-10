@@ -2472,7 +2472,8 @@ export default function PeoplePage({
                     </p>
                     {r.speakerDecision?.candidateSetStatus === "not_recorded" && (
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {t("people.candidateSetNotRecorded")}
+                        <span>{t("notes.speaker.notAssessed")}</span> ·{" "}
+                        <span>{t("people.candidateSetNotRecorded")}</span>
                       </p>
                     )}
                   </div>

@@ -47,7 +47,7 @@ function createElectronAPI({ startResult = {} } = {}) {
     meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
     meetingTranscriptionStop: async () => ({ success: true, diarizationSessionId: null }),
     meetingTranscriptionSend: () => {},
-    getNote: async () => null,
+    getNote: async () => ({id:NOTE_ID,participants:"[]",speaker_roster_revision:0,transcript:"[]"}),
     updateNote: async () => ({ success: true }),
     onMeetingDiarizationComplete: noopListener,
     onMeetingTranscriptionSegment: (callback) => {

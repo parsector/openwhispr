@@ -4090,6 +4090,15 @@ declare global {
         noteId: number;
         runId: string;
         rows: import("../stores/meetingRecordingStore").TranscriptSegment[];
+        audioReplacements?: Array<{
+          rowId: string;
+          kind: "replacement" | "reupload";
+          previousDecisionId: string;
+          parentRecordingId: string | number;
+          audioSpan: NonNullable<
+            import("../stores/meetingRecordingStore").TranscriptSegment["audioSpan"]
+          >;
+        }>;
       }) => Promise<{
         assignments: Array<{
           speakerId: string;
@@ -4265,9 +4274,7 @@ declare global {
         }>
       >;
       removeVoiceEnrollmentSample?: (id: string) => Promise<{ success: boolean; error?: string }>;
-      playVoiceEnrollmentCandidate?: (
-        id: string
-      ) => Promise<{
+      playVoiceEnrollmentCandidate?: (id: string) => Promise<{
         state: string;
         error?: string;
         wav?: string;

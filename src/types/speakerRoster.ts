@@ -1,5 +1,6 @@
 export interface SpeakerDecision {
-  candidateSetStatus: "recorded";
+  candidateSetStatus: "recorded" | "not_recorded";
+  acousticEvaluation?: "evaluated" | "not_evaluated";
   decisionId: string;
   runId: string;
   noteId: number | null;
@@ -43,7 +44,18 @@ export interface SpeakerDecision {
     };
     revision: string;
     rosterRevision: number;
-    profileFingerprint: string;
+    profileFingerprint?: string;
+    audioTransition?: {
+      kind: "replacement" | "reupload";
+      parentRecordingId: string | number;
+      previousAudioSpan: {
+        recordingId: string | number;
+        trackId: string;
+        startSample: number;
+        endSample: number;
+      };
+      canonicalHashMatched: boolean;
+    };
   };
   previousDecision?: SpeakerDecision | null;
   rawDecision?: SpeakerDecision;

@@ -2062,8 +2062,10 @@ class DatabaseManager {
       const { migrateSpeakerHistory } = require("./speakerActionLog");
       const legacySpeakerNotes = this.db
         .prepare(
-          `SELECT id, transcript, speaker_action_log, speaker_label_undo
-        FROM notes WHERE speaker_label_undo IS NOT NULL OR transcript LIKE '%"corrections"%'`
+          `SELECT id, participants, speaker_roster_revision, deleted_at, transcript, speaker_action_log, speaker_label_undo
+        FROM notes WHERE speaker_label_undo IS NOT NULL OR transcript LIKE '%"corrections"%'
+          OR transcript LIKE '%"speakerName"%'
+          OR (participants IS NOT NULL AND participants <> '[]' AND transcript IS NOT NULL)`
         )
         .all();
       const saveSpeakerHistory = this.db
@@ -2071,7 +2073,10 @@ class DatabaseManager {
         speaker_label_undo = NULL WHERE id = ?`);
       for (const note of legacySpeakerNotes) {
         try {
-          const migrated = migrateSpeakerHistory(note);
+          const migrated = migrateSpeakerHistory(note) || {
+            transcript: note.transcript,
+            speaker_action_log: note.speaker_action_log,
+          };
           if (migrated?.error) {
             debugLogger.error(
               "Speaker history migration exceeds action log limit",
@@ -2080,9 +2085,28 @@ class DatabaseManager {
             );
             continue;
           }
-          if (migrated)
+          const transcript = require("./noteSpeakerScope").enforceTranscript(
+            this,
+            note.id,
+            migrated.transcript,
+            {
+              path: "history_migration",
+              noteOverride: note,
+              storedRows: require("./transcriptDocument").readTranscriptDocument(note.transcript)
+                .rows,
+              restorationRowIds: require("./transcriptDocument")
+                .readTranscriptDocument(migrated.transcript)
+                .rows.filter((row) => require("./speakerRosterPolicy").humanProtected(row))
+                .map((row) => row.id),
+            }
+          );
+          if (
+            transcript !== note.transcript ||
+            migrated.speaker_action_log !== note.speaker_action_log ||
+            note.speaker_label_undo
+          )
             this.db.transaction(() =>
-              saveSpeakerHistory.run(migrated.transcript, migrated.speaker_action_log, note.id)
+              saveSpeakerHistory.run(transcript, migrated.speaker_action_log, note.id)
             )();
         } catch (error) {
           // Preserve the original note if its history cannot be decoded.
@@ -4338,9 +4362,21 @@ class DatabaseManager {
         spaceId,
         clientNoteId,
         accountId,
-        transcript
+        null
       );
 
+      if (transcript != null)
+        this.db
+          .prepare("UPDATE notes SET transcript = ? WHERE id = ?")
+          .run(
+            require("./noteSpeakerScope").enforceTranscript(
+              this,
+              Number(result.lastInsertRowid),
+              transcript,
+              { path: "note_seed", storedRows: [] }
+            ),
+            result.lastInsertRowid
+          );
       const fetchStmt = this.db.prepare("SELECT * FROM notes WHERE id = ?");
       const note = fetchStmt.get(result.lastInsertRowid);
 
@@ -4406,12 +4442,23 @@ class DatabaseManager {
               folderId,
               spaceId,
               accountId,
-              row.transcript,
+              null,
               row.participants,
               row.createdAt,
               row.createdAt
             );
             if (result.changes === 1) {
+              this.db
+                .prepare("UPDATE notes SET transcript = ? WHERE id = ?")
+                .run(
+                  require("./noteSpeakerScope").enforceTranscript(
+                    this,
+                    Number(result.lastInsertRowid),
+                    row.transcript,
+                    { path: "bulk_import", storedRows: [] }
+                  ),
+                  result.lastInsertRowid
+                );
               imported++;
               noteIds.push(Number(result.lastInsertRowid));
             } else {
@@ -4465,9 +4512,9 @@ class DatabaseManager {
 
   _withSpeakerDisplayNames(note) {
     if (!note?.transcript) return note;
-    // Sync and calendar changes can bypass updateNote. Scope recorded machine
-    // decisions on read as well; historical rows without evidence stay intact.
-    if (/"speaker(?:Decision|Assignment)"/.test(note.transcript))
+    // Raw imports and old notes receive the same projection as editor writes.
+    // Unknown-origin legacy names under a declared roster require review.
+    if (require("./transcriptDocument").isTranscriptDocument(note.transcript))
       note = {
         ...note,
         transcript: require("./noteSpeakerScope").enforceTranscript(
@@ -4660,19 +4707,6 @@ class DatabaseManager {
           );
         }
       }
-      if (
-        options?.reconcileTranscript &&
-        typeof updates.transcript === "string" &&
-        require("./transcriptDocument").isTranscriptDocument(updates.transcript) &&
-        require("./transcriptDocument").isTranscriptDocument(previous.transcript)
-      ) {
-        updates.transcript = require("./transcriptDocument").reconcileAutomaticTranscript(
-          updates.transcript,
-          previous.transcript
-        );
-        if (updates.transcript === null)
-          return { success: false, error: "stale_automatic_transcript" };
-      }
       const rosterEdited = ["participants"].some(
         (key) => updates[key] !== undefined && updates[key] !== previous[key]
       );
@@ -4681,10 +4715,24 @@ class DatabaseManager {
         ...updates,
         speaker_roster_revision: (previous.speaker_roster_revision || 0) + (rosterEdited ? 1 : 0),
       };
+      if (
+        options?.reconcileTranscript &&
+        typeof updates.transcript === "string" &&
+        require("./transcriptDocument").isTranscriptDocument(updates.transcript) &&
+        require("./transcriptDocument").isTranscriptDocument(previous.transcript)
+      ) {
+        updates.transcript = require("./transcriptDocument").reconcileAutomaticTranscript(
+          updates.transcript,
+          previous.transcript,
+          scopedNote
+        );
+        if (updates.transcript === null)
+          return { success: false, error: "stale_automatic_transcript" };
+      }
       const proposedTranscript = updates.transcript ?? (rosterEdited ? previous.transcript : null);
       if (
         typeof proposedTranscript === "string" &&
-        /"speaker(?:Decision|Assignment)"/.test(proposedTranscript)
+        require("./transcriptDocument").isTranscriptDocument(proposedTranscript)
       ) {
         updates.transcript = require("./noteSpeakerScope").enforceTranscript(
           this,
@@ -4696,6 +4744,7 @@ class DatabaseManager {
             storedRows: require("./transcriptDocument").readTranscriptDocument(previous.transcript)
               .rows,
             restorationRowIds: options?.speakerRestorationRowIds || [],
+            evaluations: options?.speakerEvaluations,
           }
         );
       }
@@ -8375,6 +8424,29 @@ class DatabaseManager {
         ? `CASE WHEN ${keepsLocalSummary}
             THEN enhancement_template_id ELSE excluded.enhancement_template_id END`
         : "enhancement_template_id";
+      const incomingParticipants = existing?.participants_sync_operation
+        ? existing.participants
+        : cloudNote.participants || existing?.participants || null;
+      const scopedCloudTranscript = existing
+        ? require("./noteSpeakerScope").enforceTranscript(
+            this,
+            existing.id,
+            cloudNote.transcript || existing.transcript,
+            {
+              path: "cloud_import",
+              storedRows: require("./transcriptDocument").readTranscriptDocument(
+                existing.transcript
+              ).rows,
+              noteOverride: {
+                ...existing,
+                participants: incomingParticipants,
+                speaker_roster_revision:
+                  (existing.speaker_roster_revision || 0) +
+                  (incomingParticipants !== existing.participants ? 1 : 0),
+              },
+            }
+          )
+        : null;
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhancement_template_id, enhanced_at_content_hash, note_type, source_file,
@@ -8431,7 +8503,7 @@ class DatabaseManager {
         cloudNote.note_type || "personal",
         cloudNote.source_file || null,
         cloudNote.audio_duration_seconds || null,
-        cloudNote.transcript || null,
+        scopedCloudTranscript,
         localFolderId,
         spaceId,
         cloudNote.participants || null,
@@ -8459,6 +8531,18 @@ class DatabaseManager {
       const storedNote = this.db
         .prepare("SELECT * FROM notes WHERE client_note_id = ?")
         .get(cloudNote.client_note_id);
+      if (!existing && cloudNote.transcript) {
+        const transcript = require("./noteSpeakerScope").enforceTranscript(
+          this,
+          storedNote.id,
+          cloudNote.transcript,
+          { path: "cloud_import", noteOverride: storedNote, storedRows: [] }
+        );
+        this.db
+          .prepare("UPDATE notes SET transcript = ? WHERE id = ?")
+          .run(transcript, storedNote.id);
+        storedNote.transcript = transcript;
+      }
       const pulledNote = this._withSpeakerDisplayNames(storedNote);
       if (pulledNote.transcript !== storedNote.transcript)
         this.db
@@ -8609,7 +8693,16 @@ class DatabaseManager {
             "UPDATE notes SET transcript = ?, speaker_action_log = ?, speaker_label_undo = NULL, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
           )
           .run(
-            writeTranscriptDocument(restored, document.unknownNumberHighWater),
+            require("./noteSpeakerScope").enforceTranscript(
+              this,
+              id,
+              writeTranscriptDocument(restored, document.unknownNumberHighWater),
+              {
+                path: "cloud_labels_undo",
+                storedRows: document.rows,
+                restorationRowIds: changedRowIds,
+              }
+            ),
             JSON.stringify(nextLog),
             id
           );
@@ -8637,7 +8730,12 @@ class DatabaseManager {
           next.correctionRevision = (Number(row.correctionRevision) || 0) + 1;
           return next;
         });
-        const after = writeTranscriptDocument(rows, local.unknownNumberHighWater);
+        const after = require("./noteSpeakerScope").enforceTranscript(
+          this,
+          id,
+          writeTranscriptDocument(rows, local.unknownNumberHighWater),
+          { path: "cloud_labels_adopt", storedRows: local.rows }
+        );
         const written = readTranscriptDocument(after);
         const previous = new Map(local.rows.map((row) => [row.id, row]));
         const snapshots = written.rows
@@ -9163,9 +9261,15 @@ class DatabaseManager {
               noteId: current.client_note_id,
             });
             if (rebased.transcript !== current.transcript)
-              this.db
-                .prepare("UPDATE notes SET transcript = ? WHERE id = ?")
-                .run(rebased.transcript, id);
+              this.db.prepare("UPDATE notes SET transcript = ? WHERE id = ?").run(
+                require("./noteSpeakerScope").enforceTranscript(this, id, rebased.transcript, {
+                  path: "cloud_rebase",
+                  storedRows: require("./transcriptDocument").readTranscriptDocument(
+                    current.transcript
+                  ).rows,
+                }),
+                id
+              );
           }
           // A deferred create may already have delivered (or had the server
           // discard) these sets. Keep preserves edits made after that POST,

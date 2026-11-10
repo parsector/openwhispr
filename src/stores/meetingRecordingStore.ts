@@ -99,6 +99,7 @@ export interface TranscriptSegment {
   diarizationRunId?: string;
   correctionRevision?: number;
   speakerAssessmentAvailable?: boolean;
+  speakerReviewRequired?: boolean;
   importedUnlabeled?: boolean;
   corrections?: import("../utils/transcriptCorrections").TranscriptCorrection[];
   quarantinedCorrections?: import("../utils/transcriptCorrections").TranscriptCorrection[];
@@ -1029,7 +1030,25 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         : Math.max(1, Math.min(MAX_SPEAKER_COUNT, args.expectedCount));
 
     logger.info("Meeting transcription starting...", {}, "meeting");
-    const seed = args.seedSegments ?? [];
+    let seedNote: NoteItem | null = null;
+    try {
+      seedNote = (await window.electronAPI?.getNote?.(args.noteId)) ?? null;
+    } catch {
+      /* fail closed */
+    }
+    const persistedSeed = new Map(
+      parseSeedSegments(seedNote?.transcript || "", args.noteId).map((row) => [row.id, row])
+    );
+    const seed = (args.seedSegments ?? []).map((row) => {
+      const own = persistedSeed.get(row.id);
+      const prior = own || { id: row.id };
+      return normalizeTranscriptSegment(
+        resolveAutomaticSpeaker(prior, own?.speakerDecision, seedNote, own || row, {
+          requireStoredAttribution: true,
+        })
+      );
+    });
+
     sessionExpectedTranscript = args.seedTranscriptRaw;
     sessionUnknownHighWater = Math.max(
       args.seedUnknownHighWater || 0,
@@ -1056,7 +1075,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
     sessionSeedLength = seed.length;
     sessionRecorderName = args.recorderName;
     speakerIdentifications = [];
-    latestRosterNote = null;
+    latestRosterNote = seedNote;
     sessionSpeakerIndexBase = Math.max(maxSpeakerIndex + 1, sessionUnknownHighWater);
     nextPlaceholderSpeakerIndex = sessionSpeakerIndexBase;
     recentSystemSpeaker = null;
@@ -1548,30 +1567,32 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         // invalidates independent rows and the shared cluster identity caches.
         const invalidatedSpeakers = new Set<string | undefined>();
         const current = useMeetingRecordingStore.getState().segments;
+        const persistedById = new Map(committed.map((row) => [row.id, row]));
         const next = current.map((row) => {
-          if (humanProtected(row) || !row.speakerDecision) return row;
-          const stale = !decisionCurrentForNote(row.speakerDecision, note);
-          const committedVeto = vetoedById.get(row.id);
-          if (!stale && !committedVeto) return row;
-          if (stale) retiredRosterRevisions.add(row.speakerDecision.revision);
-          if (stale) invalidatedSpeakers.add(row.speaker);
-          return normalizeTranscriptSegment({
-            ...row,
-            speakerName: undefined,
-            suggestedName: undefined,
-            suggestedProfileId: undefined,
-            speakerIsPlaceholder: true,
-            speakerDecision: !stale
-              ? committedVeto || row.speakerDecision
-              : {
-                  ...row.speakerDecision,
-                  acceptedProfileId: null,
-                  acceptedIdentity: null,
-                  rejectionReason: "roster_changed",
-                },
-          });
+          const stale =
+            !humanProtected(row) &&
+            row.speakerDecision &&
+            !decisionCurrentForNote(row.speakerDecision, note);
+          if (stale) {
+            retiredRosterRevisions.add(row.speakerDecision!.revision);
+            invalidatedSpeakers.add(row.speaker);
+          }
+          const savedRow = persistedById.get(row.id);
+          if (savedRow && !humanProtected(row))
+            return normalizeTranscriptSegment(
+              resolveAutomaticSpeaker(savedRow, savedRow.speakerDecision, note, {
+                ...row,
+                ...savedRow,
+                uncertainty: savedRow.uncertainty,
+                suggestedName: savedRow.suggestedName,
+                suggestedProfileId: savedRow.suggestedProfileId,
+              })
+            );
+          return normalizeTranscriptSegment(
+            resolveAutomaticSpeaker(row, row.speakerDecision, note, row)
+          );
         });
-        if (!vetoedById.size && !invalidatedSpeakers.size) return;
+        if (!vetoedById.size && !invalidatedSpeakers.size && !persistedById.size) return;
         speakerIdentifications = speakerIdentifications.filter(
           (item) => !invalidatedSpeakers.has(item.speakerId)
         );
@@ -2537,6 +2558,7 @@ if (typeof window !== "undefined") {
         return;
       }
 
+      let completionScope = persisted;
       const existing = selectBaseSegments({
         persistedSegments: persisted.transcript
           ? parseSeedSegments(persisted.transcript, targetNoteId)
@@ -2550,6 +2572,7 @@ if (typeof window !== "undefined") {
         : data.segments;
       let { segments: enriched, removedCount } = mergeSessionDiarization({
         existing,
+        noteScope: persisted,
         unknownNumberHighWater: readTranscriptDocument(persisted.transcript).unknownNumberHighWater,
         seedLength,
         fallbackTranscript: seed?.fallbackTranscript,
@@ -2557,8 +2580,9 @@ if (typeof window !== "undefined") {
         removedSegments: data.removedSegments,
       });
 
+      const existingById = new Map(existing.map((row) => [row.id, row]));
       enriched = enriched.map((row) => {
-        const own = existing.find((previous) => previous.id === row.id) || row;
+        const own = existingById.get(row.id) || existingById.get(row.parentRowId || "") || row;
         return normalizeTranscriptSegment(
           resolveAutomaticSpeaker(own, own.speakerDecision, persisted, row)
         );
@@ -2592,6 +2616,7 @@ if (typeof window !== "undefined") {
           if (result?.success) {
             if (result.note?.transcript)
               enriched = parseSeedSegments(result.note.transcript, targetNoteId);
+            completionScope = result.note || completionScope;
             saved = true;
             break;
           }
@@ -2599,9 +2624,13 @@ if (typeof window !== "undefined") {
             throw Error(result?.error || "finalisation_save_failed");
           const latest = await window.electronAPI?.getNote?.(targetNoteId);
           if (!latest || latest.deleted_at) throw Error("finalisation_note_missing");
+          completionScope = latest;
           baseTranscript = latest.transcript;
+          const retryBase = parseSeedSegments(baseTranscript || "", targetNoteId);
+          const retryById = new Map(retryBase.map((row) => [row.id, row]));
           const retried = mergeSessionDiarization({
-            existing: parseSeedSegments(baseTranscript || "", targetNoteId),
+            existing: retryBase,
+            noteScope: latest,
             unknownNumberHighWater: readTranscriptDocument(baseTranscript).unknownNumberHighWater,
             seedLength,
             fallbackTranscript: seed?.fallbackTranscript,
@@ -2609,10 +2638,7 @@ if (typeof window !== "undefined") {
             removedSegments: data.removedSegments,
           });
           enriched = retried.segments.map((row) => {
-            const own =
-              parseSeedSegments(baseTranscript || "", targetNoteId).find(
-                (previous) => previous.id === row.id
-              ) || row;
+            const own = retryById.get(row.id) || retryById.get(row.parentRowId || "") || row;
             return normalizeTranscriptSegment(
               resolveAutomaticSpeaker(own, own.speakerDecision, latest, row)
             );
@@ -2636,8 +2662,15 @@ if (typeof window !== "undefined") {
         seed?.fallbackTranscript &&
         current.segments[seedLength]?.text === seed.fallbackTranscript
       ) {
+        const liveScope =
+          latestRosterNote?.id === targetNoteId &&
+          (latestRosterNote.speaker_roster_revision ?? 0) >
+            (completionScope.speaker_roster_revision ?? 0)
+            ? latestRosterNote
+            : completionScope;
         const merged = mergeSessionDiarization({
           existing: current.segments,
+          noteScope: liveScope,
           unknownNumberHighWater: sessionUnknownHighWater,
           seedLength,
           fallbackTranscript: seed.fallbackTranscript,
@@ -2645,10 +2678,17 @@ if (typeof window !== "undefined") {
           removedSegments: data.removedSegments,
         });
         sessionSeedLength -= merged.removedCount;
-        segmentsRefValue = merged.segments;
+        const currentById = new Map(current.segments.map((row) => [row.id, row]));
+        const installed = merged.segments.map((row) => {
+          const own = currentById.get(row.id) || currentById.get(row.parentRowId || "") || row;
+          return normalizeTranscriptSegment(
+            resolveAutomaticSpeaker(own, own.speakerDecision, liveScope, row)
+          );
+        });
+        segmentsRefValue = installed;
         useMeetingRecordingStore.setState({
-          segments: merged.segments,
-          transcript: buildTranscriptText(merged.segments),
+          segments: installed,
+          transcript: buildTranscriptText(installed),
         });
       }
       publish(enriched);

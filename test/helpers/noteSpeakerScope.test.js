@@ -366,7 +366,15 @@ for (const alteration of ["track", "recording", "sample", "profile", "content", 
           alteration === "profile" ? "old-profile" : profileFingerprint(f.profile),
       };
     const [actual] = enforceRows(f.db, f.noteId, [incoming], { storedRows: [row] });
-    assert.equal(actual.speakerName, alteration === "genuine" ? "Alex" : undefined);
+    assert.equal(actual.speakerName, undefined, "plain-data evaluation is never authority");
     assert.equal(require("../../src/helpers/speakerRosterPolicy").humanProtected(actual), false);
   });
 }
+
+test('a new automatic row keeps its current scope through optimistic transcript reconciliation',t=>{
+  const f=fixture(t);
+  const row={...f.row,id:'a692b24f-a0d4-4d62-a39c-c915dd099cf9',text:'a replacement transcription'};
+  const previous=f.db.getNote(f.noteId).transcript;
+  assert.equal(f.db.updateNote(f.noteId,{transcript:writeTranscriptDocument([row])},{expectedTranscript:previous,reconcileTranscript:true}).success,true);
+  assert.equal(f.rows().find(r=>r.id===row.id).speakerName,'Alex');
+});

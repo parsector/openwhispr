@@ -1,0 +1,429 @@
+Baseline: 06a57ce572b46e558168889c8b7966be378af8b1
+Detached checkout: /opt/data/cache/run6-baseline (implementation unchanged; only regression tests copied).
+Repeated names across runs are overlapping coverage, not extra regressions.
+
+BASELINE RED: run6-baseline-final-proofs.log
+RUN6_REEVALUATION rows=2000 ms=285.1 heartbeats=0 profileReads=1
+✖ boundary refuses plain-data proof: forged (48.918256ms)
+✖ boundary refuses plain-data proof: re-upload (1.398289ms)
+✖ boundary refuses plain-data proof: track (0.786647ms)
+✖ boundary refuses plain-data proof: trim (0.75923ms)
+✖ main enforceRows refuses plain-data proof: forged (2.345066ms)
+✖ main enforceRows refuses plain-data proof: re-upload (0.954069ms)
+✖ main enforceRows refuses plain-data proof: track (1.003653ms)
+✖ main enforceRows refuses plain-data proof: trim (0.634101ms)
+✖ an unrecorded automatic legacy name needs review under a declared roster; human choice survives (1.218618ms)
+✖ issued evidence is single use, including a replay against its exact prior row (258.574757ms)
+✖ an issued evaluation cannot be copied and rebound to another durable row (261.025993ms)
+✖ an old roster handle cannot claim a newer revision (137.284084ms)
+✖ issued evidence verifies canonical audio: track (176.465065ms)
+✖ issued evidence verifies canonical audio: trim (223.629479ms)
+✖ issued evidence verifies canonical audio: content (171.731181ms)
+✖ same-audio reupload requires both a canonical hash and explicit intact recording lineage (222.910208ms)
+✖ validated replacement recovers even when original audio is unavailable (32.412081ms)
+✖ 2000-row reevaluation yields to a heartbeat and snapshots the profiles once per batch (303.881202ms)
+✖ main records a stale issued revision while retaining the controlling veto (147.141527ms)
+✖ main records a changed profile while retaining the controlling veto (181.543415ms)
+✖ an issued handle binds the evaluated winner rather than a caller-selected current profile (177.850811ms)
+✖ boundary refuses a fabricated initial evaluation with no stored veto (0.806189ms)
+✖ main refuses a fabricated initial evaluation with no stored veto (0.898067ms)
+✖ a stored acceptance cannot carry its serialized proof onto swapped canonical audio (0.816106ms)
+✖ legacy speaker-string names require review while portable known human choices survive (0.534932ms)
+✖ a rejected unsafe proposal retains the controlling veto even with otherwise valid issued proof (152.717476ms)
+✖ successful installation records the evaluator result rather than caller-edited diagnostics (160.714618ms)
+✖ a rejected proposal cannot poison the canonical audio binding: recording (6.564727ms)
+✖ a rejected proposal cannot poison the canonical audio binding: track (1.216868ms)
+✖ a rejected proposal cannot poison the canonical audio binding: sample (0.772647ms)
+✖ a rejected proposal cannot poison the canonical audio binding: hash (0.711103ms)
+✖ omitting stored audio metadata cannot remove its binding before a later swap (0.771771ms)
+✖ run6: startup legacy migration records Unknown once and preserves human choices (605.64368ms)
+✖ run6: bulk import installs through the legacy policy before the first read (413.58159ms)
+ℹ tests 34
+ℹ pass 0
+ℹ fail 34
+Representative assertion:
+test at test/helpers/automaticSpeakerAttribution.test.js:47:5
+✖ boundary refuses plain-data proof: forged (48.918256ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  'A' !== undefined
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/helpers/automaticSpeakerAttribution.test.js:56:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.start (node:internal/test_runner/test:1257:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'A',
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/automaticSpeakerAttribution.test.js:47:5
+✖ boundary refuses plain-data proof: re-upload (1.398289ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  'A' !== undefined
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/helpers/automaticSpeakerAttribution.test.js:56:14)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:969:18)
+      at Test.postRun (node:internal/test_runner/test:1537:19)
+      at Test.run (node:internal/test_runner/test:1462:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'A',
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/automaticSpeakerAttribution.test.js:47:5
+✖ b
+
+BASELINE RED: run6-baseline-integration.log
+✖ run6: NoteEditor completion overlay is invalidated by an ordinary roster change (26979.984135ms)
+✖ run6: fresh retained audio reassesses stale not_sure after enrollment (2425.752359ms)
+✖ run6: final acoustic recognition cannot erase the input row veto before validation (2696.326344ms)
+✖ run6: main cluster merge and reclustering cannot restore a vetoed name (22.489837ms)
+✖ run6: People rename cannot install an automatic outsider (434.614518ms)
+✖ run6: People merge cannot install an automatic outsider (442.002044ms)
+✖ run6: People undo cannot install an automatic outsider (491.186495ms)
+✖ run6: People review and editor project the same recorded row (374.529324ms)
+✖ run6: cloud-label adoption undo scopes restored automatic attribution (326.081642ms)
+✖ run6: startup legacy migration records Unknown once and preserves human choices (369.461191ms)
+✖ run6: bulk import installs through the legacy policy before the first read (311.097459ms)
+✖ run6: a new transcription identity never inherits a veto through fuzzy text or time (6.733009ms)
+RUN6_RETRY rows=2000 ms=59234.0 parses=6010
+✖ run6: a 2000-row completion retry parses its base once (73373.338898ms)
+✖ run6: recording seed resolves the current declared roster (4633.443947ms)
+✖ run6: resumed-recording completion resolves current scope for its live installation (3976.461924ms)
+ℹ tests 15
+ℹ pass 0
+ℹ fail 15
+Representative assertion:
+test at test/components/noteEditorSummaryDeletion.test.js:1800:1
+✖ run6: NoteEditor completion overlay is invalidated by an ordinary roster change (26979.984135ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  'A' !== undefined
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/components/noteEditorSummaryDeletion.test.js:1812:12)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'A',
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/liveSpeakerReconsideration.test.js:321:1
+✖ run6: fresh retained audio reassesses stale not_sure after enrollment (2425.752359ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  0 !== 1
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/helpers/liveSpeakerReconsideration.test.js:331:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/meetingSpeakerReconcile.test.js:1094:1
+✖ run6: final acoustic recognition cannot erase the input row veto before validation (2696.326344ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  'A' !== undefined
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/helpers/meetingSpeakerReconcile.test.js
+
+BASELINE RED: run6-baseline-new-recovery.log
+✖ run6: a matching batch reuses its supplied profile and fingerprint snapshot (118.693953ms)
+✖ run6: fresh retained audio reassesses stale not_sure after enrollment (532.883757ms)
+✖ run6: fresh retained audio reassesses stale not_sure after roster expansion (454.719119ms)
+✖ run6: explicit replacement commits through reconsideration when the old not_sure recording is gone (405.503158ms)
+✖ run6: explicit replacement commits through reconsideration when the old too_short recording is gone (367.345155ms)
+ℹ tests 5
+ℹ pass 0
+ℹ fail 5
+Representative assertion:
+test at test/helpers/liveSpeakerIdentifier.test.js:661:1
+✖ run6: a matching batch reuses its supplied profile and fingerprint snapshot (118.693953ms)
+  AssertionError [ERR_ASSERTION]: Expected "actual" to be reference-equal to "expected":
+  + actual - expected
+
+    [
+      {
+  +     fingerprint: 'e4bef15dce2a67d55cda87385b023491fb02651fa50c58646082dd03712c75ae',
+  -     fingerprint: 'cached',
+        id: 1
+      }
+    ]
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/helpers/liveSpeakerIdentifier.test.js:677:12)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.start (node:internal/test_runner/test:1257:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { id: 1, fingerprint: 'e4bef15dce2a67d55cda87385b023491fb02651fa50c58646082dd03712c75ae' } ],
+    expected: [ { id: 1, fingerprint: 'cached' } ],
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/liveSpeakerReconsideration.test.js:321:57
+✖ run6: fresh retained audio reassesses stale not_sure after enrollment (532.883757ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  0 !== 1
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/helpers/liveSpeakerReconsideration.test.js:333:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    dif
+
+BASELINE RED: run6-baseline-installs-complete.log
+✖ run6: People rename cannot install an automatic outsider (149.252355ms)
+✖ run6: People merge cannot install an automatic outsider (126.27863ms)
+✖ run6: People undo cannot install an automatic outsider (110.474259ms)
+✖ run6: People review and editor project the same recorded row (134.296173ms)
+✖ run6: cloud-label adoption undo scopes restored automatic attribution (119.13086ms)
+✖ run6: startup legacy migration records Unknown once and preserves human choices (123.318136ms)
+✖ run6: bulk import installs through the legacy policy before the first read (123.784815ms)
+✖ run6: mapping-only legacy attribution is Unknown in both the editor and People review (149.799244ms)
+✖ run6: recording seed resolves the current declared roster (8926.282754ms)
+✖ run6: resumed-recording completion resolves current scope for its live installation (11627.676309ms)
+✖ run6: recording seed cannot overwrite the canonical stored veto with supplied evidence (16788.929106ms)
+ℹ tests 11
+ℹ pass 0
+ℹ fail 11
+Representative assertion:
+test at test/helpers/peopleActions.test.js:812:48
+✖ run6: People rename cannot install an automatic outsider (149.252355ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'Outsider'
+  - undefined
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/helpers/peopleActions.test.js:828:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.start (node:internal/test_runner/test:1257:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Outsider',
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/peopleActions.test.js:812:48
+✖ run6: People merge cannot install an automatic outsider (126.27863ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  'A' !== undefined
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/helpers/peopleActions.test.js:828:10)
+      at Test.runInAsyncScope (node:async_hooks:226:14)
+      at Test.run (node:internal/test_runner/test:1397:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:969:18)
+      at Test.postRun (node:internal/test_runner/test:1537:19)
+      at Test.run (node:internal/test_runner/test:1462:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'A',
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/helpers/peopleActions.test.js:812:48
+
+BASELINE RED: run6-baseline-final-races.log
+✖ run6: NoteEditor completion overlay is invalidated by an ordinary roster change (8851.506978ms)
+✖ run6: resumed-recording completion resolves current scope for its live installation (before read) (7351.516089ms)
+✖ run6: resumed-recording completion resolves current scope for its live installation (during commit) (2752.595424ms)
+ℹ tests 3
+ℹ pass 0
+ℹ fail 3
+Representative assertion:
+test at test/components/noteEditorSummaryDeletion.test.js:1801:1
+✖ run6: NoteEditor completion overlay is invalidated by an ordinary roster change (8851.506978ms)
+  AssertionError [ERR_ASSERTION]: same-roster enrollment recovery must invalidate an old overlay
+  + actual - expected
+
+  + 'A'
+  - 'Re-evaluated member'
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/components/noteEditorSummaryDeletion.test.js:1814:12)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'A',
+    expected: 'Re-evaluated member',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/stores/meetingRecordingStoreDiarizationPublish.test.js:797:55
+✖ run6: resumed-recording completion resolves current scope for its live installation (before read) (7351.516089ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'Outsider'
+  - undefined
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/stores/meetingRecordingStoreDiarizationPublish.test.js:825:10)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Outsider',
+    expected: undefined,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at test/stores/meetingRecordingStoreDiarizationPublish.test.js:797:55
+✖ run6: resumed-recording completion resolves current scope for its live installation (during commit) (2752.
+
+BASELINE RED: run6-baseline-people-review.log
+✖ Review rows keeps keyboard focus through cached row replacement (9415.232284ms)
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+Representative assertion:
+test at test/browser/peopleReviewKeyboard.cjs:12:1
+✖ Review rows keeps keyboard focus through cached row replacement (9415.232284ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  0 !== 1
+
+      at TestContext.<anonymous> (/opt/data/cache/run6-baseline/test/browser/peopleReviewKeyboard.cjs:73:12)
+      at async Test.run (node:internal/test_runner/test:1404:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+NOTE: the original generic resumed-recording regression was later split into before-read and during-commit cases. Unique targeted regression count is 55 (excludes that superseded generic name).
+
+RESULT: run6-frozen-helpers.log
+RUN6_REEVALUATION rows=2000 ms=1394.7 heartbeats=763 profileReads=1
+ℹ tests 271
+ℹ pass 271
+ℹ fail 0
+
+RESULT: run6-release-ui.log
+RUN6_RETRY rows=2000 ms=288.8 parses=10
+ℹ tests 153
+ℹ pass 153
+ℹ fail 0
+
+RESULT: run6-transcript-components.log
+ℹ tests 44
+ℹ pass 44
+ℹ fail 0
+
+RESULT: run6-review-confirmed.log
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+
+RESULT: run6-verified-locales.log
+ℹ tests 9
+ℹ pass 9
+ℹ fail 0
+
+RESULT: run6-measured-retry-final.log
+RUN6_RETRY rows=2000 ms=203.8 parses=10
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+
+RESULT: run6-timing-baseline.log
+RUN6_RETRY rows=2000 ms=35501.5 parses=6010
+ℹ tests 1
+ℹ pass 0
+ℹ fail 1
+
+RESULT: run6-heartbeat-isolated.log
+RUN6_REEVALUATION rows=2000 ms=565.9 heartbeats=504 profileReads=1
+ℹ tests 1
+ℹ pass 1
+ℹ fail 0
+
+RESULT: run6-baseline-cloud.log
+ℹ tests 45
+ℹ pass 24
+ℹ fail 21
+
+RESULT: run6-cloud-upsert2.log
+ℹ tests 45
+ℹ pass 24
+ℹ fail 21
+
+CLOUD FAILURE COMPARISON:
+Same failing names: True
+Baseline failures: 21
+Fixed failures: 21
+a conflicting cloud label stays local without a transcript conflict
+two untimed yes rows with different durable IDs stay separate on cloud pull
+an empty incoming transcript never deletes local rows
+cloud history stays remote; explicit whole-note labels replace and undo in SQLite
+Keep text rebases while local speaker labels stay put
+an explicit local deletion marker survives a cloud pull of the old live row
+two devices append independently; pulls retain both rows without tombstones or speaker conflict
+idless and ambiguous cloud deletion markers are quarantined and reported
+a repaired cloud live id is used beside a marker without duplicating identity
+cloud-label Undo refuses to erase a later local mapping
+two cloud label adoptions undo in order while text edits and original correction survive
+adoption then correction undo in order restores original label and keeps edited text
+an older correction waits for later adoption and becomes undoable afterward
+separate stored histories migrate into one ordered undo log
+legacy adoption before correction keeps its original order during migration
+whole-transcript legacy adoption after a correction restores Alex or quarantines undo
+adopted cloud name rejects a stale automatic diarization completion
+folderless space move stays pending through a cloud upsert
+Refresh preserves local correction history through a changed cloud assignment
+a valid deletion marker keeps its durable row in the transcript
+a label-only cloud row cannot clear local transcript text
+
+FINAL QUALITY CHECKS (all exit 0):
+run6-frozen-lint.log
+npm notice run open-whispr@1.13.3 lint
+npm notice run eslint . --max-warnings=0 && cd src && eslint . --max-warnings=0
+run6-frozen-typecheck.log
+npm notice run open-whispr@1.13.3 typecheck
+npm notice run cd src && tsc --noEmit
+run6-frozen-build.log
+npm notice run open-whispr@1.13.3 build:renderer
+npm notice run cd src && vite build
+✓ built in 3.84s
+git diff --check: exit 0

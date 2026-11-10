@@ -177,7 +177,7 @@ function rowProfile(row, noteMappings) {
   );
 }
 const NOTE_COLUMNS =
-  "id, title, note_type, transcript, created_at, updated_at, speaker_action_log, speaker_label_undo";
+  "id, title, note_type, transcript, participants, speaker_roster_revision, deleted_at, created_at, updated_at, speaker_action_log, speaker_label_undo";
 function notes(db) {
   return db.prepare(`SELECT ${NOTE_COLUMNS} FROM notes WHERE deleted_at IS NULL`).all();
 }
@@ -809,7 +809,14 @@ function applyPersonAction(database, request) {
       else
         db.prepare(
           "UPDATE notes SET transcript = ?, speaker_action_log = ?, speaker_label_undo = NULL, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
-        ).run(record.after, JSON.stringify(record.nextLog), record.noteId);
+        ).run(
+          require("./noteSpeakerScope").enforceTranscript(database, record.noteId, record.after, {
+            path: "people_action",
+            storedRows: readTranscriptDocument(database.getNote(record.noteId)?.transcript).rows,
+          }),
+          JSON.stringify(record.nextLog),
+          record.noteId
+        );
     }
     if (request.type === "rename")
       db.prepare(
@@ -1068,7 +1075,16 @@ function undoPersonAction(database, id) {
         db.prepare(
           "UPDATE notes SET transcript = ?, speaker_action_log = ?, sync_status = 'pending', updated_at = CURRENT_TIMESTAMP WHERE id = ?"
         ).run(
-          writeTranscriptDocument(rows, doc.unknownNumberHighWater),
+          require("./noteSpeakerScope").enforceTranscript(
+            database,
+            note.id,
+            writeTranscriptDocument(rows, doc.unknownNumberHighWater),
+            {
+              path: "people_undo",
+              storedRows: doc.rows,
+              restorationRowIds: [...before.keys()],
+            }
+          ),
           JSON.stringify(removeNewestAction(log)),
           note.id
         );
@@ -1266,7 +1282,16 @@ function deletePerson(database, built) {
     ) {
       db.prepare(
         "UPDATE notes SET transcript = ?, speaker_action_log = ?, speaker_label_undo = NULL WHERE id = ?"
-      ).run(writeTranscriptDocument(rows, highWater), JSON.stringify({ ...log, actions }), note.id);
+      ).run(
+        require("./noteSpeakerScope").enforceTranscript(
+          database,
+          note.id,
+          writeTranscriptDocument(rows, highWater),
+          { path: "people_delete", storedRows: doc.rows, restorationRowIds: [...targetRows] }
+        ),
+        JSON.stringify({ ...log, actions }),
+        note.id
+      );
       changedNoteIds.add(note.id);
     }
   }
@@ -1617,17 +1642,28 @@ function assembleReviewRows(database, selectedProfileId, includeAll, facts, stor
         )
         .flatMap((action) => action.event?.affectedRowIds || action.event?.rowIds || [])
     );
-    const rows = readTranscriptDocument(note.transcript).rows;
+    const rows = require("./noteSpeakerScope").enforceRows(
+      database,
+      note.id,
+      readTranscriptDocument(note.transcript).rows,
+      { path: "people_review", noteOverride: note }
+    );
     for (const [position, row] of rows.entries()) {
       if (row.deleted) continue;
       const reason =
+        (row.speakerReviewRequired ? "unassessed" : null) ||
         row.uncertainty?.reason ||
         (changedRows.has(row.id) || row.changedAfterFinal || row.changedAfterFinalAnalysis
           ? "changed_after_final"
           : !row.speakerAssessmentAvailable && !row.speakerLocked && !row.speakerName
             ? "unassessed"
             : null);
-      const profileId = rowProfile(row, map) || byName.get(normalized(row.speakerName)) || null;
+      const profileId = recordedNameAllowed(row)
+        ? row.speakerDecision?.acceptedProfileId ||
+          rowProfile(row, map) ||
+          byName.get(normalized(row.speakerName)) ||
+          null
+        : null;
       if (selectedProfileId != null ? profileId !== selectedProfileId : !includeAll && !reason)
         continue;
       const fact = noteFacts?.[position];

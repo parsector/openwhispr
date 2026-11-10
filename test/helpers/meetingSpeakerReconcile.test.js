@@ -752,7 +752,7 @@ function rosterHandlers() {
   });
   return {handlers,note,profiles,writes};
 }
-async function rosterFinal(t, f, { enabled = true, fail = false, beforeCentroids, voice = [1,0,0], extra = [] } = {}) {
+async function rosterFinal(t, f, { enabled = true, fail = false, beforeCentroids, voice = [1,0,0], extra = [], rows } = {}) {
   const DiarizationManager = loadDiarizationManager();
   const embeddings = require("../../src/helpers/speakerEmbeddings");
   t.mock.method(embeddings, "isAvailable", () => true);
@@ -767,7 +767,7 @@ async function rosterFinal(t, f, { enabled = true, fail = false, beforeCentroids
     diarize: async () => [{start:0,end:4,speaker:"speaker_00"}, ...extra.map(([speaker], i) => ({ start:5+i*5,end:9+i*5,speaker }))],
   });
   return new Promise(resolve => f.handlers._startOrSkipDiarization("roster-run", "/nonexistent/roster.pcm", 0,
-    [{id:"row",source:"system",timestamp:1,text:"hello", speaker:"speaker_0", speakerName:"C"},
+    rows || [{id:"row",source:"system",timestamp:1,text:"hello", speaker:"speaker_0", speakerName:"C"},
       ...extra.map((_,i) => ({id:`extra-${i}`,source:"system",timestamp:6+i*5,text:"other"}))],
     {isDestroyed:()=>false,webContents:{send:(_channel,payload)=>resolve(payload)}}, null, null, NOTE_ID));
 }
@@ -1090,3 +1090,36 @@ for (const cause of ["skipped", "failed"]) {
     assert.deepEqual(result.segments[0].speakerDecision, veto);
   });
 }
+
+test('run6: final acoustic recognition cannot erase the input row veto before validation', async t=>{
+  const f=rosterHandlers();
+  f.profiles[0].embedding=Buffer.from(new Float32Array([1,0,0]).buffer);
+  f.profiles[2].embedding=Buffer.from(new Float32Array([0,0,1]).buffer);
+  const policy=require('../../src/helpers/noteSpeakerScope');
+  const veto=policy.decision(policy.readScope(f.handlers.databaseManager,NOTE_ID),{path:'prior',rejectionReason:'not_sure'});
+  const rows=[{id:'row',text:'hello',source:'system',timestamp:1,speaker:'speaker_0',speakerIsPlaceholder:true,speakerDecision:veto}];
+  const result=await rosterFinal(t,f,{rows});
+  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[0].speakerDecision.decisionId,veto.decisionId);
+});
+
+test('run6: main cluster merge and reclustering cannot restore a vetoed name',async()=>{
+  const f=rosterHandlers();
+  const policy=require('../../src/helpers/noteSpeakerScope');
+  const accepted=policy.decision(policy.readScope(f.handlers.databaseManager,NOTE_ID),{path:'cluster',profile:f.profiles[0],profiles:f.profiles});
+  const veto={...accepted,decisionId:'row-veto',acceptedProfileId:null,rejectionReason:'no_match'};
+  const saved={id:'row',speaker:'speaker_0',speakerIsPlaceholder:true,speakerDecision:veto};
+  f.note.transcript=JSON.stringify([saved]);
+  const rows=[{...saved,speakerDecision:accepted,speakerName:'A',speakerIsPlaceholder:false}];
+  const merge={keep:'speaker_1',remove:'speaker_0',displayName:'A',speakerDecision:accepted};
+  // Run the actual installed timer body, with only its process dependencies
+  // supplied by this harness. This also catches a future direct-write bypass.
+  const source=require('node:fs').readFileSync(handlersModulePath,'utf8');
+  const start=source.indexOf('meetingReclusterTimer = setInterval(async () => {')+'meetingReclusterTimer = setInterval(async () => {'.length;
+  const body=source.slice(start,source.indexOf('}, 30_000);',start));
+  const run=new Function('liveSpeakerIdentifier','meetingDiarizationSegments','meetingNoteId','win','rosterPolicy','meetingLiveSpeakerActive',`return (async()=>{${body}})();`);
+  await run.call(f.handlers,{recluster:async()=>[merge]},rows,NOTE_ID,{isDestroyed:()=>false,webContents:{send(){}}},require('../../src/helpers/speakerRosterPolicy'),true);
+  assert.equal(rows[0].speakerName,undefined);
+  assert.equal(rows[0].speakerDecision.decisionId,'row-veto');
+  assert.equal(rows[0].speaker,'speaker_1');
+});

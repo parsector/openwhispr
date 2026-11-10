@@ -274,14 +274,15 @@ class LiveSpeakerIdentifier {
     this.clusterEligibility.set(speakerId, "owner-rejected");
   }
 
-  matchEligibleCluster(speakerId, rowEmbedding = null) {
-    if (this.clusterEligibility.get(speakerId) !== "eligible-unmatched") return null;
+  matchEligibleCluster(speakerId, rowEmbedding = null, context = {}) {
+    if (!context.evaluateRow && this.clusterEligibility.get(speakerId) !== "eligible-unmatched")
+      return null;
     const centroid = rowEmbedding || this.transientEmbeddings.get(speakerId);
     if (!centroid) return null;
     let profiles = [];
     const rejected = (reason, best = null, runnerUp = 0) => ({
       reason,
-      speakerDecision: speakerScope.decision(this._scope(), {
+      speakerDecision: speakerScope.decision(context.scope || this._scope(), {
         runId: this.activeRunId,
         path: "live_reconsideration",
         profile: best?.profile,
@@ -292,7 +293,7 @@ class LiveSpeakerIdentifier {
       }),
     });
     try {
-      profiles = this.getSpeakerProfiles?.() || [];
+      profiles = context.profiles || this.getSpeakerProfiles?.() || [];
     } catch {
       return rejected("profile_unavailable");
     }
@@ -321,7 +322,7 @@ class LiveSpeakerIdentifier {
       )
         runnerUp = Math.max(runnerUp, speakerEmbeddings.cosineSimilarity(centroid, other));
     if (best.similarity - runnerUp < anchorMargin()) return rejected("close_match", best, runnerUp);
-    const scope = this._scope();
+    const scope = context.scope || this._scope();
     const accepted = rosterPolicy.eligible(scope, best.profile.id);
     const evidence = speakerScope.decision(scope, {
       runId: this.activeRunId,

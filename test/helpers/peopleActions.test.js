@@ -808,3 +808,66 @@ test('roster every explicit Unknown lock prevents People usage through a stale m
   assert.equal(listPeople(f.db).find(p=>p.id===c.id).segmentCount,0);
   assert.equal(listPeople(f.db).find(p=>p.id===c.id).noteCount,0);
 });
+
+for(const action of ['rename','merge','undo']) test(`run6: People ${action} cannot install an automatic outsider`,t=>{
+  const f=fixture(t);if(!f)return;
+  const a=f.person('A',1),c=f.person('C',2);
+  const note=f.note('outsider',[{id:'row',text:'hello',source:'system',speaker:'speaker_0',speakerName:'C'}],[['speaker_0',c]]);
+  const original=JSON.stringify({version:2,rows:[{id:'row',text:'hello',source:'system',speaker:'speaker_0',speakerName:'C'}]});
+  if(action==='undo'){
+    const renamed=applyPersonAction(f.db,{type:'rename',profileId:c.id,name:'Changed'});
+    assert.equal(renamed.success,true);
+    f.db.db.prepare('UPDATE notes SET participants = ? WHERE id = ?').run('[{"email":"a@example.com"}]',note);
+    assert.equal(undoPersonAction(f.db,renamed.id).success,true);
+  }else{
+    f.db.db.prepare('UPDATE notes SET transcript = ?, participants = ? WHERE id = ?').run(original,'[{"email":"a@example.com"}]',note);
+    const request=action==='rename'?{type:'rename',profileId:c.id,name:'Outsider'}:{type:'merge',profileId:c.id,survivorId:a.id};
+    assert.equal(applyPersonAction(f.db,request).success,true);
+  }
+  const raw=readTranscriptDocument(f.db.db.prepare('SELECT transcript FROM notes WHERE id = ?').get(note).transcript).rows[0];
+  assert.equal(raw.speakerName,undefined);
+  assert.equal(raw.speakerReviewRequired,true);
+});
+
+test('run6: People review and editor project the same recorded row',t=>{
+  const f=fixture(t);if(!f)return;
+  const c=f.person('C',1);
+  const note=f.note('review',[{id:'row',text:'hello',source:'system',speaker:'speaker_0'}],[]);
+  const scope=require('../../src/helpers/noteSpeakerScope');
+  f.db.db.prepare('UPDATE notes SET participants = ? WHERE id = ?').run('[{"email":"a@example.com"}]',note);
+  const d=scope.decision(scope.readScope(f.db,note),{path:'test',profile:c});
+  d.eligibleProfileIds=[c.id];
+  f.db.db.prepare('UPDATE notes SET transcript = ? WHERE id = ?').run(JSON.stringify([{id:'row',text:'hello',source:'system',speakerName:'C',speakerDecision:d}]),note);
+  const editor=f.rows(note)[0];
+  const review=listReviewRows(f.db,null,null,true).find(r=>r.rowId==='row');
+  assert.equal(editor.speakerName,undefined);
+  assert.equal(review.speakerName,null);
+  assert.equal(review.profileId,null);
+});
+
+test('run6: cloud-label adoption undo scopes restored automatic attribution',t=>{
+  const f=fixture(t);if(!f)return;
+  const note=f.note('adoption',[{id:'row',text:'hello',source:'system',speakerName:'Outsider'}],[]);
+  f.db.db.prepare('UPDATE notes SET cloud_transcript = ? WHERE id = ?').run(JSON.stringify([{id:'row',text:'hello',source:'system',speakerName:'Cloud human'}]),note);
+  assert.equal(f.db.takeCloudSpeakerLabels(note).success,true);
+  f.db.db.prepare('UPDATE notes SET participants = ? WHERE id = ?').run('[{"email":"a@example.com"}]',note);
+  assert.equal(f.db.takeCloudSpeakerLabels(note,true).success,true);
+  const raw=readTranscriptDocument(f.db.db.prepare('SELECT transcript FROM notes WHERE id = ?').get(note).transcript).rows[0];
+  assert.equal(raw.speakerName,undefined);
+  assert.equal(raw.speakerDecision.rejectionReason,'legacy_not_evaluated');
+  assert.equal(raw.speakerReviewRequired,true);
+});
+
+test('run6: mapping-only legacy attribution is Unknown in both the editor and People review',t=>{
+  const f=fixture(t);if(!f)return;
+  const c=f.person('Outsider',1);
+  const note=f.note('mapping legacy',[{id:'legacy-map',text:'hello',source:'system',speaker:'speaker_0'}],[['speaker_0',c]]);
+  f.db.db.prepare('UPDATE notes SET participants = ? WHERE id = ?').run('[{"email":"a@example.com"}]',note);
+  const editor=f.rows(note)[0];
+  assert.equal(editor.speakerDecision.rejectionReason,'legacy_not_evaluated');
+  assert.equal(editor.speakerName,undefined);
+  const review=listReviewRows(f.db,null,null,true).find(r=>r.noteId===note);
+  assert.equal(review.speakerName,null);
+  assert.equal(review.profileId,null);
+  assert.equal(review.reason,'unassessed');
+});

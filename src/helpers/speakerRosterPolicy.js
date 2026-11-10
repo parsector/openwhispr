@@ -65,6 +65,7 @@ export const eligible = (scope, profileId) =>
   profileId != null && !scope?.failure && !!scope?.eligibleProfileIds?.includes(profileId);
 
 export const humanProtected = (row) =>
+  row?.speakerAssignment?.origin === "human" ||
   !!row?.speakerLocked ||
   row?.speakerLockSource === "user" ||
   ["locked", "user_locked"].includes(row?.speakerStatus);

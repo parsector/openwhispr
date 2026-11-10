@@ -657,3 +657,24 @@ test("roster manual outsider correction cannot name another cluster through auto
   assert.equal(identifier.transientEmbeddings.has('speaker_1'), true);
   assert.deepEqual(identifier.getTransientState().speaker_0, originalCorrection);
 });
+
+test('run6: a matching batch reuses its supplied profile and fingerprint snapshot',t=>{
+  const {LiveSpeakerIdentifier,restore}=loadIdentifier();
+  t.after(restore);
+  const identifier=new LiveSpeakerIdentifier();
+  const profile={id:1,display_name:'A',email:'a@example.com',voice_usable:1,embedding:Float32Array.of(1,0)};
+  const scope=require('../../src/helpers/speakerRosterPolicy').resolveSpeakerRoster({id:42,participants:'[]'},null,[profile]);
+  scope.profileFingerprints=[{id:1,fingerprint:'cached'}];
+  let reads=0;
+  identifier.getSpeakerProfiles=()=>{reads++;return [profile];};
+  identifier.getSpeakerScope=()=>scope;
+  identifier.activeRunId='run';
+  for(let i=0;i<2000;i++){
+    const id=`speaker_${i}`;
+    identifier.setEligibilityState(id,'eligible-unmatched');
+    const match=identifier.matchEligibleCluster(id,Float32Array.of(1,0),{profiles:[profile],scope});
+    assert.equal(match.profile.id,1);
+    assert.equal(match.speakerDecision.profileFingerprints,scope.profileFingerprints);
+  }
+  assert.equal(reads,0);
+});
