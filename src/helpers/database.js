@@ -586,8 +586,16 @@ class DatabaseManager {
         END
       `);
 
+      // Replace the old broad trigger on existing databases too. A roster edit
+      // bumps its revision with a nested UPDATE notes; indexing that metadata
+      // update would delete the outer update's new text before it is indexed.
       this.db.exec(`
-        CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE ON notes BEGIN
+        DROP TRIGGER IF EXISTS notes_fts_update;
+        CREATE TRIGGER notes_fts_update
+        AFTER UPDATE OF id, title, content, enhanced_content ON notes
+        WHEN old.id IS NOT new.id OR old.title IS NOT new.title
+          OR old.content IS NOT new.content OR old.enhanced_content IS NOT new.enhanced_content
+        BEGIN
           INSERT INTO notes_fts(notes_fts, rowid, title, content, enhanced_content)
           VALUES ('delete', old.id, old.title, old.content, old.enhanced_content);
           INSERT INTO notes_fts(rowid, title, content, enhanced_content)
@@ -602,15 +610,12 @@ class DatabaseManager {
         END
       `);
 
-      this.db
-        .prepare(
-          `
-        INSERT OR IGNORE INTO notes_fts(rowid, title, content, enhanced_content)
-        SELECT id, COALESCE(title, ''), COALESCE(content, ''), COALESCE(enhanced_content, '')
-        FROM notes
-      `
-        )
-        .run();
+      // Seed new indexes and repair existing ones once. Re-inserting the same
+      // rows on every open is not idempotent for an external-content FTS table.
+      // Advance user_version only after the earlier migrations below have run.
+      if (this.db.pragma("user_version", { simple: true }) < 6) {
+        this.db.exec("INSERT INTO notes_fts(notes_fts) VALUES ('rebuild')");
+      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS folders (
@@ -1170,6 +1175,9 @@ class DatabaseManager {
           UPDATE microsoft_calendars SET sync_token = NULL, sync_token_expires_at = NULL;
         `);
         this.db.pragma("user_version = 5");
+      }
+      if (this.db.pragma("user_version", { simple: true }) < 6) {
+        this.db.pragma("user_version = 6");
       }
 
       this.db.exec(`

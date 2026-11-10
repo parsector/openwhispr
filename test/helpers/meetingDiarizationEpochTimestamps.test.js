@@ -188,11 +188,22 @@ test("main final analysis finds the prior row by its ingestion id", async () => 
   assert.deepEqual(payload.segments[0].finalRevision, {
     fromSpeaker: undefined, toSpeaker: "speaker_0", fromName: "Alex", toName: "Sam",
   });
+  // This fixture injects an automatic name without an owning note or acoustic
+  // evaluation. The final commit correctly refuses it; ingestion-id matching
+  // must still update the same row, and the renderer must preserve the refusal.
+  assert.equal(payload.segments[0].speakerName, undefined);
+  assert.equal(payload.segments[0].speakerDecision.scopeFailure, "note_missing");
+  assert.equal(payload.segments[0].speakerDecision.acceptedProfileId, null);
   const merged = runRendererCompletion([
     { id, source: "system", text: "hello", timestamp: START_MS + 1000, speakerName: "Alex" },
   ], payload);
+  assert.equal(merged.length, 1);
   assert.equal(merged[0].id, id);
-  assert.equal(merged[0].speakerName, "Sam");
+  assert.equal(merged[0].timestamp, 1);
+  assert.equal(merged[0].speakerName, undefined);
+  assert.equal(merged[0].speakerIsPlaceholder, true);
+  assert.equal(merged[0].speakerBoundary.refusalReason, "scope_missing");
+  assert.equal(merged[0].speakerBoundary.proposedDecisionId, payload.segments[0].speakerDecision.decisionId);
 });
 
 test("two-person expectation leaves remote clustering automatic and preserves two voices", async () => {

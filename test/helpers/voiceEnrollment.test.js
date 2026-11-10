@@ -49,7 +49,9 @@ test('decision timing emits one structured debug line after renderer refresh', a
 
 test('review eligibility matches enrolment after owner labels, and changes when audio expires', async t => {
   const f = fixture(t);
-  const { noteId } = f.note('review', 5);
+  // Begin with unlabelled rows: an ordinary transcript save cannot erase a
+  // stored human attribution through the automatic speaker boundary.
+  const { noteId } = f.note('review', 5, { labelled: false });
   const doc = JSON.parse(f.db.getNote(noteId).transcript);
   for (const row of doc.rows) {
     delete row.speakerName;
@@ -225,13 +227,14 @@ function fixture(t) {
     status: 'complete', recordingId: recordingIds.get(id), tracks: { mic: { chunks: [{ file: 'retained.opus' }] } } });
   const vector = (x, y = 0) => Float32Array.from({ length: 512 }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };
-  const note = (suffix, count = 1) => {
+  const note = (suffix, count = 1, { labelled = true } = {}) => {
     const saved = db.saveNote(`Meeting ${suffix}`, '', 'meeting');
     const noteId = (saved.note || saved).id;
     const recordingId = require('node:crypto').randomUUID();
     recordingIds.set(noteId, recordingId);
     const rows = Array.from({ length: count }, (_, i) => ({ id: `${suffix}-${i}`, source: 'mic', speaker: 'speaker_0',
-      speakerName: 'Alex', speakerLockSource: 'user', suggestedProfileId: person.id,
+      ...(labelled ? { speakerName: 'Alex', speakerLockSource: 'user', suggestedProfileId: person.id }
+        : { speakerIsPlaceholder: true }),
       audioSpan: { recordingId, trackId: 'mic', startSample: i * 24000 * 5,
         endSample: (i * 5 + 4) * 24000 } }));
     db.updateNote(noteId, { transcript: JSON.stringify({ version: 2, rows }) });
@@ -339,7 +342,7 @@ test('voice query indexes exist on a fresh database and return after a version 3
   f.db.db.close();
   const reopened = new DatabaseManager();
   f.db.db = reopened.db;
-  assert.equal(f.db.db.pragma('user_version', { simple: true }), 5);
+  assert.equal(f.db.db.pragma('user_version', { simple: true }), 6);
   assert.deepEqual(sql.map((query, i) => f.db.db.prepare(query).all(...args[i])), before);
   for (const name of indexNames)
     assert.ok(f.db.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = ?")

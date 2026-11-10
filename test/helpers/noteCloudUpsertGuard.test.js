@@ -659,7 +659,8 @@ test('adoption then correction undo in order restores original label and keeps e
   const note = db.saveNote('Meeting', '', 'meeting').note;
   db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'row-1', text: 'Original', source: 'system', speakerName: 'Alex' }]) });
   db.markNoteSynced(note.id, 'cloud-test-1');
-  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+  // This exercises legacy-label restoration on an unrestricted note.
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), participants: '[]', transcript: JSON.stringify([
     { id: 'row-1', text: 'Original', source: 'system', speakerName: 'Sam' },
   ]) }, null);
   assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
@@ -690,7 +691,7 @@ test('an older correction waits for later adoption and becomes undoable afterwar
   assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id: 'sam',
     scope: 'row', rowIds: ['row-1'], name: 'Sam', rows: [] }).success, true);
   db.markNoteSynced(note.id, 'cloud-test-1');
-  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), participants: '[]', transcript: JSON.stringify([
     { id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Sam' },
   ]) }, null);
   assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
@@ -711,7 +712,7 @@ test('separate stored histories migrate into one ordered undo log', (t) => {
   assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id: 'sam',
     scope: 'row', rowIds: ['row-1'], name: 'Sam', rows: [] }).success, true);
   db.markNoteSynced(note.id, 'cloud-test-1');
-  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), participants: '[]', transcript: JSON.stringify([
     { id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Jordan' },
   ]) }, null);
   assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
@@ -788,7 +789,7 @@ test('legacy adoption before correction keeps its original order during migratio
   const note = db.saveNote('Meeting', '', 'meeting').note;
   db.updateNote(note.id, { transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Alex' }]) });
   db.markNoteSynced(note.id, 'cloud-test-1');
-  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), participants: '[]', transcript: JSON.stringify([
     { id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Sam' },
   ]) }, null);
   assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
@@ -815,7 +816,7 @@ test('whole-transcript legacy adoption after a correction restores Alex or quara
   assert.equal(applySpeakerCorrection(db, null, { type: 'apply', noteId: note.id, id: 'sam', scope: 'row', rowIds: ['row-1'], name: 'Sam' }).success, true);
   const before = db.getNote(note.id).transcript;
   db.markNoteSynced(note.id, 'cloud-test-1');
-  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Jordan' }]) }, null);
+  db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)), participants: '[]', transcript: JSON.stringify([{ id: 'row-1', text: 'Hello', source: 'system', speakerName: 'Jordan' }]) }, null);
   assert.equal(db.takeCloudSpeakerLabels(note.id).success, true);
   const after = db.getNote(note.id).transcript;
   const log = readSpeakerActionLog(db.getNote(note.id));
@@ -1043,11 +1044,29 @@ test('a label-only cloud row cannot clear local transcript text', (t) => {
     { id: 'row', text: 'Keep this text', source: 'system', speakerName: 'Alex' },
   ]) });
   db.markNoteSynced(note.id, 'cloud-test-1');
-  const cloud = { ...emptyCloudShell(db.getNote(note.id)), transcript: JSON.stringify([
+  const cloud = { ...emptyCloudShell(db.getNote(note.id)), participants: '[]', transcript: JSON.stringify([
     { id: 'row', speakerName: 'Sam' },
   ]) };
   const result = db.upsertNoteFromCloud(cloud, null);
   const [row] = require('../../src/helpers/transcriptDocument').readTranscriptDocument(result.transcript).rows;
   assert.equal(row.text, 'Keep this text');
   assert.equal(row.speakerName, 'Alex');
+});
+
+test('a restrictive cloud roster still rejects an unproven legacy name on a label-only row', (t) => {
+  const db = createDb(t);
+  if (!db) return;
+  const note = db.saveNote('Meeting', '', 'meeting').note;
+  db.updateNote(note.id, { transcript: JSON.stringify([
+    { id: 'row', text: 'Keep this text', source: 'system', speakerName: 'Alex' },
+  ]) });
+  db.markNoteSynced(note.id, 'cloud-test-1');
+  const result = db.upsertNoteFromCloud({ ...emptyCloudShell(db.getNote(note.id)),
+    transcript: JSON.stringify([{ id: 'row', speakerName: 'Sam' }]),
+  }, null);
+  const [row] = require('../../src/helpers/transcriptDocument').readTranscriptDocument(result.transcript).rows;
+  assert.equal(row.text, 'Keep this text');
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerReviewRequired, true);
+  assert.equal(db.getNote(note.id).speaker_roster_revision, 1);
 });
