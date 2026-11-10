@@ -56,7 +56,7 @@ test(
 
     await page.evaluate(async () => {
       const row = (await window.electronAPI.listPeopleReview())[0];
-      const retained = { ...row, rowId: "retained" };
+      const retained = { ...row, rowId: "retained", speakerDecision: { candidateSetStatus: "not_recorded" } };
       window.electronAPI.listPeopleReviewPage = (noteId) =>
         noteId === null
           ? Promise.resolve({ rows: [{ ...row, rowId: "removed" }, retained], pending: [42] })
@@ -69,6 +69,7 @@ test(
     await dialog.waitFor();
     const openRows = dialog.getByRole("button", { name: "Open row" });
     await openRows.first().focus();
+    assert.equal(await dialog.getByText('Candidate set not recorded', { exact: true }).count(), 1);
     await page.waitForFunction(() => typeof window.finishReviewPage === "function");
     await page.evaluate(() => window.finishReviewPage());
     await page.waitForFunction(
@@ -79,6 +80,8 @@ test(
     );
     assert.equal(await openRows.count(), 1);
     assert.equal(await openRows.first().evaluate((el) => el === document.activeElement), true);
+    if (process.env.PEOPLE_REVIEW_SCREENSHOT)
+      await page.screenshot({ path: process.env.PEOPLE_REVIEW_SCREENSHOT });
 
     await page.keyboard.press("Escape");
     await dialog.waitFor({ state: "hidden" });

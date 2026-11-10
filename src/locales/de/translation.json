@@ -6213,6 +6213,7 @@
     "filterPerson": "Nach Person filtern",
     "allPeople": "Alle Personen",
     "reviewEmpty": "Für diese Filter gibt es keine zu prüfenden Zeilen.",
+    "candidateSetNotRecorded": "Kandidatenmenge nicht aufgezeichnet",
     "reviewEligibleOnly": "Nur Zeilen anzeigen, die als Stimmproben geeignet sind",
     "reviewChecking": "Prüfe Aufnahme {{current}} von {{total}}",
     "reviewShowing": "{{shown}} von {{total}} angezeigt",

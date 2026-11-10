@@ -6447,6 +6447,7 @@
     "filterPerson": "تصفية حسب الشخص",
     "allPeople": "كل الأشخاص",
     "reviewEmpty": "لا توجد صفوف للمراجعة وفق هذه المرشحات.",
+    "candidateSetNotRecorded": "لم تُسجَّل مجموعة المرشحين",
     "reviewEligibleOnly": "إظهار الصفوف المؤهلة لعينات الصوت فقط",
     "reviewChecking": "جارٍ فحص التسجيل {{current}} من {{total}}",
     "reviewShowing": "عرض {{shown}} من {{total}}",

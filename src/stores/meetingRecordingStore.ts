@@ -1503,7 +1503,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         (!retiredRosterRevisions.has(decision.revision) &&
           (!latestRosterNote || decisionCurrentForNote(decision, latestRosterNote)));
       const scopeIncomingRow = (row: TranscriptSegment): TranscriptSegment =>
-        humanProtected(row) || currentDecision(row.speakerDecision)
+        humanProtected(row) ||
+        (row.speakerDecision && currentDecision(row.speakerDecision) && recordedNameAllowed(row))
           ? row
           : normalizeTranscriptSegment({
               ...row,
@@ -1514,7 +1515,9 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
               speakerDecision: {
                 ...row.speakerDecision,
                 acceptedProfileId: null,
-                rejectionReason: "roster_changed",
+                rejectionReason: !currentDecision(row.speakerDecision)
+                  ? "roster_changed"
+                  : row.speakerDecision?.rejectionReason || "automatic_evidence_required",
               },
             });
       const rosterCleanup = window.electronAPI?.onNoteUpdated?.((note) => {
@@ -1526,7 +1529,10 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         latestRosterNote = note;
         const committed = parseSeedSegments(note.transcript || "", note.id);
         for (const row of committed) {
-          if (row.speakerDecision?.rejectionReason && row.speakerDecision.previousDecision)
+          if (
+            row.speakerDecision?.previousDecision &&
+            !decisionCurrentForNote(row.speakerDecision.previousDecision, note)
+          )
             retiredRosterRevisions.add(row.speakerDecision.previousDecision.revision);
         }
         const vetoed = new Set(
@@ -1537,21 +1543,27 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
         const current = useMeetingRecordingStore.getState().segments;
         const next = current.map((row) => {
           if (humanProtected(row) || !row.speakerDecision) return row;
-          if (decisionCurrentForNote(row.speakerDecision, note) && !vetoed.has(row.speaker))
-            return row;
-          retiredRosterRevisions.add(row.speakerDecision.revision);
+          const stale = !decisionCurrentForNote(row.speakerDecision, note);
+          if (!stale && !vetoed.has(row.speaker)) return row;
+          if (stale) retiredRosterRevisions.add(row.speakerDecision.revision);
           vetoed.add(row.speaker);
+          const committedVeto = committed.find(
+            (saved) =>
+              saved.speaker === row.speaker && saved.speakerDecision && !recordedNameAllowed(saved)
+          )?.speakerDecision;
           return normalizeTranscriptSegment({
             ...row,
             speakerName: undefined,
             suggestedName: undefined,
             suggestedProfileId: undefined,
             speakerIsPlaceholder: true,
-            speakerDecision: {
-              ...row.speakerDecision,
-              acceptedProfileId: null,
-              rejectionReason: "roster_changed",
-            },
+            speakerDecision: !stale
+              ? committedVeto || row.speakerDecision
+              : {
+                  ...row.speakerDecision,
+                  acceptedProfileId: null,
+                  rejectionReason: "roster_changed",
+                },
           });
         });
         if (!vetoed.size) return;
@@ -1570,6 +1582,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       const speakerCleanup = window.electronAPI?.onMeetingSpeakerIdentified?.((data) => {
         if (activeRecordingSessionId !== sessionId) return;
+        if (data.displayName && (!data.speakerDecision || !recordedNameAllowed(data)))
+          data = { ...data, displayName: null, suggestedName: undefined };
         if (
           data.speakerDecision &&
           (retiredRosterRevisions.has(data.speakerDecision.revision) ||
@@ -1625,7 +1639,13 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
           if (activeRecordingSessionId !== sessionId || !result?.rows?.length) return;
           mergeCommittedSpeakerRows(result.rows.map(scopeIncomingRow));
           for (const assignment of result.assignments || []) {
-            if (!currentDecision(assignment.rows?.[0]?.speakerDecision)) continue;
+            const evidence = assignment.rows?.[0]?.speakerDecision;
+            if (
+              !evidence ||
+              !currentDecision(evidence) ||
+              !recordedNameAllowed({ speakerDecision: evidence })
+            )
+              continue;
             speakerIdentifications = speakerIdentifications.map((item) =>
               item.speakerId === assignment.speakerId
                 ? {
@@ -1648,8 +1668,12 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
 
       const mergeCleanup = window.electronAPI?.onMeetingSpeakersMerged?.((merges) => {
         if (activeRecordingSessionId !== sessionId) return;
-        const scopedMerges = merges.map((merge) =>
-          currentDecision(merge.speakerDecision)
+        const scopedMerges = merges.map((incoming) => {
+          const merge =
+            incoming.speakerDecision && recordedNameAllowed(incoming)
+              ? incoming
+              : { ...incoming, displayName: null };
+          return currentDecision(merge.speakerDecision)
             ? merge
             : {
                 ...merge,
@@ -1659,8 +1683,8 @@ export async function startRecording(args: StartRecordingArgs): Promise<boolean>
                   acceptedProfileId: null,
                   rejectionReason: "roster_changed",
                 },
-              }
-        );
+              };
+        });
         let next = useMeetingRecordingStore.getState().segments;
         for (const { keep, remove, displayName, speakerDecision } of scopedMerges) {
           next = next.map((seg) => {

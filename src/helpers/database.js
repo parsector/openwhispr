@@ -1217,26 +1217,15 @@ class DatabaseManager {
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
-      this.db.exec(`CREATE TRIGGER IF NOT EXISTS note_speaker_roster_revision
-        AFTER UPDATE OF participants, calendar_event_id ON notes
-        WHEN OLD.participants IS NOT NEW.participants OR OLD.calendar_event_id IS NOT NEW.calendar_event_id
+      this.db.exec(`DROP TRIGGER IF EXISTS note_speaker_roster_revision;
+        CREATE TRIGGER note_speaker_roster_revision
+        AFTER UPDATE OF participants ON notes
+        WHEN OLD.participants IS NOT NEW.participants
         BEGIN UPDATE notes SET speaker_roster_revision = speaker_roster_revision + 1 WHERE id = NEW.id; END`);
-      // INSERT OR REPLACE is used by calendar sync. Measure the old attendee
-      // value before replacement, so remove/re-add races cannot reuse a scope.
-      this.db.exec(`CREATE TRIGGER IF NOT EXISTS event_insert_speaker_roster_revision
-        BEFORE INSERT ON calendar_events
-        WHEN NOT EXISTS (SELECT 1 FROM calendar_events WHERE id = NEW.id)
-          OR (SELECT attendees FROM calendar_events WHERE id = NEW.id) IS NOT NEW.attendees
-        BEGIN UPDATE notes SET speaker_roster_revision = speaker_roster_revision + 1
-          WHERE participants IS NULL AND calendar_event_id = NEW.id; END;
-        CREATE TRIGGER IF NOT EXISTS event_update_speaker_roster_revision
-        AFTER UPDATE OF attendees ON calendar_events WHEN OLD.attendees IS NOT NEW.attendees
-        BEGIN UPDATE notes SET speaker_roster_revision = speaker_roster_revision + 1
-          WHERE participants IS NULL AND calendar_event_id = NEW.id; END;
-        CREATE TRIGGER IF NOT EXISTS event_delete_speaker_roster_revision
-        AFTER DELETE ON calendar_events
-        BEGIN UPDATE notes SET speaker_roster_revision = speaker_roster_revision + 1
-          WHERE participants IS NULL AND calendar_event_id = OLD.id; END`);
+      // Remove prior calendar-only invalidation on existing databases too.
+      this.db.exec(`DROP TRIGGER IF EXISTS event_insert_speaker_roster_revision;
+        DROP TRIGGER IF EXISTS event_update_speaker_roster_revision;
+        DROP TRIGGER IF EXISTS event_delete_speaker_roster_revision;`);
       try {
         this.db.exec("ALTER TABLE notes ADD COLUMN diarization_enabled INTEGER");
       } catch (err) {
@@ -4478,7 +4467,7 @@ class DatabaseManager {
     if (!note?.transcript) return note;
     // Sync and calendar changes can bypass updateNote. Scope recorded machine
     // decisions on read as well; historical rows without evidence stay intact.
-    if (note.transcript.includes('"speakerDecision"'))
+    if (/"speaker(?:Decision|Assignment)"/.test(note.transcript))
       note = {
         ...note,
         transcript: require("./noteSpeakerScope").enforceTranscript(
@@ -4684,7 +4673,7 @@ class DatabaseManager {
         if (updates.transcript === null)
           return { success: false, error: "stale_automatic_transcript" };
       }
-      const rosterEdited = ["participants", "calendar_event_id"].some(
+      const rosterEdited = ["participants"].some(
         (key) => updates[key] !== undefined && updates[key] !== previous[key]
       );
       const scopedNote = {
@@ -4695,7 +4684,7 @@ class DatabaseManager {
       const proposedTranscript = updates.transcript ?? (rosterEdited ? previous.transcript : null);
       if (
         typeof proposedTranscript === "string" &&
-        proposedTranscript.includes('"speakerDecision"')
+        /"speaker(?:Decision|Assignment)"/.test(proposedTranscript)
       ) {
         updates.transcript = require("./noteSpeakerScope").enforceTranscript(
           this,
@@ -8464,9 +8453,14 @@ class DatabaseManager {
         this.db
           .prepare("UPDATE notes SET sync_status = 'pending' WHERE client_note_id = ?")
           .run(cloudNote.client_note_id);
-      const pulledNote = this.db
+      const storedNote = this.db
         .prepare("SELECT * FROM notes WHERE client_note_id = ?")
         .get(cloudNote.client_note_id);
+      const pulledNote = this._withSpeakerDisplayNames(storedNote);
+      if (pulledNote.transcript !== storedNote.transcript)
+        this.db
+          .prepare("UPDATE notes SET transcript = ? WHERE id = ?")
+          .run(pulledNote.transcript, pulledNote.id);
       return quarantinedMarkerCount
         ? { ...pulledNote, quarantined_transcript_markers: quarantinedMarkerCount }
         : pulledNote;

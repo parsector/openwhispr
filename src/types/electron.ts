@@ -4319,6 +4319,8 @@ declare global {
           profileId: number | null;
           reason: string;
           candidates: [string, string] | null;
+          speakerDecision?:
+            import("./speakerRoster").SpeakerDecision | { candidateSetStatus: "not_recorded" };
           timestamp: string;
           eligibilityReason: string | null;
           position: number;

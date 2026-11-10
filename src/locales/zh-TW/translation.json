@@ -6213,6 +6213,7 @@
     "filterPerson": "依人物篩選",
     "allPeople": "所有人物",
     "reviewEmpty": "這些篩選條件下沒有待審核的列。",
+    "candidateSetNotRecorded": "未記錄候選人集合",
     "reviewEligibleOnly": "僅顯示可用於語音樣本的列",
     "reviewChecking": "正在檢查第 {{current}} / {{total}} 筆錄音",
     "reviewShowing": "顯示 {{shown}} / {{total}} 列",

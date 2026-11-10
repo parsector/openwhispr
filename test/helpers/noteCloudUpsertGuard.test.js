@@ -950,7 +950,7 @@ test('folderless space move stays pending through a cloud upsert', (t) => {
   assert.equal(db.getNote(note.id).sync_status, 'pending');
 });
 
-test('a fresh device displays cloud labels without importing speaker evidence', (t) => {
+test('a fresh device preserves human protection without importing local profile ids or history', (t) => {
   const db = createDb(t);
   if (!db) return;
   const cloud = { ...emptyCloudShell({ updated_at: '2026-01-01T00:00:00Z', client_note_id: 'fresh-note' }),
@@ -963,8 +963,8 @@ test('a fresh device displays cloud labels without importing speaker evidence', 
   assert.equal(row.speakerName, 'Alex');
   assert.equal(row.suggestedProfileId, undefined);
   assert.equal(row.corrections, undefined);
-  assert.equal(row.speakerLocked, undefined);
-  assert.equal(row.speakerLockSource, undefined);
+  assert.equal(row.speakerLocked, true);
+  assert.equal(row.speakerLockSource, 'user');
 });
 
 test('Refresh preserves local correction history through a changed cloud assignment', (t) => {

@@ -6231,6 +6231,7 @@
     "filterPerson": "Filtrer par personne",
     "allPeople": "Toutes les personnes",
     "reviewEmpty": "Aucune ligne à vérifier pour ces filtres.",
+    "candidateSetNotRecorded": "Ensemble des candidats non enregistré",
     "reviewEligibleOnly": "Afficher uniquement les lignes admissibles aux échantillons vocaux",
     "reviewChecking": "Vérification de {{current}} enregistrements sur {{total}}",
     "reviewShowing": "{{shown}} sur {{total}} affichées",

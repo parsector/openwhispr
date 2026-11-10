@@ -11,6 +11,11 @@ const {
 // session's speakers must never reuse an earlier session's id.
 
 const NOTE_ID = 21;
+const acceptedDecision = {
+  candidateSetStatus: 'recorded', noteId: NOTE_ID, source: 'note', revision: 'fixture',
+  rosterRevision: 0, rawRoster: '[]', eligibleProfileIds: [1], acceptedProfileId: 1,
+  rejectionReason: null,
+};
 const START_ARGS = {
   noteId: NOTE_ID,
   noteTitle: "Planning",
@@ -52,7 +57,8 @@ function createElectronAPI({ startResult = {} } = {}) {
       };
     },
     onMeetingSpeakerIdentified: (callback) => {
-      state.identifiedCallback = callback;
+      state.identifiedCallback = (data) => callback({ ...data,
+        speakerDecision: data.displayName ? acceptedDecision : undefined });
       return () => { state.identifiedCallback = null; };
     },
     onMeetingSpeakerEvidenceChanged: (callback) => {
@@ -176,8 +182,8 @@ test("undo invalidates reconsidered identification windows before a delayed fina
   const now = Date.now();
   state.identifiedCallback({ speakerId: "speaker_0", displayName: "Alex", startTime: now - 100, endTime: now + 100 });
   state.reconsidered = { rows: [{ id: "reconsidered", text: "first", source: "system",
-    timestamp: now, speaker: "speaker_0", speakerName: "Sam" }],
-    assignments: [{ speakerId: "speaker_0", displayName: "Sam" }] };
+    timestamp: now, speaker: "speaker_0", speakerName: "Sam", speakerDecision: acceptedDecision }],
+    assignments: [{ speakerId: "speaker_0", displayName: "Sam", rows: [{ speakerDecision: acceptedDecision }] }] };
   await state.evidenceCallback({ noteId: NOTE_ID, runId: store.getActiveRecordingSessionId() });
   store.restoreSpeakerIdentityCache("speaker_0", null);
   state.segmentCallback({ text: "delayed", source: "system", type: "final", timestamp: now });

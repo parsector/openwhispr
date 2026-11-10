@@ -6231,6 +6231,7 @@
     "filterPerson": "Filtrar por persona",
     "allPeople": "Todas las personas",
     "reviewEmpty": "No hay filas para revisar con estos filtros.",
+    "candidateSetNotRecorded": "Conjunto de candidatos no registrado",
     "reviewEligibleOnly": "Mostrar solo filas aptas para muestras de voz",
     "reviewChecking": "Comprobando {{current}} de {{total}} grabaciones",
     "reviewShowing": "Se muestran {{shown}} de {{total}}",

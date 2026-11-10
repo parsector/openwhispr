@@ -3841,7 +3841,7 @@
       "typeEmail": "Type an email to add...",
       "me": "(me)",
       "recognitionScope": "This meeting lists {{participants}}, so only they can be recognised automatically. Other or uncertain voices stay Unknown and can always be named manually.",
-      "recognitionGlobal": "This note lists no participants. Any known voice may be named automatically, as before. You can always name voices manually.",
+      "recognitionGlobal": "This note lists no participants. Any known voice may be named automatically, regardless of linked calendar attendees. You can always name voices manually.",
       "recognitionUnavailable": "Automatic recognition is unavailable for this participant list. Voices stay Unknown and can always be named manually."
     },
     "eventLink": {
@@ -6213,6 +6213,7 @@
     "filterPerson": "Filter by person",
     "allPeople": "All people",
     "reviewEmpty": "No rows need review for these filters.",
+    "candidateSetNotRecorded": "Candidate set not recorded",
     "reviewEligibleOnly": "Only show rows eligible for voice samples",
     "reviewChecking": "Checking {{current}} of {{total}} recordings",
     "reviewShowing": "Showing {{shown}} of {{total}}",

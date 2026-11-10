@@ -2470,6 +2470,11 @@ export default function PeoplePage({
                     <p className="mt-1 text-xs text-muted-foreground">
                       {r.speakerName || t("people.unknown")}
                     </p>
+                    {r.speakerDecision?.candidateSetStatus === "not_recorded" && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {t("people.candidateSetNotRecorded")}
+                      </p>
+                    )}
                   </div>
                   <Button
                     type="button"

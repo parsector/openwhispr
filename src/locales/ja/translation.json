@@ -6213,6 +6213,7 @@
     "filterPerson": "人物で絞り込む",
     "allPeople": "すべての人物",
     "reviewEmpty": "この条件で確認が必要な行はありません。",
+    "candidateSetNotRecorded": "候補者の集合は記録されていません",
     "reviewEligibleOnly": "音声サンプルに使用できる行のみ表示",
     "reviewChecking": "{{total}} 件中 {{current}} 件の録音を確認中",
     "reviewShowing": "{{total}} 行中 {{shown}} 行を表示",

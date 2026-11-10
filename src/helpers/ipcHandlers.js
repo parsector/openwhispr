@@ -10051,7 +10051,10 @@ class IPCHandlers {
               return;
             }
 
-            const displayName = identification.displayName;
+            const displayName =
+              identification.speakerDecision && rosterPolicy.recordedNameAllowed(identification)
+                ? identification.displayName
+                : null;
 
             const startTime = Math.max(capturedAt, capturedAt + identification.startTime * 1000);
             const endTime = Math.max(startTime, capturedAt + identification.endTime * 1000);
@@ -10125,7 +10128,13 @@ class IPCHandlers {
         meetingReclusterTimer = setInterval(async () => {
           if (!meetingLiveSpeakerActive || !win || win.isDestroyed()) return;
 
-          const merges = await liveSpeakerIdentifier.recluster();
+          const merges = (await liveSpeakerIdentifier.recluster()).map((merge) => ({
+            ...merge,
+            displayName:
+              merge.speakerDecision && rosterPolicy.recordedNameAllowed(merge)
+                ? merge.displayName
+                : null,
+          }));
           if (!merges.length) return;
 
           for (const { keep, remove, displayName, speakerDecision } of merges) {
@@ -14984,8 +14993,14 @@ class IPCHandlers {
                 runId: row.diarizationRunId,
                 path: "retroactive",
                 profile: best.profile,
+                runnerUpProfileId: ranked[1]?.profile.id ?? null,
                 profiles,
                 scores: { best: best.score, runnerUp: ranked[1]?.score ?? 0 },
+                effectiveThresholds: {
+                  ...require("./speakerDecisionThresholds").current().values,
+                  similarityFloor: require("./speakerDecisionThresholds").effectiveFloor(),
+                  retroactiveFloor: 0.6,
+                },
                 rejectionReason: allowed ? null : "retroactive_rejected",
               });
               if (allowed)
@@ -15030,10 +15045,13 @@ class IPCHandlers {
       if (segment.speaker !== speakerId || isSpeakerLocked(segment)) continue;
       const allowed =
         rosterPolicy.mayAutoName(segment, profile, scope, {
-          acousticAccepted: !!displayName && !evidence?.rejectionReason,
+          acousticAccepted:
+            !!displayName &&
+            !!evidence &&
+            evidence.acceptedProfileId === profile?.id &&
+            rosterPolicy.recordedNameAllowed({ speakerDecision: evidence }),
           currentRevision: current.revision,
-        }) &&
-        (!evidence || evidence.revision === current.revision);
+        }) && evidence?.revision === current.revision;
       if (!allowed) {
         speakerScope.veto(
           segment,
@@ -15709,8 +15727,13 @@ class IPCHandlers {
                   runId: sessionId,
                   path: "final",
                   profile: bestProfile,
+                  runnerUpProfileId: runnerUp?.id ?? null,
                   profiles,
                   scores: { best: bestSim, runnerUp: runnerUpSim },
+                  effectiveThresholds: {
+                    ...require("./speakerDecisionThresholds").current().values,
+                    similarityFloor: require("./speakerDecisionThresholds").effectiveFloor(),
+                  },
                   rejectionReason: !eligibleWinner
                     ? "outside_roster"
                     : bestProfile?.voice_usable !== 1
@@ -15762,17 +15785,23 @@ class IPCHandlers {
                         recognitionScope,
                         { acousticAccepted: cohort.cohortBest.raw > 0.5 }
                       );
-                      seg.speakerDecision = speakerScope.decision(recognitionScope, {
-                        runId: sessionId,
+                      seg.speakerDecision = {
+                        ...rawEvidence,
                         path: "final_cohort",
-                        profile: cohortProfile,
-                        profiles,
-                        scores: {
+                        rawDecision: rawEvidence,
+                        acceptedProfileId: allowed ? cohortProfile.id : null,
+                        acceptedIdentity: allowed
+                          ? { email: rosterPolicy.normalizedEmail(cohortProfile.email) }
+                          : null,
+                        cohortSelection: {
+                          profileId: cohortProfile?.id ?? null,
                           raw: cohort.cohortBest.raw,
                           normalized: cohort.cohortBest.normalized,
+                          rawFloor: 0.5,
+                          accepted: allowed,
                         },
                         rejectionReason: allowed ? null : "cohort_rejected",
-                      });
+                      };
                       seg.suggestedName = undefined;
                       seg.suggestedProfileId = undefined;
                       if (allowed)

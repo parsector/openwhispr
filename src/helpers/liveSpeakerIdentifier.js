@@ -287,6 +287,7 @@ class LiveSpeakerIdentifier {
         profile: best?.profile,
         profiles,
         scores: best ? { best: best.similarity, runnerUp } : null,
+        effectiveThresholds: { similarityFloor: matchFloor(), runnerUpMargin: anchorMargin() },
         rejectionReason: reason,
       }),
     });
@@ -328,6 +329,7 @@ class LiveSpeakerIdentifier {
       profile: best.profile,
       profiles,
       scores: { best: best.similarity, runnerUp },
+      effectiveThresholds: { similarityFloor: matchFloor(), runnerUpMargin: anchorMargin() },
       rejectionReason: accepted ? null : "outside_roster",
     });
     return accepted
@@ -541,6 +543,10 @@ class LiveSpeakerIdentifier {
       if (removed.has(speakers[i][0])) continue;
       for (let j = i + 1; j < speakers.length; j += 1) {
         if (removed.has(speakers[j][0])) continue;
+        // Human corrections belong to exactly the audio the owner corrected.
+        // An acoustic merge cannot extend that choice onto another cluster.
+        if (this.humanClusters.has(speakers[i][0]) || this.humanClusters.has(speakers[j][0]))
+          continue;
         if (this.transientCohorts.get(speakers[i][0]) !== this.transientCohorts.get(speakers[j][0]))
           continue;
 
@@ -633,29 +639,16 @@ class LiveSpeakerIdentifier {
         removed.add(removeId);
         const scope = this._scope();
         const profileId = this.transientProfileIds.get(keepId);
-        let evidence = this.transientDecisions.get(keepId);
+        const evidence = this.transientDecisions.get(keepId);
         let displayName = this.transientDisplayNames.get(keepId) || null;
-        if (this.humanClusters.has(keepId)) {
-          // The corrected rows keep their lock. Merging a different cluster
-          // does not extend that human decision to its previously unnamed rows.
-          let profiles = [];
-          try {
-            profiles = this.getSpeakerProfiles?.() || [];
-          } catch {
-            /* fail closed */
-          }
-          const profile = profiles.find((item) => item.id === profileId);
-          const allowed = rosterPolicy.mayAutoName({}, profile, scope, { acousticAccepted: true });
-          evidence = speakerScope.decision(scope, {
-            runId: this.activeRunId,
-            path: "live_merge",
-            profile,
-            profiles,
-            scores: { similarity },
-            rejectionReason: allowed ? null : "outside_roster",
-          });
-          if (!allowed) displayName = null;
-        }
+        if (
+          displayName &&
+          (!evidence ||
+            evidence.acceptedProfileId !== profileId ||
+            evidence.revision !== scope.revision ||
+            !rosterPolicy.recordedNameAllowed({ speakerDecision: evidence }))
+        )
+          displayName = null;
         merges.push({
           keep: keepId,
           remove: removeId,
@@ -1223,6 +1216,7 @@ class LiveSpeakerIdentifier {
       profile: bestProfile,
       profiles,
       scores: { best: bestSimilarity, runnerUp: secondBestSimilarity },
+      effectiveThresholds: { similarityFloor: matchFloor(), runnerUpMargin: matchMargin() },
       rejectionReason: accepted
         ? null
         : !acousticAccepted
@@ -1284,6 +1278,7 @@ class LiveSpeakerIdentifier {
     if (scope.noteId != null) this.transientNoteIds.set(result.speakerId, scope.noteId);
     if (
       !rosterPolicy.eligible(scope, this.transientProfileIds.get(result.speakerId)) ||
+      evidence.acceptedProfileId !== this.transientProfileIds.get(result.speakerId) ||
       evidence.revision !== scope.revision ||
       evidence.rejectionReason
     ) {

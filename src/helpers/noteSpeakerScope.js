@@ -4,6 +4,7 @@ const {
   resolveSpeakerRoster,
   eligible,
   humanProtected,
+  normalizedEmail,
   SPEAKER_ROSTER_POLICY_VERSION,
 } = require("./speakerRosterPolicy");
 const { readTranscriptDocument, writeTranscriptDocument } = require("./transcriptDocument");
@@ -17,11 +18,7 @@ function readScope(database, noteId, profiles = null, noteOverride = null) {
     const identities = database?.db
       ? database.db.prepare("SELECT id, email FROM speaker_profiles ORDER BY id").all()
       : profiles || database?.getSpeakerProfiles?.() || [];
-    const event =
-      note?.participants == null && note?.calendar_event_id
-        ? database?.getCalendarEventById?.(note.calendar_event_id)
-        : null;
-    return resolveSpeakerRoster(note, event, identities);
+    return resolveSpeakerRoster(note, null, identities);
   } catch {
     return resolveSpeakerRoster(null, null);
   }
@@ -54,7 +51,16 @@ function profileFingerprint(profile) {
 }
 function decision(
   scope,
-  { runId, path, profile = null, profiles = [], scores = null, rejectionReason = null }
+  {
+    runId,
+    path,
+    profile = null,
+    runnerUpProfileId = null,
+    profiles = [],
+    scores = null,
+    effectiveThresholds = null,
+    rejectionReason = null,
+  }
 ) {
   return {
     candidateSetStatus: "recorded",
@@ -72,7 +78,10 @@ function decision(
     eligibleProfileIds: [...scope.eligibleProfileIds],
     policyVersion: SPEAKER_ROSTER_POLICY_VERSION,
     acceptedProfileId: rejectionReason ? null : (profile?.id ?? null),
+    acceptedIdentity: rejectionReason ? null : { email: normalizedEmail(profile?.email) },
     acousticWinnerProfileId: profile?.id ?? null,
+    acousticRunnerUpProfileId: runnerUpProfileId,
+    effectiveThresholds,
     origin: "machine",
     path,
     scores,
@@ -94,6 +103,28 @@ function veto(row, evidence) {
   return row;
 }
 
+function sameRosterRevision(recorded, current) {
+  if (recorded?.revision === current.revision) return true;
+  // Existing evidence included the calendar id in the revision tuple. Ignore
+  // only that retired field, preserving the generation and identity checks.
+  try {
+    const legacy = JSON.parse(recorded?.revision);
+    if (!Array.isArray(legacy) || legacy.length !== 6) return false;
+    if (
+      recorded.source === "linked_event" &&
+      current.source === "none" &&
+      current.unrestricted &&
+      recorded.noteId === current.noteId &&
+      recorded.rosterRevision === current.rosterRevision
+    )
+      return true;
+    legacy.splice(3, 1);
+    return JSON.stringify(legacy) === current.revision;
+  } catch {
+    return false;
+  }
+}
+
 // Recheck at every commit, including saves from a renderer holding an old final
 // result. Never rewrite historical unrecorded rows merely because they are read.
 function enforceRows(
@@ -105,10 +136,40 @@ function enforceRows(
   const current = readScope(database, noteId, profiles, noteOverride);
   for (const row of rows) {
     if (humanProtected(row)) continue;
+    if (!row.speakerDecision && row.speakerAssignment?.origin === "machine") {
+      const assignment = row.speakerAssignment;
+      let matches = [];
+      try {
+        const identities = database?.db
+          ? database.db.prepare("SELECT id, email FROM speaker_profiles ORDER BY id").all()
+          : profiles || database?.getSpeakerProfiles?.() || [];
+        const email = normalizedEmail(assignment.email);
+        if (email) matches = identities.filter((p) => normalizedEmail(p.email) === email);
+      } catch {
+        /* unresolved imports fail closed */
+      }
+      const profile = matches.length === 1 ? matches[0] : null;
+      row.speakerDecision = decision(current, {
+        runId: `sync:${row.id}`,
+        path: "sync_import",
+        profile,
+        rejectionReason: !assignment.accepted
+          ? "imported_rejection"
+          : !profile
+            ? "identity_unresolved"
+            : !eligible(current, profile.id)
+              ? "outside_roster"
+              : null,
+      });
+      row.speakerDecision.decisionId = hash(JSON.stringify([row.id, assignment, current.revision]));
+      // This device checked identity and scope, not the original audio/model.
+      row.speakerDecision.acousticWinnerProfileId = null;
+      row.speakerDecision.modelFingerprint = null;
+    }
     const recorded = row.speakerDecision;
     if (!recorded && !includeUnrecorded) continue;
     const profileId = recorded?.acceptedProfileId ?? row.suggestedProfileId;
-    const stale = (recorded?.revision || scope?.revision) !== current.revision;
+    const stale = !sameRosterRevision(recorded || scope, current);
     if (recorded?.rejectionReason && !stale) {
       veto(row, recorded);
       continue;

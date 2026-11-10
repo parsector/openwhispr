@@ -563,6 +563,52 @@ test("a self correction during resumed recording leaves earlier recorders alone"
   await store.stopRecording();
 });
 
+test('ordinary rejection stays local and does not retire an unchanged roster revision', async t => {
+  const { api, state } = createElectronAPI();
+  let onNoteUpdated, onSpeaker;
+  api.onNoteUpdated = cb => { onNoteUpdated = cb; return () => {}; };
+  api.onMeetingSpeakerIdentified = cb => { onSpeaker = cb; return () => {}; };
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const now = Date.now();
+  const accepted = { candidateSetStatus: 'recorded', noteId: NOTE_ID, source: 'note', revision: 'unchanged', rawRoster: '[]', roster: [], eligibleProfileIds: [1], acceptedProfileId: 1, rejectionReason: null, rosterRevision: 0, linkedEventId: null };
+  const rejected = { ...accepted, acceptedProfileId: null, rejectionReason: 'acoustic_rejected' };
+  state.segmentCallback({ text: 'unclear', source: 'system', timestamp: now });
+  onSpeaker({ cohort: 'system', speakerId: 'speaker_0', displayName: null, startTime: now-100, endTime: now+100, speakerDecision: rejected });
+  const row = store.useMeetingRecordingStore.getState().segments.at(-1);
+  onNoteUpdated({ id: NOTE_ID, participants: '[]', speaker_roster_revision: 0, transcript: JSON.stringify([row]) });
+  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerDecision.rejectionReason, 'acoustic_rejected');
+  state.segmentCallback({ text: 'clear', source: 'system', timestamp: now+1000 });
+  onSpeaker({ cohort: 'system', speakerId: 'speaker_1', displayName: 'A', startTime: now+900, endTime: now+1100, speakerDecision: accepted });
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName, 'A');
+  await store.stopRecording();
+});
+
+test('live identification and merge names require automatic evidence on unprotected rows', async t => {
+  const { api, state } = createElectronAPI();
+  let onSpeaker, onMerge, onEvidence;
+  api.onMeetingSpeakerIdentified = cb => { onSpeaker = cb; return () => {}; };
+  api.onMeetingSpeakersMerged = cb => { onMerge = cb; return () => {}; };
+  api.onMeetingSpeakerEvidenceChanged = cb => { onEvidence = cb; return () => {}; };
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const now = Date.now();
+  state.segmentCallback({ text: 'hello', source: 'system', timestamp: now });
+  onSpeaker({ cohort: 'system', speakerId: 'speaker_1', displayName: 'Outsider', startTime: now-100, endTime: now+100 });
+  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerName, undefined);
+  const locked = { id: 'locked', text: 'corrected', source: 'system', speaker: 'speaker_1', speakerName: 'Human outsider', speakerLocked: true };
+  store.useMeetingRecordingStore.setState({ segments: [...store.useMeetingRecordingStore.getState().segments, locked] });
+  onMerge([{ keep: 'speaker_0', remove: 'speaker_1', displayName: 'Outsider', similarity: .99 }]);
+  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerName, undefined);
+  assert.deepEqual(store.useMeetingRecordingStore.getState().segments[1], locked);
+  const unproven = { ...store.useMeetingRecordingStore.getState().segments[0], speakerName: 'Outsider', speakerDecision: undefined };
+  api.reconsiderLiveSpeakers = async () => ({ rows: [unproven], assignments: [{ speakerId: 'speaker_0', displayName: 'Outsider', rows: [unproven] }] });
+  await onEvidence({ noteId: NOTE_ID, runId: store.getActiveRecordingSessionId() });
+  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerName, undefined);
+  assert.deepEqual(store.useMeetingRecordingStore.getState().segments[1], locked);
+  await store.stopRecording();
+});
+
 test("roster edit retires cached identifications and rejects delayed live names", async t => {
   const {api,state}=createElectronAPI();
   let onNoteUpdated, onSpeaker;

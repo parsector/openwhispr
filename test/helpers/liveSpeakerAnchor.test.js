@@ -151,7 +151,7 @@ test('removing an approved exemplar invalidates the live anchor', async t => {
   assert.notEqual(f.identifier._resolveSpeakerForEmbedding(unit(0.02, 1)).displayName, 'Alex');
 });
 
-test('a correction and a cluster merge each invalidate the active anchor', async t => {
+test('a correction invalidates the active anchor and automatic merging preserves a human cluster', async t => {
   const corrected = fixture(t);
   await graduate(corrected);
   assert.equal(corrected.name().anchor.state, 'active');
@@ -164,8 +164,8 @@ test('a correction and a cluster merge each invalidate the active anchor', async
   await graduate(merged);
   assert.equal(merged.name().anchor.state, 'active');
   merged.identifier._assignSpeakerId(unit(0.81, 0.59));
-  assert.equal(merged.identifier._performRecluster().length, 1);
-  assert.equal(merged.identifier.getAnchorState('speaker_0'), null);
+  assert.equal(merged.identifier._performRecluster().length, 0);
+  assert.equal(merged.identifier.getAnchorState('speaker_0').state, 'active');
 });
 
 test('overlapping, locked, explicit Unknown, short and ambiguous clusters have specific refusals', async t => {

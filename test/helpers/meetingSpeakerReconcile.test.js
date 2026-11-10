@@ -83,6 +83,18 @@ function createMappingRecorder(existingMappings) {
 const NOTE_ID = 42;
 const embedding = Array.from({ length: 8 }, (_, i) => (i === 0 ? 1 : 0));
 
+test('unprotected rows require automatic evidence even when the live cluster was human named', () => {
+  const { IPCHandlers } = loadHandlers();
+  const profile = { id: 1, email: 'a@example.com', voice_usable: 1, embedding };
+  const databaseManager = { getNote: () => ({ id: NOTE_ID, participants: '[]' }), getSpeakerProfiles: () => [profile] };
+  const scope = require('../../src/helpers/noteSpeakerScope').readScope(databaseManager, NOTE_ID);
+  const handlers = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
+  const rows = [{ speaker: 'speaker_0' }, { speaker: 'speaker_0', speakerName: 'Human outsider', speakerLocked: true }];
+  handlers._applySpeakerName(rows, 'speaker_0', 'A', { profile, scope });
+  assert.equal(rows[0].speakerName, undefined);
+  assert.equal(rows[1].speakerName, 'Human outsider');
+});
+
 function reconcile(IPCHandlers, databaseManager, liveSpeakerId) {
   const fakeThis = Object.assign(Object.create(IPCHandlers.prototype), { databaseManager });
   const liveState = {
@@ -811,15 +823,15 @@ for (const [label, participants, event, expected] of [
   ["declared beats a larger event", declaredAB, {attendees: JSON.stringify([{email:"c@example.com"}])}, undefined],
   ["explicit empty ignores event", "[]", {attendees: declaredAB}, "C"],
   ["absent without event keeps global naming", null, null, "C"],
-  ["absent uses only linked event", null, {attendees: declaredAB}, undefined],
+  ["NULL ignores linked event attendees", null, {attendees: declaredAB}, "C"],
   ["malformed fails closed", "{broken", {attendees:"[]"}, undefined],
   ["JSON null fails closed", "null", null, undefined],
-  ["missing linked event fails closed", null, undefined, undefined],
+  ["NULL ignores missing linked event", null, undefined, "C"],
   ["email case and whitespace", JSON.stringify([{email:" C@EXAMPLE.COM "}]), null, "C"],
   ["display name is insufficient", JSON.stringify([{displayName:"C"}]), null, undefined],
   ["unprofiled participant", JSON.stringify([{email:"new@example.com"}]), null, undefined],
-  ["resource", JSON.stringify([{email:"c@example.com",resource:true}]), null, undefined],
-  ["declined guest", JSON.stringify([{email:"c@example.com",responseStatus:"declined"}]), null, undefined],
+  ["declared resource", JSON.stringify([{email:"c@example.com",resource:true}]), null, "C"],
+  ["declared declined guest", JSON.stringify([{email:"c@example.com",responseStatus:"declined"}]), null, "C"],
   ["declined self", JSON.stringify([{email:"c@example.com",responseStatus:"declined",self:true}]), null, "C"],
 ]) test(`roster precedence and identity: ${label}`, async t => {
   const f = rosterHandlers();
@@ -878,6 +890,17 @@ test("roster cohort suggestion cannot name outsider C when raw winner A is invit
   assert.equal(result.segments[0].speakerName,undefined);
   assert.equal(result.segments[0].suggestedName,undefined);
   assert.equal(result.segments[0].speakerDecision.path,"final_cohort");
+  const d = result.segments[0].speakerDecision;
+  assert.equal(d.acousticWinnerProfileId, 1, 'cohort selection must not replace the raw winner');
+  assert.equal(d.acousticRunnerUpProfileId, 3);
+  assert.ok(Math.abs(d.scores.best - .9) < 1e-6);
+  assert.ok(Math.abs(d.scores.runnerUp - .8) < 1e-6);
+  assert.equal(d.cohortSelection.profileId, 3);
+  assert.equal(d.cohortSelection.accepted, false);
+  assert.equal(d.rawDecision.acousticWinnerProfileId, 1);
+  assert.deepEqual(d.rawDecision.scores, d.scores);
+  assert.equal(d.effectiveThresholds.similarityFloor, require('../../src/helpers/speakerDecisionThresholds').effectiveFloor());
+  assert.equal(d.cohortSelection.rawFloor, .5);
 });
 
 test("roster direct reconciliation veto clears cached outsider names and suggestions",()=>{

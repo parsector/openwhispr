@@ -6231,6 +6231,7 @@
     "filterPerson": "Filtra per persona",
     "allPeople": "Tutte le persone",
     "reviewEmpty": "Nessuna riga da rivedere con questi filtri.",
+    "candidateSetNotRecorded": "Insieme dei candidati non registrato",
     "reviewEligibleOnly": "Mostra solo le righe idonee ai campioni vocali",
     "reviewChecking": "Controllo {{current}} di {{total}} registrazioni",
     "reviewShowing": "Visualizzazione di {{shown}} su {{total}}",

@@ -24,6 +24,8 @@ const { mayAutoName, candidateSetEvidence } = require("../../src/helpers/speaker
 const {
   readTranscriptDocument,
   writeTranscriptDocument,
+  publicTranscript,
+  reconcileCloudTranscript,
 } = require("../../src/helpers/transcriptDocument");
 const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
 Module._load = originalLoad;
@@ -74,6 +76,82 @@ function fixture(t) {
     rows: () => readTranscriptDocument(db.getNote(noteId).transcript).rows,
   };
 }
+test('portable machine identity is revalidated on import and on later participant edits', (t) => {
+  const f = fixture(t);
+  const remoteProfile = { id: 900, email: ' C@EXAMPLE.COM ', voice_usable: 1, embedding: [1, 0] };
+  const remoteScope = require('../../src/helpers/speakerRosterPolicy').resolveSpeakerRoster({ id: 999, participants: '[]' }, null, [remoteProfile]);
+  const remote = { id: 'remote', text: 'hello', speakerName: 'C', speakerDecision: decision(remoteScope, { path: 'live', profile: remoteProfile }) };
+  const cloud = publicTranscript(writeTranscriptDocument([remote]));
+  assert.equal(cloud.includes('900'), false, 'local numeric identities must not cross sync');
+  const imported = reconcileCloudTranscript(cloud, null).transcript;
+  f.db.updateNote(f.noteId, { participants: '[]', transcript: imported });
+  assert.equal(f.rows()[0].speakerName, 'C');
+  const localProfileId = f.rows()[0].speakerDecision?.acceptedProfileId;
+  f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: 'a@example.com' }]) });
+  assert.equal(f.rows()[0].speakerName, undefined);
+  assert.equal(localProfileId, f.c.id);
+  assert.ok(f.rows()[0].speakerDecision.rejectionReason);
+});
+
+test('portable human choices, including Unknown, survive import and participant edits', (t) => {
+  const f = fixture(t);
+  for (const name of ['Human outsider', undefined]) {
+    const raw = publicTranscript(writeTranscriptDocument([{ id: 'human', text: 'hello', speakerName: name, speakerIsPlaceholder: !name, speakerStatus: 'user_locked' }]));
+    f.db.updateNote(f.noteId, { transcript: reconcileCloudTranscript(raw, null).transcript });
+    f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: 'nobody@example.com' }]) });
+    assert.equal(require('../../src/helpers/speakerRosterPolicy').humanProtected(f.rows()[0]), true);
+    assert.equal(f.rows()[0].speakerName, name);
+  }
+});
+
+test('cloud upsert scopes imported machine names before returning the note to IPC', (t) => {
+  const f = fixture(t);
+  const imported = f.db.upsertNoteFromCloud({
+    id: 'remote-cloud', client_note_id: 'remote-client', title: 'Remote', content: '',
+    note_type: 'meeting', participants: JSON.stringify([{ email: 'a@example.com' }]),
+    created_at: '2026-11-10T00:00:00Z', updated_at: '2026-11-10T00:00:00Z',
+    transcript: writeTranscriptDocument([{ id: 'remote', text: 'hello', speakerName: 'C',
+      speakerAssignment: { origin: 'machine', accepted: true, email: 'c@example.com' } }]),
+  }, null);
+  const row = readTranscriptDocument(imported.transcript).rows[0];
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerDecision.rejectionReason, 'outside_roster');
+  assert.equal(readTranscriptDocument(f.db.getNoteByCloudId('remote-cloud').transcript).rows[0].speakerName, undefined);
+});
+
+test('imported machine identities fail closed when missing, ambiguous, or unreadable', () => {
+  for (const profiles of [[], [{ id: 1, email: 'c@example.com' }, { id: 2, email: 'C@example.com' }], null]) {
+    const row = { id: 'row', speakerName: 'C', speakerAssignment: { origin: 'machine', accepted: true, email: 'c@example.com' } };
+    const db = { getNote: () => ({ id: 42, participants: '[]' }), getSpeakerProfiles: () => { if (!profiles) throw Error('offline'); return profiles; } };
+    enforceRows(db, 42, [row]);
+    assert.equal(row.speakerName, undefined);
+    assert.equal(row.speakerDecision.rejectionReason, 'identity_unresolved');
+  }
+});
+
+test('calendar-only edits preserve existing machine evidence across the policy upgrade', (t) => {
+  const f = fixture(t);
+  const legacy = { ...f.evidence, linkedEventId: 'before', revision: JSON.stringify([
+    f.scope.rosterRevision, f.scope.source, f.scope.rawRoster, 'before', null, f.scope.eligibleProfileIds,
+  ]) };
+  f.db.db.prepare('UPDATE notes SET transcript = ?, calendar_event_id = ? WHERE id = ?')
+    .run(writeTranscriptDocument([{ ...f.row, speakerDecision: legacy }]), 'after', f.noteId);
+  assert.equal(f.rows()[0].speakerName, 'Alex');
+  assert.deepEqual(f.rows()[0].speakerDecision, legacy, 'the original acoustic evidence stays intact');
+});
+
+test('legacy calendar-scoped acceptance remains valid when NULL becomes unrestricted', (t) => {
+  const f = fixture(t);
+  f.db.updateNote(f.noteId, { participants: null });
+  const scope = readScope(f.db, f.noteId);
+  const legacy = { ...f.evidence, source: 'linked_event', rosterRevision: scope.rosterRevision,
+    revision: JSON.stringify([scope.rosterRevision, 'linked_event', f.scope.rawRoster, 'before', null, [f.a.id]]) };
+  f.db.db.prepare('UPDATE notes SET transcript = ? WHERE id = ?')
+    .run(writeTranscriptDocument([{ ...f.row, speakerDecision: legacy }]), f.noteId);
+  assert.equal(f.rows()[0].speakerName, 'Alex');
+  f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: 'c@example.com' }]) });
+  assert.equal(f.rows()[0].speakerName, undefined);
+});
 test("roster revision invalidates a delayed renderer save after remove then re-add and resumed recording", (t) => {
   const f = fixture(t);
   const stale = f.db.getNote(f.noteId).transcript;
@@ -201,7 +279,7 @@ test("roster missing lookup fails closed and historical evidence is explicitly u
   assert.equal(profileFingerprint({}), null);
 });
 
-test("linked event replacement, removal and restoration each invalidate fallback decisions", (t) => {
+test("calendar edits, replacement and relinking do not invalidate NULL participant scope", (t) => {
   const f = fixture(t);
   const event = {
     id: "linked",
@@ -218,7 +296,7 @@ test("linked event replacement, removal and restoration each invalidate fallback
   ]);
   f.db.upsertCalendarEvents([event]);
   const restored = readScope(f.db, f.noteId);
-  assert.notEqual(original.revision, restored.revision);
+  assert.equal(original.revision, restored.revision);
   f.db.upsertCalendarEvents([event]);
   assert.equal(
     readScope(f.db, f.noteId).revision,
@@ -227,7 +305,9 @@ test("linked event replacement, removal and restoration each invalidate fallback
   );
   f.db.db.prepare("DELETE FROM calendar_events WHERE id = ?").run(event.id);
   f.db.upsertCalendarEvents([event]);
-  assert.notEqual(readScope(f.db, f.noteId).revision, restored.revision);
+  assert.equal(readScope(f.db, f.noteId).revision, restored.revision);
+  f.db.updateNote(f.noteId, { calendar_event_id: null });
+  assert.equal(readScope(f.db, f.noteId).revision, restored.revision);
 });
 
 test("a read-time veto remains stable for optimistic final saves after sync edits", (t) => {

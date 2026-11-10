@@ -1,4 +1,4 @@
-import { humanProtected } from "./speakerRosterPolicy.js";
+import { humanProtected, recordedNameAllowed, normalizedEmail } from "./speakerRosterPolicy.js";
 // The note owns the counter even when its last row is removed. Old notes are
 // arrays; version 2 stores note metadata beside the rows.
 function readTranscriptDocument(raw) {
@@ -248,6 +248,21 @@ function writeTranscriptDocument(rows, highWater = 0) {
   });
 }
 
+// Portable attribution carries origin and email identity, never device-local
+// profile ids, acoustic vectors, or the local candidate set.
+function portableAssignment(row, displayedName) {
+  if (humanProtected(row) || row.speakerAssignment?.origin === "human") return { origin: "human" };
+  if (row.speakerDecision || row.diarizationRunId || row.speakerAssignment?.origin === "machine")
+    return {
+      origin: "machine",
+      accepted: !!displayedName && recordedNameAllowed(row),
+      email: normalizedEmail(
+        row.speakerDecision?.acceptedIdentity?.email || row.speakerAssignment?.email
+      ),
+    };
+  return undefined;
+}
+
 // Explicit allowlist: new local evidence fields cannot cross this boundary.
 function publicTranscript(raw, speakerMappings = {}) {
   if (!raw || !isTranscriptDocument(raw)) return raw;
@@ -278,37 +293,45 @@ function publicTranscript(raw, speakerMappings = {}) {
     .map((row) => {
       if (row.deleted) return { id: row.id, deleted: true };
       const fixedAssignment =
-        row.speakerLocked || row.speakerLockSource === "user" || row.diarizationRunId;
+        humanProtected(row) || row.speakerDecision || row.speakerAssignment || row.diarizationRunId;
       const mappedName = !fixedAssignment && row.speaker ? speakerMappings[row.speaker] : undefined;
-      const displayedName = fixedAssignment
-        ? row.speakerIsPlaceholder
-          ? undefined
-          : row.speakerName
-        : mappedName ||
-          (row.speakerIsPlaceholder
+      const displayedName = !recordedNameAllowed(row)
+        ? undefined
+        : fixedAssignment
+          ? row.speakerIsPlaceholder
             ? undefined
-            : row.speakerName ||
-              (typeof row.speaker === "string" &&
-              row.speaker !== "you" &&
-              !row.speaker.startsWith("speaker_")
-                ? row.speaker
-                : undefined));
-      return Object.fromEntries(
-        fields
-          .filter((field) => {
-            if (field === "speakerName") return displayedName !== undefined;
-            if (field === "speakerIsPlaceholder")
-              return !!row.speakerIsPlaceholder && !displayedName;
-            return row[field] !== undefined;
-          })
-          .map((field) => [field, field === "speakerName" ? displayedName : row[field]])
-      );
+            : row.speakerName
+          : mappedName ||
+            (row.speakerIsPlaceholder
+              ? undefined
+              : row.speakerName ||
+                (typeof row.speaker === "string" &&
+                row.speaker !== "you" &&
+                !row.speaker.startsWith("speaker_")
+                  ? row.speaker
+                  : undefined));
+      return {
+        ...Object.fromEntries(
+          fields
+            .filter((field) => {
+              if (field === "speakerName") return displayedName !== undefined;
+              if (field === "speakerIsPlaceholder")
+                return !!row.speakerIsPlaceholder && !displayedName;
+              return row[field] !== undefined;
+            })
+            .map((field) => [field, field === "speakerName" ? displayedName : row[field]])
+        ),
+        ...(portableAssignment(row, displayedName) && {
+          speakerAssignment: portableAssignment(row, displayedName),
+        }),
+      };
     });
   return JSON.stringify({ version: 2, rows: visible });
 }
 
-// Cloud rows are display data. An existing note's attribution, evidence and
-// history are owned by this device. Identity is only the durable row id.
+// Existing attribution, acoustic evidence and history stay local. New rows
+// carry portable assignment origin for local scope validation; row ids alone
+// decide whether an incoming row corresponds to an existing one.
 function reconcileCloudTranscript(cloudRaw, localRaw, { noteId = "unknown" } = {}) {
   if (!isTranscriptDocument(cloudRaw))
     return { transcript: localRaw || cloudRaw, pendingUpload: false, quarantinedMarkers: [] };
@@ -388,15 +411,20 @@ function reconcileCloudTranscript(cloudRaw, localRaw, { noteId = "unknown" } = {
 }
 
 function publicRow(row, id) {
-  return Object.fromEntries(
-    ["id", "text", "source", "timestamp", "speakerName", "speakerIsPlaceholder", "unknownNumber"]
-      .filter(
-        (key) =>
-          key === "id" ||
-          (row[key] !== undefined && !(key === "speakerName" && row.speakerIsPlaceholder))
-      )
-      .map((key) => [key, key === "id" ? id : row[key]])
-  );
+  const assignment = portableAssignment(row, row.speakerName);
+  return {
+    ...Object.fromEntries(
+      ["id", "text", "source", "timestamp", "speakerName", "speakerIsPlaceholder", "unknownNumber"]
+        .filter(
+          (key) =>
+            key === "id" ||
+            (row[key] !== undefined && !(key === "speakerName" && row.speakerIsPlaceholder))
+        )
+        .map((key) => [key, key === "id" ? id : row[key]])
+    ),
+    ...(assignment && { speakerAssignment: assignment }),
+    ...(assignment?.origin === "human" && { speakerLocked: true, speakerLockSource: "user" }),
+  };
 }
 
 function mergeLocalTranscriptState(cloudRaw, localRaw) {

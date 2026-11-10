@@ -33,7 +33,7 @@ test("declared snapshots resolve exact unambiguous emails and never promote name
   assert.equal(scope.rawRoster, note.participants);
   assert.deepEqual(scope.roster, JSON.parse(note.participants));
 });
-test("explicit empty never reads an event and absent participants only use the linked event", () => {
+test("NULL and explicit empty are unrestricted independently of linked calendar attendees", () => {
   assert.deepEqual(
     resolveSpeakerRoster(
       { id: 42, participants: "[]", calendar_event_id: "event" },
@@ -48,14 +48,14 @@ test("explicit empty never reads an event and absent participants only use the l
       { attendees: JSON.stringify(ab) },
       profiles
     ).eligibleProfileIds,
-    [1, 2]
+    [1, 2, 3]
   );
   assert.deepEqual(
     resolveSpeakerRoster({ id: 42, participants: null }, null, profiles).eligibleProfileIds,
     [1, 2, 3]
   );
 });
-test("malformed JSON, missing context and unavailable linked-event data cannot become unrestricted", () => {
+test("malformed JSON and missing note context fail closed; a missing event is irrelevant", () => {
   for (const raw of ["null", "{}", "{broken", "[null]", '["a@example.com"]']) {
     const scope = resolveSpeakerRoster(
       { id: 42, participants: raw },
@@ -68,22 +68,23 @@ test("malformed JSON, missing context and unavailable linked-event data cannot b
   assert.equal(resolveSpeakerRoster(null, null, profiles).unrestricted, false);
   assert.equal(
     resolveSpeakerRoster({ id: 42, calendar_event_id: "missing" }, null, profiles).unrestricted,
-    false
+    true
   );
 });
-test("event roster excludes resources and declined non-self guests, retaining self", () => {
+test("every explicitly declared participant resolves regardless of calendar attendance metadata", () => {
   const scope = resolveSpeakerRoster(
-    { id: 42, calendar_event_id: "event" },
     {
-      attendees: JSON.stringify([
+      id: 42,
+      participants: JSON.stringify([
         { email: "a@example.com", resource: true },
         { email: "b@example.com", responseStatus: "declined" },
         { email: "c@example.com", responseStatus: "declined", self: true },
       ]),
     },
+    null,
     profiles
   );
-  assert.deepEqual(scope.eligibleProfileIds, [3]);
+  assert.deepEqual(scope.eligibleProfileIds, [1, 2, 3]);
 });
 test("scope snapshots do not follow mutation and revisions change on identity or roster edits", () => {
   const note = { id: 42, participants: [...ab] };

@@ -6315,6 +6315,7 @@
     "filterPerson": "Фильтр по человеку",
     "allPeople": "Все люди",
     "reviewEmpty": "Нет строк для проверки с этими фильтрами.",
+    "candidateSetNotRecorded": "Набор кандидатов не записан",
     "reviewEligibleOnly": "Показывать только строки, подходящие для голосовых образцов",
     "reviewChecking": "Проверка записи {{current}} из {{total}}",
     "reviewShowing": "Показано {{shown}} из {{total}}",

@@ -261,14 +261,16 @@ test("clusters with different manual names never merge on similarity alone", () 
   assert.deepEqual(merges, [], "differing user-set names assert distinct identities");
 });
 
-test("an unidentified cluster still merges into an identified one", () => {
+test("an unidentified cluster still merges into an automatically identified one", () => {
   const { LiveSpeakerIdentifier } = loadIdentifier();
   const identifier = new LiveSpeakerIdentifier();
 
   seedSimilarIdentifiedPair(identifier);
   identifier.getSpeakerProfiles = () => [{id:1,display_name:"Alice",embedding:voiceA,voice_usable:1}];
   identifier.getSpeakerScope = () => ({noteId:42,source:"note",revision:"alice",roster:[],eligibleProfileIds:[1]});
-  assert.equal(identifier.mapSpeaker("speaker_0", 1, "Alice", null), true);
+  assert.equal(identifier.mapSpeaker("speaker_0", 1, "Alice", null, {
+    revision: 'alice', acceptedProfileId: 1, eligibleProfileIds: [1], rejectionReason: null,
+  }), true);
 
   const merges = identifier._performRecluster();
   assert.equal(merges.length, 1, "the guard must not block ordinary convergence");
@@ -647,9 +649,11 @@ test("roster manual outsider correction cannot name another cluster through auto
   seedSimilarIdentifiedPair(identifier);
   identifier.getSpeakerScope=()=>({noteId:42,source:'note',revision:'ab',roster:[],eligibleProfileIds:[1,2]});
   identifier.mapSpeaker('speaker_0',3,'C',42);
+  const originalCorrection = identifier.getTransientState().speaker_0;
   const merges=identifier._performRecluster();
-  assert.equal(merges.length,1);
-  assert.equal(merges[0].displayName,null);
-  assert.equal(merges[0].speakerDecision.rejectionReason,'outside_roster');
+  assert.deepEqual(merges, [], 'automatic merging must preserve the exact human cluster scope');
   assert.equal(identifier.transientDisplayNames.get('speaker_0'),'C');
+  assert.equal(identifier.humanClusters.has('speaker_0'), true);
+  assert.equal(identifier.transientEmbeddings.has('speaker_1'), true);
+  assert.deepEqual(identifier.getTransientState().speaker_0, originalCorrection);
 });

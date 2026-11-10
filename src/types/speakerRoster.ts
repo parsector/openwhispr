@@ -14,7 +14,17 @@ export interface SpeakerDecision {
   eligibleProfileIds: number[];
   policyVersion: number;
   acceptedProfileId: number | null;
+  acceptedIdentity?: { email: string | null } | null;
   acousticWinnerProfileId: number | null;
+  acousticRunnerUpProfileId?: number | null;
+  effectiveThresholds?: Record<string, number> | null;
+  cohortSelection?: {
+    profileId: number | null;
+    raw: number;
+    normalized: number;
+    rawFloor: number;
+    accepted: boolean;
+  };
   origin: "machine";
   path: string;
   scores: Record<string, number> | null;
@@ -22,4 +32,5 @@ export interface SpeakerDecision {
   profileFingerprints: Array<{ id: number; fingerprint: string | null }>;
   modelFingerprint: string | null;
   previousDecision?: SpeakerDecision | null;
+  rawDecision?: SpeakerDecision;
 }

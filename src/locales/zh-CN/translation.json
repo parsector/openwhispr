@@ -6213,6 +6213,7 @@
     "filterPerson": "按人物筛选",
     "allPeople": "所有人物",
     "reviewEmpty": "这些筛选条件下没有待审核的行。",
+    "candidateSetNotRecorded": "未记录候选人集合",
     "reviewEligibleOnly": "仅显示可用于语音样本的行",
     "reviewChecking": "正在检查第 {{current}} / {{total}} 条录音",
     "reviewShowing": "显示 {{shown}} / {{total}} 行",
