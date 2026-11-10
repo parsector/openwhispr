@@ -1,4 +1,7 @@
-import { resolveAutomaticSpeaker } from "../helpers/automaticSpeakerAttribution";
+import {
+  prepareAutomaticSpeakerScope,
+  resolveAutomaticSpeaker,
+} from "../helpers/automaticSpeakerAttribution";
 import {
   humanProtected,
   recordedNameAllowed,
@@ -2559,6 +2562,8 @@ if (typeof window !== "undefined") {
       }
 
       let completionScope = persisted;
+      const persistedScope = prepareAutomaticSpeakerScope(persisted);
+      let baseHighWater = readTranscriptDocument(persisted.transcript).unknownNumberHighWater;
       const existing = selectBaseSegments({
         persistedSegments: persisted.transcript
           ? parseSeedSegments(persisted.transcript, targetNoteId)
@@ -2572,8 +2577,8 @@ if (typeof window !== "undefined") {
         : data.segments;
       let { segments: enriched, removedCount } = mergeSessionDiarization({
         existing,
-        noteScope: persisted,
-        unknownNumberHighWater: readTranscriptDocument(persisted.transcript).unknownNumberHighWater,
+        noteScope: persistedScope,
+        unknownNumberHighWater: baseHighWater,
         seedLength,
         fallbackTranscript: seed?.fallbackTranscript,
         segments: recordedSegments,
@@ -2584,7 +2589,7 @@ if (typeof window !== "undefined") {
       enriched = enriched.map((row) => {
         const own = existingById.get(row.id) || existingById.get(row.parentRowId || "") || row;
         return normalizeTranscriptSegment(
-          resolveAutomaticSpeaker(own, own.speakerDecision, persisted, row)
+          resolveAutomaticSpeaker(own, own.speakerDecision, persistedScope, row)
         );
       });
 
@@ -2608,7 +2613,7 @@ if (typeof window !== "undefined") {
             {
               transcript: serializeTranscriptSegments(
                 enriched.map((row) => ({ ...row, finalAnalysisCompleted: true })),
-                readTranscriptDocument(baseTranscript).unknownNumberHighWater
+                baseHighWater
               ),
             },
             { expectedTranscript: baseTranscript, reconcileTranscript: true }
@@ -2625,13 +2630,15 @@ if (typeof window !== "undefined") {
           const latest = await window.electronAPI?.getNote?.(targetNoteId);
           if (!latest || latest.deleted_at) throw Error("finalisation_note_missing");
           completionScope = latest;
+          const retryScope = prepareAutomaticSpeakerScope(latest);
           baseTranscript = latest.transcript;
+          baseHighWater = readTranscriptDocument(baseTranscript).unknownNumberHighWater;
           const retryBase = parseSeedSegments(baseTranscript || "", targetNoteId);
           const retryById = new Map(retryBase.map((row) => [row.id, row]));
           const retried = mergeSessionDiarization({
             existing: retryBase,
-            noteScope: latest,
-            unknownNumberHighWater: readTranscriptDocument(baseTranscript).unknownNumberHighWater,
+            noteScope: retryScope,
+            unknownNumberHighWater: baseHighWater,
             seedLength,
             fallbackTranscript: seed?.fallbackTranscript,
             segments: data.segments,
@@ -2640,7 +2647,7 @@ if (typeof window !== "undefined") {
           enriched = retried.segments.map((row) => {
             const own = retryById.get(row.id) || retryById.get(row.parentRowId || "") || row;
             return normalizeTranscriptSegment(
-              resolveAutomaticSpeaker(own, own.speakerDecision, latest, row)
+              resolveAutomaticSpeaker(own, own.speakerDecision, retryScope, row)
             );
           });
           removedCount = retried.removedCount;
@@ -2662,12 +2669,13 @@ if (typeof window !== "undefined") {
         seed?.fallbackTranscript &&
         current.segments[seedLength]?.text === seed.fallbackTranscript
       ) {
-        const liveScope =
+        const liveScope = prepareAutomaticSpeakerScope(
           latestRosterNote?.id === targetNoteId &&
           (latestRosterNote.speaker_roster_revision ?? 0) >
             (completionScope.speaker_roster_revision ?? 0)
             ? latestRosterNote
-            : completionScope;
+            : completionScope
+        );
         const merged = mergeSessionDiarization({
           existing: current.segments,
           noteScope: liveScope,

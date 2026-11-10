@@ -1,6 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { resolveAutomaticSpeaker } = require("../../src/helpers/automaticSpeakerAttribution");
+const {
+  prepareAutomaticSpeakerScope,
+  resolveAutomaticSpeaker,
+} = require("../../src/helpers/automaticSpeakerAttribution");
 const { enforceRows, decision, readScope } = require("../../src/helpers/noteSpeakerScope");
 
 function fixture() {
@@ -75,6 +78,20 @@ test("an unrecorded automatic legacy name needs review under a declared roster; 
 });
 module.exports = { fixture };
 
+test("a batch roster snapshot cannot cache a later edit to the same note object", () => {
+  const note = { id: 42, participants: "[]" };
+  const row = { id: "legacy", speakerName: "Alice" };
+  const first = prepareAutomaticSpeakerScope(note);
+  note.participants = '[{"email":"a@example.com"}]';
+  note.speaker_roster_revision = 1;
+  const second = prepareAutomaticSpeakerScope(note);
+  assert.equal(resolveAutomaticSpeaker(row, null, first, row).speakerName, "Alice");
+  const restricted = resolveAutomaticSpeaker(row, null, second, row);
+  assert.equal(restricted.speakerName, undefined);
+  assert.equal(restricted.speakerDecision.rejectionReason, "legacy_not_evaluated");
+  assert.equal(restricted.speakerDecision.rosterRevision, 1);
+});
+
 for (const participants of [
   null,
   "[]",
@@ -93,6 +110,7 @@ for (const participants of [
     const main = enforceRows(db, 42, [{ ...row }])[0];
     const editor = resolveAutomaticSpeaker(row, null, note, row);
     assert.deepEqual(editor, main);
+    assert.deepEqual(resolveAutomaticSpeaker(row, null, prepareAutomaticSpeakerScope(note), row), main);
   });
 }
 

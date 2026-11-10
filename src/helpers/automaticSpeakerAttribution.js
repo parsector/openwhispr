@@ -20,7 +20,10 @@ const ATTRIBUTION = [
 ];
 const copyAttribution = (target, source) => {
   const result = { ...target };
-  for (const field of ATTRIBUTION) result[field] = source[field];
+  for (const field of ATTRIBUTION) {
+    if (source[field] === undefined) delete result[field];
+    else result[field] = source[field];
+  }
   if (source.speakerAssignment !== undefined || target.speakerAssignment !== undefined)
     result.speakerAssignment = source.speakerAssignment;
   return result;
@@ -39,6 +42,17 @@ const sameSpan = (a, b) =>
   a &&
   b &&
   ["recordingId", "trackId", "startSample", "endSample"].every((key) => a[key] === b[key]);
+
+// A batch owns its snapshot. Never cache a mutable note itself: the next
+// roster notification or completion retry must resolve the new generation.
+const preparedRosters = new WeakMap();
+export function prepareAutomaticSpeakerScope(scope) {
+  if (!scope || !("participants" in scope || "id" in scope) || preparedRosters.has(scope))
+    return scope;
+  const snapshot = { ...scope };
+  preparedRosters.set(snapshot, resolveSpeakerRoster(snapshot, null));
+  return snapshot;
+}
 
 export function currentSpeakerDecision(decision, scope) {
   if (!scope) return true; // historical projections cannot invent a note context
@@ -336,7 +350,7 @@ export function resolveAutomaticSpeaker(
   // Unknown-origin names under a restricted roster have no acoustic evidence.
   const rosterScope =
     scope && ("participants" in scope || "id" in scope)
-      ? resolveSpeakerRoster(scope, null)
+      ? preparedRosters.get(scope) || resolveSpeakerRoster(scope, null)
       : scope;
   const restricted = rosterScope && !rosterScope.unrestricted;
   if (

@@ -1917,8 +1917,13 @@ test("run7: NoteEditor suppresses legacy review count for human resolution and r
 
 test("run8: NoteEditor opens uncertain legacy names under the real note scope", async (t) => {
   const { render, click, latest, unmount } = await loadNoteEditor(t);
-  window.requestAnimationFrame = (callback) => setTimeout(callback, 0);
-  window.cancelAnimationFrame = clearTimeout;
+  const frames = new Map();
+  let frameId = 0;
+  window.requestAnimationFrame = (callback) => {
+    frames.set(++frameId, callback);
+    return frameId;
+  };
+  window.cancelAnimationFrame = (id) => frames.delete(id);
   const forms = [null, "[]", "[ ]", "   ", "{broken", "null", "{}", '[{"email":"a@example.com"}]'];
   try {
     for (const [index, participants] of forms.entries()) {
@@ -1932,6 +1937,13 @@ test("run8: NoteEditor opens uncertain legacy names under the real note scope", 
         note: { ...NOTE, id: index + 1, participants, transcript: JSON.stringify([row]) },
       });
       await click("transcript");
+      // Under shard load the note-change frame can run after the user's tab
+      // click. Pin that ordering instead of relying on a zero-delay timer.
+      await React.act(async () => {
+        const pending = [...frames.values()];
+        frames.clear();
+        for (const callback of pending) callback();
+      });
       let actual;
       walk(latest(), (node) => {
         if (node.props.onMapSpeaker) actual = node.props.segments[0];

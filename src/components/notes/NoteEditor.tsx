@@ -333,6 +333,13 @@ export default function NoteEditor({
       ? "transcript"
       : "raw";
   const [selectedViewMode, setSelectedViewMode] = useState<MeetingViewMode>(defaultViewMode);
+  const [selectedViewNoteId, setSelectedViewNoteId] = useState(note.id);
+  // Reset with the note render. A deferred frame can otherwise overwrite a
+  // tab the user has already selected in the newly opened note.
+  if (selectedViewNoteId !== note.id) {
+    setSelectedViewNoteId(note.id);
+    setSelectedViewMode(defaultViewMode);
+  }
   const [peopleFocusRowId, setPeopleFocusRowId] = useState<string | undefined>(() => {
     try {
       const target = JSON.parse(window.sessionStorage.getItem("peopleReviewTarget") || "null");
@@ -804,7 +811,6 @@ export default function NoteEditor({
           setSelectedViewMode("transcript");
         } else {
           setPeopleFocusRowId(undefined);
-          setSelectedViewMode(defaultViewMode);
         }
         if (titleRef.current && titleRef.current.textContent !== note.title) {
           titleRef.current.textContent = note.title || "";

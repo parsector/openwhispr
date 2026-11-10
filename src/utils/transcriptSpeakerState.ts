@@ -1,4 +1,7 @@
-import { resolveAutomaticSpeaker } from "../helpers/automaticSpeakerAttribution";
+import {
+  prepareAutomaticSpeakerScope,
+  resolveAutomaticSpeaker,
+} from "../helpers/automaticSpeakerAttribution";
 import { recordedNameAllowed } from "../helpers/speakerRosterPolicy";
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import { allocateUnknownNumbers, writeTranscriptDocument } from "../helpers/transcriptDocument";
@@ -212,6 +215,7 @@ export const mergeTranscriptSegments = (
     );
   }
 
+  scope = prepareAutomaticSpeakerScope(scope);
   const existingById = new Map<string, number>();
   const existingByKey = new Map<string, number[]>();
 

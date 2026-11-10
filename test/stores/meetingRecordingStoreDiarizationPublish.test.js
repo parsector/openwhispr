@@ -767,18 +767,23 @@ test('run6: a 2000-row completion retry parses its base once', async t => {
     return {success:true};
   };
   let parses=0;
+  let transcriptParses=0;
   const parse=JSON.parse;
-  t.mock.method(JSON,'parse',(...args)=>{parses++;return parse(...args);});
+  t.mock.method(JSON,'parse',(...args)=>{
+    parses++;
+    if (typeof args[0] === 'string' && args[0].includes('perf-1999')) transcriptParses++;
+    return parse(...args);
+  });
   const start=performance.now();
   state.diarizationCallback({noteId:NOTE_ID,sessionId:'perf',segments:rows});
   await done.promise;
   const elapsed=performance.now()-start;
-  console.log(`RUN6_RETRY rows=2000 ms=${elapsed.toFixed(1)} parses=${parses}`);
+  console.log(`RUN6_RETRY rows=2000 ms=${elapsed.toFixed(1)} parses=${parses} transcriptParses=${transcriptParses}`);
   assert.equal(attempts,2);
   const output=JSON.parse(notes.get(NOTE_ID).transcript).rows;
   assert.equal(output.length,2000);
   assert.equal(new Set(output.map(row=>row.text)).size,2000);
-  assert.ok(parses<100,`full JSON parses: ${parses}`);
+  assert.ok(parses<100,`JSON parses: ${parses} (${transcriptParses} transcript parses)`);
   assert.ok(elapsed<2500,`retry took ${elapsed}ms`);
   assert.equal(store.useMeetingRecordingStore.getState().isRecording,false);
 });
