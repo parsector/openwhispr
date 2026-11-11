@@ -183,6 +183,29 @@ async function mountUseAuth(t, { initialStorage }) {
       isPending: false,
       error: null,
     });
+    if (user) {
+      // Reconciliation lazily loads modules through Vite before committing the
+      // generation. Timer turns cannot establish that those imports finished.
+      // Keep collecting every render, then assert after the actual commit.
+      await React.act(async () => {
+        if (authContext.getValidatedAuthGeneration() === token.generation) return;
+        await new Promise((resolve, reject) => {
+          let unsubscribe = () => {};
+          const timeout = setTimeout(() => {
+            unsubscribe();
+            reject(new Error("Auth fixture did not finish account reconciliation"));
+          }, 5000);
+          const check = () => {
+            if (authContext.getValidatedAuthGeneration() !== token.generation) return;
+            clearTimeout(timeout);
+            unsubscribe();
+            resolve();
+          };
+          unsubscribe = authContext.subscribeAuthRequestContext(check);
+          check();
+        });
+      });
+    }
   };
   const reject = async () => {
     await React.act(() =>

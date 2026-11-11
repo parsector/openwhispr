@@ -1,0 +1,171 @@
+{
+  "recorded_at_utc": "2026-11-11T01:00:58.510451+00:00",
+  "review_base": "59356c41d19caf7ad327ad0b7b7255c59a232784",
+  "initial_head": "137b881c8",
+  "runtime": {
+    "node": "v26.7.0",
+    "os": "Linux",
+    "architecture": "aarch64",
+    "workflow_node": "24",
+    "cpu_quota": 4,
+    "task_limit": 512
+  },
+  "note": "Release workflow glob and four partitions. Compiler and file-worker concurrency bounded for this machine. Only the successful-response auth test fixture changed after the first attempt of shard 3; no production changes. Reran the entire affected shard. Other partitions were unchanged. No added skip/TODO declarations.",
+  "production_freeze_unchanged": true,
+  "final_shards": [
+    {
+      "shard": "1/4",
+      "command": "GOMAXPROCS=2 node --import tsx --test --test-concurrency=1 --test-shard=1/4 --test-reporter=tap 'test/**/*.test.js'",
+      "exit_code": 0,
+      "tests": 2830,
+      "suites": 4,
+      "pass": 2821,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 8,
+      "todo": 1,
+      "duration_ms": 2304469.727406,
+      "tap_log": "/opt/data/cache/participant-review/gate-shard-1.tap",
+      "tap_sha256": "48ad96cdf44d46caa70ead16b33cbe95ef320e6be5a5c541f1b61da061ea6865",
+      "dispositions": [
+        "ok 573 - darwin: native snapshots exclude background speech while preserving meeting capture # SKIP the native microphone listener requires macOS",
+        "ok 1225 - macOS shortcuts follow the active layout and fall back only without layout data # SKIP",
+        "ok 1744 - staging refuses a filesystem alias instead of overwriting an earlier file # SKIP The filesystem distinguishes these Unicode filenames",
+        "ok 1857 - S5 a full delta page tied on updated_at must not abandon the rest of the pull # TODO",
+        "ok 1888 - a reported window rect is parsed # SKIP",
+        "ok 1889 - an app with no ordinary window resolves to null # SKIP",
+        "ok 1890 - a failing read resolves to null rather than throwing # SKIP",
+        "ok 1891 - reads are cached per pid for one press, then re-read # SKIP",
+        "ok 1892 - no target pid means no spawn at all # SKIP"
+      ]
+    },
+    {
+      "shard": "2/4",
+      "command": "GOMAXPROCS=2 node --import tsx --test --test-concurrency=1 --test-shard=2/4 --test-reporter=tap 'test/**/*.test.js'",
+      "exit_code": 0,
+      "tests": 2842,
+      "suites": 1,
+      "pass": 2838,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 4,
+      "todo": 0,
+      "duration_ms": 3142419.216605,
+      "tap_log": "/opt/data/cache/participant-review/gate-shard-2.tap",
+      "tap_sha256": "cf92245df9420d7fe7bdb12e2898b7f4086d0ea80c2fa1c313fa0b123073e970",
+      "dispositions": [
+        "ok 1039 - extractArchive PowerShell fallback extracts a zip under apostrophe paths # SKIP",
+        "ok 1221 - macOS transcript promise reports the target's read, however late, and only that # SKIP",
+        "ok 1902 - --app-context output becomes the app's name, bundle id, title and host # SKIP",
+        "ok 1903 - a failed --app-context run keeps what it printed before failing # SKIP"
+      ]
+    },
+    {
+      "shard": "3/4",
+      "command": "GOMAXPROCS=2 node --import tsx --test --test-concurrency=2 --test-shard=3/4 --test-reporter=tap 'test/**/*.test.js'",
+      "exit_code": 0,
+      "tests": 3010,
+      "suites": 1,
+      "pass": 3002,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 8,
+      "todo": 0,
+      "duration_ms": 905347.194428,
+      "tap_log": "/opt/data/cache/participant-review/gate-shard-3-rerun.tap",
+      "tap_sha256": "b454da37b6bdee1071a702472a7ac0e57c0cff02bf9b0c1808cbe7154ef4a6c0",
+      "dispositions": [
+        "ok 1323 - native modifier gate waits for a held modifier, ignores locked ones, and reports an unreadable XKB state as unknown # SKIP X11, Xtst or Xext development libraries unavailable",
+        "ok 1324 - native evdev modifier gate sees a held key on a keyboard and ignores ydotoold's virtual one # SKIP /dev/uinput is not writable",
+        "ok 1400 - macOS typing covers Chromium browsers and only single lines it can type safely # SKIP",
+        "ok 2124 - concurrent captures share one frontmost lookup # SKIP",
+        "ok 2125 - a just-completed capture is reused instead of respawning osascript # SKIP",
+        "ok 2126 - a failed capture is retried, not reused # SKIP",
+        "ok 2127 - captures refresh once the reuse window has passed # SKIP",
+        "ok 2399 - live helper probe succeeds on this machine when the binary is present # SKIP Windows-only probe"
+      ]
+    },
+    {
+      "shard": "4/4",
+      "command": "GOMAXPROCS=2 node --import tsx --test --test-concurrency=1 --test-shard=4/4 --test-reporter=tap 'test/**/*.test.js'",
+      "exit_code": 0,
+      "tests": 3165,
+      "suites": 2,
+      "pass": 3150,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 15,
+      "todo": 0,
+      "duration_ms": 3085286.516415,
+      "tap_log": "/opt/data/cache/participant-review/gate-shard-4.tap",
+      "tap_sha256": "4875c3775885015cc05e02df3096c24359010a034cec92b2ce1792cb9df222e7",
+      "dispositions": [
+        "ok 1284 - native input regions scale, clip and route clicks without changing the visible window # SKIP X11, Xtst or Xext development libraries unavailable",
+        "ok 2032 - startMonitoring stops immediately without a target PID # SKIP",
+        "ok 2033 - startMonitoring self-terminates when the target has no accessible focused element # SKIP",
+        "ok 2034 - getSelectedText caches a -25212 native failure per PID # SKIP",
+        "ok 2035 - getSelectedText skips the native binary for a cached PID # SKIP",
+        "ok 2036 - getSelectedText identifies an empty writable field # SKIP",
+        "ok 2037 - isFocusedEditable maps the native verdicts, including the dormant-tree UNKNOWN # SKIP",
+        "ok 2038 - isFocusedEditable answers from a stale binary's first monitor line # SKIP",
+        "ok 2042 - getSelectedText surfaces the native UNKNOWN verdict # SKIP",
+        "ok 2043 - a non--25212 native failure is not cached # SKIP",
+        "ok 2044 - a run where the AX tree woke mid-retry is not cached # SKIP",
+        "ok 2045 - a monitor run ending in NO_ELEMENT with uniform -25212 teaches the cache # SKIP",
+        "ok 2046 - a timeout-killed selection read is not cached # SKIP",
+        "ok 2047 - startMonitoring skips the native monitor for a cached PID # SKIP",
+        "ok 2512 - a macOS marker written before the arm64 ONNX Runtime slice is not a complete install # SKIP the slice is only replaced on macOS hosts"
+      ]
+    }
+  ],
+  "totals": {
+    "tests": 11847,
+    "suites": 8,
+    "pass": 11811,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 35,
+    "todo": 1
+  },
+  "initial_failed_attempt": {
+    "shard": "3/4",
+    "command": "GOMAXPROCS=2 node --import tsx --test --test-concurrency=1 --test-shard=3/4 --test-reporter=tap 'test/**/*.test.js'",
+    "exit_code": 1,
+    "tests": 3010,
+    "suites": 1,
+    "pass": 3000,
+    "fail": 2,
+    "cancelled": 0,
+    "skipped": 8,
+    "todo": 0,
+    "duration_ms": 2771672.783323,
+    "tap_log": "/opt/data/cache/participant-review/gate-shard-3.tap",
+    "tap_sha256": "93170ccc3865b21bdef85e0bb9e83587aa55b11ad6ce82e47a56a027eedb3e77",
+    "dispositions": [
+      "ok 1323 - native modifier gate waits for a held modifier, ignores locked ones, and reports an unreadable XKB state as unknown # SKIP X11, Xtst or Xext development libraries unavailable",
+      "ok 1324 - native evdev modifier gate sees a held key on a keyboard and ignores ydotoold's virtual one # SKIP /dev/uinput is not writable",
+      "ok 1400 - macOS typing covers Chromium browsers and only single lines it can type safely # SKIP",
+      "ok 2124 - concurrent captures share one frontmost lookup # SKIP",
+      "ok 2125 - a just-completed capture is reused instead of respawning osascript # SKIP",
+      "ok 2126 - a failed capture is retried, not reused # SKIP",
+      "ok 2127 - captures refresh once the reuse window has passed # SKIP",
+      "ok 2399 - live helper probe succeeds on this machine when the binary is present # SKIP Windows-only probe"
+    ]
+  },
+  "static_checks": {
+    "lint": 0,
+    "typecheck": 0,
+    "build_renderer": 0,
+    "compile_routine_tools": 0,
+    "i18n_check": 0,
+    "lint_after_auth_fixture": 0
+  },
+  "separate_browser_check": {
+    "tests": 1,
+    "pass": 1,
+    "fail": 0,
+    "skipped": 0,
+    "log": "/opt/data/cache/participant-review/people-browser-warm.tap",
+    "initial_attempt": "Cold Vite dependency build exceeded existing 15-second page navigation timeout; no timeout changed."
+  }
+}

@@ -303,7 +303,9 @@ export function resolveAutomaticSpeaker(
     };
   }
   if (humanProtected(incoming))
-    return incoming.speakerReviewRequired ? { ...incoming, speakerReviewRequired: false } : incoming;
+    return incoming.speakerReviewRequired
+      ? { ...incoming, speakerReviewRequired: false }
+      : incoming;
   if (requireStoredAttribution && !storedDecision && incoming.speakerDecision)
     return refusal(row, incoming, storedDecision, "row_binding");
   let next = incoming;
@@ -379,6 +381,11 @@ export function resolveAutomaticSpeaker(
         rejectionReason: "legacy_not_evaluated",
       }),
       speakerReviewRequired: true,
+      // A legacy candidate list has no recorded assessment or scope. It cannot
+      // keep suggesting identities after its owning name has become Unknown.
+      uncertainty: next.uncertainty?.candidates
+        ? { reason: next.uncertainty.reason }
+        : next.uncertainty,
     };
   }
   // Context-free normalization cannot decide a historical row's note scope.

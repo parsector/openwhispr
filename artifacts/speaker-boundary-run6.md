@@ -1,3 +1,6 @@
+> Historical run report. Current guarantees and corrected baseline claims are in
+> [the participant-scope self-review](participant-scope-self-review.md).
+
 Fix run 6 — attribution installation, proof integrity and large-note retries
 
 Baseline: `06a57ce572b46e558168889c8b7966be378af8b1`, on `master`.

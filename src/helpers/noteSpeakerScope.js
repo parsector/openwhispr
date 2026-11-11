@@ -49,7 +49,15 @@ function profileFingerprint(profile) {
     : Buffer.from(vector.buffer, vector.byteOffset, vector.byteLength);
   return hash(
     Buffer.concat([
-      Buffer.from(JSON.stringify([profile.id, profile.voice_usable, profile.updated_at])),
+      Buffer.from(
+        JSON.stringify([
+          profile.id,
+          normalizedEmail(profile.email),
+          profile.display_name,
+          profile.voice_usable,
+          profile.updated_at,
+        ])
+      ),
       bytes,
     ])
   );

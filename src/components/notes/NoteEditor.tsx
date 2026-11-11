@@ -1,4 +1,7 @@
-import { resolveAutomaticSpeaker } from "../../helpers/automaticSpeakerAttribution";
+import {
+  prepareAutomaticSpeakerScope,
+  resolveAutomaticSpeaker,
+} from "../../helpers/automaticSpeakerAttribution";
 import { restoreTranscriptSpeakerRows } from "../../utils/transcriptSpeakerState";
 import { resolveSpeakerRoster } from "../../helpers/speakerRosterPolicy";
 import {
@@ -586,13 +589,12 @@ export default function NoteEditor({
   );
   // Project the overlay against the current note on every roster generation.
   // An async correction/completion cannot outlive its declared roster.
-  const displaySegments = useMemo(
-    () =>
-      (diarizedSegments?.length ? diarizedSegments : storedTranscript.segments).map((row) =>
-        resolveAutomaticSpeaker(row, row.speakerDecision, note, row)
-      ),
-    [diarizedSegments, storedTranscript.segments, note]
-  );
+  const displaySegments = useMemo(() => {
+    const scope = prepareAutomaticSpeakerScope(note);
+    return (diarizedSegments?.length ? diarizedSegments : storedTranscript.segments).map((row) =>
+      resolveAutomaticSpeaker(row, row.speakerDecision, scope, row)
+    );
+  }, [diarizedSegments, storedTranscript.segments, note]);
   const reviewCount = displaySegments.filter(
     (segment) =>
       segment.uncertainty || segment.speakerReviewRequired || segment.quarantinedCorrections?.length

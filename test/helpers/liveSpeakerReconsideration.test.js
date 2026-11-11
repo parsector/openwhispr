@@ -1,236 +1,353 @@
 const createTempDir = require("../lib/tempDir");
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const Module = require('node:module');
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const Module = require("node:module");
 
 let dir;
 const originalLoad = Module._load;
 Module._load = function (request, parent, isMain) {
-  if (request === 'electron') return { app: { getPath: () => dir, getAppPath: () => process.cwd(), isReady: () => false } };
+  if (request === "electron")
+    return { app: { getPath: () => dir, getAppPath: () => process.cwd(), isReady: () => false } };
   return originalLoad.call(this, request, parent, isMain);
 };
-process.env.NODE_ENV = 'test';
-const Database = require('../../src/helpers/database');
-const enrollment = require('../../src/helpers/voiceEnrollment');
-const { LiveSpeakerIdentifier } = require('../../src/helpers/liveSpeakerIdentifier');
-const { reconsiderLiveClusters, undoReconsideration } = require('../../src/helpers/liveSpeakerReconsideration');
-const { applySpeakerCorrection } = require('../../src/helpers/speakerCorrectionTransaction');
-const { reconcileAutomaticTranscript } = require('../../src/helpers/transcriptDocument');
-const retainedSpeakerAudio = require('../lib/retainedSpeakerAudio');
+process.env.NODE_ENV = "test";
+const Database = require("../../src/helpers/database");
+const enrollment = require("../../src/helpers/voiceEnrollment");
+const { LiveSpeakerIdentifier } = require("../../src/helpers/liveSpeakerIdentifier");
+const {
+  reconsiderLiveClusters,
+  undoReconsideration,
+} = require("../../src/helpers/liveSpeakerReconsideration");
+const { applySpeakerCorrection } = require("../../src/helpers/speakerCorrectionTransaction");
+const { reconcileAutomaticTranscript } = require("../../src/helpers/transcriptDocument");
+const retainedSpeakerAudio = require("../lib/retainedSpeakerAudio");
 Module._load = originalLoad;
 
-const vector = (x, y = 0) => Float32Array.from({ length: 512 }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
+const vector = (x, y = 0) =>
+  Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? x : i === 1 ? y : 0));
 function fixture(t) {
-  dir = createTempDir(path.join(os.tmpdir(), 'ow-reconsider-'));
+  dir = createTempDir(path.join(os.tmpdir(), "ow-reconsider-"));
   const ownDir = dir;
   const db = new Database();
-  t.after(() => { db.db.close(); fs.rmSync(ownDir, { recursive: true, force: true }); });
-  const person = db.createNamedSpeakerProfile('Alex', 'alex@example.com');
+  t.after(() => {
+    db.db.close();
+    fs.rmSync(ownDir, { recursive: true, force: true });
+  });
+  const person = db.createNamedSpeakerProfile("Alex", "alex@example.com");
   let clock = Date.now();
   const { audio, record } = retainedSpeakerAudio(db, ownDir, () => clock);
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };
-  for (const [title, count] of [['Earlier one', 2], ['Earlier two', 1]]) {
-    const id = db.saveNote(title, '', 'meeting').note.id;
+  for (const [title, count] of [
+    ["Earlier one", 2],
+    ["Earlier two", 1],
+  ]) {
+    const id = db.saveNote(title, "", "meeting").note.id;
     const recordingId = record(id, count);
-    const rows = Array.from({ length: count }, (_, i) => ({ id: `${title}-${i}`, source: 'system',
-      speaker: 'speaker_0', speakerName: 'Alex', speakerLockSource: 'user', suggestedProfileId: person.id,
-      audioSpan: { recordingId, trackId: 'system', startSample: i * 120000, endSample: i * 120000 + 96000 } }));
+    const rows = Array.from({ length: count }, (_, i) => ({
+      id: `${title}-${i}`,
+      source: "system",
+      speaker: "speaker_0",
+      speakerName: "Alex",
+      speakerLockSource: "user",
+      suggestedProfileId: person.id,
+      audioSpan: {
+        recordingId,
+        trackId: "system",
+        startSample: i * 120000,
+        endSample: i * 120000 + 96000,
+      },
+    }));
     db.updateNote(id, { transcript: JSON.stringify({ version: 2, rows }) });
   }
-  const noteId = db.saveNote('Live', '', 'meeting').note.id;
-  db.updateNote(noteId, { participants: JSON.stringify([{email:'alex@example.com'}]) });
-  const runId = 'run-live';
-  const row = { id: 'live-row', text: 'Hello', source: 'system', diarizationRunId: runId,
-    speaker: 'speaker_3', speakerIsPlaceholder: true, speakerStatus: 'suggested',
-    audioSpan: { recordingId: noteId, trackId: 'system', startSample: 0, endSample: 96000 } };
+  const noteId = db.saveNote("Live", "", "meeting").note.id;
+  db.updateNote(noteId, { participants: JSON.stringify([{ email: "alex@example.com" }]) });
+  const runId = "run-live";
+  const row = {
+    id: "live-row",
+    text: "Hello",
+    source: "system",
+    diarizationRunId: runId,
+    speaker: "speaker_3",
+    speakerIsPlaceholder: true,
+    speakerStatus: "suggested",
+    audioSpan: { recordingId: noteId, trackId: "system", startSample: 0, endSample: 96000 },
+  };
   db.updateNote(noteId, { transcript: JSON.stringify({ version: 2, rows: [row] }) });
   const identifier = new LiveSpeakerIdentifier();
-  identifier.getSpeakerScope = () => require('../../src/helpers/noteSpeakerScope').readScope(db, noteId);
+  identifier.getSpeakerScope = () =>
+    require("../../src/helpers/noteSpeakerScope").readScope(db, noteId);
   identifier.running = true;
   identifier.activeRunId = runId;
   identifier.nextLiveIndex = 3;
   identifier.getSpeakerProfiles = () => db.getSpeakerProfiles(true);
-  identifier._resolveSpeakerForEmbedding(vector(1), { updateCentroid: true, voicedSamples: 16000 * 4 });
-  identifier._resolveSpeakerForEmbedding(vector(1), { updateCentroid: true, voicedSamples: 16000 * 4 });
+  identifier._resolveSpeakerForEmbedding(vector(1), {
+    updateCentroid: true,
+    voicedSamples: 16000 * 4,
+  });
+  identifier._resolveSpeakerForEmbedding(vector(1), {
+    updateCentroid: true,
+    voicedSamples: 16000 * 4,
+  });
   const graduate = async () => {
     for (const candidate of enrollment.listCandidates(db, audio, person.id)) {
       const { token } = enrollment.play(db, audio, candidate.id);
       clock += 5000;
       assert.equal(enrollment.complete(db, audio, candidate.id, token).success, true);
-      assert.equal((await enrollment.decide(db, audio, extractor, candidate.id, 'approve', token)).success, true);
+      assert.equal(
+        (await enrollment.decide(db, audio, extractor, candidate.id, "approve", token)).success,
+        true
+      );
     }
   };
   return { db, person, noteId, runId, row, identifier, graduate, audio, record };
 }
 
-test('speaker_3 gains an approved voice in the current meeting without changing its centroid', async t => {
+test("speaker_3 gains an approved voice in the current meeting without changing its centroid", async (t) => {
   const f = fixture(t);
   assert.equal(f.identifier._resolveSpeakerForEmbedding(vector(1)).displayName, null);
   await f.graduate();
-  const before = f.db.db.prepare('SELECT embedding, sample_count, voice_usable FROM speaker_profiles WHERE id = ?').get(f.person.id);
+  const before = f.db.db
+    .prepare("SELECT embedding, sample_count, voice_usable FROM speaker_profiles WHERE id = ?")
+    .get(f.person.id);
   const staleTranscript = f.db.getNote(f.noteId).transcript;
-  const centroid = f.identifier.getSpeakerEmbedding('speaker_3');
+  const centroid = f.identifier.getSpeakerEmbedding("speaker_3");
   const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
   assert.equal(result.assignments.length, 1);
-  assert.equal(result.assignments[0].speakerId, 'speaker_3');
-  assert.equal(result.assignments[0].displayName, 'Alex');
-  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, 'Alex');
-  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].machineReason, 'approved_voice');
-  assert.deepEqual(f.identifier.getSpeakerEmbedding('speaker_3'), centroid);
-  assert.deepEqual(f.db.db.prepare('SELECT embedding, sample_count, voice_usable FROM speaker_profiles WHERE id = ?').get(f.person.id), before);
-  assert.equal(enrollment.listCandidates(f.db, {
-    status: () => ({ state: 'complete', bytes: 96044 }), span: () => ({ state: 'available' }),
-  }, f.person.id).some(candidate => candidate.noteId === f.noteId), false);
-  const reconciled = reconcileAutomaticTranscript(staleTranscript, f.db.getNote(f.noteId).transcript);
-  assert.equal(JSON.parse(reconciled).rows[0].machineReason, 'approved_voice');
-  assert.equal(undoReconsideration(f.db, f.identifier, f.noteId, result.assignments[0].actionId).success, true);
+  assert.equal(result.assignments[0].speakerId, "speaker_3");
+  assert.equal(result.assignments[0].displayName, "Alex");
+  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, "Alex");
+  assert.equal(
+    JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].machineReason,
+    "approved_voice"
+  );
+  assert.deepEqual(f.identifier.getSpeakerEmbedding("speaker_3"), centroid);
+  assert.deepEqual(
+    f.db.db
+      .prepare("SELECT embedding, sample_count, voice_usable FROM speaker_profiles WHERE id = ?")
+      .get(f.person.id),
+    before
+  );
+  assert.equal(
+    enrollment
+      .listCandidates(
+        f.db,
+        {
+          status: () => ({ state: "complete", bytes: 96044 }),
+          span: () => ({ state: "available" }),
+        },
+        f.person.id
+      )
+      .some((candidate) => candidate.noteId === f.noteId),
+    false
+  );
+  const reconciled = reconcileAutomaticTranscript(
+    staleTranscript,
+    f.db.getNote(f.noteId).transcript
+  );
+  assert.equal(JSON.parse(reconciled).rows[0].machineReason, "approved_voice");
+  assert.equal(
+    undoReconsideration(f.db, f.identifier, f.noteId, result.assignments[0].actionId).success,
+    true
+  );
   assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, undefined);
-  assert.deepEqual(reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId).skipped,
-    [{ speakerId: 'speaker_3', reason: 'owner-rejected' }]);
+  assert.deepEqual(reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId).skipped, [
+    { speakerId: "speaker_3", reason: "owner-rejected" },
+  ]);
 });
 
-test('a live row not yet saved is reconciled and logged at graduation', async t => {
+test("a live row not yet saved is reconciled and logged at graduation", async (t) => {
   const f = fixture(t);
-  f.db.updateNote(f.noteId, { transcript: '[]' });
+  f.db.updateNote(f.noteId, { transcript: "[]" });
   await f.graduate();
   const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId, [f.row]);
   assert.equal(result.assignments.length, 1);
-  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, 'Alex');
-  assert.equal(JSON.parse(f.db.getNote(f.noteId).speaker_action_log).actions.at(-1).kind, 'reconsideration');
-  const reconciled = reconcileAutomaticTranscript('[]', f.db.getNote(f.noteId).transcript);
-  assert.equal(JSON.parse(reconciled).rows[0].machineReason, 'approved_voice');
+  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, "Alex");
+  assert.equal(
+    JSON.parse(f.db.getNote(f.noteId).speaker_action_log).actions.at(-1).kind,
+    "reconsideration"
+  );
+  const reconciled = reconcileAutomaticTranscript("[]", f.db.getNote(f.noteId).transcript);
+  assert.equal(JSON.parse(reconciled).rows[0].machineReason, "approved_voice");
 });
 
-test('a mic cohort becomes nameable after graduation without confirming the mic row', async t => {
+test("a mic cohort becomes nameable after graduation without confirming the mic row", async (t) => {
   const f = fixture(t);
-  const micRow = { ...f.row, source: 'mic', audioSpan: { ...f.row.audioSpan, trackId: 'mic' } };
+  const micRow = { ...f.row, source: "mic", audioSpan: { ...f.row.audioSpan, trackId: "mic" } };
   f.db.updateNote(f.noteId, { transcript: JSON.stringify({ version: 2, rows: [micRow] }) });
-  f.identifier.transientCohorts.set('speaker_3', 'mic');
+  f.identifier.transientCohorts.set("speaker_3", "mic");
   await f.graduate();
   const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
   assert.equal(result.assignments.length, 1);
   const row = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
-  assert.equal(row.speakerName, 'Alex');
-  assert.equal(row.speakerStatus, 'provisional');
+  assert.equal(row.speakerName, "Alex");
+  assert.equal(row.speakerStatus, "provisional");
 });
 
-test('explicit Unknown, locked, overlap and mixed audio have distinct eligibility states', async t => {
+test("explicit Unknown, locked, overlap and mixed audio have distinct eligibility states", async (t) => {
   const cases = [
-    [{ speakerLockSource: 'user', speakerLocked: true, speakerName: undefined }, 'explicit-unknown'],
-    [{ speakerLocked: true }, 'locked'],
-    [{ uncertainty: { reason: 'overlapping_speech' } }, 'uncertain-overlap'],
-    [{ uncertainty: { reason: 'possible_mixed_speakers' } }, 'mixed-audio'],
-    [{ uncertainty: { reason: 'too_short' } }, 'insufficient-evidence'],
+    [
+      { speakerLockSource: "user", speakerLocked: true, speakerName: undefined },
+      "explicit-unknown",
+    ],
+    [{ speakerLocked: true }, "locked"],
+    [{ suggestedName: "Alex" }, "provisional-suggestion"],
+    [{ uncertainty: { reason: "overlapping_speech" } }, "uncertain-overlap"],
+    [{ uncertainty: { reason: "possible_mixed_speakers" } }, "mixed-audio"],
+    [{ uncertainty: { reason: "too_short" } }, "insufficient-evidence"],
   ];
-  for (const [patch, reason] of cases) await t.test(reason, async sub => {
-    const f = fixture(sub);
-    await f.graduate();
-    f.db.updateNote(f.noteId, { transcript: JSON.stringify({ version: 2, rows: [{ ...f.row, ...patch }] }) });
-    const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
-    assert.deepEqual(result.skipped, [{ speakerId: 'speaker_3', reason }]);
-    assert.equal(f.identifier.getEligibilityState('speaker_3'), reason);
-    assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, undefined);
-  });
+  for (const [patch, reason] of cases)
+    await t.test(reason, async (sub) => {
+      const f = fixture(sub);
+      await f.graduate();
+      let rowPatch = patch;
+      if (reason === "provisional-suggestion") {
+        const scope = require("../../src/helpers/noteSpeakerScope");
+        rowPatch = {
+          ...patch,
+          suggestedProfileId: f.person.id,
+          speakerDecision: scope.decision(scope.readScope(f.db, f.noteId), {
+            profile: f.db.getSpeakerProfiles(true).find((profile) => profile.id === f.person.id),
+            path: "test_acoustic_suggestion",
+          }),
+        };
+      }
+      f.db.updateNote(f.noteId, {
+        transcript: JSON.stringify({ version: 2, rows: [{ ...f.row, ...rowPatch }] }),
+      });
+      const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
+      assert.deepEqual(result.skipped, [{ speakerId: "speaker_3", reason }]);
+      assert.equal(f.identifier.getEligibilityState("speaker_3"), reason);
+      assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, undefined);
+    });
 });
 
-test('a close runner-up leaves the row uncertain and never names it', async t => {
+test("a close runner-up leaves the row uncertain and never names it", async (t) => {
   const f = fixture(t);
   await f.graduate();
   f.identifier._assignSpeakerId(vector(0.995, 0.1));
   const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
   assert.deepEqual(result.assignments, []);
-  assert.deepEqual(result.skipped.find(item => item.speakerId === 'speaker_3'),
-    { speakerId: 'speaker_3', reason: 'close_match' });
+  assert.deepEqual(
+    result.skipped.find((item) => item.speakerId === "speaker_3"),
+    { speakerId: "speaker_3", reason: "close_match" }
+  );
   const row = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
   assert.equal(row.speakerName, undefined);
-  assert.equal(row.uncertainty.reason, 'close_match');
+  assert.equal(row.uncertainty.reason, "close_match");
 });
 
-test('cached reconsideration cannot supersede a row veto while a clean sibling can graduate', async t => {
+test("cached reconsideration cannot supersede a row veto while a clean sibling can graduate", async (t) => {
   const f = fixture(t);
   await f.graduate();
-  const scope = require('../../src/helpers/noteSpeakerScope');
+  const scope = require("../../src/helpers/noteSpeakerScope");
   const evidence = scope.decision(scope.readScope(f.db, f.noteId), {
-    runId: f.runId, path: 'row_evaluation', rejectionReason: 'close_match',
+    runId: f.runId,
+    path: "row_evaluation",
+    rejectionReason: "close_match",
   });
-  const vetoed = { ...f.row, id: 'vetoed-row', uncertainty: { reason: 'close_match' }, speakerDecision: evidence };
+  const vetoed = {
+    ...f.row,
+    id: "vetoed-row",
+    uncertainty: { reason: "close_match" },
+    speakerDecision: evidence,
+  };
   f.db.updateNote(f.noteId, { transcript: JSON.stringify({ version: 2, rows: [vetoed, f.row] }) });
   const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
   assert.equal(result.assignments.length, 1);
   const rows = JSON.parse(f.db.getNote(f.noteId).transcript).rows;
   assert.equal(rows[0].speakerName, undefined);
   assert.deepEqual(rows[0].speakerDecision, evidence);
-  assert.equal(require('../../src/helpers/speakerRosterPolicy').recordedNameAllowed(rows[0]), false);
-  assert.equal(rows[1].speakerName, 'Alex');
-  assert.deepEqual(result.assignments[0].rows.map(row => row.id), ['live-row']);
+  assert.equal(
+    require("../../src/helpers/speakerRosterPolicy").recordedNameAllowed(rows[0]),
+    false
+  );
+  assert.equal(rows[1].speakerName, "Alex");
+  assert.deepEqual(
+    result.assignments[0].rows.map((row) => row.id),
+    ["live-row"]
+  );
 });
 
-test('an owner correction on the cluster wins over a later graduation', async t => {
+test("an owner correction on the cluster wins over a later graduation", async (t) => {
   const f = fixture(t);
-  const corrected = applySpeakerCorrection(f.db, f.identifier, { type: 'apply', noteId: f.noteId,
-    id: 'owner-correction', scope: 'cluster', target: { runId: f.runId, clusterId: 'speaker_3' },
-    rowIds: ['live-row'], name: 'Sam' });
+  const corrected = applySpeakerCorrection(f.db, f.identifier, {
+    type: "apply",
+    noteId: f.noteId,
+    id: "owner-correction",
+    scope: "cluster",
+    target: { runId: f.runId, clusterId: "speaker_3" },
+    rowIds: ["live-row"],
+    name: "Sam",
+  });
   assert.equal(corrected.success, true);
   await f.graduate();
   const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
-  assert.deepEqual(result.skipped, [{ speakerId: 'speaker_3', reason: 'confirmed-by-owner' }]);
-  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, 'Sam');
+  assert.deepEqual(result.skipped, [{ speakerId: "speaker_3", reason: "confirmed-by-owner" }]);
+  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, "Sam");
 });
 
-test('roster reconsideration vetoes a cached eligible match after the participant is removed', async t => {
+test("roster reconsideration vetoes a cached eligible match after the participant is removed", async (t) => {
   const f = fixture(t);
   await f.graduate();
-  const stale = {noteId:f.noteId,source:'note',revision:'old',roster:[{email:'alex@example.com'}],eligibleProfileIds:[f.person.id]};
+  const stale = {
+    noteId: f.noteId,
+    source: "note",
+    revision: "old",
+    roster: [{ email: "alex@example.com" }],
+    eligibleProfileIds: [f.person.id],
+  };
   f.identifier.getSpeakerScope = () => stale;
-  f.db.updateNote(f.noteId, { participants: '[]' });
+  f.db.updateNote(f.noteId, { participants: "[]" });
   const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
   assert.deepEqual(result.assignments, []);
   assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, undefined);
 });
 
-test('roster reconsideration cannot name an approved outsider', async t => {
+test("roster reconsideration cannot name an approved outsider", async (t) => {
   const f = fixture(t);
   await f.graduate();
-  f.db.updateNote(f.noteId, { participants: JSON.stringify([{email:'invited@example.com'}]) });
+  f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: "invited@example.com" }]) });
   const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
   assert.deepEqual(result.assignments, []);
-  const row=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  const row = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
   assert.equal(row.speakerName, undefined);
-  assert.equal(row.speakerDecision.rejectionReason, 'outside_roster');
+  assert.equal(row.speakerDecision.rejectionReason, "outside_roster");
 });
 
-test('roster reconsideration records the snapshot even when no approved voice matches', t => {
-  const f=fixture(t);
-  const result=reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId);
-  assert.deepEqual(result.assignments,[]);
-  const row=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
-  assert.equal(row.speakerDecision.rejectionReason,'no_match');
-  assert.equal(row.speakerDecision.runId,f.runId);
-  assert.deepEqual(row.speakerDecision.roster,[{email:'alex@example.com'}]);
+test("roster reconsideration records the snapshot even when no approved voice matches", (t) => {
+  const f = fixture(t);
+  const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
+  assert.deepEqual(result.assignments, []);
+  const row = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  assert.equal(row.speakerDecision.rejectionReason, "no_match");
+  assert.equal(row.speakerDecision.runId, f.runId);
+  assert.deepEqual(row.speakerDecision.roster, [{ email: "alex@example.com" }]);
 });
 
-test('roster owner A/B vetoes reconsideration winner C without promoting A',async t=>{
-  const f=fixture(t);
+test("roster owner A/B vetoes reconsideration winner C without promoting A", async (t) => {
+  const f = fixture(t);
   await f.graduate();
-  const a=f.db.createNamedSpeakerProfile('A','a@example.com');
-  const b=f.db.createNamedSpeakerProfile('B','b@example.com');
-  f.db.updateNote(f.noteId,{participants:JSON.stringify([{email:a.email},{email:b.email}])});
-  f.identifier.getSpeakerProfiles=()=>[
-    {...a,voice_usable:1,embedding:vector(.7,Math.sqrt(.51))},
-    {...b,voice_usable:1,embedding:vector(.3,-Math.sqrt(.91))},
-    {...f.person,voice_usable:1,embedding:vector(.95,Math.sqrt(.0975))},
+  const a = f.db.createNamedSpeakerProfile("A", "a@example.com");
+  const b = f.db.createNamedSpeakerProfile("B", "b@example.com");
+  f.db.updateNote(f.noteId, {
+    participants: JSON.stringify([{ email: a.email }, { email: b.email }]),
+  });
+  f.identifier.getSpeakerProfiles = () => [
+    { ...a, voice_usable: 1, embedding: vector(0.7, Math.sqrt(0.51)) },
+    { ...b, voice_usable: 1, embedding: vector(0.3, -Math.sqrt(0.91)) },
+    { ...f.person, voice_usable: 1, embedding: vector(0.95, Math.sqrt(0.0975)) },
   ];
-  const result=reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId);
-  assert.deepEqual(result.assignments,[]);
-  const row=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
-  assert.equal(row.speakerName,undefined);
-  assert.equal(row.suggestedName,undefined);
-  assert.equal(row.speakerDecision.acousticWinnerProfileId,f.person.id);
-  assert.ok(Math.abs(row.speakerDecision.scores.best-.95)<1e-6);
-  assert.ok(Math.abs(row.speakerDecision.scores.runnerUp-.7)<1e-6);
+  const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
+  assert.deepEqual(result.assignments, []);
+  const row = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.suggestedName, undefined);
+  assert.equal(row.speakerDecision.acousticWinnerProfileId, f.person.id);
+  assert.ok(Math.abs(row.speakerDecision.scores.best - 0.95) < 1e-6);
+  assert.ok(Math.abs(row.speakerDecision.scores.runnerUp - 0.7) < 1e-6);
 });
 
 for (const change of ["enrollment", "roster expansion"]) {
@@ -257,9 +374,16 @@ for (const change of ["enrollment", "roster expansion"]) {
     else
       f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: "alex@example.com" }]) });
     const pending = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
-    const evaluations = await require("../../src/helpers/speakerRowEvaluation").prepareSpeakerRowEvaluations(
-      f.db, f.identifier, f.noteId, f.runId, [], f.audio,
-      { isAvailable: () => true, extractEmbeddingFromSamples: async () => vector(1) });
+    const evaluations =
+      await require("../../src/helpers/speakerRowEvaluation").prepareSpeakerRowEvaluations(
+        f.db,
+        f.identifier,
+        f.noteId,
+        f.runId,
+        [],
+        f.audio,
+        { isAvailable: () => true, extractEmbeddingFromSamples: async () => vector(1) }
+      );
     assert.equal(evaluations.has(pending.id), true);
     const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId, [], evaluations);
     assert.equal(result.assignments.length, 1);
@@ -306,55 +430,120 @@ test("reconsideration evaluates retained row audio and commits its canonical con
   assert.equal(actual.speakerDecision.evaluation.audioContentHash, contentHash);
 });
 
-test('a refused row evaluation cannot publish an accepted cluster assignment', async t => {
+test("a refused row evaluation cannot publish an accepted cluster assignment", async (t) => {
   const f = fixture(t);
-  reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId);
+  reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId);
   const row = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
-  f.db.updateNote(f.noteId,{transcript:JSON.stringify([{...row,audioContentHash:'canonical'}])});
+  f.db.updateNote(f.noteId, {
+    transcript: JSON.stringify([{ ...row, audioContentHash: "canonical" }]),
+  });
   await f.graduate();
-  const evaluations = new Map([[row.id,{embedding:vector(1),audioContentHash:'different-content',previousDecisionId:row.speakerDecision.decisionId}]]);
-  const result = reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId,[],evaluations);
-  assert.deepEqual(result.assignments,[]);
-  assert.equal(f.identifier.transientDisplayNames.has('speaker_3'),false);
+  const evaluations = new Map([
+    [
+      row.id,
+      {
+        embedding: vector(1),
+        audioContentHash: "different-content",
+        previousDecisionId: row.speakerDecision.decisionId,
+      },
+    ],
+  ]);
+  const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId, [], evaluations);
+  assert.deepEqual(result.assignments, []);
+  assert.equal(f.identifier.transientDisplayNames.has("speaker_3"), false);
 });
 
-for (const change of ['enrollment','roster expansion']) test(`run6: fresh retained audio reassesses stale not_sure after ${change}`,async t=>{
-  const f=fixture(t);
-  f.row.audioSpan.recordingId=f.record(f.noteId,1);
-  const scope=require('../../src/helpers/noteSpeakerScope');
-  if(change==='roster expansion'){await f.graduate();f.db.updateNote(f.noteId,{participants:'[{"email":"outsider@example.com"}]'});}
-  const evidence=scope.decision(scope.readScope(f.db,f.noteId),{path:'prior',profiles:f.db.getSpeakerProfiles(true),rejectionReason:'not_sure'});
-  f.db.updateNote(f.noteId,{transcript:JSON.stringify([{...f.row,uncertainty:{reason:'not_sure'},speakerDecision:evidence}])});
-  if(change==='enrollment')await f.graduate();
-  else f.db.updateNote(f.noteId,{participants:'[{"email":"alex@example.com"}]'});
-  const evaluations=await require('../../src/helpers/speakerRowEvaluation').prepareSpeakerRowEvaluations(f.db,f.identifier,f.noteId,f.runId,[],f.audio,{isAvailable:()=>true,extractEmbeddingFromSamples:async()=>vector(1)});
-  assert.equal(evaluations.size,1);
-  const result=reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId,[],evaluations);
-  assert.equal(result.assignments.length,1);
-  assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName,'Alex');
-});
+for (const change of ["enrollment", "roster expansion"])
+  test(`run6: fresh retained audio reassesses stale not_sure after ${change}`, async (t) => {
+    const f = fixture(t);
+    f.row.audioSpan.recordingId = f.record(f.noteId, 1);
+    const scope = require("../../src/helpers/noteSpeakerScope");
+    if (change === "roster expansion") {
+      await f.graduate();
+      f.db.updateNote(f.noteId, { participants: '[{"email":"outsider@example.com"}]' });
+    }
+    const evidence = scope.decision(scope.readScope(f.db, f.noteId), {
+      path: "prior",
+      profiles: f.db.getSpeakerProfiles(true),
+      rejectionReason: "not_sure",
+    });
+    f.db.updateNote(f.noteId, {
+      transcript: JSON.stringify([
+        { ...f.row, uncertainty: { reason: "not_sure" }, speakerDecision: evidence },
+      ]),
+    });
+    if (change === "enrollment") await f.graduate();
+    else f.db.updateNote(f.noteId, { participants: '[{"email":"alex@example.com"}]' });
+    const evaluations =
+      await require("../../src/helpers/speakerRowEvaluation").prepareSpeakerRowEvaluations(
+        f.db,
+        f.identifier,
+        f.noteId,
+        f.runId,
+        [],
+        f.audio,
+        { isAvailable: () => true, extractEmbeddingFromSamples: async () => vector(1) }
+      );
+    assert.equal(evaluations.size, 1);
+    const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId, [], evaluations);
+    assert.equal(result.assignments.length, 1);
+    assert.equal(JSON.parse(f.db.getNote(f.noteId).transcript).rows[0].speakerName, "Alex");
+  });
 
-for (const reason of ['not_sure','too_short']) test(`run6: explicit replacement commits through reconsideration when the old ${reason} recording is gone`,async t=>{
-  const f=fixture(t);
-  const original=f.record(f.noteId,1);
-  const scope=require('../../src/helpers/noteSpeakerScope');
-  f.row.audioSpan.recordingId=original;
-  if(reason==='too_short')f.row.audioSpan.endSample=12000;
-  const d=scope.decision(scope.readScope(f.db,f.noteId),{path:'old',rejectionReason:reason});
-  f.db.updateNote(f.noteId,{transcript:JSON.stringify([{...f.row,uncertainty:{reason},speakerDecision:d}])});
-  await f.graduate();
-  f.audio.purge(f.noteId);
-  const recordingId=f.record(f.noteId,1);
-  const row=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
-  const prepare=require('../../src/helpers/speakerRowEvaluation').prepareSpeakerRowEvaluations;
-  const extractor={isAvailable:()=>true,extractEmbeddingFromSamples:async()=>vector(1)};
-  assert.equal((await prepare(f.db,f.identifier,f.noteId,f.runId,[],f.audio,extractor)).size,0);
-  const evaluations=await prepare(f.db,f.identifier,f.noteId,f.runId,[],f.audio,extractor,{replacements:new Map([[row.id,{kind:'replacement',previousDecisionId:row.speakerDecision.decisionId,parentRecordingId:original,audioSpan:{...row.audioSpan,recordingId,endSample:96000}}]])});
-  assert.equal(evaluations.size,1);
-  const result=reconsiderLiveClusters(f.db,f.identifier,f.noteId,f.runId,[],evaluations);
-  assert.equal(result.assignments.length,1);
-  const actual=JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
-  assert.equal(actual.speakerName,'Alex');
-  assert.equal(actual.audioSpan.recordingId,recordingId);
-  assert.equal(actual.speakerDecision.evaluation.audioTransition.parentRecordingId,original);
-});
+for (const reason of ["not_sure", "too_short"])
+  test(`run6: explicit replacement commits through reconsideration when the old ${reason} recording is gone`, async (t) => {
+    const f = fixture(t);
+    const original = f.record(f.noteId, 1);
+    const scope = require("../../src/helpers/noteSpeakerScope");
+    f.row.audioSpan.recordingId = original;
+    if (reason === "too_short") f.row.audioSpan.endSample = 12000;
+    const d = scope.decision(scope.readScope(f.db, f.noteId), {
+      path: "old",
+      rejectionReason: reason,
+    });
+    f.db.updateNote(f.noteId, {
+      transcript: JSON.stringify([{ ...f.row, uncertainty: { reason }, speakerDecision: d }]),
+    });
+    await f.graduate();
+    f.audio.purge(f.noteId);
+    const recordingId = f.record(f.noteId, 1);
+    const row = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+    const prepare = require("../../src/helpers/speakerRowEvaluation").prepareSpeakerRowEvaluations;
+    const extractor = {
+      isAvailable: () => true,
+      extractEmbeddingFromSamples: async () => vector(1),
+    };
+    assert.equal(
+      (await prepare(f.db, f.identifier, f.noteId, f.runId, [], f.audio, extractor)).size,
+      0
+    );
+    const evaluations = await prepare(
+      f.db,
+      f.identifier,
+      f.noteId,
+      f.runId,
+      [],
+      f.audio,
+      extractor,
+      {
+        replacements: new Map([
+          [
+            row.id,
+            {
+              kind: "replacement",
+              previousDecisionId: row.speakerDecision.decisionId,
+              parentRecordingId: original,
+              audioSpan: { ...row.audioSpan, recordingId, endSample: 96000 },
+            },
+          ],
+        ]),
+      }
+    );
+    assert.equal(evaluations.size, 1);
+    const result = reconsiderLiveClusters(f.db, f.identifier, f.noteId, f.runId, [], evaluations);
+    assert.equal(result.assignments.length, 1);
+    const actual = JSON.parse(f.db.getNote(f.noteId).transcript).rows[0];
+    assert.equal(actual.speakerName, "Alex");
+    assert.equal(actual.audioSpan.recordingId, recordingId);
+    assert.equal(actual.speakerDecision.evaluation.audioTransition.parentRecordingId, original);
+  });

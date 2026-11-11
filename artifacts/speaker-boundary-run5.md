@@ -1,3 +1,6 @@
+> Historical run report. Current guarantees and corrected baseline claims are in
+> [the participant-scope self-review](participant-scope-self-review.md).
+
 # Automatic speaker attribution: fix run 5
 
 Baseline: `master` at `73fd1a59ab75c144945bfb3ed9086683fb74fb3e`.

@@ -201,6 +201,9 @@ class LiveSpeakerIdentifier {
     this.transientCounts = new Map();
     this.transientDisplayNames = new Map();
     this.transientProfileIds = new Map();
+    // Acoustic identity guards clustering even when note scope hides its name.
+    // These identities never supply a display name or portable assignment.
+    this.transientAcousticIdentities = new Map();
     this.transientNoteIds = new Map();
     this.transientMergeOrigins = new Map();
     this.transientCohorts = new Map();
@@ -208,6 +211,7 @@ class LiveSpeakerIdentifier {
     this.transientObservations = new Map();
     this.transientMinimumSimilarity = new Map();
     this.anchors = new Map();
+    this.acousticAnchors = new Map();
     this.clusterEligibility = new Map();
     this.dismissedReconsiderations = new Set();
     this.onEvidenceChanged = null;
@@ -347,18 +351,24 @@ class LiveSpeakerIdentifier {
 
   invalidateAnchor(speakerId) {
     if (speakerId) {
-      this.anchors.delete(speakerId);
-      if (this.clusterEligibility.get(speakerId) === "anchored")
-        this.clusterEligibility.delete(speakerId);
+      this.acousticAnchors.delete(speakerId);
+      this._retireNamingAnchor(speakerId);
     } else {
+      this.acousticAnchors.clear();
       this.anchors.clear();
       for (const [id, state] of this.clusterEligibility)
         if (state === "anchored") this.clusterEligibility.delete(id);
     }
   }
 
+  _retireNamingAnchor(speakerId) {
+    this.anchors.delete(speakerId);
+    if (this.clusterEligibility.get(speakerId) === "anchored")
+      this.clusterEligibility.delete(speakerId);
+  }
+
   revalidateAnchors() {
-    if (!this.anchors.size) return [];
+    if (!this.acousticAnchors.size) return [];
     let profiles;
     try {
       profiles = this.getSpeakerProfiles?.() || [];
@@ -366,17 +376,19 @@ class LiveSpeakerIdentifier {
       profiles = [];
     }
     const removed = [];
-    for (const [id, anchor] of this.anchors) {
+    const scope = this._scope();
+    for (const [id, anchor] of this.acousticAnchors) {
       const profile = profiles.find(
         (item) => item.id === anchor.profileId && item.voice_usable === 1
       );
-      if (
-        !rosterPolicy.eligible(this._scope(), anchor.profileId) ||
-        anchor.revision !== this._scope().revision ||
-        !profile?.embedding ||
-        !Buffer.from(profile.embedding).equals(anchor.profileBytes)
-      ) {
+      if (!profile?.embedding || !Buffer.from(profile.embedding).equals(anchor.profileBytes)) {
         this.invalidateAnchor(id);
+        removed.push(id);
+      } else if (
+        this.anchors.has(id) &&
+        (!rosterPolicy.eligible(scope, anchor.profileId) || anchor.revision !== scope.revision)
+      ) {
+        this._retireNamingAnchor(id);
         removed.push(id);
       }
     }
@@ -427,7 +439,6 @@ class LiveSpeakerIdentifier {
     }
     const profile = profiles.find((item) => item.id === profileId && item.voice_usable === 1);
     if (!profile) return refused("not_graduated");
-    if (!rosterPolicy.eligible(this._scope(), profileId)) return refused("outside_roster");
     if (
       (this.transientVoicedSamples.get(speakerId) || 0) < anchorMinSamples() ||
       (this.transientObservations.get(speakerId) || 0) < 2
@@ -449,7 +460,7 @@ class LiveSpeakerIdentifier {
     if (own < matchFloor() || own - Math.max(0, ...alternatives) < anchorMargin())
       return refused("ambiguous_match");
     const state = { state: "active", reason: null };
-    this.anchors.set(speakerId, {
+    const anchor = {
       state,
       centroid,
       profileId,
@@ -458,7 +469,10 @@ class LiveSpeakerIdentifier {
       cohort,
       profileBytes: Buffer.from(profile.embedding),
       revision: this._scope().revision,
-    });
+    };
+    this.acousticAnchors.set(speakerId, anchor);
+    if (!rosterPolicy.eligible(this._scope(), profileId)) return refused("outside_roster");
+    this.anchors.set(speakerId, anchor);
     this.clusterEligibility.set(speakerId, "anchored");
     return state;
   }
@@ -544,10 +558,6 @@ class LiveSpeakerIdentifier {
       if (removed.has(speakers[i][0])) continue;
       for (let j = i + 1; j < speakers.length; j += 1) {
         if (removed.has(speakers[j][0])) continue;
-        // Human corrections belong to exactly the audio the owner corrected.
-        // An acoustic merge cannot extend that choice onto another cluster.
-        if (this.humanClusters.has(speakers[i][0]) || this.humanClusters.has(speakers[j][0]))
-          continue;
         if (this.transientCohorts.get(speakers[i][0]) !== this.transientCohorts.get(speakers[j][0]))
           continue;
 
@@ -572,22 +582,26 @@ class LiveSpeakerIdentifier {
 
         // Confirmed-distinct identities (different profiles, or different
         // user-set names) must never merge on embedding similarity alone.
-        const profileI = this.transientProfileIds.get(speakers[i][0]);
-        const profileJ = this.transientProfileIds.get(speakers[j][0]);
+        const identityI = this.transientAcousticIdentities.get(speakers[i][0]);
+        const identityJ = this.transientAcousticIdentities.get(speakers[j][0]);
+        const profileI = identityI?.profileId ?? this.transientProfileIds.get(speakers[i][0]);
+        const profileJ = identityJ?.profileId ?? this.transientProfileIds.get(speakers[j][0]);
         if (profileI != null && profileJ != null && profileI !== profileJ) continue;
-        const nameI = this.transientDisplayNames.get(speakers[i][0]);
-        const nameJ = this.transientDisplayNames.get(speakers[j][0]);
+        const nameI = identityI?.displayName || this.transientDisplayNames.get(speakers[i][0]);
+        const nameJ = identityJ?.displayName || this.transientDisplayNames.get(speakers[j][0]);
         if (nameI && nameJ && nameI !== nameJ) continue;
 
         const countI = this.transientCounts.get(speakers[i][0]) || 1;
         const countJ = this.transientCounts.get(speakers[j][0]) || 1;
-        const hasNameI = !!this.transientDisplayNames.get(speakers[i][0]);
-        const hasNameJ = !!this.transientDisplayNames.get(speakers[j][0]);
+        const hasNameI = !!nameI;
+        const hasNameJ = !!nameJ;
         const keepFirst =
           hasNameI && !hasNameJ ? true : hasNameJ && !hasNameI ? false : countI >= countJ;
         const [keepId, removeId] = keepFirst
           ? [speakers[i][0], speakers[j][0]]
           : [speakers[j][0], speakers[i][0]];
+        const hadHumanAssignment =
+          this.humanClusters.has(keepId) || this.humanClusters.has(removeId);
         const keepCount = this.transientCounts.get(keepId) || 1;
         const removeCount = this.transientCounts.get(removeId) || 1;
         const keepEmb = this.transientEmbeddings.get(keepId);
@@ -604,6 +618,15 @@ class LiveSpeakerIdentifier {
         this.onEvidenceChanged?.(keepId);
         this.transientEmbeddings.delete(removeId);
         this.transientCounts.delete(removeId);
+        if (
+          !this.transientAcousticIdentities.has(keepId) &&
+          this.transientAcousticIdentities.has(removeId)
+        )
+          this.transientAcousticIdentities.set(
+            keepId,
+            this.transientAcousticIdentities.get(removeId)
+          );
+        this.transientAcousticIdentities.delete(removeId);
         this.transientCohorts.delete(removeId);
         this.transientVoicedSamples.delete(removeId);
         this.transientObservations.delete(removeId);
@@ -617,7 +640,6 @@ class LiveSpeakerIdentifier {
 
         if (!this.transientDisplayNames.get(keepId) && this.transientDisplayNames.get(removeId)) {
           this.transientDisplayNames.set(keepId, this.transientDisplayNames.get(removeId));
-          if (this.humanClusters.has(removeId)) this.humanClusters.add(keepId);
           if (this.transientDecisions.has(removeId))
             this.transientDecisions.set(keepId, this.transientDecisions.get(removeId));
         }
@@ -632,6 +654,22 @@ class LiveSpeakerIdentifier {
           this.transientNoteIds.set(keepId, this.transientNoteIds.get(removeId));
         }
         this.transientNoteIds.delete(removeId);
+        this.transientMergeOrigins.delete(removeId);
+
+        // The centroid still merges on the same acoustic evidence. A human
+        // correction belongs to its existing rows; the enlarged cluster must
+        // obtain an independent automatic decision before naming other audio.
+        if (hadHumanAssignment) {
+          this.humanClusters.delete(keepId);
+          this.transientDisplayNames.delete(keepId);
+          this.transientProfileIds.delete(keepId);
+          this.transientNoteIds.delete(keepId);
+          this.transientDecisions.delete(keepId);
+          if (this.currentSegmentSpeakerId === keepId || this.currentSegmentSpeakerId === removeId)
+            this.currentSegmentSpeakerName = null;
+        }
+        this.humanClusters.delete(removeId);
+        this.transientDecisions.delete(removeId);
 
         if (this.currentSegmentSpeakerId === removeId) {
           this.currentSegmentSpeakerId = keepId;
@@ -711,6 +749,7 @@ class LiveSpeakerIdentifier {
       return false;
     }
 
+    this.transientAcousticIdentities.set(liveId, { profileId, displayName });
     if (automaticDecision) {
       this.humanClusters.delete(liveId);
       this.transientDecisions.set(liveId, automaticDecision);
@@ -739,6 +778,7 @@ class LiveSpeakerIdentifier {
     this.transientDecisions.delete(liveId);
     this.transientDisplayNames.delete(liveId);
     this.transientProfileIds.delete(liveId);
+    this.transientAcousticIdentities.delete(liveId);
     this.transientNoteIds.delete(liveId);
     this.invalidateAnchor(liveId);
     if (this.currentSegmentSpeakerId === liveId) this.currentSegmentSpeakerName = null;
@@ -757,6 +797,9 @@ class LiveSpeakerIdentifier {
       this.transientMinimumSimilarity.clear();
       this.transientDisplayNames.clear();
       this.transientProfileIds.clear();
+      this.transientAcousticIdentities.clear();
+      this.transientDecisions.clear();
+      this.humanClusters.clear();
       this.transientNoteIds.clear();
       this.transientMergeOrigins.clear();
       this.clusterEligibility.clear();
@@ -765,20 +808,28 @@ class LiveSpeakerIdentifier {
       this.currentSegmentSpeakerName = null;
       return;
     }
+    const clusterProfileIds = new Map([
+      ...[...this.transientAcousticIdentities].map(([id, identity]) => [id, identity.profileId]),
+      ...this.transientProfileIds,
+    ]);
     if (type === "undo_merge") {
-      for (const [speakerId, id] of this.transientProfileIds) {
+      for (const [speakerId, id] of clusterProfileIds) {
         const origins = this.transientMergeOrigins.get(speakerId);
         if (id !== survivorId || origins?.at(-1)?.profileId !== profileId) continue;
         const previous = origins.pop();
         if (!origins.length) this.transientMergeOrigins.delete(speakerId);
         this.transientProfileIds.set(speakerId, profileId);
+        this.transientAcousticIdentities.set(speakerId, {
+          profileId,
+          displayName: previous.displayName || displayName,
+        });
         this.transientDisplayNames.set(speakerId, previous.displayName || displayName);
         if (this.currentSegmentSpeakerId === speakerId)
           this.currentSegmentSpeakerName = previous.displayName || displayName;
       }
       return;
     }
-    for (const [speakerId, id] of this.transientProfileIds) {
+    for (const [speakerId, id] of clusterProfileIds) {
       if (id !== profileId) continue;
       if (type === "delete" || type === "reset") {
         this.transientEmbeddings.delete(speakerId);
@@ -789,6 +840,9 @@ class LiveSpeakerIdentifier {
         this.transientMinimumSimilarity.delete(speakerId);
         this.transientDisplayNames.delete(speakerId);
         this.transientProfileIds.delete(speakerId);
+        this.transientAcousticIdentities.delete(speakerId);
+        this.transientDecisions.delete(speakerId);
+        this.humanClusters.delete(speakerId);
         this.transientNoteIds.delete(speakerId);
         this.transientMergeOrigins.delete(speakerId);
         this.clusterEligibility.delete(speakerId);
@@ -805,6 +859,10 @@ class LiveSpeakerIdentifier {
           this.transientProfileIds.set(speakerId, survivorId);
         }
         this.transientDisplayNames.set(speakerId, displayName);
+        this.transientAcousticIdentities.set(speakerId, {
+          profileId: type === "merge" ? survivorId : profileId,
+          displayName,
+        });
         if (this.currentSegmentSpeakerId === speakerId)
           this.currentSegmentSpeakerName = displayName;
       }
@@ -846,6 +904,7 @@ class LiveSpeakerIdentifier {
     this.transientCounts = new Map();
     this.transientDisplayNames = new Map();
     this.transientProfileIds = new Map();
+    this.transientAcousticIdentities = new Map();
     this.transientNoteIds = new Map();
     this.transientMergeOrigins = new Map();
     this.transientCohorts = new Map();
@@ -853,6 +912,7 @@ class LiveSpeakerIdentifier {
     this.transientObservations = new Map();
     this.transientMinimumSimilarity = new Map();
     this.anchors = new Map();
+    this.acousticAnchors = new Map();
     this.clusterEligibility = new Map();
     this.dismissedReconsiderations = new Set();
     this.nextLiveIndex = 0;
@@ -1226,7 +1286,9 @@ class LiveSpeakerIdentifier {
             ? "outside_roster"
             : "voice_not_approved",
     });
-    return accepted ? bestProfile : null;
+    // Scope vetoes the name after clustering; it cannot change which acoustic
+    // profile reuses an existing cluster or protects two distinct identities.
+    return acousticAccepted ? bestProfile : null;
   }
 
   _scope() {
@@ -1248,7 +1310,7 @@ class LiveSpeakerIdentifier {
       ) {
         this.transientDisplayNames.delete(id);
         this.transientProfileIds.delete(id);
-        this.invalidateAnchor(id);
+        this._retireNamingAnchor(id);
         if (this.currentSegmentSpeakerId === id) this.currentSegmentSpeakerName = null;
         this.transientDecisions.set(
           id,
@@ -1294,7 +1356,7 @@ class LiveSpeakerIdentifier {
   _resolveSpeakerForEmbeddingUnchecked(embedding, options = {}) {
     const { updateCentroid = false, voicedSamples = 0, cohort = "system" } = options;
     this.revalidateAnchors();
-    const comparable = [...this.anchors].filter(
+    const comparable = [...this.acousticAnchors].filter(
       ([, anchor]) => anchor.runId === this.activeRunId && anchor.cohort === cohort
     );
     if (comparable.length) {
@@ -1310,7 +1372,7 @@ class LiveSpeakerIdentifier {
       for (const [id, other] of this.transientEmbeddings)
         if (
           id !== best.id &&
-          !this.anchors.has(id) &&
+          !this.acousticAnchors.has(id) &&
           (this.transientCohorts.get(id) || "system") === cohort
         )
           runnerUp = Math.max(runnerUp, speakerEmbeddings.cosineSimilarity(embedding, other));
@@ -1326,14 +1388,40 @@ class LiveSpeakerIdentifier {
             runnerUp,
             speakerEmbeddings.cosineSimilarity(embedding, getBufferFloat32View(profile.embedding))
           );
-      if (best.similarity >= anchorFloor() && best.similarity - runnerUp >= anchorMargin())
-        return { speakerId: best.id, displayName: this.transientDisplayNames.get(best.id) || null };
+      if (best.similarity >= anchorFloor() && best.similarity - runnerUp >= anchorMargin()) {
+        const scope = this._scope();
+        const profile = profiles.find((item) => item.id === best.anchor.profileId);
+        const accepted =
+          this.anchors.has(best.id) &&
+          best.anchor.revision === scope.revision &&
+          rosterPolicy.eligible(scope, profile?.id) &&
+          profile?.voice_usable === 1;
+        const evidence = speakerScope.decision(scope, {
+          runId: this.activeRunId,
+          path: "live_anchor",
+          profile,
+          profiles,
+          scores: { best: best.similarity, runnerUp },
+          effectiveThresholds: { similarityFloor: anchorFloor(), runnerUpMargin: anchorMargin() },
+          rejectionReason: accepted ? null : "anchor_naming_retired",
+        });
+        this.lastProfileDecision = evidence;
+        if (accepted) {
+          this.transientProfileIds.set(best.id, profile.id);
+          this.transientDisplayNames.set(best.id, profile.display_name);
+        }
+        return {
+          speakerId: best.id,
+          displayName: accepted ? profile.display_name : null,
+          speakerDecision: evidence,
+        };
+      }
       // A confirmed label does not make disagreeing audio belong to it.
       const transient = this.currentSegmentSpeakerId || this._findTransientMatch(embedding, cohort);
       const profile = this._findStoredProfileMatch(embedding);
       if (
         best.similarity >= 0.5 ||
-        (transient && this.anchors.has(transient)) ||
+        (transient && this.acousticAnchors.has(transient)) ||
         (profile && ranked.some((item) => item.anchor.profileId === profile.id))
       ) {
         const speakerId = this._assignCluster(embedding, voicedSamples, cohort);
@@ -1370,6 +1458,10 @@ class LiveSpeakerIdentifier {
       }
 
       this.transientProfileIds.set(speakerId, matchedProfile.id);
+      this.transientAcousticIdentities.set(speakerId, {
+        profileId: matchedProfile.id,
+        displayName: matchedProfile.display_name,
+      });
       this.transientDisplayNames.set(speakerId, matchedProfile.display_name);
       return {
         speakerId,
@@ -1402,9 +1494,9 @@ class LiveSpeakerIdentifier {
   }
 
   _findTransientSpeakerForProfile(profileId, cohort = "system") {
-    for (const [speakerId, candidateProfileId] of this.transientProfileIds.entries()) {
+    for (const [speakerId, identity] of this.transientAcousticIdentities) {
       if (
-        candidateProfileId === profileId &&
+        identity.profileId === profileId &&
         (this.transientCohorts.get(speakerId) || "system") === cohort
       ) {
         return speakerId;

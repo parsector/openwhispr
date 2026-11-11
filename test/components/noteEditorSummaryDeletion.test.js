@@ -106,7 +106,7 @@ const NOTE = {
 const ENHANCEMENT = { content: NOTE.enhanced_content, isStale: false, onChange() {} };
 
 for (const action of ["correction", "undo"]) {
-  test(`live ${action} in NoteEditor preserves sibling identification windows`, async t => {
+  test(`live ${action} in NoteEditor preserves sibling identification windows`, async (t) => {
     let store;
     t.after(() => store?.stopRecording());
     installMicCaptureGlobals(t);
@@ -114,45 +114,111 @@ for (const action of ["correction", "undo"]) {
     const { render, click, latest, unmount, vite } = await loadNoteEditor(t);
     const callbacks = {};
     Object.assign(window.electronAPI, {
-      checkSystemAudioAccess: async () => ({ granted: true, status: "granted", mode: "native", strategy: "native" }),
-      meetingTranscriptionStart: async () => ({ success: true, systemAudioMode: "native", systemAudioStrategy: "native" }),
+      checkSystemAudioAccess: async () => ({
+        granted: true,
+        status: "granted",
+        mode: "native",
+        strategy: "native",
+      }),
+      meetingTranscriptionStart: async () => ({
+        success: true,
+        systemAudioMode: "native",
+        systemAudioStrategy: "native",
+      }),
       meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
       meetingTranscriptionStop: async () => ({ success: true }),
-      meetingTranscriptionSend() {}, getNote: async () => ({...NOTE,participants:'[]',speaker_roster_revision:0,transcript:'[]'}), updateNote: async () => ({ success: true }),
-      onMeetingTranscriptionSegment: cb => { callbacks.segment = cb; return () => {}; },
-      onMeetingSpeakerIdentified: cb => { callbacks.identify = cb; return () => {}; },
+      meetingTranscriptionSend() {},
+      getNote: async () => ({
+        ...NOTE,
+        participants: "[]",
+        speaker_roster_revision: 0,
+        transcript: "[]",
+      }),
+      updateNote: async () => ({ success: true }),
+      onMeetingTranscriptionSegment: (cb) => {
+        callbacks.segment = cb;
+        return () => {};
+      },
+      onMeetingSpeakerIdentified: (cb) => {
+        callbacks.identify = cb;
+        return () => {};
+      },
     });
     store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
-    assert.equal(await store.startRecording({ noteId: NOTE.id, noteTitle: NOTE.title, folderId: null }), true);
+    assert.equal(
+      await store.startRecording({ noteId: NOTE.id, noteTitle: NOTE.title, folderId: null }),
+      true
+    );
     const now = Date.now();
-    const evidence = { origin: "machine", decisionId: "accepted", noteId: NOTE.id, source: "note", rawRoster: "[]", rosterRevision: 0, eligibleProfileIds: [1], acceptedProfileId: 1, rejectionReason: null };
-    const final = (text, timestamp) => callbacks.segment({ type: "final", source: "system", text, timestamp });
+    const evidence = {
+      origin: "machine",
+      decisionId: "accepted",
+      noteId: NOTE.id,
+      source: "note",
+      rawRoster: "[]",
+      rosterRevision: 0,
+      eligibleProfileIds: [1],
+      acceptedProfileId: 1,
+      rejectionReason: null,
+    };
+    const final = (text, timestamp) =>
+      callbacks.segment({ type: "final", source: "system", text, timestamp });
     final("affected", now);
-    callbacks.identify({ speakerId: "speaker_0", displayName: "A", speakerDecision: evidence, startTime: now - 100, endTime: now + 500 });
+    callbacks.identify({
+      speakerId: "speaker_0",
+      displayName: "A",
+      speakerDecision: evidence,
+      startTime: now - 100,
+      endTime: now + 500,
+    });
     final("sibling", now + 1000);
-    callbacks.identify({ speakerId: "speaker_1", displayName: "Sibling", speakerDecision: evidence, startTime: now + 900, endTime: now + 1500 });
-    window.electronAPI.applySpeakerCorrection = async request => ({
+    callbacks.identify({
+      speakerId: "speaker_1",
+      displayName: "Sibling",
+      speakerDecision: evidence,
+      startTime: now + 900,
+      endTime: now + 1500,
+    });
+    window.electronAPI.applySpeakerCorrection = async (request) => ({
       success: true,
-      affectedRowIds:request.rows.filter(row=>row.speaker === "speaker_0").map(row=>row.id),
-      rows: request.rows.map(row => row.speaker === "speaker_0"
-        ? { ...row, speakerName: action === "undo" ? undefined : "B", speakerLocked: action !== "undo", speakerIsPlaceholder: action === "undo" }
-        : row),
-      mapping: { clusterId: "speaker_0", runId: store.getActiveRecordingSessionId(), value: action === "undo" ? null : { display_name: "B" } },
+      affectedRowIds: request.rows
+        .filter((row) => row.speaker === "speaker_0")
+        .map((row) => row.id),
+      rows: request.rows.map((row) =>
+        row.speaker === "speaker_0"
+          ? {
+              ...row,
+              speakerName: action === "undo" ? undefined : "B",
+              speakerLocked: action !== "undo",
+              speakerIsPlaceholder: action === "undo",
+            }
+          : row
+      ),
+      mapping: {
+        clusterId: "speaker_0",
+        runId: store.getActiveRecordingSessionId(),
+        value: action === "undo" ? null : { display_name: "B" },
+      },
     });
     await render(undefined, { isRecording: true });
     await click("transcript");
     await React.act(async () => {
       let chat;
-      walk(latest(), node => { if (node.props.onMapSpeaker) chat = node; });
+      walk(latest(), (node) => {
+        if (node.props.onMapSpeaker) chat = node;
+      });
       assert.ok(chat);
       if (action === "undo") await chat.props.onUndoCorrection("correction-id");
       else await chat.props.onMapSpeaker("speaker_0", "B");
     });
     final("covered sibling", now + 1100);
     const rows = () => store.useMeetingRecordingStore.getState().segments;
-    assert.equal(rows().find(row => row.text === "covered sibling").speakerName, "Sibling");
+    assert.equal(rows().find((row) => row.text === "covered sibling").speakerName, "Sibling");
     final("covered affected", now + 100);
-    assert.equal(rows().find(row => row.text === "covered affected").speakerName, action === "undo" ? undefined : "B");
+    assert.equal(
+      rows().find((row) => row.text === "covered affected").speakerName,
+      action === "undo" ? undefined : "B"
+    );
     await unmount();
   });
 }
@@ -258,15 +324,21 @@ async function loadNoteEditor(t, permission) {
         applySpeakerCorrection: async (request) => {
           const ids = new Set(request.rowIds || []);
           const rows = request.rows.map((row) => {
-            const affected = request.scope === "cluster"
-              ? row.speaker === request.target?.clusterId && row.diarizationRunId === request.target?.runId
-              : ids.has(row.id);
+            const affected =
+              request.scope === "cluster"
+                ? row.speaker === request.target?.clusterId &&
+                  row.diarizationRunId === request.target?.runId
+                : ids.has(row.id);
             return affected ? { ...row, speakerName: request.name, speakerLocked: true } : row;
           });
           await globalThis.window.electronAPI.updateNote?.(request.noteId, {
             transcript: JSON.stringify(rows),
           });
-          return { success: true, rows, affectedRowIds:rows.filter(row=>row.speakerLocked).map(row=>row.id) };
+          return {
+            success: true,
+            rows,
+            affectedRowIds: rows.filter((row) => row.speakerLocked).map((row) => row.id),
+          };
         },
       },
     },
@@ -814,7 +886,10 @@ test("Create to-dos still extracts when no toast provider is mounted", async (t)
     findBottomBar(latest()).props.actionPicker.props.onRunAction(makeTodos);
     await new Promise((resolve) => setImmediate(resolve));
   });
-  assert.deepEqual(calls, [["flush", NOTE.id], ["extract", NOTE.id]]);
+  assert.deepEqual(calls, [
+    ["flush", NOTE.id],
+    ["extract", NOTE.id],
+  ]);
   await unmount();
 });
 
@@ -1517,7 +1592,14 @@ test("diarization keeps stored recorder labels separate from viewer-local self m
     { speaker_id: "speaker_2", display_name: "You" },
   ];
   const segments = [
-    { id: "original", source: "mic", speaker: "speaker_0", speakerName: "You", speakerLockSource: "user", text: "Original" },
+    {
+      id: "original",
+      source: "mic",
+      speaker: "speaker_0",
+      speakerName: "You",
+      speakerLockSource: "user",
+      text: "Original",
+    },
     {
       id: "appended",
       source: "mic",
@@ -1527,7 +1609,12 @@ test("diarization keeps stored recorder labels separate from viewer-local self m
       speakerLockSource: "user",
       text: "Appended",
     },
-    { id: "viewer", source: "mic", speaker: "speaker_2", speakerAssignment: { origin: "human" }, text: "Viewer" },
+    {
+      id: "viewer",
+      source: "mic",
+      speaker: "speaker_2",
+      text: "Viewer",
+    },
   ];
   await render(undefined, {
     note: {
@@ -1774,53 +1861,177 @@ test("NoteEditor stopped undo revalidates restored automatic decisions against c
   await unmount();
 });
 
-test('NoteEditor undo uses the current scope when participants change during its IPC wait', async t => {
-  const {render,click,latest,unmount} = await loadNoteEditor(t);
-  const rawRoster = JSON.stringify([{email:'a@example.com'}]);
-  const evidence = {origin:'machine',decisionId:'A',noteId:NOTE.id,source:'note',revision:'A',rawRoster,rosterRevision:0,eligibleProfileIds:[1],acceptedProfileId:1,rejectionReason:null};
-  const row = {id:'locked-row',text:'hello',source:'system',speaker:'speaker_0',speakerName:'Manual outsider',speakerLocked:true,speakerStatus:'locked',speakerLockSource:'user',speakerDecision:evidence};
-  const noteA = {...NOTE,participants:rawRoster,speaker_roster_revision:0,transcript:JSON.stringify([row])};
+test("NoteEditor undo uses the current scope when participants change during its IPC wait", async (t) => {
+  const { render, click, latest, unmount } = await loadNoteEditor(t);
+  const rawRoster = JSON.stringify([{ email: "a@example.com" }]);
+  const evidence = {
+    origin: "machine",
+    decisionId: "A",
+    noteId: NOTE.id,
+    source: "note",
+    revision: "A",
+    rawRoster,
+    rosterRevision: 0,
+    eligibleProfileIds: [1],
+    acceptedProfileId: 1,
+    rejectionReason: null,
+  };
+  const row = {
+    id: "locked-row",
+    text: "hello",
+    source: "system",
+    speaker: "speaker_0",
+    speakerName: "Manual outsider",
+    speakerLocked: true,
+    speakerStatus: "locked",
+    speakerLockSource: "user",
+    speakerDecision: evidence,
+  };
+  const noteA = {
+    ...NOTE,
+    participants: rawRoster,
+    speaker_roster_revision: 0,
+    transcript: JSON.stringify([row]),
+  };
   let reply;
-  window.electronAPI.applySpeakerCorrection = request => new Promise(resolve => {
-    reply = () => resolve({success:true,affectedRowIds:request.rows.map(row=>row.id),rows:request.rows.map(row=>({...row,
-      speakerName:'A',speakerLocked:false,speakerLockSource:undefined,speakerStatus:'confirmed',speakerDecision:evidence}))});
-  });
-  await render(undefined,{note:noteA});
-  await click('transcript');
-  const chat = () => {let result;walk(latest(),node=>{if(node.props.onUndoCorrection)result=node;});return result;};
+  window.electronAPI.applySpeakerCorrection = (request) =>
+    new Promise((resolve) => {
+      reply = () =>
+        resolve({
+          success: true,
+          affectedRowIds: request.rows.map((row) => row.id),
+          rows: request.rows.map((row) => ({
+            ...row,
+            speakerName: "A",
+            speakerLocked: false,
+            speakerLockSource: undefined,
+            speakerStatus: "confirmed",
+            speakerDecision: evidence,
+          })),
+        });
+    });
+  await render(undefined, { note: noteA });
+  await click("transcript");
+  const chat = () => {
+    let result;
+    walk(latest(), (node) => {
+      if (node.props.onUndoCorrection) result = node;
+    });
+    return result;
+  };
   let pending;
-  await React.act(async()=>{pending = chat().props.onUndoCorrection('undo-A'); await Promise.resolve();});
+  await React.act(async () => {
+    pending = chat().props.onUndoCorrection("undo-A");
+    await Promise.resolve();
+  });
   assert.ok(reply);
-  await render(undefined,{note:{...noteA,participants:JSON.stringify([{email:'b@example.com'}]),speaker_roster_revision:1}});
-  await React.act(async()=>{reply();await pending;});
-  assert.equal(chat().props.segments[0].speakerName,undefined);
-  assert.equal(chat().props.segments[0].speakerDecision.rejectionReason,'roster_changed');
+  await render(undefined, {
+    note: {
+      ...noteA,
+      participants: JSON.stringify([{ email: "b@example.com" }]),
+      speaker_roster_revision: 1,
+    },
+  });
+  await React.act(async () => {
+    reply();
+    await pending;
+  });
+  assert.equal(chat().props.segments[0].speakerName, undefined);
+  assert.equal(chat().props.segments[0].speakerDecision.rejectionReason, "roster_changed");
   await unmount();
 });
 
-test('run6: NoteEditor completion overlay is invalidated by an ordinary roster change', async t=>{
-  const { render, click, latest, unmount, vite }=await loadNoteEditor(t);
-  const store=await vite.ssrLoadModule('/stores/meetingRecordingStore.ts');
-  const note={...NOTE,participants:'[]',speaker_roster_revision:0,transcript:JSON.stringify([{id:'overlay',text:'hello',source:'system'}])};
-  const decision={candidateSetStatus:'recorded',decisionId:'accepted',noteId:note.id,source:'note',rawRoster:'[]',rosterRevision:0,eligibleProfileIds:[1],acceptedProfileId:1,rejectionReason:null};
-  const segments=[{id:'overlay',text:'hello',source:'system',speakerName:'A',speakerDecision:decision}];
-  const chat=()=>{let found;walk(latest(),node=>{if(node.props.onMapSpeaker)found=node;});return found.props;};
+test("run6: NoteEditor completion overlay is invalidated by an ordinary roster change", async (t) => {
+  const { render, click, latest, unmount, vite } = await loadNoteEditor(t);
+  const store = await vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+  const note = {
+    ...NOTE,
+    participants: "[]",
+    speaker_roster_revision: 0,
+    transcript: JSON.stringify([{ id: "overlay", text: "hello", source: "system" }]),
+  };
+  const decision = {
+    candidateSetStatus: "recorded",
+    decisionId: "accepted",
+    noteId: note.id,
+    source: "note",
+    rawRoster: "[]",
+    rosterRevision: 0,
+    eligibleProfileIds: [1],
+    acceptedProfileId: 1,
+    rejectionReason: null,
+  };
+  const segments = [
+    { id: "overlay", text: "hello", source: "system", speakerName: "A", speakerDecision: decision },
+  ];
+  const chat = () => {
+    let found;
+    walk(latest(), (node) => {
+      if (node.props.onMapSpeaker) found = node;
+    });
+    return found.props;
+  };
   try {
-    await render(undefined,{note});await click('transcript');
-    await React.act(async()=>store.useMeetingRecordingStore.setState({completedDiarization:{noteId:note.id,segments}}));
-    assert.equal(chat().segments[0].speakerName,'A');
-    const current={...segments[0],speakerName:'Re-evaluated member',speakerDecision:{...decision,decisionId:'new-evaluation'}};
-    await render(undefined,{note:{...note,transcript:JSON.stringify({version:2,rows:[current]})}});
-    assert.equal(chat().segments[0].speakerName,'Re-evaluated member','same-roster enrollment recovery must invalidate an old overlay');
+    await render(undefined, { note });
+    await click("transcript");
+    await React.act(async () =>
+      store.useMeetingRecordingStore.setState({
+        completedDiarization: { noteId: note.id, segments },
+      })
+    );
+    assert.equal(chat().segments[0].speakerName, "A");
+    const current = {
+      ...segments[0],
+      speakerName: "Re-evaluated member",
+      speakerDecision: { ...decision, decisionId: "new-evaluation" },
+    };
+    await render(undefined, {
+      note: { ...note, transcript: JSON.stringify({ version: 2, rows: [current] }) },
+    });
+    assert.equal(
+      chat().segments[0].speakerName,
+      "Re-evaluated member",
+      "same-roster enrollment recovery must invalidate an old overlay"
+    );
 
-    await render(undefined,{note:{...note,participants:'[{"email":"other@example.com"}]',speaker_roster_revision:1}});
-    assert.equal(chat().segments[0].speakerName,undefined);
-    assert.equal(chat().segments[0].speakerDecision?.acceptedProfileId ?? null,null);
-    const participants='[{"email":"other@example.com"}]';
-    const recovered={...segments[0],speakerName:'Current member',speakerDecision:{...decision,decisionId:'recovered',rawRoster:participants,rosterRevision:1,acceptedProfileId:2,eligibleProfileIds:[2]}};
-    await render(undefined,{note:{...note,participants,speaker_roster_revision:1,transcript:JSON.stringify({version:2,rows:[recovered]})}});
-    assert.equal(chat().segments[0].speakerName,'Current member','an old overlay must not hide a legitimate current recovery');
-  } finally {await unmount();}
+    await render(undefined, {
+      note: {
+        ...note,
+        participants: '[{"email":"other@example.com"}]',
+        speaker_roster_revision: 1,
+      },
+    });
+    assert.equal(chat().segments[0].speakerName, undefined);
+    assert.equal(chat().segments[0].speakerDecision?.acceptedProfileId ?? null, null);
+    const participants = '[{"email":"other@example.com"}]';
+    const recovered = {
+      ...segments[0],
+      speakerName: "Current member",
+      speakerDecision: {
+        ...decision,
+        decisionId: "recovered",
+        rawRoster: participants,
+        rosterRevision: 1,
+        acceptedProfileId: 2,
+        eligibleProfileIds: [2],
+      },
+    };
+    await render(undefined, {
+      note: {
+        ...note,
+        participants,
+        speaker_roster_revision: 1,
+        transcript: JSON.stringify({ version: 2, rows: [recovered] }),
+      },
+    });
+    assert.equal(
+      chat().segments[0].speakerName,
+      "Current member",
+      "an old overlay must not hide a legitimate current recovery"
+    );
+  } finally {
+    await unmount();
+  }
 });
 
 test("run7: main and NoteEditor agree on every legacy roster form", async (t) => {
@@ -1959,6 +2170,32 @@ test("run8: NoteEditor opens uncertain legacy names under the real note scope", 
         assert.equal(actual.speakerDecision.rejectionReason, "legacy_not_evaluated");
       }
     }
+  } finally {
+    await unmount();
+  }
+});
+
+test("a 2000-row editor projection resolves the declared roster once per render", async (t) => {
+  const { render, unmount } = await loadNoteEditor(t);
+  const participants = '[{"email":"batch-editor@example.com","displayName":"Batch Editor"}]';
+  const rows = Array.from({ length: 2000 }, (_, i) => ({
+    id: `editor-${i}`,
+    text: `line ${i}`,
+    source: "system",
+    speakerName: "Legacy",
+  }));
+  let rosterParses = 0;
+  const parse = JSON.parse;
+  t.mock.method(JSON, "parse", (...args) => {
+    if (args[0] === participants || args[0] === JSON.stringify(participants)) rosterParses++;
+    return parse(...args);
+  });
+  try {
+    await render(undefined, {
+      note: { ...NOTE, participants, transcript: JSON.stringify({ version: 2, rows }) },
+    });
+    console.log(`EDITOR_BATCH rows=2000 rosterParses=${rosterParses}`);
+    assert.ok(rosterParses < 20, `roster parses: ${rosterParses}`);
   } finally {
     await unmount();
   }

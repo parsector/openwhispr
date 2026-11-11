@@ -28,7 +28,18 @@ function createElectronAPI({ stopDiarizationSessionId = null } = {}) {
     // synchronous skip-diarization send.
     onStop: null,
   };
-  const notes = new Map([[NOTE_ID, { id: NOTE_ID, participants: "[]", speaker_roster_revision: 0, transcript: "", deleted_at: null }]]);
+  const notes = new Map([
+    [
+      NOTE_ID,
+      {
+        id: NOTE_ID,
+        participants: "[]",
+        speaker_roster_revision: 0,
+        transcript: "",
+        deleted_at: null,
+      },
+    ],
+  ]);
   const api = {
     checkSystemAudioAccess: async () => ({
       granted: true,
@@ -158,7 +169,10 @@ test("the same result publishes normally once the recording has stopped", async 
   const published = store.useMeetingRecordingStore.getState().completedDiarization;
   assert.equal(published?.noteId, NOTE_ID);
   assert.equal(published?.segments.length, 1);
-  assert.equal(JSON.parse(state.updatedTranscripts.at(-1).transcript).rows[0].finalAnalysisCompleted, true);
+  assert.equal(
+    JSON.parse(state.updatedTranscripts.at(-1).transcript).rows[0].finalAnalysisCompleted,
+    true
+  );
 });
 
 test("a live recording on another note does not suppress the publish", async (t) => {
@@ -233,7 +247,9 @@ test("a resumed note's diarization labels the resumed session's row, not an earl
   });
   await settle();
 
-  const rows = require("../../src/helpers/transcriptDocument").readTranscriptDocument(state.updatedTranscripts.at(-1).transcript).rows;
+  const rows = require("../../src/helpers/transcriptDocument").readTranscriptDocument(
+    state.updatedTranscripts.at(-1).transcript
+  ).rows;
   assert.deepEqual(
     rows.map((row) => [row.text, row.timestamp, row.speakerName]),
     [
@@ -314,7 +330,9 @@ const diarized = (text, timestamp, speakerName) => ({
 });
 
 const rowsOf = (note) =>
-  require("../../src/helpers/transcriptDocument").readTranscriptDocument(note.transcript).rows.map((row) => [row.text, row.timestamp, row.speakerName]);
+  require("../../src/helpers/transcriptDocument")
+    .readTranscriptDocument(note.transcript)
+    .rows.map((row) => [row.text, row.timestamp, row.speakerName]);
 
 // Each stop keeps its own seed length: with one shared value, the resumed
 // session's seed would also shield the earlier session's own diarization.
@@ -563,24 +581,64 @@ test("a self correction during resumed recording leaves earlier recorders alone"
   await store.stopRecording();
 });
 
-test('ordinary rejection stays local and does not retire an unchanged roster revision', async t => {
+test("ordinary rejection stays local and does not retire an unchanged roster revision", async (t) => {
   const { api, state } = createElectronAPI();
   let onNoteUpdated, onSpeaker;
-  api.onNoteUpdated = cb => { onNoteUpdated = cb; return () => {}; };
-  api.onMeetingSpeakerIdentified = cb => { onSpeaker = cb; return () => {}; };
+  api.onNoteUpdated = (cb) => {
+    onNoteUpdated = cb;
+    return () => {};
+  };
+  api.onMeetingSpeakerIdentified = (cb) => {
+    onSpeaker = cb;
+    return () => {};
+  };
   const store = await loadStore(t, api);
   assert.equal(await store.startRecording(START_ARGS), true);
   const now = Date.now();
-  const accepted = { candidateSetStatus: 'recorded', noteId: NOTE_ID, source: 'note', revision: 'unchanged', rawRoster: '[]', roster: [], eligibleProfileIds: [1], acceptedProfileId: 1, rejectionReason: null, rosterRevision: 0, linkedEventId: null };
-  const rejected = { ...accepted, acceptedProfileId: null, rejectionReason: 'acoustic_rejected' };
-  state.segmentCallback({ text: 'unclear', source: 'system', timestamp: now });
-  onSpeaker({ cohort: 'system', speakerId: 'speaker_0', displayName: null, startTime: now-100, endTime: now+100, speakerDecision: rejected });
+  const accepted = {
+    candidateSetStatus: "recorded",
+    noteId: NOTE_ID,
+    source: "note",
+    revision: "unchanged",
+    rawRoster: "[]",
+    roster: [],
+    eligibleProfileIds: [1],
+    acceptedProfileId: 1,
+    rejectionReason: null,
+    rosterRevision: 0,
+    linkedEventId: null,
+  };
+  const rejected = { ...accepted, acceptedProfileId: null, rejectionReason: "acoustic_rejected" };
+  state.segmentCallback({ text: "unclear", source: "system", timestamp: now });
+  onSpeaker({
+    cohort: "system",
+    speakerId: "speaker_0",
+    displayName: null,
+    startTime: now - 100,
+    endTime: now + 100,
+    speakerDecision: rejected,
+  });
   const row = store.useMeetingRecordingStore.getState().segments.at(-1);
-  onNoteUpdated({ id: NOTE_ID, participants: '[]', speaker_roster_revision: 0, transcript: JSON.stringify([row]) });
-  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerDecision.rejectionReason, 'acoustic_rejected');
-  state.segmentCallback({ text: 'clear', source: 'system', timestamp: now+1000 });
-  onSpeaker({ cohort: 'system', speakerId: 'speaker_1', displayName: 'A', startTime: now+900, endTime: now+1100, speakerDecision: accepted });
-  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName, 'A');
+  onNoteUpdated({
+    id: NOTE_ID,
+    participants: "[]",
+    speaker_roster_revision: 0,
+    transcript: JSON.stringify([row]),
+  });
+  assert.equal(
+    store.useMeetingRecordingStore.getState().segments[0].speakerDecision.rejectionReason,
+    "acoustic_rejected"
+  );
+  state.segmentCallback({ text: "clear", source: "system", timestamp: now + 1000 });
+  onSpeaker({
+    cohort: "system",
+    speakerId: "speaker_1",
+    displayName: "A",
+    startTime: now + 900,
+    endTime: now + 1100,
+    speakerDecision: accepted,
+  });
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName, "A");
   await store.stopRecording();
 });
 
@@ -589,39 +647,67 @@ test("an unsafe saved row preserves an accepted sibling and its identity caches"
   t.after(() => store?.stopRecording());
   const { api, state } = createElectronAPI();
   let onNoteUpdated, onSpeaker;
-  api.onNoteUpdated = (callback) => { onNoteUpdated = callback; return () => {}; };
-  api.onMeetingSpeakerIdentified = (callback) => { onSpeaker = callback; return () => {}; };
+  api.onNoteUpdated = (callback) => {
+    onNoteUpdated = callback;
+    return () => {};
+  };
+  api.onMeetingSpeakerIdentified = (callback) => {
+    onSpeaker = callback;
+    return () => {};
+  };
   store = await loadStore(t, api);
   assert.equal(await store.startRecording(START_ARGS), true);
   const now = Date.now();
   const accepted = {
-    candidateSetStatus: "recorded", noteId: NOTE_ID, source: "note", revision: "unchanged",
-    rawRoster: "[]", roster: [], eligibleProfileIds: [1], acceptedProfileId: 1,
-    acceptedIdentity: { email: "a@example.com" }, rejectionReason: null,
-    rosterRevision: 0, linkedEventId: null,
+    candidateSetStatus: "recorded",
+    noteId: NOTE_ID,
+    source: "note",
+    revision: "unchanged",
+    rawRoster: "[]",
+    roster: [],
+    eligibleProfileIds: [1],
+    acceptedProfileId: 1,
+    acceptedIdentity: { email: "a@example.com" },
+    rejectionReason: null,
+    rosterRevision: 0,
+    linkedEventId: null,
   };
   state.segmentCallback({ text: "unsafe", source: "system", timestamp: now });
   state.segmentCallback({ text: "clear sibling", source: "system", timestamp: now + 1000 });
   onSpeaker({
-    cohort: "system", speakerId: "speaker_0", displayName: "A",
-    startTime: now - 100, endTime: now + 5000, speakerDecision: accepted,
+    cohort: "system",
+    speakerId: "speaker_0",
+    displayName: "A",
+    startTime: now - 100,
+    endTime: now + 5000,
+    speakerDecision: accepted,
   });
   const [unsafe, sibling] = store.useMeetingRecordingStore.getState().segments;
   assert.equal(sibling.speakerName, "A");
   const rejected = {
-    ...unsafe, speakerName: undefined, speakerIsPlaceholder: true,
+    ...unsafe,
+    speakerName: undefined,
+    speakerIsPlaceholder: true,
     uncertainty: { reason: "too_short" },
     speakerDecision: {
-      ...accepted, acceptedProfileId: null, acceptedIdentity: null, rejectionReason: "unsafe_span",
+      ...accepted,
+      acceptedProfileId: null,
+      acceptedIdentity: null,
+      rejectionReason: "unsafe_span",
     },
   };
   // The accepted sibling has not been saved yet; it shares only the cluster.
   onNoteUpdated({
-    id: NOTE_ID, participants: "[]", speaker_roster_revision: 0,
+    id: NOTE_ID,
+    participants: "[]",
+    speaker_roster_revision: 0,
     transcript: JSON.stringify([rejected]),
   });
   const rows = store.useMeetingRecordingStore.getState().segments;
-  assert.equal(rows.find((row) => row.id === unsafe.id).speakerDecision.rejectionReason, "unsafe_span");
+  assert.equal(
+    rows.find((row) => row.id === unsafe.id).speakerDecision.rejectionReason,
+    "unsafe_span"
+  );
   assert.equal(rows.find((row) => row.id === sibling.id).speakerName, "A");
   assert.deepEqual(rows.find((row) => row.id === sibling.id).speakerDecision, accepted);
   assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName, "A");
@@ -631,77 +717,195 @@ test("an unsafe saved row preserves an accepted sibling and its identity caches"
   assert.deepEqual(cached.speakerDecision, accepted);
 });
 
-test('live identification and merge names require automatic evidence on unprotected rows', async t => {
+test("live identification and merge names require automatic evidence on unprotected rows", async (t) => {
   const { api, state } = createElectronAPI();
   let onSpeaker, onMerge, onEvidence;
-  api.onMeetingSpeakerIdentified = cb => { onSpeaker = cb; return () => {}; };
-  api.onMeetingSpeakersMerged = cb => { onMerge = cb; return () => {}; };
-  api.onMeetingSpeakerEvidenceChanged = cb => { onEvidence = cb; return () => {}; };
+  api.onMeetingSpeakerIdentified = (cb) => {
+    onSpeaker = cb;
+    return () => {};
+  };
+  api.onMeetingSpeakersMerged = (cb) => {
+    onMerge = cb;
+    return () => {};
+  };
+  api.onMeetingSpeakerEvidenceChanged = (cb) => {
+    onEvidence = cb;
+    return () => {};
+  };
   const store = await loadStore(t, api);
   assert.equal(await store.startRecording(START_ARGS), true);
   const now = Date.now();
-  state.segmentCallback({ text: 'hello', source: 'system', timestamp: now });
-  onSpeaker({ cohort: 'system', speakerId: 'speaker_1', displayName: 'Outsider', startTime: now-100, endTime: now+100 });
+  state.segmentCallback({ text: "hello", source: "system", timestamp: now });
+  onSpeaker({
+    cohort: "system",
+    speakerId: "speaker_1",
+    displayName: "Outsider",
+    startTime: now - 100,
+    endTime: now + 100,
+  });
   assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerName, undefined);
-  const locked = { id: 'locked', text: 'corrected', source: 'system', speaker: 'speaker_1', speakerName: 'Human outsider', speakerLocked: true };
-  store.useMeetingRecordingStore.setState({ segments: [...store.useMeetingRecordingStore.getState().segments, locked] });
-  onMerge([{ keep: 'speaker_0', remove: 'speaker_1', displayName: 'Outsider', similarity: .99 }]);
+  const locked = {
+    id: "locked",
+    text: "corrected",
+    source: "system",
+    speaker: "speaker_1",
+    speakerName: "Human outsider",
+    speakerLocked: true,
+  };
+  store.useMeetingRecordingStore.setState({
+    segments: [...store.useMeetingRecordingStore.getState().segments, locked],
+  });
+  onMerge([{ keep: "speaker_0", remove: "speaker_1", displayName: "Outsider", similarity: 0.99 }]);
   assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerName, undefined);
   assert.deepEqual(store.useMeetingRecordingStore.getState().segments[1], locked);
-  const unproven = { ...store.useMeetingRecordingStore.getState().segments[0], speakerName: 'Outsider', speakerDecision: undefined };
-  api.reconsiderLiveSpeakers = async () => ({ rows: [unproven], assignments: [{ speakerId: 'speaker_0', displayName: 'Outsider', rows: [unproven] }] });
+  const unproven = {
+    ...store.useMeetingRecordingStore.getState().segments[0],
+    speakerName: "Outsider",
+    speakerDecision: undefined,
+  };
+  api.reconsiderLiveSpeakers = async () => ({
+    rows: [unproven],
+    assignments: [{ speakerId: "speaker_0", displayName: "Outsider", rows: [unproven] }],
+  });
   await onEvidence({ noteId: NOTE_ID, runId: store.getActiveRecordingSessionId() });
   assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerName, undefined);
   assert.deepEqual(store.useMeetingRecordingStore.getState().segments[1], locked);
   await store.stopRecording();
 });
 
-test("roster edit retires cached identifications and rejects delayed live names", async t => {
-  const {api,state,notes}=createElectronAPI();
-  notes.get(NOTE_ID).participants='[{"email":"c@example.com"}]';
-  notes.get(NOTE_ID).speaker_roster_revision=1;
+test("roster edit retires cached identifications and rejects delayed live names", async (t) => {
+  const { api, state, notes } = createElectronAPI();
+  notes.get(NOTE_ID).participants = '[{"email":"c@example.com"}]';
+  notes.get(NOTE_ID).speaker_roster_revision = 1;
   let onNoteUpdated, onSpeaker;
-  api.onNoteUpdated=callback=>{onNoteUpdated=callback;return ()=>{};};
-  api.onMeetingSpeakerIdentified=callback=>{onSpeaker=callback;return ()=>{};};
-  const store=await loadStore(t,api);
-  assert.equal(await store.startRecording(START_ARGS),true);
-  const now=Date.now();
-  const decision={candidateSetStatus:'recorded',noteId:NOTE_ID,source:'note',revision:JSON.stringify([1,'note','[{"email":"c@example.com"}]',null,[[3,'c@example.com']]]),rawRoster:'[{"email":"c@example.com"}]',roster:[{email:'c@example.com'}],eligibleProfileIds:[3],acceptedProfileId:3,rejectionReason:null,rosterRevision:1,linkedEventId:null};
-  state.segmentCallback({text:'hello',source:'system',timestamp:now});
-  onSpeaker({cohort:'system',speakerId:'speaker_0',displayName:'C',startTime:now-100,endTime:now+100,speakerDecision:decision});
-  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName,'C');
-  onNoteUpdated?.({id:NOTE_ID,participants:'[{"email":"a@example.com"}]',speaker_roster_revision:2,transcript:'[]'});
-  onSpeaker({cohort:'system',speakerId:'speaker_0',displayName:'C',startTime:now-100,endTime:now+200,speakerDecision:decision});
-  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName,undefined);
-  assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName,null);
+  api.onNoteUpdated = (callback) => {
+    onNoteUpdated = callback;
+    return () => {};
+  };
+  api.onMeetingSpeakerIdentified = (callback) => {
+    onSpeaker = callback;
+    return () => {};
+  };
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const now = Date.now();
+  const decision = {
+    candidateSetStatus: "recorded",
+    noteId: NOTE_ID,
+    source: "note",
+    revision: JSON.stringify([
+      1,
+      "note",
+      '[{"email":"c@example.com"}]',
+      null,
+      [[3, "c@example.com"]],
+    ]),
+    rawRoster: '[{"email":"c@example.com"}]',
+    roster: [{ email: "c@example.com" }],
+    eligibleProfileIds: [3],
+    acceptedProfileId: 3,
+    rejectionReason: null,
+    rosterRevision: 1,
+    linkedEventId: null,
+  };
+  state.segmentCallback({ text: "hello", source: "system", timestamp: now });
+  onSpeaker({
+    cohort: "system",
+    speakerId: "speaker_0",
+    displayName: "C",
+    startTime: now - 100,
+    endTime: now + 100,
+    speakerDecision: decision,
+  });
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName, "C");
+  onNoteUpdated?.({
+    id: NOTE_ID,
+    participants: '[{"email":"a@example.com"}]',
+    speaker_roster_revision: 2,
+    transcript: "[]",
+  });
+  onSpeaker({
+    cohort: "system",
+    speakerId: "speaker_0",
+    displayName: "C",
+    startTime: now - 100,
+    endTime: now + 200,
+    speakerDecision: decision,
+  });
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName, undefined);
+  assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName, null);
   await store.stopRecording();
 });
 
-test("roster late reconsideration and merge replies cannot restore a withdrawn live name",async t=>{
-  const {api,state}=createElectronAPI();
-  let onNoteUpdated,onSpeaker,onEvidence,onMerge,runId;
-  api.onNoteUpdated=cb=>{onNoteUpdated=cb;return ()=>{};};
-  api.onMeetingSpeakerIdentified=cb=>{onSpeaker=cb;return ()=>{};};
-  api.onMeetingSpeakerEvidenceChanged=cb=>{onEvidence=cb;return ()=>{};};
-  api.onMeetingSpeakersMerged=cb=>{onMerge=cb;return ()=>{};};
-  api.meetingTranscriptionStart=async opts=>{runId=opts.sessionId;return {success:true,systemAudioMode:'native',systemAudioStrategy:'native'};};
-  const gate=deferred();
-  api.reconsiderLiveSpeakers=()=>gate.promise;
-  const store=await loadStore(t,api);
-  assert.equal(await store.startRecording(START_ARGS),true);
-  const now=Date.now();
-  const d={candidateSetStatus:'recorded',noteId:NOTE_ID,source:'note',revision:'old',rawRoster:'[{"email":"c@example.com"}]',roster:[],eligibleProfileIds:[3],acceptedProfileId:3,rejectionReason:null,rosterRevision:1,linkedEventId:null};
-  state.segmentCallback({text:'hello',source:'system',timestamp:now});
-  onSpeaker({cohort:'system',speakerId:'speaker_0',displayName:'C',startTime:now-100,endTime:now+100,speakerDecision:d});
-  const oldRow={...store.useMeetingRecordingStore.getState().segments.at(-1)};
-  const pending=onEvidence({noteId:NOTE_ID,runId});
-  onNoteUpdated?.({id:NOTE_ID,participants:'[{"email":"a@example.com"}]',speaker_roster_revision:2,transcript:'[]'});
-  gate.resolve({assignments:[{speakerId:'speaker_0',displayName:'C',rows:[oldRow]}],rows:[oldRow]});
+test("roster late reconsideration and merge replies cannot restore a withdrawn live name", async (t) => {
+  const { api, state } = createElectronAPI();
+  let onNoteUpdated, onSpeaker, onEvidence, onMerge, runId;
+  api.onNoteUpdated = (cb) => {
+    onNoteUpdated = cb;
+    return () => {};
+  };
+  api.onMeetingSpeakerIdentified = (cb) => {
+    onSpeaker = cb;
+    return () => {};
+  };
+  api.onMeetingSpeakerEvidenceChanged = (cb) => {
+    onEvidence = cb;
+    return () => {};
+  };
+  api.onMeetingSpeakersMerged = (cb) => {
+    onMerge = cb;
+    return () => {};
+  };
+  api.meetingTranscriptionStart = async (opts) => {
+    runId = opts.sessionId;
+    return { success: true, systemAudioMode: "native", systemAudioStrategy: "native" };
+  };
+  const gate = deferred();
+  api.reconsiderLiveSpeakers = () => gate.promise;
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const now = Date.now();
+  const d = {
+    candidateSetStatus: "recorded",
+    noteId: NOTE_ID,
+    source: "note",
+    revision: "old",
+    rawRoster: '[{"email":"c@example.com"}]',
+    roster: [],
+    eligibleProfileIds: [3],
+    acceptedProfileId: 3,
+    rejectionReason: null,
+    rosterRevision: 1,
+    linkedEventId: null,
+  };
+  state.segmentCallback({ text: "hello", source: "system", timestamp: now });
+  onSpeaker({
+    cohort: "system",
+    speakerId: "speaker_0",
+    displayName: "C",
+    startTime: now - 100,
+    endTime: now + 100,
+    speakerDecision: d,
+  });
+  const oldRow = { ...store.useMeetingRecordingStore.getState().segments.at(-1) };
+  const pending = onEvidence({ noteId: NOTE_ID, runId });
+  onNoteUpdated?.({
+    id: NOTE_ID,
+    participants: '[{"email":"a@example.com"}]',
+    speaker_roster_revision: 2,
+    transcript: "[]",
+  });
+  gate.resolve({
+    assignments: [{ speakerId: "speaker_0", displayName: "C", rows: [oldRow] }],
+    rows: [oldRow],
+  });
   await pending;
-  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName,undefined);
-  onMerge([{keep:'speaker_1',remove:'speaker_0',displayName:'C',speakerDecision:d,similarity:1}]);
-  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName,undefined);
-  assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName,null);
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName, undefined);
+  onMerge([
+    { keep: "speaker_1", remove: "speaker_0", displayName: "C", speakerDecision: d, similarity: 1 },
+  ]);
+  assert.equal(store.useMeetingRecordingStore.getState().segments.at(-1).speakerName, undefined);
+  assert.equal(store.useMeetingRecordingStore.getState().systemPartialSpeakerName, null);
   await store.stopRecording();
 });
 
@@ -713,7 +917,9 @@ for (const cause of ["cached final", "diarization_skipped", "diarization_failed"
       decisionId: "veto",
       noteId: NOTE_ID,
       revision: "r",
-      source:"none",rawRoster:null,rosterRevision:0,
+      source: "none",
+      rawRoster: null,
+      rosterRevision: 0,
       eligibleProfileIds: [1],
       acceptedProfileId: null,
       rejectionReason: "no_match",
@@ -753,94 +959,270 @@ for (const cause of ["cached final", "diarization_skipped", "diarization_failed"
   });
 }
 
-test('run6: a 2000-row completion retry parses its base once', async t => {
+test("run6: a 2000-row completion retry parses its base once", async (t) => {
   const { api, state, notes } = createElectronAPI();
   const { store } = await loadModules(t, api);
-  const rows = Array.from({length:2000}, (_,i)=>({id:`perf-${i}`,text:`line ${i}`,source:'system',timestamp:i,speaker:'speaker_0'}));
-  notes.get(NOTE_ID).transcript=JSON.stringify({version:2,rows});
-  let attempts=0;
-  const done=deferred();
-  api.updateNote=async (_id,patch)=>{
-    if (++attempts===1) return {success:false,error:'transcript_changed'};
-    notes.get(NOTE_ID).transcript=patch.transcript;
+  const rows = Array.from({ length: 2000 }, (_, i) => ({
+    id: `perf-${i}`,
+    text: `line ${i}`,
+    source: "system",
+    timestamp: i,
+    speaker: "speaker_0",
+  }));
+  notes.get(NOTE_ID).transcript = JSON.stringify({ version: 2, rows });
+  let attempts = 0;
+  const done = deferred();
+  api.updateNote = async (_id, patch) => {
+    if (++attempts === 1) return { success: false, error: "transcript_changed" };
+    notes.get(NOTE_ID).transcript = patch.transcript;
     done.resolve();
-    return {success:true};
+    return { success: true };
   };
-  let parses=0;
-  let transcriptParses=0;
-  const parse=JSON.parse;
-  t.mock.method(JSON,'parse',(...args)=>{
+  let parses = 0;
+  let transcriptParses = 0;
+  const parse = JSON.parse;
+  t.mock.method(JSON, "parse", (...args) => {
     parses++;
-    if (typeof args[0] === 'string' && args[0].includes('perf-1999')) transcriptParses++;
+    if (typeof args[0] === "string" && args[0].includes("perf-1999")) transcriptParses++;
     return parse(...args);
   });
-  const start=performance.now();
-  state.diarizationCallback({noteId:NOTE_ID,sessionId:'perf',segments:rows});
+  const start = performance.now();
+  state.diarizationCallback({ noteId: NOTE_ID, sessionId: "perf", segments: rows });
   await done.promise;
-  const elapsed=performance.now()-start;
-  console.log(`RUN6_RETRY rows=2000 ms=${elapsed.toFixed(1)} parses=${parses} transcriptParses=${transcriptParses}`);
-  assert.equal(attempts,2);
-  const output=JSON.parse(notes.get(NOTE_ID).transcript).rows;
-  assert.equal(output.length,2000);
-  assert.equal(new Set(output.map(row=>row.text)).size,2000);
-  assert.ok(parses<100,`JSON parses: ${parses} (${transcriptParses} transcript parses)`);
-  assert.ok(elapsed<2500,`retry took ${elapsed}ms`);
-  assert.equal(store.useMeetingRecordingStore.getState().isRecording,false);
+  const elapsed = performance.now() - start;
+  console.log(
+    `RUN6_RETRY rows=2000 ms=${elapsed.toFixed(1)} parses=${parses} transcriptParses=${transcriptParses}`
+  );
+  assert.equal(attempts, 2);
+  const output = JSON.parse(notes.get(NOTE_ID).transcript).rows;
+  assert.equal(output.length, 2000);
+  assert.equal(new Set(output.map((row) => row.text)).size, 2000);
+  assert.ok(parses < 100, `JSON parses: ${parses} (${transcriptParses} transcript parses)`);
+  assert.ok(elapsed < 2500, `retry took ${elapsed}ms`);
+  assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
 });
 
-test('run6: recording seed resolves the current declared roster', async t=>{
-  const {api,notes}=createElectronAPI();
-  notes.get(NOTE_ID).participants='[{"email":"a@example.com"}]';
-  const store=await loadStore(t,api);
-  await store.startRecording({...START_ARGS,seedSegments:[{id:'seed',text:'hello',source:'system',speakerName:'Outsider'}]});
-  const row=store.useMeetingRecordingStore.getState().segments[0];
-  assert.equal(row.speakerName,undefined);
-  assert.equal(row.speakerDecision.rejectionReason,'legacy_not_evaluated');
+test("run6: recording seed resolves the current declared roster", async (t) => {
+  const { api, notes } = createElectronAPI();
+  notes.get(NOTE_ID).participants = '[{"email":"a@example.com"}]';
+  const store = await loadStore(t, api);
+  await store.startRecording({
+    ...START_ARGS,
+    seedSegments: [{ id: "seed", text: "hello", source: "system", speakerName: "Outsider" }],
+  });
+  const row = store.useMeetingRecordingStore.getState().segments[0];
+  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerDecision.rejectionReason, "legacy_not_evaluated");
   await store.stopRecording();
 });
 
-for (const timing of ['before read','during commit']) test(`run6: resumed-recording completion resolves current scope for its live installation (${timing})`,async t=>{
-  const {api,state,notes}=createElectronAPI({stopDiarizationSessionId:'first'});
-  let noteUpdated;
-  api.onNoteUpdated=callback=>{noteUpdated=callback;return ()=>{};};
-  api.getNote=async id=>({...notes.get(id)});
-  const {store,parseSeedSegments}=await loadModules(t,api);
-  state.stopTranscript='First sentence.';
-  await store.startRecording(START_ARGS);await store.stopRecording();
-  state.stopTranscript='';
-  await store.startRecording({...START_ARGS,seedSegments:parseSeedSegments(notes.get(NOTE_ID).transcript)});
-  const note=notes.get(NOTE_ID);
-  const changeRoster=()=>{note.participants='[{"email":"other@example.com"}]';note.speaker_roster_revision=1;};
-  if(timing==='before read')changeRoster();
-  else {
-    const update=api.updateNote;
-    let edited=false;
-    api.updateNote=async(id,patch,options)=>{
-      const result=await update(id,patch);
-      const snapshot={...notes.get(id)};
-      if(!edited && options?.reconcileTranscript){edited=true;changeRoster();noteUpdated({...note});}
-      return {...result,note:snapshot};
+for (const timing of ["before read", "during commit"])
+  test(`run6: resumed-recording completion resolves current scope for its live installation (${timing})`, async (t) => {
+    const { api, state, notes } = createElectronAPI({ stopDiarizationSessionId: "first" });
+    let noteUpdated;
+    api.onNoteUpdated = (callback) => {
+      noteUpdated = callback;
+      return () => {};
     };
-  }
-  const d={candidateSetStatus:'recorded',decisionId:'old-acceptance',noteId:NOTE_ID,source:'note',rawRoster:'[]',rosterRevision:0,acceptedProfileId:1,eligibleProfileIds:[1],rejectionReason:null};
-  state.diarizationCallback({noteId:NOTE_ID,sessionId:'first',segments:[{id:'earlier',text:'First sentence.',source:'system',speaker:'speaker_0',speakerName:'Outsider',speakerDecision:d}]});
-  await settle();
-  const row=store.useMeetingRecordingStore.getState().segments.find(r=>r.text==='First sentence.');
-  assert.ok(row);
-  assert.equal(row.speakerName,undefined);
-  assert.equal(row.speakerDecision.rejectionReason,'roster_changed');
+    api.getNote = async (id) => ({ ...notes.get(id) });
+    const { store, parseSeedSegments } = await loadModules(t, api);
+    state.stopTranscript = "First sentence.";
+    await store.startRecording(START_ARGS);
+    await store.stopRecording();
+    state.stopTranscript = "";
+    await store.startRecording({
+      ...START_ARGS,
+      seedSegments: parseSeedSegments(notes.get(NOTE_ID).transcript),
+    });
+    const note = notes.get(NOTE_ID);
+    const changeRoster = () => {
+      note.participants = '[{"email":"other@example.com"}]';
+      note.speaker_roster_revision = 1;
+    };
+    if (timing === "before read") changeRoster();
+    else {
+      const update = api.updateNote;
+      let edited = false;
+      api.updateNote = async (id, patch, options) => {
+        const result = await update(id, patch);
+        const snapshot = { ...notes.get(id) };
+        if (!edited && options?.reconcileTranscript) {
+          edited = true;
+          changeRoster();
+          noteUpdated({ ...note });
+        }
+        return { ...result, note: snapshot };
+      };
+    }
+    const d = {
+      candidateSetStatus: "recorded",
+      decisionId: "old-acceptance",
+      noteId: NOTE_ID,
+      source: "note",
+      rawRoster: "[]",
+      rosterRevision: 0,
+      acceptedProfileId: 1,
+      eligibleProfileIds: [1],
+      rejectionReason: null,
+    };
+    state.diarizationCallback({
+      noteId: NOTE_ID,
+      sessionId: "first",
+      segments: [
+        {
+          id: "earlier",
+          text: "First sentence.",
+          source: "system",
+          speaker: "speaker_0",
+          speakerName: "Outsider",
+          speakerDecision: d,
+        },
+      ],
+    });
+    await settle();
+    const row = store.useMeetingRecordingStore
+      .getState()
+      .segments.find((r) => r.text === "First sentence.");
+    assert.ok(row);
+    assert.equal(row.speakerName, undefined);
+    assert.equal(row.speakerDecision.rejectionReason, "roster_changed");
+    await store.stopRecording();
+  });
+
+test("run6: recording seed cannot overwrite the canonical stored veto with supplied evidence", async (t) => {
+  const { api, notes } = createElectronAPI();
+  const id = "bf99d416-46c6-4ca9-a057-68a1c5ca5bb9";
+  const d = {
+    decisionId: "canonical-veto",
+    noteId: NOTE_ID,
+    source: "note",
+    rawRoster: "[]",
+    rosterRevision: 0,
+    eligibleProfileIds: [1],
+    acceptedProfileId: null,
+    rejectionReason: "no_match",
+  };
+  const row = { id, text: "stored", source: "system", speaker: "speaker_0", speakerDecision: d };
+  notes.get(NOTE_ID).transcript = JSON.stringify({ version: 2, rows: [row] });
+  const store = await loadStore(t, api);
+  await store.startRecording({
+    ...START_ARGS,
+    seedSegments: [
+      {
+        ...row,
+        speakerName: "Forged",
+        speakerDecision: { ...d, acceptedProfileId: 1, rejectionReason: null },
+      },
+    ],
+  });
+  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerName, undefined);
+  assert.equal(
+    store.useMeetingRecordingStore.getState().segments[0].speakerDecision.decisionId,
+    "canonical-veto"
+  );
   await store.stopRecording();
 });
 
-test('run6: recording seed cannot overwrite the canonical stored veto with supplied evidence',async t=>{
-  const {api,notes}=createElectronAPI();
-  const id='bf99d416-46c6-4ca9-a057-68a1c5ca5bb9';
-  const d={decisionId:'canonical-veto',noteId:NOTE_ID,source:'note',rawRoster:'[]',rosterRevision:0,eligibleProfileIds:[1],acceptedProfileId:null,rejectionReason:'no_match'};
-  const row={id,text:'stored',source:'system',speaker:'speaker_0',speakerDecision:d};
-  notes.get(NOTE_ID).transcript=JSON.stringify({version:2,rows:[row]});
-  const store=await loadStore(t,api);
-  await store.startRecording({...START_ARGS,seedSegments:[{...row,speakerName:'Forged',speakerDecision:{...d,acceptedProfileId:1,rejectionReason:null}}]});
-  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerName,undefined);
-  assert.equal(store.useMeetingRecordingStore.getState().segments[0].speakerDecision.decisionId,'canonical-veto');
-  await store.stopRecording();
+test("a 2000-row committed snapshot indexes live rows and resolves its roster once", async (t) => {
+  const { api } = createElectronAPI();
+  const store = await loadStore(t, api);
+  let idReads = 0;
+  const rows = Array.from({ length: 2000 }, (_, index) => ({
+    get id() {
+      idReads++;
+      return `indexed-${index}`;
+    },
+    source: "system",
+    text: `line ${index}`,
+    speaker: "speaker_0",
+  }));
+  store.useMeetingRecordingStore.setState({ segments: rows });
+  let parses = 0;
+  const parse = JSON.parse;
+  t.mock.method(JSON, "parse", (...args) => {
+    parses++;
+    return parse(...args);
+  });
+  const started = performance.now();
+  const installed = store.mergeCommittedSpeakerRows(
+    rows.map((row) => ({ ...row })),
+    {
+      noteScope: { id: NOTE_ID, participants: '[{"email":"a@example.com"}]' },
+      preserveIdentifications: true,
+    }
+  );
+  console.log(
+    `COMMITTED_BATCH rows=2000 ms=${(performance.now() - started).toFixed(1)} idReads=${idReads} parses=${parses}`
+  );
+  assert.equal(installed.length, 2000);
+  assert.ok(idReads < 20000, `live row identity reads: ${idReads}`);
+  assert.ok(parses < 20, `roster parses: ${parses}`);
 });
+
+for (const route of [
+  "initial",
+  "retry",
+  "diarization_skipped",
+  "diarization_failed",
+  "resumed live",
+]) {
+  test(`2000-row ${route} completion bounds parsing for every note snapshot`, async (t) => {
+    let recordingStore;
+    t.after(() => recordingStore?.stopRecording());
+    const { api, state, notes } = createElectronAPI({ stopDiarizationSessionId: "earlier" });
+    const { store, parseSeedSegments } = await loadModules(t, api);
+    const rows = Array.from({ length: 2000 }, (_, i) => ({
+      id: `completion-${i}`,
+      text: `line ${i}`,
+      source: "system",
+      timestamp: i,
+      speaker: "speaker_0",
+    }));
+    notes.get(NOTE_ID).transcript = JSON.stringify({ version: 2, rows });
+    if (route === "resumed live") {
+      recordingStore = store;
+      await store.startRecording(START_ARGS);
+      // These rows belong to the first session, rather than its seed. The
+      // later session resumes them while that first completion is pending.
+      store.useMeetingRecordingStore.setState({ segments: rows });
+      await store.stopRecording();
+      await store.startRecording({
+        ...START_ARGS,
+        seedSegments: parseSeedSegments(notes.get(NOTE_ID).transcript),
+      });
+    }
+    let attempts = 0;
+    const done = deferred();
+    api.meetingNoteFinalized = () => done.resolve();
+    api.updateNote = async (_id, patch) => {
+      if (++attempts === 1 && route === "retry")
+        return { success: false, error: "transcript_changed" };
+      notes.get(NOTE_ID).transcript = patch.transcript;
+      return { success: true };
+    };
+    let parses = 0,
+      transcriptParses = 0;
+    const parse = JSON.parse;
+    t.mock.method(JSON, "parse", (...args) => {
+      parses++;
+      if (typeof args[0] === "string" && args[0].includes('"line 1999"')) transcriptParses++;
+      return parse(...args);
+    });
+    const started = performance.now();
+    state.diarizationCallback({
+      noteId: NOTE_ID,
+      sessionId: "earlier",
+      segments: rows,
+      centroidPersistence: { cause: route },
+    });
+    await done.promise;
+    console.log(
+      `COMPLETION_BATCH route=${route} rows=2000 ms=${(performance.now() - started).toFixed(1)} parses=${parses} transcriptParses=${transcriptParses}`
+    );
+    assert.equal(transcriptParses, route === "retry" ? 8 : 4);
+    assert.ok(parses < 100, `JSON parses: ${parses}`);
+    const saved = parse(notes.get(NOTE_ID).transcript).rows;
+    assert.equal(saved.length, 2000);
+    assert.equal(new Set(saved.map((row) => row.id)).size, 2000);
+  });
+}

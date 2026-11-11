@@ -126,6 +126,13 @@ export interface TranscriptSegment {
   speakerLockSource?: TranscriptSpeakerLockSource;
   machineReason?: "approved_voice";
   speakerDecision?: SpeakerDecision;
+  speakerBoundary?: {
+    refusalReason: string | null;
+    proposedDecisionId?: string | null;
+    controllingDecisionId?: string | null;
+  };
+  speakerAssignment?:
+    { origin: "human" } | { origin: "machine"; accepted: boolean; email?: string | null };
 }
 
 export const SIDE_PANEL_BREAKPOINT_PX = 1024;
@@ -2304,19 +2311,16 @@ export function mergeCommittedSpeakerRows(
   }: { preserveIdentifications?: boolean; affectedRowIds?: string[]; noteScope?: NoteItem } = {}
 ): TranscriptSegment[] {
   const liveNow = useMeetingRecordingStore.getState().segments;
+  const liveById = new Map(liveNow.map((row) => [row.id, row]));
+  const affected = affectedRowIds && new Set(affectedRowIds);
+  const scope = prepareAutomaticSpeakerScope(latestRosterNote ?? noteScope);
   committed = committed.map((incoming) => {
-    const existing = liveNow.find((row) => row.id === incoming.id) || incoming;
-    if (affectedRowIds && !affectedRowIds.includes(incoming.id)) return existing;
+    const existing = liveById.get(incoming.id) || incoming;
+    if (affected && !affected.has(incoming.id)) return existing;
     return normalizeTranscriptSegment(
-      resolveAutomaticSpeaker(
-        existing,
-        existing.speakerDecision,
-        latestRosterNote ?? noteScope,
-        incoming,
-        {
-          restorationRowIds: affectedRowIds,
-        }
-      )
+      resolveAutomaticSpeaker(existing, existing.speakerDecision, scope, incoming, {
+        restorationRowIds: affectedRowIds,
+      })
     );
   });
   const committedById = new Map(committed.map((row) => [row.id, row]));
@@ -2671,8 +2675,8 @@ if (typeof window !== "undefined") {
       ) {
         const liveScope = prepareAutomaticSpeakerScope(
           latestRosterNote?.id === targetNoteId &&
-          (latestRosterNote.speaker_roster_revision ?? 0) >
-            (completionScope.speaker_roster_revision ?? 0)
+            (latestRosterNote.speaker_roster_revision ?? 0) >
+              (completionScope.speaker_roster_revision ?? 0)
             ? latestRosterNote
             : completionScope
         );

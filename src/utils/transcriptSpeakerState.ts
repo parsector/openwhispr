@@ -2,7 +2,7 @@ import {
   prepareAutomaticSpeakerScope,
   resolveAutomaticSpeaker,
 } from "../helpers/automaticSpeakerAttribution";
-import { recordedNameAllowed } from "../helpers/speakerRosterPolicy";
+import { humanProtected, recordedNameAllowed } from "../helpers/speakerRosterPolicy";
 import type { TranscriptSegment } from "../stores/meetingRecordingStore";
 import { allocateUnknownNumbers, writeTranscriptDocument } from "../helpers/transcriptDocument";
 
@@ -68,10 +68,7 @@ const pickSpeakerStatus = (segment: TranscriptSegment): TranscriptSpeakerStatus 
   return undefined;
 };
 
-export const isTranscriptSpeakerLocked = (segment: TranscriptSegment) =>
-  !!segment.speakerLocked ||
-  segment.speakerLockSource === "user" ||
-  canonicalizeTranscriptSpeakerStatus(segment.speakerStatus) === "locked";
+export const isTranscriptSpeakerLocked = (segment: TranscriptSegment) => humanProtected(segment);
 
 export const normalizeTranscriptSegment = (segment: TranscriptSegment): TranscriptSegment => {
   segment = resolveAutomaticSpeaker(segment, segment.speakerDecision, null, segment);
@@ -409,6 +406,9 @@ export const serializeTranscriptSegments = (segments: TranscriptSegment[], noteH
       speakerLockSource: segment.speakerLockSource,
       machineReason: segment.machineReason,
       speakerDecision: segment.speakerDecision,
+      speakerReviewRequired: segment.speakerReviewRequired,
+      speakerBoundary: segment.speakerBoundary,
+      speakerAssignment: segment.speakerAssignment,
     })),
     Math.max(noteHighWater, ...normalized.map((segment) => segment.unknownNumberHighWater || 0), 0)
   );

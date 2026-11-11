@@ -52,7 +52,12 @@ async function fixture(t) {
     meetingTranscriptionSetSystemAudioAvailable: async () => ({ success: true }),
     meetingTranscriptionStop: async () => ({ success: true }),
     meetingTranscriptionSend() {},
-    getNote: async () => ({id:NOTE_ID,participants:"[]",speaker_roster_revision:0,transcript:"[]"}),
+    getNote: async () => ({
+      id: NOTE_ID,
+      participants: "[]",
+      speaker_roster_revision: 0,
+      transcript: "[]",
+    }),
     updateNote: async () => ({ success: true }),
     reconsiderLiveSpeakers: async () => callbacks.reconsidered,
   };
@@ -181,8 +186,14 @@ for (const replay of ["identification", "cached windows", "cluster merge"]) {
       },
     ]);
     assert.equal(f.rows()[0].speakerName, undefined, "a serialized proof has no authority");
-    f.callbacks.NoteUpdated({id:NOTE_ID,participants:"[]",speaker_roster_revision:0,
-      transcript:JSON.stringify([{...fresh,speakerDecision:{...accepted,decisionId:"persisted-evaluation"}}])});
+    f.callbacks.NoteUpdated({
+      id: NOTE_ID,
+      participants: "[]",
+      speaker_roster_revision: 0,
+      transcript: JSON.stringify([
+        { ...fresh, speakerDecision: { ...accepted, decisionId: "persisted-evaluation" } },
+      ]),
+    });
     assert.equal(f.rows()[0].speakerName, "A");
     assert.equal(recordedNameAllowed(f.rows()[0]), true);
     assert.equal(humanProtected(f.rows()[0]), false);
@@ -370,18 +381,31 @@ for (const fresh of [false, true]) {
       speakerIsPlaceholder: false,
       speakerDecision: evidence,
     };
-    f.callbacks.reconsidered = {
+    // Electron transports plain data: a main-process proof handle cannot
+    // retain object identity in the renderer.
+    f.callbacks.reconsidered = structuredClone({
       rows: [changed],
       assignments: [{ speakerId: "speaker_0", displayName: "A", rows: [changed] }],
-    };
+    });
     await f.callbacks.MeetingSpeakerEvidenceChanged({
       noteId: NOTE_ID,
       runId: f.store.getActiveRecordingSessionId(),
     });
     assert.equal(f.rows()[0].speakerName, undefined, "response proofs cannot supersede a veto");
     if (fresh) {
-      f.callbacks.NoteUpdated({id:NOTE_ID,participants:"[]",speaker_roster_revision:0,transcript:JSON.stringify([changed])});
-      assert.equal(f.rows()[0].speakerName, "A", "authoritative persistence has already validated the evaluation");
+      f.callbacks.NoteUpdated(
+        structuredClone({
+          id: NOTE_ID,
+          participants: "[]",
+          speaker_roster_revision: 0,
+          transcript: JSON.stringify([changed]),
+        })
+      );
+      assert.equal(
+        f.rows()[0].speakerName,
+        "A",
+        "authoritative persistence has already validated the evaluation"
+      );
     }
     assert.equal(humanProtected(f.rows()[0]), false);
   });

@@ -76,80 +76,162 @@ function fixture(t) {
     rows: () => readTranscriptDocument(db.getNote(noteId).transcript).rows,
   };
 }
-test('portable machine identity is revalidated on import and on later participant edits', (t) => {
+test("portable machine identity is revalidated on import and on later participant edits", (t) => {
   const f = fixture(t);
-  const remoteProfile = { id: 900, email: ' C@EXAMPLE.COM ', voice_usable: 1, embedding: [1, 0] };
-  const remoteScope = require('../../src/helpers/speakerRosterPolicy').resolveSpeakerRoster({ id: 999, participants: '[]' }, null, [remoteProfile]);
-  const remote = { id: 'remote', text: 'hello', speakerName: 'C', speakerDecision: decision(remoteScope, { path: 'live', profile: remoteProfile }) };
+  const remoteProfile = { id: 900, email: " C@EXAMPLE.COM ", voice_usable: 1, embedding: [1, 0] };
+  const remoteScope = require("../../src/helpers/speakerRosterPolicy").resolveSpeakerRoster(
+    { id: 999, participants: "[]" },
+    null,
+    [remoteProfile]
+  );
+  const remote = {
+    id: "remote",
+    text: "hello",
+    speakerName: "C",
+    speakerDecision: decision(remoteScope, { path: "live", profile: remoteProfile }),
+  };
   const cloud = publicTranscript(writeTranscriptDocument([remote]));
-  assert.equal(cloud.includes('900'), false, 'local numeric identities must not cross sync');
+  assert.equal(cloud.includes("900"), false, "local numeric identities must not cross sync");
   const imported = reconcileCloudTranscript(cloud, null).transcript;
-  f.db.updateNote(f.noteId, { participants: '[]', transcript: imported });
-  assert.equal(f.rows()[0].speakerName, 'C');
+  f.db.updateNote(f.noteId, { participants: "[]", transcript: imported });
+  assert.equal(f.rows()[0].speakerName, "C");
   const localProfileId = f.rows()[0].speakerDecision?.acceptedProfileId;
-  f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: 'a@example.com' }]) });
+  f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: "a@example.com" }]) });
   assert.equal(f.rows()[0].speakerName, undefined);
   assert.equal(localProfileId, f.c.id);
   assert.ok(f.rows()[0].speakerDecision.rejectionReason);
 });
 
-test('portable human choices, including Unknown, survive import and participant edits', (t) => {
+test("portable human choices, including Unknown, survive import and participant edits", (t) => {
   const f = fixture(t);
-  for (const name of ['Human outsider', undefined]) {
-    const raw = publicTranscript(writeTranscriptDocument([{ id: 'human', text: 'hello', speakerName: name, speakerIsPlaceholder: !name, speakerStatus: 'user_locked' }]));
+  for (const name of ["Human outsider", undefined]) {
+    const raw = publicTranscript(
+      writeTranscriptDocument([
+        {
+          id: "human",
+          text: "hello",
+          speakerName: name,
+          speakerIsPlaceholder: !name,
+          speakerStatus: "user_locked",
+        },
+      ])
+    );
     f.db.updateNote(f.noteId, { transcript: reconcileCloudTranscript(raw, null).transcript });
-    f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: 'nobody@example.com' }]) });
-    assert.equal(require('../../src/helpers/speakerRosterPolicy').humanProtected(f.rows()[0]), true);
+    f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: "nobody@example.com" }]) });
+    assert.equal(
+      require("../../src/helpers/speakerRosterPolicy").humanProtected(f.rows()[0]),
+      true
+    );
     assert.equal(f.rows()[0].speakerName, name);
   }
 });
 
-test('cloud upsert scopes imported machine names before returning the note to IPC', (t) => {
+test("cloud upsert scopes imported machine names before returning the note to IPC", (t) => {
   const f = fixture(t);
-  const imported = f.db.upsertNoteFromCloud({
-    id: 'remote-cloud', client_note_id: 'remote-client', title: 'Remote', content: '',
-    note_type: 'meeting', participants: JSON.stringify([{ email: 'a@example.com' }]),
-    created_at: '2026-11-10T00:00:00Z', updated_at: '2026-11-10T00:00:00Z',
-    transcript: writeTranscriptDocument([{ id: 'remote', text: 'hello', speakerName: 'C',
-      speakerAssignment: { origin: 'machine', accepted: true, email: 'c@example.com' } }]),
-  }, null);
+  const imported = f.db.upsertNoteFromCloud(
+    {
+      id: "remote-cloud",
+      client_note_id: "remote-client",
+      title: "Remote",
+      content: "",
+      note_type: "meeting",
+      participants: JSON.stringify([{ email: "a@example.com" }]),
+      created_at: "2026-11-10T00:00:00Z",
+      updated_at: "2026-11-10T00:00:00Z",
+      transcript: writeTranscriptDocument([
+        {
+          id: "remote",
+          text: "hello",
+          speakerName: "C",
+          speakerAssignment: { origin: "machine", accepted: true, email: "c@example.com" },
+        },
+      ]),
+    },
+    null
+  );
   const row = readTranscriptDocument(imported.transcript).rows[0];
   assert.equal(row.speakerName, undefined);
-  assert.equal(row.speakerDecision.rejectionReason, 'outside_roster');
-  assert.equal(readTranscriptDocument(f.db.getNoteByCloudId('remote-cloud').transcript).rows[0].speakerName, undefined);
+  assert.equal(row.speakerDecision.rejectionReason, "outside_roster");
+  assert.equal(
+    readTranscriptDocument(f.db.getNoteByCloudId("remote-cloud").transcript).rows[0].speakerName,
+    undefined
+  );
 });
 
-test('imported machine identities fail closed when missing, ambiguous, or unreadable', () => {
-  for (const profiles of [[], [{ id: 1, email: 'c@example.com' }, { id: 2, email: 'C@example.com' }], null]) {
-    const row = { id: 'row', speakerName: 'C', speakerAssignment: { origin: 'machine', accepted: true, email: 'c@example.com' } };
-    const db = { getNote: () => ({ id: 42, participants: '[]' }), getSpeakerProfiles: () => { if (!profiles) throw Error('offline'); return profiles; } };
+test("imported machine identities fail closed when missing, ambiguous, or unreadable", () => {
+  for (const profiles of [
+    [],
+    [
+      { id: 1, email: "c@example.com" },
+      { id: 2, email: "C@example.com" },
+    ],
+    null,
+  ]) {
+    const row = {
+      id: "row",
+      speakerName: "C",
+      speakerAssignment: { origin: "machine", accepted: true, email: "c@example.com" },
+    };
+    const db = {
+      getNote: () => ({ id: 42, participants: "[]" }),
+      getSpeakerProfiles: () => {
+        if (!profiles) throw Error("offline");
+        return profiles;
+      },
+    };
     enforceRows(db, 42, [row]);
     assert.equal(row.speakerName, undefined);
-    assert.equal(row.speakerDecision.rejectionReason, 'identity_unresolved');
+    assert.equal(row.speakerDecision.rejectionReason, "identity_unresolved");
   }
 });
 
-test('calendar-only edits preserve existing machine evidence across the policy upgrade', (t) => {
+test("calendar-only edits preserve existing machine evidence across the policy upgrade", (t) => {
   const f = fixture(t);
-  const legacy = { ...f.evidence, linkedEventId: 'before', revision: JSON.stringify([
-    f.scope.rosterRevision, f.scope.source, f.scope.rawRoster, 'before', null, f.scope.eligibleProfileIds,
-  ]) };
-  f.db.db.prepare('UPDATE notes SET transcript = ?, calendar_event_id = ? WHERE id = ?')
-    .run(writeTranscriptDocument([{ ...f.row, speakerDecision: legacy }]), 'after', f.noteId);
-  assert.equal(f.rows()[0].speakerName, 'Alex');
-  assert.deepEqual(f.rows()[0].speakerDecision, legacy, 'the original acoustic evidence stays intact');
+  const legacy = {
+    ...f.evidence,
+    linkedEventId: "before",
+    revision: JSON.stringify([
+      f.scope.rosterRevision,
+      f.scope.source,
+      f.scope.rawRoster,
+      "before",
+      null,
+      f.scope.eligibleProfileIds,
+    ]),
+  };
+  f.db.db
+    .prepare("UPDATE notes SET transcript = ?, calendar_event_id = ? WHERE id = ?")
+    .run(writeTranscriptDocument([{ ...f.row, speakerDecision: legacy }]), "after", f.noteId);
+  assert.equal(f.rows()[0].speakerName, "Alex");
+  assert.deepEqual(
+    f.rows()[0].speakerDecision,
+    legacy,
+    "the original acoustic evidence stays intact"
+  );
 });
 
-test('legacy calendar-scoped acceptance remains valid when NULL becomes unrestricted', (t) => {
+test("legacy calendar-scoped acceptance remains valid when NULL becomes unrestricted", (t) => {
   const f = fixture(t);
   f.db.updateNote(f.noteId, { participants: null });
   const scope = readScope(f.db, f.noteId);
-  const legacy = { ...f.evidence, source: 'linked_event', rosterRevision: scope.rosterRevision,
-    revision: JSON.stringify([scope.rosterRevision, 'linked_event', f.scope.rawRoster, 'before', null, [f.a.id]]) };
-  f.db.db.prepare('UPDATE notes SET transcript = ? WHERE id = ?')
+  const legacy = {
+    ...f.evidence,
+    source: "linked_event",
+    rosterRevision: scope.rosterRevision,
+    revision: JSON.stringify([
+      scope.rosterRevision,
+      "linked_event",
+      f.scope.rawRoster,
+      "before",
+      null,
+      [f.a.id],
+    ]),
+  };
+  f.db.db
+    .prepare("UPDATE notes SET transcript = ? WHERE id = ?")
     .run(writeTranscriptDocument([{ ...f.row, speakerDecision: legacy }]), f.noteId);
-  assert.equal(f.rows()[0].speakerName, 'Alex');
-  f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: 'c@example.com' }]) });
+  assert.equal(f.rows()[0].speakerName, "Alex");
+  f.db.updateNote(f.noteId, { participants: JSON.stringify([{ email: "c@example.com" }]) });
   assert.equal(f.rows()[0].speakerName, undefined);
 });
 test("roster revision invalidates a delayed renderer save after remove then re-add and resumed recording", (t) => {
@@ -178,7 +260,7 @@ test("roster revision invalidates a delayed renderer save after remove then re-a
   f.db.updateNote(f.noteId, { transcript: writeTranscriptDocument([...f.rows(), fresh]) });
   assert.equal(f.rows()[1].speakerName, "Alex");
 });
-test("roster changed by sync or a linked event cannot resurrect a recorded name on read", (t) => {
+test("a direct SQL roster edit cannot resurrect a recorded name on read", (t) => {
   const f = fixture(t);
   f.db.db
     .prepare("UPDATE notes SET participants = ? WHERE id = ?")
@@ -371,12 +453,23 @@ for (const alteration of ["track", "recording", "sample", "profile", "content", 
   });
 }
 
-test('a new automatic row keeps its current scope through optimistic transcript reconciliation',t=>{
-  const f=fixture(t);
-  const row={...f.row,id:'a692b24f-a0d4-4d62-a39c-c915dd099cf9',text:'a replacement transcription'};
-  const previous=f.db.getNote(f.noteId).transcript;
-  assert.equal(f.db.updateNote(f.noteId,{transcript:writeTranscriptDocument([row])},{expectedTranscript:previous,reconcileTranscript:true}).success,true);
-  assert.equal(f.rows().find(r=>r.id===row.id).speakerName,'Alex');
+test("a new automatic row keeps its current scope through optimistic transcript reconciliation", (t) => {
+  const f = fixture(t);
+  const row = {
+    ...f.row,
+    id: "a692b24f-a0d4-4d62-a39c-c915dd099cf9",
+    text: "a replacement transcription",
+  };
+  const previous = f.db.getNote(f.noteId).transcript;
+  assert.equal(
+    f.db.updateNote(
+      f.noteId,
+      { transcript: writeTranscriptDocument([row]) },
+      { expectedTranscript: previous, reconcileTranscript: true }
+    ).success,
+    true
+  );
+  assert.equal(f.rows().find((r) => r.id === row.id).speakerName, "Alex");
 });
 
 test("run7: identity-only import carries unevaluated provenance through roster refusal", (t) => {

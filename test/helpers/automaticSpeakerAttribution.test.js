@@ -110,7 +110,10 @@ for (const participants of [
     const main = enforceRows(db, 42, [{ ...row }])[0];
     const editor = resolveAutomaticSpeaker(row, null, note, row);
     assert.deepEqual(editor, main);
-    assert.deepEqual(resolveAutomaticSpeaker(row, null, prepareAutomaticSpeakerScope(note), row), main);
+    assert.deepEqual(
+      resolveAutomaticSpeaker(row, null, prepareAutomaticSpeakerScope(note), row),
+      main
+    );
   });
 }
 
@@ -515,3 +518,50 @@ test("run8: null scope preserves only unchanged undecided legacy attribution", (
     );
   }
 });
+
+for (const field of ["email", "display_name"]) {
+  test(`a same-timestamp profile ${field} edit invalidates an issued evaluation`, async () => {
+    const f = audioFixture();
+    const e = (await f.prepare()).get("row");
+    const incoming = f.proposal(e);
+    const before = f.db.getSpeakerProfiles()[0];
+    // A timestamp is not an identity binding: two edits may share its precision.
+    f.db.getSpeakerProfiles = () => [
+      { ...before, [field]: field === "email" ? "changed@example.com" : "Changed" },
+    ];
+    const actual = enforceRows(f.db, 42, [incoming], { storedRows: [f.row] })[0];
+    assert.equal(actual.speakerName, undefined);
+    assert.equal(actual.speakerDecision.decisionId, "prior");
+    assert.equal(actual.speakerBoundary.refusalReason, "profile");
+  });
+}
+
+for (const route of ["boundary", "main projection"]) {
+  test(`unevaluated restricted legacy ${route} cannot disclose cached candidate names`, () => {
+    const row = {
+      id: "legacy-candidates",
+      text: "hello",
+      speaker: "speaker_0",
+      speakerName: "Private outsider",
+      uncertainty: { reason: "close_match", candidates: ["Private outsider", "A"] },
+    };
+    for (const participants of ['[{"email":"a@example.com"}]', "[]"]) {
+      const note = { id: 42, participants };
+      const db = { getNote: () => note, getSpeakerProfiles: () => [] };
+      const actual =
+        route === "boundary"
+          ? resolveAutomaticSpeaker(row, null, note, row)
+          : enforceRows(db, 42, [{ ...row }])[0];
+      assert.equal(actual.uncertainty.reason, "close_match");
+      if (participants === "[]") {
+        assert.deepEqual(actual.uncertainty.candidates, row.uncertainty.candidates);
+        assert.equal(actual.speakerName, row.speakerName);
+      } else {
+        assert.equal(actual.speakerName, undefined);
+        assert.equal(actual.speakerReviewRequired, true);
+        assert.equal(actual.uncertainty.candidates, undefined);
+        assert.equal(JSON.stringify(actual).includes("Private outsider"), false);
+      }
+    }
+  });
+}

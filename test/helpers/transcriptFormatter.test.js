@@ -9,6 +9,25 @@ const {
 } = require("../../src/helpers/transcriptFormatter");
 const { changeLanguage } = require("../../src/helpers/i18nMain");
 
+for (const name of ["Chosen", undefined]) {
+  test(`portable human ${name || "Unknown"} outranks a stale export mapping`, () => {
+    const row = {
+      id: "human",
+      text: "A human choice",
+      source: "system",
+      timestamp: 1,
+      speaker: "speaker_0",
+      speakerName: name,
+      speakerIsPlaceholder: !name,
+      speakerAssignment: { origin: "human" },
+    };
+    const output = formatSrt([row], { speaker_0: "Stale" });
+    assert.doesNotMatch(output, /Stale/);
+    assert.match(output, name ? /Chosen: A human choice/ : /Unknown speaker 1: A human choice/);
+    assert.equal(require("../../src/helpers/speakerAssignmentPolicy").isSpeakerLocked(row), true);
+  });
+}
+
 test("TXT and Markdown exports include participant display names", () => {
   const note = {
     title: "Planning",
@@ -259,10 +278,20 @@ test("diarized speaker numbers render in the UI language", (t) => {
 
 test("a user-pinned unknown prints the same numbered placeholder in plain and Markdown exports", () => {
   const note = { title: "Standup", created_at: "2026-01-01T00:00:00Z" };
-  const rows = [{ id: "pinned", source: "system", speaker: "speaker_mic",
-    speakerName: "Speaker 1", speakerIsPlaceholder: true,
-    speakerLocked: true, speakerLockSource: "user", unknownNumber: 7,
-    timestamp: 0, text: "Unidentified voice." }];
+  const rows = [
+    {
+      id: "pinned",
+      source: "system",
+      speaker: "speaker_mic",
+      speakerName: "Speaker 1",
+      speakerIsPlaceholder: true,
+      speakerLocked: true,
+      speakerLockSource: "user",
+      unknownNumber: 7,
+      timestamp: 0,
+      text: "Unidentified voice.",
+    },
+  ];
   const mappings = { speaker_mic: "Wrong name" };
   for (const output of [formatTxt(note, rows, mappings), formatMd(note, rows, mappings)]) {
     assert.ok(output.includes("Unknown speaker 7"));
@@ -314,7 +343,9 @@ test("speakerless rows do not consume export numbers and a note's high-water mar
 });
 
 test("a placeholder-named row without a channel uses the numbered label in every export", () => {
-  const rows = [{ speakerName: "Speaker", speakerIsPlaceholder: true, text: "Hello.", timestamp: 0 }];
+  const rows = [
+    { speakerName: "Speaker", speakerIsPlaceholder: true, text: "Hello.", timestamp: 0 },
+  ];
   const note = { title: "Meeting", created_at: "2026-01-01T00:00:00Z" };
   assert.match(formatTxt(note, rows, {}), /Unknown speaker 1:\nHello\./);
   assert.match(formatMd(note, rows, {}), /\*\*Unknown speaker 1\*\*/);
@@ -382,13 +413,18 @@ test("untimed upload text exports without invented times or speakers", () => {
   assert.equal(json.segments[0].speaker, null);
 });
 
-test('JSON export preserves durable transcript row identities', () => {
+test("JSON export preserves durable transcript row identities", () => {
   const rows = [
-    { id: 'row-a', source: 'system', speaker: 'speaker_0', timestamp: 0, text: 'One' },
-    { id: 'row-b', source: 'system', speaker: 'speaker_0', timestamp: 1, text: 'Two' },
+    { id: "row-a", source: "system", speaker: "speaker_0", timestamp: 0, text: "One" },
+    { id: "row-b", source: "system", speaker: "speaker_0", timestamp: 1, text: "Two" },
   ];
-  const exported = JSON.parse(formatJson({ title: 'Meeting', created_at: '2026-01-01T00:00:00Z' }, rows, {}));
-  assert.deepEqual(exported.transcriptRows.map((row) => row.id), ['row-a', 'row-b']);
+  const exported = JSON.parse(
+    formatJson({ title: "Meeting", created_at: "2026-01-01T00:00:00Z" }, rows, {})
+  );
+  assert.deepEqual(
+    exported.transcriptRows.map((row) => row.id),
+    ["row-a", "row-b"]
+  );
 });
 test("exports keep different recorders' adjacent self lines separate", () => {
   const note = { title: "Planning", created_at: "2026-01-01T00:00:00Z" };
@@ -510,9 +546,22 @@ for (const [language, youLabel] of [
 }
 
 test("roster veto prevents export from restoring a stale C mapping", () => {
-  const row = {id:"row",source:"system",speaker:"speaker_0",speakerName:"C",text:"hello",timestamp:0,
-    speakerDecision:{acceptedProfileId:null,eligibleProfileIds:[1,2],rejectionReason:"outside_roster"}};
-  const {formatJson} = require("../../src/helpers/transcriptFormatter");
-  const result = JSON.parse(formatJson({title:"meeting",created_at:"2026-11-10"},[row],{speaker_0:"C"}));
+  const row = {
+    id: "row",
+    source: "system",
+    speaker: "speaker_0",
+    speakerName: "C",
+    text: "hello",
+    timestamp: 0,
+    speakerDecision: {
+      acceptedProfileId: null,
+      eligibleProfileIds: [1, 2],
+      rejectionReason: "outside_roster",
+    },
+  };
+  const { formatJson } = require("../../src/helpers/transcriptFormatter");
+  const result = JSON.parse(
+    formatJson({ title: "meeting", created_at: "2026-11-10" }, [row], { speaker_0: "C" })
+  );
   assert.equal(result.segments[0].speaker, "Unknown speaker 1");
 });

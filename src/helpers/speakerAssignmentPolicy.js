@@ -1,4 +1,5 @@
 const { resolveAutomaticSpeaker } = require("./automaticSpeakerAttribution");
+const { humanProtected } = require("./speakerRosterPolicy");
 const SPEAKER_STATUS = Object.freeze({
   PROVISIONAL: "provisional",
   CONFIRMED: "confirmed",
@@ -7,7 +8,7 @@ const SPEAKER_STATUS = Object.freeze({
 });
 
 function canonicalizeSpeakerStatus(status, segment = null) {
-  if (segment?.speakerLocked || segment?.speakerLockSource === "user") {
+  if (humanProtected(segment)) {
     return SPEAKER_STATUS.LOCKED;
   }
 

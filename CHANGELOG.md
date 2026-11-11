@@ -11,11 +11,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Speakers
 
-- **Automatic names stay within the note's participants.** Only people matched by email to declared participants can be named automatically; other voices stay Unknown. Manual names remain authoritative.
-- **No participants, same behaviour.** Notes without declared participants keep existing naming, including names in older transcripts and imported notes.
+- **Automatic names stay within declared participants.** When a note lists participants, only people matched by email to that list can be named automatically; other voices stay Unknown. Manual names remain authoritative.
+- **No participants, global voice matching.** Notes with an absent or empty participant list can match any known voice, regardless of linked calendar attendees. Existing names in older transcripts and historical imports are preserved.
+- **Names require voice evidence.** Adding an attendee or attaching an email alone no longer suggests a speaker name. The participant list explains which naming rule applies.
 - **Unassessed names go to review.** On notes with declared participants, automatic names that were never assessed appear as Unknown and are offered for review.
-- **Rejected matches leave no contact email behind.** The contact's email no longer follows a rejected match into exports or sync.
-- **Long transcripts stay responsive.** Re-evaluating speakers no longer slows down as the note grows.
+- **People shows missing evidence.** Review distinguishes names that were not assessed and candidate sets that were not recorded. Usage counts no longer revive rejected matches through old mappings.
+- **Corrections keep their scope.** Correcting or undoing one row preserves other rows' identities. Undo checks the current participant list before restoring an automatic name.
+- **Human choices survive sync.** Manually chosen names, including Unknown, retain their protection on another device.
+- **Rejected matches leave no contact email behind.** A rejected voice match no longer supplies a contact email to exports, sync, or inferred attendee lookup.
+- **Long transcripts stay responsive.** Speaker re-evaluation yields between rows, and transcript updates avoid repeatedly resolving the whole participant list for each row.
+- **Participant edits preserve search.** Search remains consistent when participants and note text change together; upgrading also repairs older note search indexes.
+
+### Notes
+
+- **Changing notes preserves the tab you choose.** A delayed note-change update no longer resets a newly selected tab.
 
 ## [1.13.4] - 2026-11-07
 

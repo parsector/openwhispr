@@ -1,6 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createDb } = require("./harness/db.js");
+const fs = require("node:fs");
+const path = require("node:path");
+const { gunzipSync } = require("node:zlib");
 
 function assertIndex(db, noteId, present, absent = []) {
   // rank=1 also compares the external notes content with the FTS index.
@@ -105,3 +108,51 @@ test("opening an existing database replaces the broad FTS update trigger", (t) =
   assertIndex(db, existing.id, ["migratedtitle", "existingcontent"], ["existingtitle"]);
   exerciseRosterAndTextChanges(db);
 });
+
+for (const corrupt of [false, true]) {
+  test(`upgrading a database created by 1.13.4 repairs search (${corrupt ? "corrupt" : "clean"} index)`, (t) => {
+    const db = createDb(t);
+    if (!db) return;
+    const filename = db.db.name;
+    db.db.close();
+    fs.writeFileSync(
+      filename,
+      gunzipSync(fs.readFileSync(path.join(__dirname, "../fixtures/speaker-scope/1.13.4.db.gz")))
+    );
+    const original = new (require("better-sqlite3"))(filename);
+    assert.equal(original.pragma("user_version", { simple: true }), 5);
+    assert.equal(
+      original
+        .prepare(
+          "SELECT COUNT(*) AS count FROM pragma_table_info('notes') WHERE name='speaker_roster_revision'"
+        )
+        .get().count,
+      0
+    );
+    if (corrupt) {
+      original.exec(
+        "INSERT INTO notes_fts(rowid, title, content, enhanced_content) SELECT id, title, content, enhanced_content FROM notes"
+      );
+      assert.throws(
+        () => original.exec("INSERT INTO notes_fts(notes_fts, rank) VALUES ('integrity-check', 1)"),
+        { code: "SQLITE_CORRUPT_VTAB" }
+      );
+    }
+    original.close();
+    db.initDatabase();
+    assert.equal(db.db.pragma("user_version", { simple: true }), 6);
+    assertIndex(db, 1, ["upgradecanary", "searchcanary", "summarycanary"]);
+    const rows = require("../../src/helpers/transcriptDocument").readTranscriptDocument(
+      db.getNote(1).transcript
+    ).rows;
+    assert.equal(rows[0].speakerName, undefined);
+    assert.equal(rows[0].speakerReviewRequired, true);
+    assert.equal(rows[1].speakerName, "Chosen");
+    const transcript = db.getNote(1).transcript;
+    db.db.close();
+    db.initDatabase();
+    assert.equal(db.getNote(1).transcript, transcript, "a second open is stable");
+    assertIndex(db, 1, ["upgradecanary", "searchcanary", "summarycanary"]);
+    exerciseRosterAndTextChanges(db);
+  });
+}
