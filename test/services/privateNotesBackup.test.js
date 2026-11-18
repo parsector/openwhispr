@@ -851,7 +851,14 @@ test("a stale first-upgrade profile respects an explicit newer move to the defau
 });
 
 test("a lost workspace restores into default without merging distinct cloud folders", async (t) => {
-  const ctx = await setup(t, { privateWorkspacePlacement: true, workspaces: [DEFAULT_WORKSPACE] });
+  // Placement-aware APIs derive a note's workspace from its folder. Freeze the
+  // clock so a stale-write refusal cannot accidentally hide a missing rule.
+  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-11-18T12:00:00.000Z") });
+  const ctx = await setup(t, {
+    privateWorkspacePlacement: true,
+    folderPlacement: true,
+    workspaces: [DEFAULT_WORKSPACE],
+  });
   if (!ctx) return;
   const { device, cloud } = ctx;
   showWorkspaceList(t, device, [DEFAULT_WORKSPACE]);
@@ -882,6 +889,10 @@ test("a lost workspace restores into default without merging distinct cloud fold
   assert.notEqual(restoredFolder.name, "Notes");
   assert.equal(restored.folder_id, restoredFolder.id);
   assert.equal(cloud.folder(orphan.id).private_workspace_id, "workspace-default");
+  assert.equal(cloud.note(restored.cloud_id).private_workspace_id, "workspace-default");
+  assert.equal(cloud.note(restored.cloud_id).folder_id, orphan.id);
+  await device.service.syncAll(true);
+  assert.equal(device.db.getNote(restored.id).folder_id, restoredFolder.id);
 });
 
 test("a pulled note in a workspace newer than this window's list keeps its placement", async (t) => {
