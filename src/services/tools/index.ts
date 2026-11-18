@@ -20,11 +20,18 @@ import {
   type ConnectorToolSettings,
 } from "./connectors/connectorToolModules";
 import {
+  createInteractionTools,
+  requireConnection,
+  type InteractionToolOptions,
+} from "./interactionTools";
+import {
   createLoadSkillTool,
   createProposeSkillTool,
   createUpdateSkillTool,
   type SkillToolDeps,
 } from "./skillTools";
+
+import { getSettings, selectCalendarConnected } from "../../stores/settingsStore";
 import type { ContainerScope } from "../../types/chat";
 import { createDelegateTaskTool, type AgentProject } from "./delegateTaskTool";
 import { createRunPresetTool, type AgentPreset } from "./runPresetTool";
@@ -36,12 +43,23 @@ export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 interface ToolRegistrySettings {
   isSignedIn: boolean;
+  cloudBackupEnabled: boolean;
   /** Disabled for onboarding demos; supported normal chat surfaces default to enabled. */
   productHelpEnabled?: boolean;
   calendarConnected: boolean;
-  cloudBackupEnabled: boolean;
   /** Pins search_notes to a container (overview chat); the LLM cannot widen it. */
   searchScope?: ContainerScope;
+  /**
+   * The spaces whose notes the note tools may read or change: the active workspace's Private and
+   * its teamspaces in scope (resolveAssistantScopeSpaceIds). Nothing elsewhere reaches the model.
+   */
+  scopeSpaceIds: number[];
+  protectNotes?: NoteScope["protectNotes"];
+  getWriteGuard?: NoteScope["getWriteGuard"];
+  privateWorkspaceId?: string | null;
+  privateCreationAllowed?: boolean;
+  /** The note a note's chat is about, which that chat's tools reach wherever it is. */
+  openNoteId?: number | null;
   webSearchEnabled: boolean;
   /** Live dictionary and snippet access; enables the vocabulary tools. */
   vocabulary?: DictionaryActions & SnippetActions;
@@ -90,6 +108,12 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   if (settings.calendarConnected) {
     registry.register(calendarTool);
     registry.register(calendarAvailabilityTool);
+  } else if (settings.interactions?.connectionTargets.includes("calendar")) {
+    for (const tool of [calendarTool, calendarAvailabilityTool]) {
+      registry.register(
+        requireConnection(tool, "calendar", () => selectCalendarConnected(getSettings()))
+      );
+    }
   }
 
   if (settings.connectors) registerConnectorTools(registry, settings.connectors);
@@ -110,6 +134,9 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     if (tool && execute) registry.register({ ...tool, execute });
   }
 
+  if (settings.interactions) {
+    for (const tool of createInteractionTools(settings.interactions)) registry.register(tool);
+  }
   if (settings.skills) {
     const hasSkills = settings.skills.usable.length > 0;
     if (hasSkills) {

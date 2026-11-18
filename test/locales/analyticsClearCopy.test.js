@@ -25,5 +25,9 @@ test("Clear History describes account and device cleanup without showing a retir
   assert.match(confirmationCopy, /Insights|counters/);
   assert.match(confirmationCopy, /account/);
   assert.match(signedOutConfirmationCopy, /device/);
-  assert.match(signedOutConfirmationCopy, /not affected/);
+  assert.match(signedOutConfirmationCopy, /this history/);
+  assert.match(
+    signedOutConfirmationCopy,
+    /deleted from that account the next time it signs in here/
+  );
 });

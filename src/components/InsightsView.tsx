@@ -366,7 +366,12 @@ function YourUsage({
   syncActive: boolean;
 }) {
   const { t } = useTranslation();
-  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  // Reopening Insights shows this session's last account summary while the next one loads.
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(() =>
+    isLoaded && syncActive && accountId
+      ? (readCachedInsightsSummary(accountId)?.value ?? null)
+      : null
+  );
   const [loading, setLoading] = useState(true);
   const [syncError, setSyncError] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -375,28 +380,26 @@ function YourUsage({
   // A superseded load also bails before syncing, so two passes cannot share a
   // batch and leave the winner reading a summary the other has not finished.
   const requestIdRef = useRef(0);
+  const accountReadFailedRef = useRef(false);
+  const [cacheInvalidationRevision, setCacheInvalidationRevision] = useState(0);
 
-  const load = useCallback(async () => {
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    setSyncError(false);
+  useEffect(
+    () =>
+      subscribeToInsightsCacheInvalidation((scope) => {
+        if (scope !== "all") return;
+        requestIdRef.current += 1;
+        setSummary(null);
+        setCacheInvalidationRevision((revision) => revision + 1);
+      }),
+    []
+  );
 
-    // The device read stands on its own. Folding it into the same catch as the
-    // cloud fetch meant a failed local read fell through to a summary of
-    // zeros — under a confident "On this device", with no error anywhere — and
-    // told the user their history was empty.
-    let local: AnalyticsSummary;
-    try {
-      local = await window.electronAPI.getAnalyticsSummary();
-    } catch (error) {
-      if (requestId !== requestIdRef.current) return;
-      console.error("Reading local Insights failed:", error);
-      setLoadFailed(true);
-      setLoading(false);
-      return;
-    }
-    if (requestId !== requestIdRef.current) return;
-    setLoadFailed(false);
+  const load = useCallback(
+    async (cache: AccountSummaryCache = "refresh") => {
+      const requestId = ++requestIdRef.current;
+      const cacheVersion = accountId ? getInsightsCacheVersion(accountId) : null;
+      setLoading(true);
+      setSyncError(false);
 
     setSummary(local);
     setLoading(false);

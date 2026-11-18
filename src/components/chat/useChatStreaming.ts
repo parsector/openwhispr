@@ -20,10 +20,7 @@ import {
 import { usePolicyStore } from "../../stores/policyStore";
 import { readSkillCardRecord, SKILL_CARD_TOOLS } from "./skillCardRecord";
 import { useAuth } from "../../hooks/useAuth";
-import { getUsageState } from "../../lib/usageStore";
-import { readIsSubscribed } from "../../lib/subscriptionFlag";
-import { hasConnectorPlan } from "../../utils/connectorEligibility";
-import { gmailSendStatus, resolveEmailDraftTarget } from "../../utils/emailDraftTarget";
+import { getAuthRequestContextSnapshot, subscribeAuthBoundary } from "../../lib/authRequestContext";
 import {
   ensureConnectorStatus,
   readyConnectorIds,
@@ -80,9 +77,7 @@ import {
   type AgentSelectionContext,
 } from "../../utils/agentSelectionContext";
 
-const RAG_NOTE_LIMIT = 5;
-const RAG_NOTE_SNIPPET_LENGTH = 500;
-const STREAM_FLUSH_INTERVAL_MS = 32;
+export type { OpenNoteContext, SendToAIOptions, TurnDetails, TurnHandler } from "./chatTurnEngine";
 
 // The tool reads the DB mirror over IPC (not the control panel's store), so it
 // also works from the dictation window, for the workspace every window uses now.
@@ -250,134 +245,50 @@ export interface ChatStreaming {
   agentState: AgentState;
   toolStatus: string;
   activeToolName: string;
-  sendToAI: (userText: string, allMessages: Message[], options?: SendToAIOptions) => Promise<void>;
+  sendToAI: (userText: string, messages: Message[], options?: SendToAIOptions) => Promise<void>;
   cancelStream: () => void;
 }
 
-// Walks backward to the newest user message; a null transform keeps walking.
-function transformLastUserMessage(
-  history: HistoryMessage[],
-  transform: (message: HistoryMessage) => HistoryMessage | null
-): void {
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].role !== "user") continue;
-    const replacement = transform(history[i]);
-    if (replacement === null) continue;
-    history[i] = replacement;
-    break;
-  }
-}
-
-export function useChatStreaming({
-  setMessages,
-  inferenceScope = "chatIntelligence",
-  noteContext: externalNoteContext,
-  openNote,
-  searchScope,
-  allowConnectors = false,
-  nameUnavailableCapabilities = true,
-  productHelpEnabled = true,
-  skillsEnabled = false,
-  noteMeeting,
-  onStreamComplete,
-  onResponseContent,
-}: UseChatStreamingOptions): ChatStreaming {
-  const { t } = useTranslation();
+export function useChatStreaming(options: UseChatStreamingOptions): ChatStreaming {
+  const { user } = useAuth();
   const [agentState, setAgentState] = useState<AgentState>("idle");
   const [toolStatus, setToolStatus] = useState("");
   const [activeToolName, setActiveToolName] = useState("");
-  const mountedRef = useRef(true);
-  const noteContextRef = useRef(externalNoteContext);
-  noteContextRef.current = externalNoteContext;
-  const openNoteRef = useRef(openNote);
-  openNoteRef.current = openNote;
-  const searchScopeRef = useRef(searchScope);
-  searchScopeRef.current = searchScope;
-  const noteMeetingRef = useRef(noteMeeting);
-  noteMeetingRef.current = noteMeeting;
-  // Only an account bound to this session: after a switch, drafts must not
-  // be signed with the previous account's name.
-  const { user } = useAuth();
-  const userNameRef = useRef<string | null>(null);
-  userNameRef.current = user?.name ?? null;
-  const toolRegistryRef = useRef<{ key: string; registry: ToolRegistry } | null>(null);
-  // The skills whose text the current send carries; load_skill reads it at call time.
-  const carriedSkillNamesRef = useRef<ReadonlySet<string>>(new Set());
-  const toolActivityStartedAtRef = useRef<number | null>(null);
-  const toolActivityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clearToolActivityTimer = useCallback(() => {
-    if (toolActivityTimerRef.current) {
-      clearTimeout(toolActivityTimerRef.current);
-      toolActivityTimerRef.current = null;
-    }
+  const optionsRef = useRef<Omit<ChatTurnOptions, "isOwnerCurrent">>({
+    ...options,
+    userName: user?.name ?? null,
+  });
+  optionsRef.current = { ...options, userName: user?.name ?? null };
+  const messagesRef = useRef(options.setMessages);
+  messagesRef.current = options.setMessages;
+  const accountVersionRef = useRef(0);
+  const engineGenerationRef = useRef<number | null>(null);
+  // One engine per account: a turn started before an account change writes nothing after it.
+  const createEngine = useCallback((): ChatTurnEngine => {
+    const accountVersion = accountVersionRef.current;
+    const authGeneration = getAuthRequestContextSnapshot().observedGeneration;
+    engineGenerationRef.current = authGeneration;
+    const isOwnerCurrent = (): boolean =>
+      accountVersion === accountVersionRef.current &&
+      authGeneration === getAuthRequestContextSnapshot().observedGeneration;
+    return createChatTurnEngine(() => ({ ...optionsRef.current, isOwnerCurrent }), {
+      setMessages: (update) => messagesRef.current(update),
+      setAgentState,
+      setToolStatus,
+      setActiveToolName,
+    });
   }, []);
-
-  const clearToolActivity = useCallback(() => {
-    clearToolActivityTimer();
-    toolActivityStartedAtRef.current = null;
-    if (!mountedRef.current) return;
-    setToolStatus("");
-    setActiveToolName("");
-  }, [clearToolActivityTimer]);
-
-  const beginToolActivity = useCallback(
-    (name: string, status: string) => {
-      clearToolActivityTimer();
-      toolActivityStartedAtRef.current = Date.now();
-      setActiveToolName(name);
-      setToolStatus(status);
-    },
-    [clearToolActivityTimer]
-  );
-
-  const completeToolActivity = useCallback(() => {
-    const startedAt = toolActivityStartedAtRef.current;
-    if (startedAt == null) {
-      clearToolActivity();
-      return;
-    }
-
-    const remainingMs = getAgentToolActivityRemainingMs(startedAt);
-    clearToolActivityTimer();
-    if (remainingMs === 0) {
-      clearToolActivity();
-      return;
-    }
-
-    toolActivityTimerRef.current = setTimeout(clearToolActivity, remainingMs);
-  }, [clearToolActivity, clearToolActivityTimer]);
-
-  const sendGenerationRef = useRef(0);
-  // Generation stamped by the most recent cancel issued while still mounted
-  // (Esc, a Stop button). The unmount cleanup below flips mountedRef off
-  // before routing through cancelStream, so it never stamps this — which is
-  // how sendToAI tells a user's cancel from an unmount mid-stream.
-  const explicitCancelGenerationRef = useRef(0);
-  const toolScopeRef = useRef<ToolExecutionScope | null>(null);
-  const cancelStream = useCallback(() => {
-    sendGenerationRef.current += 1;
-    if (mountedRef.current) {
-      explicitCancelGenerationRef.current = sendGenerationRef.current;
-    }
-    toolScopeRef.current?.abort();
-    toolScopeRef.current = null;
-    ReasoningService.cancelActiveStream();
-    setAgentState("idle");
-    clearToolActivity();
-  }, [clearToolActivity]);
-
+  const engineRef = useRef<ChatTurnEngine | null>(null);
+  if (!engineRef.current) engineRef.current = createEngine();
   useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      // Route through cancelStream so every cancellation path — Esc/Stop and
-      // an unmount mid-stream alike — bumps the same generation counter.
-      // Calling ReasoningService.cancelActiveStream() directly here (as this
-      // used to) left sendToAI's cancelled() check unaware of an unmount
-      // cancel, so its empty-response fallback still fired and persisted a
-      // fabricated reply for a send the user never saw complete.
-      cancelStream();
+    const replaceEngine = (): void => {
+      // Fence before aborting: abort listeners can run synchronously.
+      accountVersionRef.current += 1;
+      engineRef.current?.cancel({ explicit: true });
+      engineRef.current = createEngine();
+      setAgentState("idle");
+      setToolStatus("");
+      setActiveToolName("");
     };
   }, [cancelStream]);
 
@@ -1173,12 +1084,6 @@ export function useChatStreaming({
       completeToolActivity,
     ]
   );
-
-  return {
-    agentState,
-    toolStatus,
-    activeToolName,
-    sendToAI,
-    cancelStream,
-  };
+  const cancelStream = useCallback((): void => engineRef.current?.cancel({ explicit: true }), []);
+  return { agentState, toolStatus, activeToolName, sendToAI, cancelStream };
 }

@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -86,9 +87,11 @@ test.before(() => {
     _buildSpeakerMappings: () => ({}),
   };
   IPCHandlers.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
 });
 

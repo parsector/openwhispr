@@ -15,7 +15,8 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useUiLocale } from "../../hooks/useUiLocale";
-import { usePolicySnapshot } from "../../hooks/usePolicy";
+import { usePolicySnapshot, useTranscriptionChoiceRefusal } from "../../hooks/usePolicy";
+import { openProviderSettings } from "../../utils/describeProviderError";
 import { meetingRecordingRefusal } from "../../stores/policyRules";
 import {
   Loader2,
@@ -45,6 +46,7 @@ import {
 import { ownsNote } from "../../lib/spacePermissions";
 import SpaceSettingsDialog from "./SpaceSettingsDialog";
 import {
+  markNoteEdited,
   useShareCacheEntry,
   useNoteConflict,
   useSpaces,
@@ -58,6 +60,7 @@ import { NoteSharingService } from "../../services/NoteSharingService";
 import { fetchSpaceRoster, useSpaceRoster } from "../../hooks/useSpaceRoster";
 import { useAuth } from "../../hooks/useAuth";
 import { RichTextEditor } from "../ui/RichTextEditor";
+import { NoteBacklinks } from "../ui/editorBlocks/NoteBacklinks";
 import type { Editor } from "@tiptap/react";
 import { MeetingTranscriptChat, SelectionBar } from "./MeetingTranscriptChat";
 import {
@@ -325,7 +328,12 @@ export default function NoteEditor({
     };
   }, [note.id]);
   const locale = useUiLocale();
+  const handleStartRecording = (): void => {
+    markNoteEdited(note.id);
+    onStartRecording();
+  };
   const recordingRefusal = meetingRecordingRefusal(usePolicySnapshot());
+  const recordingChoiceRefusal = useTranscriptionChoiceRefusal("meeting");
   // An upload's transcription lives in its transcript, so until the user writes
   // notes it opens there rather than on an empty "Your notes".
   const opensOnTranscript =
@@ -452,6 +460,7 @@ export default function NoteEditor({
   }, [
     aclRetryVersion,
     isSignedIn,
+    isTeamNote,
     note.cloud_id,
     note.id,
     note.is_shared,
@@ -1106,7 +1115,8 @@ export default function NoteEditor({
   );
 
   const handleDismissSuggestion = useCallback(
-    async (speakerId: string) => {
+    async (speakerId: string): Promise<void> => {
+      markNoteEdited(note.id);
       const currentSegments = displaySegments.map((s) =>
         s.speaker === speakerId
           ? applyTranscriptSpeakerPatch(s, {
@@ -1117,7 +1127,7 @@ export default function NoteEditor({
       );
       await persistDisplaySegments(currentSegments, !!diarizedSegments || !isRecording);
     },
-    [displaySegments, diarizedSegments, isRecording, persistDisplaySegments]
+    [note.id, displaySegments, diarizedSegments, isRecording, persistDisplaySegments]
   );
 
   const [selectedSegmentIds, setSelectedSegmentIds] = useState<Set<string>>(new Set());
@@ -1438,7 +1448,11 @@ export default function NoteEditor({
     clearNoteConflict(note.client_note_id);
     // With no save pending, the owner's external-update resync applies the
     // fresh copy to the visible editor buffer.
-    if (fresh) updateNoteInStore(fresh);
+    if (fresh) {
+      // The row may have adopted the cloud copy's key; nothing may wait under it.
+      clearNoteConflict(fresh.client_note_id);
+      updateNoteInStore(fresh);
+    }
   }, [conflict, note.client_note_id, note.folder_id, note.id, note.space_id, onCancelPendingSaves]);
 
   const handleCloudLabels = useCallback(
@@ -1863,8 +1877,11 @@ export default function NoteEditor({
                   isRecording={isRecording}
                   isProcessing={isProcessing}
                   disabled={!recordingAllowed}
-                  disabledReason={t(MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal])}
-                  onStart={onStartRecording}
+                  disabledReason={t(
+                    recordingChoiceRefusal?.messageKey ??
+                      MEETING_RECORDING_REFUSAL_KEYS[recordingRefusal]
+                  )}
+                  onStart={handleStartRecording}
                   onStop={onStopRecording}
                 />
               )}
@@ -1969,9 +1986,14 @@ export default function NoteEditor({
                 {t(MEETING_RECORDING_REFUSAL_KEYS.disabled)}
               </p>
             </div>
-          </div>
-        )}
+          )}
 
+        {/* notes that link here with [[title]]. */}
+        <NoteBacklinks
+          noteId={note.id}
+          title={note.title || ""}
+          className={cn(PAGE_CONTENT_WIDTH_CLASS, "shrink-0 px-5")}
+        />
         <div className="flex-1 relative min-h-0">
           <div ref={contentScrollRef} className="h-full overflow-y-auto">
             {viewMode === "transcript" && (hasChatSegments || isRecording) ? (
@@ -2060,7 +2082,7 @@ export default function NoteEditor({
                 {canEditNote && recordingAllowed && (
                   <Button
                     className="mt-6 rounded-full px-5 font-medium"
-                    onClick={onStartRecording}
+                    onClick={handleStartRecording}
                     disabled={isProcessing}
                   >
                     {t("notes.editor.startRecording")}

@@ -10,6 +10,8 @@ import {
   selectResolvedNoteFormatting,
   type ResolvedNoteFormatting,
 } from "./settingsStore";
+import { localModelRefusal } from "./policyRules";
+import { usePolicyStore } from "./policyStore";
 import { appendDictionarySuffix } from "../config/prompts";
 import { getLlmDictionaryWords } from "../utils/snippets";
 import { generateNoteTitle } from "../utils/generateTitle";
@@ -249,8 +251,9 @@ const nothingToSummarizeError = () =>
 
 /**
  * Whether the reply is the marker itself, as models wrap it: in a fence or
- * emphasis, or after a short sentence. A summary that only contains it, such as
- * a section a small model answered with the marker, is still a summary.
+ * emphasis, after a short sentence, or in another letter case. A summary that
+ * only contains it, such as a section a small model answered with the marker,
+ * is still a summary.
  */
 function isNothingToSummarizeReply(reply: string): boolean {
   return isMarkerOnly(reply, NOTHING_TO_SUMMARIZE);
@@ -522,7 +525,17 @@ export function runBackgroundAction(
 
   const modelId = options.modelId;
   if (!modelId && !options.isCloudMode) {
-    pushErrorEvent({ noteId, message: labels.noModel });
+    const blocked = getSettings().policyBlockedLocalScopes?.includes("noteFormatting");
+    pushErrorEvent({
+      noteId,
+      message: labels.noModel,
+      ...(blocked
+        ? {
+            messageKey: localModelRefusal(usePolicyStore.getState(), "llm").messageKey,
+            settingsTarget: "noteFormatting",
+          }
+        : {}),
+    });
     return;
   }
 

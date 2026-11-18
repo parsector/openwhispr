@@ -10,6 +10,7 @@ export interface ToolContextRequest {
 }
 
 export interface ToolExecutionScope {
+  signal: AbortSignal;
   createContext: (request: ToolContextRequest) => ToolExecutionContext;
   setMcpResultBudget: (perResultBudget: number) => void;
   abort: () => void;
@@ -18,7 +19,17 @@ export interface ToolExecutionScope {
 interface ToolExecutionHandlers {
   origin?: { conversationId: string; surface: "chat" | "assistant" };
   onApprovalRequested?: () => void;
-  onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
+  /** A call now waits on the user's answer, or no longer does. */
+  onInteraction?: (request: { toolCallId: string; record: InteractionRecord }) => void;
+  onImageAttached?: (image: ChatImageAttachment) => void;
+  /** A send happened (or may have); the key belongs on its tool call. */
+  onActionCompleted?: (request: {
+    toolCallId: string;
+    actionKey: string;
+    outcome?: CompletedActionOutcome;
+  }) => void;
+  /** Sends earlier requests in the conversation made, from its saved tool calls. */
+  completedActions?: Iterable<string>;
 }
 
 /**
@@ -26,7 +37,9 @@ interface ToolExecutionHandlers {
  * conversation-ending path (Esc, new chat, unmount) aborts, so tools waiting
  * on the user (approval cards) are released no matter how the turn ended.
  * Notices from a tool that finishes after that are dropped, so a late result
- * cannot reopen a panel the user dismissed.
+ * cannot reopen a panel the user dismissed. A completed send is the exception:
+ * a card already committing when the turn stopped still sends, and the
+ * conversation must know it did.
  */
 export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): ToolExecutionScope {
   const controller = new AbortController();
@@ -47,22 +60,9 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
     const used = turnSlots.get(key) ?? 0;
     if (used > 0) turnSlots.set(key, used - 1);
   };
-  // A tool and runApprovalAction may both hold the same call; the caller
-  // hears it once, and again only when a later hold newly asks to keep the
-  // clipboard.
-  const holdOncePerCall = (): ((options?: HoldDeliveryOptions) => void) => {
-    const hold = notify(handlers.onHoldDelivery);
-    let held = false;
-    let clipboardPreserved = false;
-    return (options) => {
-      const preservesClipboard = options?.preserveClipboard === true;
-      if (held && (clipboardPreserved || !preservesClipboard)) return;
-      held = true;
-      clipboardPreserved ||= preservesClipboard;
-      hold(options);
-    };
-  };
+  const interaction = notify(handlers.onInteraction);
   return {
+    signal: controller.signal,
     createContext: ({ messageId, toolCallId, signal }) => ({
       messageId,
       toolCallId,
@@ -71,7 +71,6 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       // whatever the tool is waiting on.
       signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
       onApprovalRequested: notify(handlers.onApprovalRequested),
-      onHoldDelivery: holdOncePerCall(),
       claimTurnSlot,
       releaseTurnSlot,
       limitMcpResult: (result) => limitMcpResult?.(result) ?? result,

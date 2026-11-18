@@ -18,7 +18,7 @@ interface UpdateInfo {
 }
 
 interface UpdateState {
-  status: UpdateStatus;
+  status: UpdateStatusResult;
   info: UpdateInfo | null;
   downloadProgress: number;
   isChecking: boolean;
@@ -35,6 +35,7 @@ let globalState: UpdateState = {
     logPath: "",
     isDevelopment: false,
     isSupported: true,
+    policyReady: false,
   },
   info: null,
   downloadProgress: 0,
@@ -56,12 +57,44 @@ function updateGlobalState(updates: Partial<UpdateState>) {
   notifyListeners();
 }
 
+// Main ends running work only once no verdict allows it, not while one is pending.
+const isBlocked = (status: UpdateStatusResult) =>
+  status.updateMode == null || status.updateMode === "it_managed";
+
 function registerEventListeners() {
   if (listenersRegistered || !window.electronAPI) {
     return;
   }
 
   listenersRegistered = true;
+
+  if (window.electronAPI.onUpdateStatusChanged) {
+    const dispose = window.electronAPI.onUpdateStatusChanged((status) => {
+      const wasBlocked = isBlocked(globalState.status);
+      const blocked = isBlocked(status);
+      updateGlobalState({
+        status,
+        ...(blocked
+          ? {
+              info: null,
+              isChecking: false,
+              isDownloading: false,
+              isInstalling: false,
+              downloadProgress: 0,
+            }
+          : {}),
+      });
+      if (wasBlocked && !blocked) {
+        window.electronAPI
+          .getUpdateInfo?.()
+          .then((info) => {
+            if (info) updateGlobalState({ info });
+          })
+          .catch(() => {});
+      }
+    });
+    if (dispose) cleanupFunctions.push(dispose);
+  }
 
   if (window.electronAPI.onUpdateAvailable) {
     const dispose = window.electronAPI.onUpdateAvailable((_event, info) => {
@@ -229,7 +262,10 @@ export function useUpdater() {
     isInstallingRef.current = true;
 
     try {
-      await window.electronAPI.installUpdate();
+      const result = await window.electronAPI.installUpdate();
+      if (!result.success && result.code) {
+        throw Object.assign(new Error(result.message), { code: result.code });
+      }
 
       // Settings raises its own "almost there" dialog when the restart stalls.
       setTimeout(() => {

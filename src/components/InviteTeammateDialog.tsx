@@ -40,6 +40,7 @@ export default function InviteTeammateDialog({
   workspaceId,
   workspaceName,
   onInvited,
+  onInvitationsChanged,
   cancelLabel,
   teamIds,
   spaceIds,
@@ -59,6 +60,7 @@ export default function InviteTeammateDialog({
     Boolean(workspace?.stripe_subscription_id) &&
     (seatsUsed === null || seats === null || seatsUsed >= seats);
 
+  // Re-sent on every open, since a fresh flow starts with nothing known.
   useEffect(() => {
     if (!open) return;
     let cancelled = false;

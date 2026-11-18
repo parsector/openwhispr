@@ -4,6 +4,7 @@ import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Markdown } from "tiptap-markdown";
 import { HorizontalRuleOutsideTables, markdownTableExtensions } from "./RichTextEditorTable";
+import { createEditorBlockExtensions } from "./editorBlocks/editorBlockExtensions";
 
 /**
  * The note editor's schema and Markdown round-trip. Order matters: at equal
@@ -26,6 +27,7 @@ export function createRichTextExtensions(placeholder: string) {
     HorizontalRuleOutsideTables,
     TaskList,
     TaskItem.configure({ nested: true }),
+    ...createEditorBlockExtensions(),
     Placeholder.configure({
       placeholder,
       emptyEditorClass: "is-editor-empty",

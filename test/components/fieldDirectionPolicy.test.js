@@ -58,8 +58,8 @@ function inventoryByFile(inventory) {
 const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/ApiKeysSection.tsx": ["auto"],
   "src/components/AuthenticationStep.tsx": ["ltr", "auto", "ltr", "ltr", "ltr"],
-  "src/components/CreateTeamDialog.tsx": ["auto"],
   "src/components/CreateWorkspaceDialog.tsx": ["auto"],
+  "src/components/CreatorLinkField.tsx": ["ltr"],
   "src/components/DictionaryView.tsx": ["auto"],
   "src/components/EnterpriseProviderConfig.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/ForgotPasswordView.tsx": ["ltr"],
@@ -67,12 +67,14 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/LeaderboardSection.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
+  // A typed answer in any script; an API key, always LTR.
   "src/components/dictionary/DictionaryAddField.tsx": ["auto"],
   "src/components/dictionary/DictionaryToolbar.tsx": ["auto"],
   "src/components/dictionary/DictionaryWordList.tsx": ["auto"],
   "src/components/notes/ActionManagerDialog.tsx": ["auto", "auto", "auto"],
   "src/components/notes/DeleteSpaceDialog.tsx": ["auto"],
   "src/components/notes/FolderNotesPopover.tsx": ["auto"],
+  // Names, emails and teams typed in one field: a name may be in any script.
   "src/components/notes/UploadAudioView.tsx": ["auto"],
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
   "src/components/settings/EnterpriseAudioSettings.tsx": ["ltr"],
@@ -93,17 +95,23 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
 };
 
 const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
+  "src/components/CreateTeamDialog.tsx": ["auto"],
+  // A teamspace's description is prose in any script.
+  "src/components/notes/CreateSpaceDialog.tsx": ["auto"],
+  "src/components/notes/SpacePeopleField.tsx": ["auto"],
   "src/components/ApiKeysSection.tsx": ["inherit"],
   "src/components/CommandSearch.tsx": ["auto"],
   // Folder names and search accept user text in any script.
   "src/components/MeetingNotificationFolderPicker.tsx": ["auto", "auto"],
-  "src/components/MemberPickList.tsx": ["auto"],
   "src/components/ReferralDashboard.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["inherit"],
+  // The agent's typed request: prose in any script.
+  "src/components/agent/AgentComposer.tsx": ["auto"],
+  // An answer card's title and message: prose in any script.
   "src/components/chat/ApprovalCard.tsx": ["auto", "auto"],
   "src/components/chat/ChatInput.tsx": ["auto"],
-  // To, Cc, Subject, Body: people's names and prose in any script.
-  "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto", "auto"],
+  // To, Cc, Subject: people's names and prose in any script.
+  "src/components/chat/EmailApprovalFields.tsx": ["auto", "auto", "auto"],
   // Title and description, or a comment: prose in any script.
   "src/components/chat/IssueApprovalFields.tsx": ["auto", "auto"],
   "src/components/chat/LocalApprovalCard.tsx": ["inherit"],
@@ -135,6 +143,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/notes/NotesOnboarding.tsx": ["auto", "auto", "auto"],
   "src/components/notes/ShareNoteDialog.tsx": ["auto"],
   "src/components/notes/SpaceNameField.tsx": ["auto"],
+  // A teamspace's name and description, edited in place in the settings header: prose in any script.
+  "src/components/notes/SpaceSettingsDialog.tsx": ["auto", "auto"],
   "src/components/notes/SpacesTree.tsx": ["auto", "auto", "auto", "auto"],
   "src/components/notes/UploadAudioView.tsx": ["ltr", "ltr", "inherit"],
   "src/components/onboarding/DemoStep.tsx": ["auto"],
@@ -158,6 +168,8 @@ const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
   "src/components/ui/LanguageSelector.tsx": ["auto"],
   // A skill's instructions: Markdown prose in any script.
   "src/components/ui/LineNumberedTextarea.tsx": ["auto"],
+  // Find and replace terms are user text in any script.
+  "src/components/ui/editorBlocks/FindReplacePanel.tsx": ["auto", "auto"],
 };
 
 test("shared field primitives inherit unless a consumer declares its content direction", async (t) => {

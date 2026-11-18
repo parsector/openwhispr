@@ -616,8 +616,8 @@ test("getDictionaryEntriesByWords matches case-insensitively", (t) => {
 
   const result = db.getDictionaryEntriesByWords(["openwhispr", "PARAKEET", "removed", "missing"]);
   assert.deepEqual(result, [
-    { word: "OpenWhispr", cloudId: "cloud-1" },
-    { word: "Parakeet", cloudId: null },
+    { word: "OpenWhispr", cloudId: "cloud-1", accountId: null },
+    { word: "Parakeet", cloudId: null, accountId: null },
   ]);
   assert.deepEqual(db.getDictionaryEntriesByWords([]), []);
 });

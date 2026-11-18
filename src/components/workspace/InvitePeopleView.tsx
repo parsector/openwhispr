@@ -9,15 +9,30 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  MAX_INVITE_RECIPIENTS,
+  inviteConfirmed,
   inviteSummary,
   isRetryableFailure,
+  seatsWarningMessage,
   type InviteFlowEvent,
   type InviteFlowState,
   type InviteRecipient,
 } from "../../lib/inviteFlow";
 import type { InviteErrorKind } from "../../lib/workspaceErrors";
-import { CheckCircle2, ChevronDown, Loader2, X } from "../icons";
+import {
+  AlertCircle,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Loader2,
+  Mail,
+  User,
+  UserSettings,
+  X,
+  type IconComponent,
+} from "../icons";
 import { cn } from "../lib/utils";
+import MemberAvatar from "../MemberAvatar";
 import { isolate } from "../../utils/bidiIsolate";
 import { BIDI_VALUE_TOKEN, BidiInterpolatedText } from "../ui/BidiInterpolatedText";
 import { DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
@@ -29,6 +44,8 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { WorkspaceErrorBar } from "./WorkspaceErrorBar";
+import { FIELD_GROUP, FIELD_LABEL } from "./dialogButtons";
+import { CHIP_REMOVE_BUTTON, CHIP_TONE_DEFAULT, CHIP_TONE_ERROR } from "./recipientChipStyles";
 
 export interface InviteSuggestion {
   email: string;
@@ -37,22 +54,42 @@ export interface InviteSuggestion {
 
 export interface InvitePeopleViewProps {
   workspaceName: string;
+  /** Replaces the default title and description when given. */
+  heading?: { title: string; description: string };
   state: InviteFlowState;
   dispatch: (event: InviteFlowEvent) => void;
   suggestions: InviteSuggestion[];
   seatLine: string | null;
   seatCostLine: string | null;
+  canManageBilling: boolean;
+  /** Who to ask for more seats, for admins who can't buy them. */
+  billingManager: string | null;
+  /** Opens Plan & Billing from the seats warning, for those who can manage billing. */
+  onUpgrade: () => void;
+  /** Accepting adds the invitee to a team or teamspace too, which a skipped address misses. */
+  addsToContainer: boolean;
   cancelLabel: string;
+  /** Who an address is, by lowercase address, so a chip can show a name and picture. */
+  profiles?: ReadonlyMap<string, InviteProfile>;
   onCancel: () => void;
   onSend: () => void;
   onDone: () => void;
 }
 
+export interface InviteProfile {
+  name: string | null;
+  image: string | null;
+}
+
 const ROLES = ["member", "admin"] as const;
+const ROLE_ICON: Record<(typeof ROLES)[number], IconComponent> = {
+  member: User,
+  admin: UserSettings,
+};
 export const SUGGESTION_MIN_CHARS = 2;
 
 const BUTTON_BASE =
-  "flex h-10 w-full items-center justify-center gap-2 rounded-full px-4 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
+  "flex h-[38px] w-full items-center justify-center gap-2 rounded-full px-4 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
 const PRIMARY_BUTTON = cn(BUTTON_BASE, "bg-primary text-primary-foreground hover:bg-primary/90");
 const SECONDARY_BUTTON = cn(
   BUTTON_BASE,
@@ -82,19 +119,25 @@ function recipientErrorKind(recipient: InviteRecipient): InviteErrorKind | null 
   return null;
 }
 
-interface ErrorBarContent {
+interface BarContent {
   message: ReactNode;
   action?: { label: string; onClick: () => void };
 }
 
 export function InvitePeopleView({
   workspaceName,
+  heading,
   state,
   dispatch,
   suggestions,
   seatLine,
   seatCostLine,
+  canManageBilling,
+  billingManager,
+  onUpgrade,
+  addsToContainer,
   cancelLabel,
+  profiles,
   onCancel,
   onSend,
   onDone,
@@ -113,6 +156,10 @@ export function InvitePeopleView({
 
   const summary = inviteSummary(state);
   const sending = state.phase === "sending";
+  const RoleIcon = ROLE_ICON[state.role];
+  // A clean run keeps the form on screen with Send turned into its confirmation, until the host
+  // closes the dialog.
+  const confirmed = inviteConfirmed(state);
   const listOpen =
     state.phase === "editing" &&
     !listDismissed &&
@@ -130,22 +177,103 @@ export function InvitePeopleView({
     />
   );
 
-  const errorBarContent = (): ErrorBarContent | null => {
-    if (summary.tooMany) return { message: t("workspaces.invite.tooMany") };
-    const refused = summary.invalid[0] ?? summary.blocked[0];
-    if (refused) return { message: recipientMessage(refused) };
+  const removeLast = (count: number): BarContent["action"] => ({
+    label: t("workspaces.invite.removeLast", { count }),
+    onClick: () => {
+      dispatch({ type: "removeLast", count });
+      // The button goes away with the excess.
+      inputRef.current?.focus();
+    },
+  });
+
+  // At most one error, the first that applies.
+  const errorBarContent = (): BarContent | null => {
+    if (summary.tooMany) {
+      return {
+        message: t("workspaces.invite.tooMany", { count: MAX_INVITE_RECIPIENTS }),
+        action: removeLast(summary.tooManyBy),
+      };
+    }
+    if (summary.invalid[0]) return { message: recipientMessage(summary.invalid[0]) };
+    if (summary.overCeiling) {
+      const { available, excess } = summary.overCeiling;
+      return available === 0
+        ? { message: t("workspaces.invite.errors.seatLimit") }
+        : {
+            message: t("workspaces.invite.ceilingLeft", { count: available, excess }),
+            action: removeLast(excess),
+          };
+    }
+    if (summary.overRateLimit) {
+      const { available, excess, limit } = summary.overRateLimit;
+      // Past the daily allowance, waiting can't make this batch fit.
+      return {
+        message:
+          summary.sendable.length > limit
+            ? t("workspaces.invite.rateLimitedDaily", { limit, excess })
+            : t("workspaces.invite.rateLimitedLeft", { count: available, excess }),
+        action: removeLast(excess),
+      };
+    }
     if (summary.failed.length === 0) return null;
-    // Try again resends exactly these, so the count and the button agree with Send.
+    // Try resending resends exactly these, so the count and the button agree with Send.
     const retryable = summary.failed.filter(
-      ({ state: chip }) => chip.status === "failed" && isRetryableFailure(chip.kind)
+      ({ state: chip }) => chip.status === "failed" && isRetryableFailure(chip)
     );
     if (retryable.length === 0) return { message: recipientMessage(summary.failed[0]) };
+    const resend = { label: t("workspaces.invite.tryResending"), onClick: onSend };
+    // A 429 answers for the whole batch, so the server's "try later" says more than a count.
+    const rateLimited = retryable.some(
+      ({ state: chip }) => chip.status === "failed" && chip.kind === "rateLimited"
+    );
+    if (rateLimited) return { message: t("workspaces.invite.errors.rateLimited"), action: resend };
+    const seatLimited = retryable.find(
+      ({ state: chip }) => chip.status === "failed" && chip.kind === "seatLimit"
+    );
+    if (seatLimited) return { message: recipientMessage(seatLimited), action: resend };
     return {
       message: t("workspaces.invite.someFailed", { count: retryable.length }),
-      action: { label: t("workspaces.exit.tryAgain"), onClick: onSend },
+      action: resend,
     };
   };
   const errorBar = errorBarContent();
+
+  // Warnings never block Send: the server bills a seat only when an invitation is accepted, and
+  // skipped addresses are left out of the send.
+  const warningBars: Array<BarContent & { key: string }> = [];
+  // Over the ceiling, its blocking bar already says how many to remove; a seats count beside it
+  // would name a different number.
+  if (summary.overSeats && !summary.overCeiling) {
+    warningBars.push({
+      key: "seats",
+      message: seatsWarningMessage(t, summary.overSeats, canManageBilling, billingManager),
+      action:
+        canManageBilling && !sending
+          ? { label: t("workspaces.invite.upgrade"), onClick: onUpgrade }
+          : undefined,
+    });
+  }
+  // On a team or teamspace, "skipped" alone would read as if they were added anyway.
+  const namesSkippedAddress = summary.skipped.length === 1 && !addsToContainer;
+  const skippedMessage: ReactNode = namesSkippedAddress
+    ? recipientMessage(summary.skipped[0])
+    : t(addsToContainer ? "workspaces.invite.skippedNotAdded" : "workspaces.invite.skippedMany", {
+        count: summary.skipped.length,
+      });
+  if (summary.skipped.length > 0) warningBars.push({ key: "skipped", message: skippedMessage });
+  // Part of a send went out while other chips still need attention; Cancel from here must not hide
+  // that the rest got their invitations, or that some emails never arrived.
+  const undelivered = summary.noEmailCount > 0 && summary.noEmailCount === state.sent.length;
+  const sentHeadline = t(
+    undelivered ? "workspaces.invite.createdTitle" : "workspaces.invite.sentTitle",
+    { count: state.sent.length }
+  );
+  if (summary.noEmailCount > 0) {
+    warningBars.push({
+      key: "noEmail",
+      message: t("workspaces.invite.noEmail", { count: summary.noEmailCount }),
+    });
+  }
 
   // The field and Send are disabled while sending, which drops focus to the page; a run that
   // leaves chips to fix returns it to the field (the Done screen focuses its own button).
@@ -182,6 +310,12 @@ export function InvitePeopleView({
       event.preventDefault();
       if (active >= 0) pick(suggestions[active]);
       else dispatch({ type: "commit" });
+      return;
+    }
+    // In an empty field, Backspace takes back the last chip.
+    if (event.key === "Backspace" && state.draft === "" && state.recipients.length > 0) {
+      event.preventDefault();
+      dispatch({ type: "remove", email: state.recipients[state.recipients.length - 1].email });
     }
   };
 
@@ -213,39 +347,53 @@ export function InvitePeopleView({
       onOpenAutoFocus={focusField}
       onEscapeKeyDown={handleEscapeKeyDown}
       onInteractOutside={blockWhileSending}
-      className="w-[440px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-6 rounded-[28px] p-5 sm:max-w-[440px]"
+      className="max-h-[calc(100vh-32px)] w-[441px] max-w-[calc(100vw-32px)] grid-cols-1 items-stretch gap-7 overflow-y-auto rounded-[28px] p-5 sm:max-w-[441px]"
     >
-      {state.phase === "done" ? (
+      {state.phase === "done" && !confirmed ? (
         <InviteDoneContent
           workspaceName={workspaceName}
           sent={state.sent}
+          attachedCount={state.attached.length}
+          headline={sentHeadline}
+          undelivered={undelivered}
           noEmailCount={summary.noEmailCount}
+          skippedMessage={summary.skipped.length > 0 ? skippedMessage : null}
+          // Their chips are gone on this screen, so this is the only place that says who.
+          skippedEmails={
+            namesSkippedAddress ? [] : summary.skipped.map((recipient) => recipient.email)
+          }
           onDone={onDone}
         />
       ) : (
         <>
           <div className="flex flex-col gap-1.5">
             <DialogTitle className="text-lg font-medium leading-snug tracking-normal">
-              {t("workspaces.invite.title")}
+              {heading?.title ?? t("workspaces.invite.title")}
             </DialogTitle>
             <DialogDescription className="text-sm leading-normal">
-              {t("workspaces.invite.description", { workspace: isolate(workspaceName) })}
+              {heading?.description ??
+                t("workspaces.invite.description", { workspace: isolate(workspaceName) })}
             </DialogDescription>
             {seatLine ? <p className="text-xs text-muted-foreground">{seatLine}</p> : null}
             {seatCostLine ? <p className="text-xs text-muted-foreground">{seatCostLine}</p> : null}
+            {state.attached.length > 0 ? (
+              <p role="status" className="text-xs font-medium text-foreground">
+                {t("workspaces.invite.attachedBody", { count: state.attached.length })}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-2">
-              <label htmlFor={inputId} className="text-xs font-medium text-muted-foreground">
+            <div className={FIELD_GROUP}>
+              <label htmlFor={inputId} className={FIELD_LABEL}>
                 {t("workspaces.invite.emailLabel")}
               </label>
               <div className="relative">
                 <div
                   onClick={() => inputRef.current?.focus()}
                   className={cn(
-                    "flex max-h-32 min-h-10 cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl border border-border/70 bg-surface-1 px-2 py-1.5 transition-colors",
-                    "focus-within:border-border focus-within:ring-2 focus-within:ring-ring/40",
+                    "flex max-h-[104px] min-h-[38px] cursor-text flex-wrap items-center gap-1.5 overflow-y-auto rounded-xl bg-surface-1 px-2 py-1 ring-1 ring-inset ring-black/[0.06] transition-shadow dark:bg-surface-window dark:ring-0",
+                    "focus-within:ring-2 focus-within:ring-ring/40 dark:focus-within:ring-2",
                     sending && "opacity-60"
                   )}
                 >
@@ -253,6 +401,7 @@ export function InvitePeopleView({
                     <RecipientChip
                       key={recipient.email}
                       recipient={recipient}
+                      profile={profiles?.get(recipient.email.toLowerCase())}
                       workspaceName={workspaceName}
                       disabled={sending}
                       onRemove={() => dispatch({ type: "remove", email: recipient.email })}
@@ -270,14 +419,16 @@ export function InvitePeopleView({
                     aria-expanded={listOpen}
                     aria-controls={listOpen ? listId : undefined}
                     aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-                    aria-describedby={errorBar ? `${hintId} ${errorId}` : hintId}
+                    aria-describedby={
+                      errorBar ? errorId : warningBars.length > 0 ? undefined : hintId
+                    }
                     aria-invalid={errorBar ? true : undefined}
-                    disabled={sending}
+                    disabled={sending || confirmed}
                     value={state.draft}
                     placeholder={
                       state.recipients.length === 0
                         ? t("workspaces.invite.emailPlaceholder")
-                        : undefined
+                        : t("workspaces.invite.addMore")
                     }
                     onChange={(event) => changeDraft(event.target.value)}
                     onPaste={(event) => {
@@ -293,7 +444,7 @@ export function InvitePeopleView({
                     }}
                     onKeyDown={handleKeyDown}
                     onBlur={() => dispatch({ type: "commit" })}
-                    className="h-7 min-w-[8rem] flex-1 bg-transparent px-1 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+                    className="input-inline h-7 min-w-[8rem] flex-1 bg-transparent px-1 text-base text-foreground outline-none placeholder:text-muted-foreground"
                   />
                 </div>
                 {listOpen ? (
@@ -314,35 +465,44 @@ export function InvitePeopleView({
                         onMouseEnter={() => setActiveIndex(index)}
                         onClick={() => pick(suggestion)}
                         className={cn(
-                          "flex cursor-pointer flex-col rounded-lg px-2.5 py-1.5 text-sm",
+                          "flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm",
                           index === active && "bg-muted"
                         )}
                       >
-                        {suggestion.name ? (
-                          <span dir="auto" className="truncate text-foreground">
-                            {suggestion.name}
+                        <Mail
+                          className="size-3.5 shrink-0 text-muted-foreground"
+                          aria-hidden="true"
+                        />
+                        <span className="flex min-w-0 flex-col">
+                          {suggestion.name ? (
+                            <span dir="auto" className="truncate text-foreground">
+                              {suggestion.name}
+                            </span>
+                          ) : null}
+                          <span
+                            className={cn(
+                              "truncate",
+                              suggestion.name ? "text-xs text-muted-foreground" : "text-foreground"
+                            )}
+                          >
+                            <bdi dir="ltr">{suggestion.email}</bdi>
                           </span>
-                        ) : null}
-                        <span
-                          className={cn(
-                            "truncate",
-                            suggestion.name ? "text-xs text-muted-foreground" : "text-foreground"
-                          )}
-                        >
-                          <bdi dir="ltr">{suggestion.email}</bdi>
                         </span>
                       </div>
                     ))}
                   </div>
                 ) : null}
               </div>
-              <p id={hintId} className="text-xs text-muted-foreground">
-                {t("workspaces.invite.emailHint")}
-              </p>
+              {/* The hint steps aside while a bar has something more specific to say. */}
+              {errorBar || warningBars.length > 0 ? null : (
+                <p id={hintId} className="text-xs text-muted-foreground">
+                  {t("workspaces.invite.emailHint")}
+                </p>
+              )}
             </div>
 
-            <div className="flex flex-col gap-2">
-              <span id={roleLabelId} className="text-xs font-medium text-muted-foreground">
+            <div className={FIELD_GROUP}>
+              <span id={roleLabelId} className={FIELD_LABEL}>
                 {t("workspaces.invite.roleLabel")}
               </span>
               <DropdownMenu>
@@ -350,13 +510,22 @@ export function InvitePeopleView({
                   // The label names the field and the trigger's own text says the current role.
                   // Radix owns the trigger's id, which its menu is labelled by.
                   aria-labelledby={`${roleLabelId} ${roleValueId}`}
-                  disabled={sending}
-                  className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-border/70 bg-surface-1 px-3 text-sm text-foreground outline-none transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={sending || confirmed}
+                  className="flex min-h-[52px] w-full items-center gap-2.5 rounded-xl bg-surface-1 px-3 py-2 text-start text-foreground outline-none ring-1 ring-inset ring-black/[0.06] transition-colors hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-surface-window dark:ring-0 dark:hover:bg-surface-1"
                 >
-                  <span id={roleValueId} className="truncate">
-                    {t(`workspaces.invite.role.${state.role}`)}
+                  <RoleIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span id={roleValueId} className="truncate text-sm">
+                      {t(`workspaces.invite.role.${state.role}`)}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {t(`workspaces.invite.roleDescription.${state.role}`)}
+                    </span>
                   </span>
-                  <ChevronDown className="size-3.5 shrink-0" aria-hidden="true" />
+                  <ChevronDown
+                    className="size-4 shrink-0 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent
                   aria-labelledby={roleLabelId}
@@ -369,22 +538,35 @@ export function InvitePeopleView({
                       dispatch({ type: "role", role: value === "admin" ? "admin" : "member" })
                     }
                   >
-                    {ROLES.map((role) => (
-                      <DropdownMenuRadioItem
-                        key={role}
-                        value={role}
-                        className="items-start rounded-lg py-2 [&>span:first-child]:top-3"
-                      >
-                        <span className="flex min-w-0 flex-col gap-0.5">
-                          <span className="text-sm text-foreground">
-                            {t(`workspaces.invite.role.${role}`)}
+                    {ROLES.map((role) => {
+                      const Icon = ROLE_ICON[role];
+                      return (
+                        <DropdownMenuRadioItem
+                          key={role}
+                          value={role}
+                          className="items-start gap-2.5 rounded-lg px-2.5 py-2 ps-2.5 pe-2.5 data-[state=checked]:bg-muted focus:bg-muted [&>span:first-child]:hidden"
+                        >
+                          <Icon
+                            className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                            aria-hidden="true"
+                          />
+                          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                            <span className="text-sm text-foreground">
+                              {t(`workspaces.invite.role.${role}`)}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {t(`workspaces.invite.roleDescription.${role}`)}
+                            </span>
                           </span>
-                          <span className="text-xs text-muted-foreground">
-                            {t(`workspaces.invite.roleDescription.${role}`)}
-                          </span>
-                        </span>
-                      </DropdownMenuRadioItem>
-                    ))}
+                          {role === state.role ? (
+                            <Check
+                              className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                        </DropdownMenuRadioItem>
+                      );
+                    })}
                   </DropdownMenuRadioGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -398,27 +580,53 @@ export function InvitePeopleView({
                 action={errorBar.action}
               />
             ) : null}
+            {warningBars.map((bar) => (
+              <WorkspaceErrorBar
+                key={bar.key}
+                tone="warning"
+                message={bar.message}
+                action={bar.action}
+              />
+            ))}
           </div>
 
           <div className="flex flex-col gap-3">
             <button
               type="button"
               onClick={onSend}
-              disabled={sending || !summary.canSend}
-              className={PRIMARY_BUTTON}
+              disabled={sending || confirmed || !summary.canSend}
+              className={cn(
+                PRIMARY_BUTTON,
+                confirmed && "bg-success text-success-foreground disabled:opacity-100"
+              )}
             >
-              {sending ? (
+              {confirmed ? (
+                <>
+                  <CheckCircle2 className="size-4" aria-hidden="true" />
+                  {t("workspaces.invite.sentTitle", { count: state.sent.length })}
+                </>
+              ) : sending ? (
                 <>
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                  {t("workspaces.invite.submitting")}
+                  {t("workspaces.invite.sending")}
                 </>
+              ) : summary.sendable.length > 1 ? (
+                t("workspaces.invite.submit", { count: summary.sendable.length })
               ) : (
-                // The empty field still reads "Send invitation" rather than "Send 0 invitations".
-                t("workspaces.invite.submit", { count: Math.max(1, summary.sendable.length) })
+                // One address, and the empty field, read "Send invite". A plural form can't say
+                // that: fr, pt and ru reuse "one" for other counts, so it must carry the number.
+                t("workspaces.invite.submitOne")
               )}
             </button>
-            {sending ? null : (
-              <button type="button" onClick={onCancel} className={SECONDARY_BUTTON}>
+            {sending || confirmed ? null : (
+              <button
+                type="button"
+                // Keeps focus in the field: its blur would chip a half-typed address, and the error
+                // bar that can raise moves this button out from under the click.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={onCancel}
+                className={SECONDARY_BUTTON}
+              >
                 {cancelLabel}
               </button>
             )}
@@ -431,11 +639,13 @@ export function InvitePeopleView({
 
 function RecipientChip({
   recipient,
+  profile,
   workspaceName,
   disabled,
   onRemove,
 }: {
   recipient: InviteRecipient;
+  profile?: InviteProfile;
   workspaceName: string;
   disabled: boolean;
   onRemove: () => void;
@@ -451,23 +661,39 @@ function RecipientChip({
 
   return (
     <span
-      title={error}
+      title={error ?? (profile?.name ? recipient.email : undefined)}
       className={cn(
-        "inline-flex h-7 max-w-full items-center gap-0.5 rounded-full border ps-2.5 pe-0.5 text-xs",
-        error
-          ? "border-destructive/60 bg-destructive/5 text-destructive"
-          : "border-border/70 bg-surface-2 text-foreground"
+        "inline-flex h-[29px] max-w-full items-center gap-0.5 rounded-full pe-0.5 text-xs",
+        profile?.name ? "ps-1" : "ps-2.5",
+        error ? CHIP_TONE_ERROR : CHIP_TONE_DEFAULT
       )}
     >
-      <bdi dir="ltr" className="truncate">
-        {recipient.email}
-      </bdi>
+      {profile?.name ? (
+        <>
+          <MemberAvatar
+            name={profile.name}
+            email={recipient.email}
+            image={profile.image}
+            size="row"
+          />
+          <span dir="auto" className="ms-1 truncate">
+            {profile.name}
+          </span>
+        </>
+      ) : (
+        <>
+          <Mail className="me-1 size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <bdi dir="ltr" className="truncate">
+            {recipient.email}
+          </bdi>
+        </>
+      )}
       <button
         type="button"
         disabled={disabled}
         onClick={onRemove}
         aria-label={t("workspaces.invite.removeRecipient", { email: recipient.email })}
-        className="flex size-6 shrink-0 items-center justify-center rounded-full opacity-70 transition-colors hover:bg-foreground/10 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
+        className={CHIP_REMOVE_BUTTON}
       >
         <X className="size-3" aria-hidden="true" />
       </button>
@@ -478,12 +704,23 @@ function RecipientChip({
 function InviteDoneContent({
   workspaceName,
   sent,
+  attachedCount,
+  headline,
+  undelivered,
   noEmailCount,
+  skippedMessage,
+  skippedEmails,
   onDone,
 }: {
   workspaceName: string;
   sent: InviteFlowState["sent"];
+  attachedCount: number;
+  headline: string;
+  /** Every invitation exists, but no email reached anyone, so this is no success to confirm. */
+  undelivered: boolean;
   noEmailCount: number;
+  skippedMessage: ReactNode;
+  skippedEmails: string[];
   onDone: () => void;
 }): ReactElement {
   const { t } = useTranslation();
@@ -491,14 +728,29 @@ function InviteDoneContent({
   return (
     <>
       <div className="flex flex-col items-center gap-3 text-center">
-        <div className="flex size-[42px] items-center justify-center rounded-full bg-success/10 text-success">
-          <CheckCircle2 className="size-4" aria-hidden="true" />
+        <div
+          className={cn(
+            "flex size-[42px] items-center justify-center rounded-full",
+            undelivered ? "bg-warning/10 text-warning" : "bg-success/10 text-success"
+          )}
+        >
+          {undelivered ? (
+            <AlertCircle className="size-4" aria-hidden="true" />
+          ) : (
+            <CheckCircle2 className="size-4" aria-hidden="true" />
+          )}
         </div>
         <DialogTitle className="text-lg font-medium leading-snug tracking-normal">
-          {t("workspaces.invite.sentTitle", { count: sent.length })}
+          {sent.length === 0
+            ? t("workspaces.invite.attachedTitle", { count: attachedCount })
+            : headline}
         </DialogTitle>
         <DialogDescription className="text-sm leading-normal">
-          {sent.length === 1 ? (
+          {sent.length === 0 ? (
+            t("workspaces.invite.attachedBody", { count: attachedCount })
+          ) : undelivered ? (
+            t("workspaces.invite.noEmail", { count: noEmailCount })
+          ) : sent.length === 1 ? (
             <BidiInterpolatedText
               text={t("workspaces.invite.sentOne", {
                 email: BIDI_VALUE_TOKEN,
@@ -514,11 +766,26 @@ function InviteDoneContent({
           )}
         </DialogDescription>
       </div>
-      {noEmailCount > 0 ? (
+      {sent.length > 0 && attachedCount > 0 ? (
+        <p className="text-center text-xs text-muted-foreground">
+          {t("workspaces.invite.attachedBody", { count: attachedCount })}
+        </p>
+      ) : null}
+      {noEmailCount > 0 && !undelivered ? (
         <WorkspaceErrorBar
           tone="warning"
           message={t("workspaces.invite.noEmail", { count: noEmailCount })}
         />
+      ) : null}
+      {skippedMessage ? <WorkspaceErrorBar tone="warning" message={skippedMessage} /> : null}
+      {skippedEmails.length > 0 ? (
+        <ul className="max-h-24 overflow-y-auto text-xs text-muted-foreground">
+          {skippedEmails.map((email) => (
+            <li key={email} className="truncate">
+              <bdi dir="ltr">{email}</bdi>
+            </li>
+          ))}
+        </ul>
       ) : null}
       {/* The send button that had focus is gone, so focus would otherwise fall to the page. */}
       <button type="button" autoFocus onClick={onDone} className={PRIMARY_BUTTON}>

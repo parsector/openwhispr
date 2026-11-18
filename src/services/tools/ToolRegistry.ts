@@ -1,5 +1,7 @@
 import { jsonSchema } from "ai";
 import type { Tool, ToolExecutionOptions } from "ai";
+import type { InteractionRecord } from "../../types/agentInteractions";
+import type { ChatImageAttachment } from "../../components/chat/types";
 
 export interface ToolResult {
   success: boolean;
@@ -7,9 +9,10 @@ export interface ToolResult {
   displayText: string;
 }
 
-export interface HoldDeliveryOptions {
-  /** The tool may have put user content on the clipboard; don't copy the answer over it. */
-  preserveClipboard?: boolean;
+export interface CompletedActionOutcome {
+  status: "sent" | "unknown" | "draft_opened";
+  url?: string;
+  reference?: string;
 }
 
 /**
@@ -28,14 +31,7 @@ export interface ToolExecutionContext {
   };
   /** Aborts when the turn is cancelled or its conversation ends. */
   signal: AbortSignal;
-  /** Tells the chat surface an approval card needs the user's attention. */
   onApprovalRequested: () => void;
-  /**
-   * The turn's answer must stay in the chat surface instead of being pasted at
-   * the user's caret: the tool opened something outside the app or needs the
-   * user to answer.
-   */
-  onHoldDelivery: (options?: HoldDeliveryOptions) => void;
   /**
    * Counts one use of `key` in this turn and reports whether it stays within
    * `limit`, so a tool can cap what one turn does (drafts opened, clipboard

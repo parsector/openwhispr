@@ -19,6 +19,7 @@ const rowButtonClass =
 
 interface ControlPanelSidebarProps {
   activeView: ControlPanelView;
+  chatNeedsAttention?: boolean;
   onViewChange: (view: ControlPanelView) => void;
   onOpenSettings: () => void;
   onOpenReferrals?: () => void;
@@ -31,6 +32,7 @@ interface ControlPanelSidebarProps {
 
 export default function ControlPanelSidebar({
   activeView,
+  chatNeedsAttention = false,
   onViewChange,
   onOpenSettings,
   onOpenReferrals,

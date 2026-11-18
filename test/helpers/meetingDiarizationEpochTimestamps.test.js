@@ -1,8 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
-const os = require("node:os");
 const fs = require("node:fs");
+const os = require("node:os");
 const vm = require("node:vm");
 const crypto = require("node:crypto");
 const ts = require("typescript");
@@ -43,7 +43,11 @@ Module._load = function loadWithMocks(request, parent, isMain) {
     };
   }
   if (parent?.filename === handlersModulePath && request === "./speakerEmbeddings") {
-    return { isAvailable: () => false };
+    return {
+      isAvailable: () => false,
+      extractClusterCentroids: async () => new Map(),
+      cosineSimilarity: () => 0,
+    };
   }
   return originalLoad.call(this, request, parent, isMain);
 };
@@ -75,7 +79,10 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
     diarizationManager.isAvailable = () => outcome !== "skipped";
     diarizationManager.convertRawPcmToWav = async () => {
       if (outcome === "failed") throw new Error("Raw PCM file is empty");
-      return "/nonexistent/diarization.wav";
+      // The diarized path reads the WAV's size for its duration.
+      const wavPath = path.join(os.tmpdir(), `ow-epoch-test-${process.pid}-${Date.now()}.wav`);
+      fs.writeFileSync(wavPath, Buffer.alloc(32000 * 120));
+      return wavPath;
     };
     diarizationManager.diarize = async (_wavPath, options) => {
       onDiarize?.(options);
@@ -109,7 +116,7 @@ const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized"
       null,
       sessionConfig,
       1,
-      "system",
+      diarizedSource,
       0,
       retracted
     );

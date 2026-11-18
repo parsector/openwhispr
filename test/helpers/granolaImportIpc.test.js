@@ -1,3 +1,4 @@
+const { withDevicePolicy } = require("./harness/devicePolicy");
 const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -84,13 +85,15 @@ test.before(() => {
   const Ctor = IPCHandlers.default || IPCHandlers;
   target = {
     databaseManager: {
-      getExistingClientNoteIds: () => [],
+      getImportedClientNoteIds: () => [],
     },
   };
   Ctor.prototype.setupHandlers.call(
-    new Proxy(target, {
-      get: (value, property) => (property in value ? value[property] : anything()),
-    })
+    withDevicePolicy(
+      new Proxy(target, {
+        get: (value, property) => (property in value ? value[property] : anything()),
+      })
+    )
   );
   assert.ok(
     handlers.get("granola-import-pick-and-preview"),

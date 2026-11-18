@@ -13,6 +13,8 @@ export interface InferenceScopeStoreKeys {
   reasoningEffort?: keyof SettingsState;
 }
 
+export type ModelCapability = "tools" | "image";
+
 export interface InferenceScopeDefinition {
   storeKeys: InferenceScopeStoreKeys;
   fallbackScope?: string;
@@ -28,6 +30,13 @@ export interface InferenceScopeDefinition {
    */
   optional?: true;
   inheritMode?: true;
+  /**
+   * What this scope's requests ask of a model beyond text: chat sends tools to
+   * every cloud model, and the vision override also sends a screenshot. Only
+   * OpenRouter's list reads it: an image need picks the tested vision list, and a
+   * tools need also drops models whose catalog entry has lost tool support.
+   */
+  modelNeeds?: readonly ModelCapability[];
 }
 
 export const INFERENCE_SCOPES = {
@@ -58,6 +67,7 @@ export const INFERENCE_SCOPES = {
       disableThinking: "dictationAgentDisableThinking",
       reasoningEffort: "dictationAgentReasoningEffort",
     },
+    modelNeeds: ["tools"],
   },
   // Optional override used only when a voice-agent request carries a screen
   // context screenshot. Unset fields resolve to the dictationAgent scope, and
@@ -76,6 +86,7 @@ export const INFERENCE_SCOPES = {
     },
     fallbackScope: "dictationAgent",
     optional: true,
+    modelNeeds: ["tools", "image"],
   },
   noteFormatting: {
     cloudPurpose: "noteFormatting",
@@ -93,7 +104,7 @@ export const INFERENCE_SCOPES = {
     fallbackScope: "dictationCleanup",
   },
   // Runs typed chat conversations (Control Panel, note and container chat).
-  // The voice assistant panel's spoken commands, like selection edits, run on
+  // The agent window's requests, like selection edits, run on
   // dictationAgent(Vision) — see resolveChatStreamingInference.
   chatIntelligence: {
     cloudPurpose: "assistant",
@@ -108,6 +119,7 @@ export const INFERENCE_SCOPES = {
       disableThinking: "chatAgentDisableThinking",
       reasoningEffort: "chatAgentReasoningEffort",
     },
+    modelNeeds: ["tools"],
   },
   routines: {
     cloudPurpose: "assistant",

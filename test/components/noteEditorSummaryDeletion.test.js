@@ -375,7 +375,7 @@ async function loadNoteEditor(t, permission) {
         export function SelectionBar() { return null; }
       `,
       "/EmbeddedChat": `export default function EmbeddedChat() { return null; }`,
-      "/hooks/useAuth": `
+      "/useAuth": `
         export function useAuth() {
           return globalThis.__noteEditorAuth ?? { isSignedIn: false, user: null };
         }
@@ -400,8 +400,11 @@ async function loadNoteEditor(t, permission) {
       "/services/NoteSharingService": `
         export const NoteSharingService = {
           fetchAcl: async () => null,
-          // A signed-in cloud note loads its sharing state; never answered here.
-          getShareSettings: () => new Promise(() => {}),
+          // A signed-in cloud note loads its sharing state; unanswered unless a test answers.
+          getShareSettings: (cloudId) =>
+            globalThis.__noteEditorShareSettings?.[cloudId]
+              ? Promise.resolve(globalThis.__noteEditorShareSettings[cloudId])
+              : new Promise(() => {}),
         };
       `,
       "/hooks/useSpaceRoster": `export async function fetchSpaceRoster() { return []; }
@@ -409,6 +412,7 @@ export function useSpaceRoster(cloudSpaceId) {
   globalThis.__noteEditorRosterId = cloudSpaceId;
   return globalThis.__noteEditorRoster ? new Map(globalThis.__noteEditorRoster.map(member => [member.user_id, member])) : null;
 }`,
+      ...options.mockModules,
     },
   });
 
@@ -1637,6 +1641,7 @@ test("diarization keeps stored recorder labels separate from viewer-local self m
 test("only the org's meeting switch shows a banner; other restrictions explain themselves on the record button", async (t) => {
   const { render, latest, unmount, vite } = await loadNoteEditor(t);
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
+  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const messages = () => {
     const out = [];
     walk(latest(), (node) => {
@@ -1644,11 +1649,18 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     });
     return out;
   };
+  // The editor reads the policy-effective selection, which needs both sections.
+  const scope = {
+    allowedModes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"],
+    allowedByokProviders: [],
+    allowedEnterpriseProviders: [],
+  };
+  const sections = { transcription: scope, llm: scope };
   for (const audioUploadEnabled of [true, false]) {
     await React.act(async () => {
       usePolicyStore.setState({
         status: "managed",
-        policy: { features: { meetingRecordingEnabled: false, audioUploadEnabled } },
+        policy: { ...sections, features: { meetingRecordingEnabled: false, audioUploadEnabled } },
       });
     });
     await render(undefined, { recordingAllowed: false });
@@ -1656,7 +1668,7 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     assert.ok(collectEditorValues(latest()).includes(NOTE.content), "saved notes remain readable");
     await React.act(async () => {
       usePolicyStore.setState({
-        policy: { features: { meetingRecordingEnabled: true, audioUploadEnabled } },
+        policy: { ...sections, features: { meetingRecordingEnabled: true, audioUploadEnabled } },
       });
     });
     await render(undefined, { recordingAllowed: true });
@@ -1672,7 +1684,7 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
   for (const [policy, expected] of [
     [{ status: "loading", policy: null }, "common.policyUnresolved"],
     [
-      { status: "managed", policy: { features: { meetingRecordingEnabled: true } } },
+      { status: "managed", policy: { ...sections, features: { meetingRecordingEnabled: true } } },
       "notes.meeting.restrictedByOrg",
     ],
   ]) {
@@ -1681,6 +1693,31 @@ test("only the org's meeting switch shows a banner; other restrictions explain t
     assert.deepEqual(messages(), [], `${policy.status}: no banner`);
     assert.equal(recordReason(), expected);
   }
+
+  // A refused local model is fixed in Settings, so it says so and links there.
+  await React.act(async () => {
+    useSettingsStore.setState({
+      meetingTranscriptionMode: "local",
+      meetingLocalTranscriptionProvider: "whisper",
+      meetingWhisperModel: "small",
+    });
+    usePolicyStore.setState({
+      status: "managed",
+      policy: {
+        ...sections,
+        transcription: { ...scope, allowedLocalModels: ["base"] },
+        features: { meetingRecordingEnabled: true },
+      },
+    });
+  });
+  await render(undefined, { recordingAllowed: false });
+  assert.deepEqual(messages(), ["models.policy.modelBlocked"]);
+  assert.equal(recordReason(), "models.policy.modelBlocked");
+  const links = [];
+  walk(latest(), (node) => {
+    if (node.props.children === "providerErrors.openSettings") links.push(node);
+  });
+  assert.equal(links.length, 1);
   await unmount();
 });
 

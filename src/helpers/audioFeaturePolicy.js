@@ -64,18 +64,19 @@ function createAudioFeaturePolicy({
       next?.revision < snapshot.revision
     )
       return;
-    const previous = snapshot ?? retained;
+    const previous = retained ?? snapshot;
     snapshot = next;
-    retained = null;
+    retained =
+      next?.status === "loading" ? (next.policy ? { ...next, success: true } : previous) : null;
     for (const purpose of Object.keys(FEATURE_BY_PURPOSE)) {
-      const denied = failure(purpose);
+      const denied = activeFailure(purpose);
       if (!denied) continue;
       for (const job of jobs.values()) {
         if (job.purpose === purpose) job.controller.abort(denied);
       }
       if (!previous || !audioFeatureFailure(previous, purpose)) onBlocked(purpose, denied.code);
     }
-    const meetingVerdict = failure("meeting")?.code ?? null;
+    const meetingVerdict = activeFailure("meeting")?.code ?? null;
     if (meetingVerdict !== reportedMeetingVerdict) {
       reportedMeetingVerdict = meetingVerdict;
       onChange();
@@ -142,7 +143,7 @@ function createAudioFeaturePolicy({
     // already running keeps the verdict it started under. The policy is
     // fetched now, unless the caller already knows it (a sign-out is a guest).
     invalidate(known) {
-      retained = snapshot ?? retained;
+      retained = retained ?? snapshot;
       snapshot = null;
       epoch += 1;
       // Others may sync to the unresolved verdict meanwhile, so the next one
