@@ -59,11 +59,9 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/ApiKeysSection.tsx": ["auto"],
   "src/components/AuthenticationStep.tsx": ["ltr", "auto", "ltr", "ltr", "ltr"],
   "src/components/CreateWorkspaceDialog.tsx": ["auto"],
-  "src/components/CreatorLinkField.tsx": ["ltr"],
   "src/components/DictionaryView.tsx": ["auto"],
   "src/components/EnterpriseProviderConfig.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/ForgotPasswordView.tsx": ["ltr"],
-  "src/components/InviteTeammateDialog.tsx": ["ltr"],
   "src/components/LeaderboardSection.tsx": ["ltr"],
   "src/components/SettingsPage.tsx": ["ltr", "ltr", "ltr", "ltr", "ltr", "ltr"],
   "src/components/SnippetsView.tsx": ["auto", "auto", "auto", "auto"],
@@ -83,7 +81,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/PeoplePage.tsx": ["auto", "auto", "ltr", "ltr", "ltr", "ltr", "auto"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceGeneralSection.tsx": ["auto"],
-  "src/components/settings/WorkspaceMembersTab.tsx": ["auto"],
+  "src/components/settings/WorkspacePeopleSection.tsx": ["auto"],
+  "src/components/settings/TeamSpacesPanel.tsx": ["auto"],
   // A skill's name and the skills search accept text in any script.
   "src/components/skills/CreateSkillScreen.tsx": ["auto"],
   "src/components/skills/SkillSearchInput.tsx": ["auto"],
@@ -95,6 +94,10 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
 };
 
 const EXPECTED_NATIVE_FIELD_DIRECTIONS = {
+  // Upstream interaction cards: secrets are LTR; questions accept any script.
+  "src/components/chat/interactions/ApiKeyCard.tsx": ["ltr"],
+  "src/components/chat/interactions/QuestionsCard.tsx": ["auto"],
+  "src/components/settings/TeamSettingsDialog.tsx": ["auto"],
   "src/components/CreateTeamDialog.tsx": ["auto"],
   // A teamspace's description is prose in any script.
   "src/components/notes/CreateSpaceDialog.tsx": ["auto"],

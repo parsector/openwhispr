@@ -29,9 +29,10 @@ import type { PolicyScope } from "../types/policy";
 /** The minimal reactive snapshot consumed by the pure policy rules. */
 export function usePolicySnapshot(): PolicyDecisionSnapshot {
   const status = usePolicyStore((state) => state.status);
+  const managed = usePolicyStore((state) => state.managed);
   const policy = usePolicyStore((state) => state.policy);
   const appVersion = usePolicyStore((state) => state.appVersion);
-  return useMemo(() => ({ status, policy, appVersion }), [status, policy, appVersion]);
+  return useMemo(() => ({ status, managed, policy, appVersion }), [status, managed, policy, appVersion]);
 }
 
 interface MeetingAutoTranscriptionAuth {
@@ -52,6 +53,7 @@ export function useMeetingAutoTranscriptionCheck({
   auth.current = { isLoaded, isSignedIn };
   return useCallback(() => {
     const policy = usePolicyStore.getState();
+    if (!policy.managed && policy.status !== "managed") return true;
     // Nobody asked for this recording, so there is no refusal to explain.
     if (isMeetingTranscriptionStartManual(policy)) return false;
     // A recording these checks refuse never captures. Let it reach startRecording,
@@ -137,7 +139,7 @@ export function usePolicyModeOptions<T extends { id: InferenceMode; disabled?: b
   const snapshot = usePolicySnapshot();
   const modes = filterModeOptionsByPolicy(options, scope, snapshot, providerCatalog);
   const selectionIsVisible = modes.some((option) => option.id === selectedMode && !option.disabled);
-  const preservesRawSelection = snapshot.status === "idle" || snapshot.status === "unmanaged";
+  const preservesRawSelection = snapshot.managed !== true && snapshot.status !== "managed";
   return {
     modes,
     effectiveMode:

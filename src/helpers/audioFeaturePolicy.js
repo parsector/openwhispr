@@ -54,8 +54,8 @@ function createAudioFeaturePolicy({
   let epoch = 0;
   // New work is gated on the current credential's verdict; work already
   // running keeps the one it started under until a newer verdict lands.
-  const failure = (purpose) => audioFeatureFailure(snapshot ?? retained, purpose);
-  const activeFailure = (purpose) => audioFeatureFailure(snapshot ?? retained, purpose);
+  const failure = (purpose) => audioFeatureFailure(snapshot, purpose);
+  const activeFailure = (purpose) => audioFeatureFailure(retained ?? snapshot, purpose);
 
   function update(next) {
     if (

@@ -59,7 +59,8 @@ function allowedByokProviderIds(policy: OrgPolicy, scope: PolicyScope): string[]
 }
 
 export function isPolicyActionAllowed(state: PolicyDecisionSnapshot): boolean {
-  if (state.status === "idle" || state.status === "unmanaged") return true;
+  if (state.status === "unmanaged") return true;
+  if (state.managed !== true && state.status !== "managed") return true;
   if (state.status !== "managed" || !state.policy) return false;
   if (!state.policy.minAppVersion) return true;
   if (!state.appVersion) return false;
@@ -75,10 +76,10 @@ export function isMeetingTranscriptionStartManual(state: PolicyDecisionSnapshot)
 /** A signed-in window must resolve policy before treating note navigation as consent. */
 export function isMeetingAutoTranscriptionAllowed(
   state: PolicyDecisionSnapshot,
-  isSignedIn: boolean
+  _isSignedIn: boolean
 ): boolean {
   if (state.status === "unmanaged") return true;
-  if (state.status === "idle") return !isSignedIn;
+  if (state.managed !== true && state.status !== "managed") return true;
   if (!isPolicyActionAllowed(state)) return false;
   return managedPolicy(state) !== null && !isMeetingTranscriptionStartManual(state);
 }
@@ -125,7 +126,7 @@ export function effectiveLocalHistoryEnabled(
  * it persists, so it makes that call.
  */
 export function isLocalHistoryPolicyResolved(state: PolicyDecisionSnapshot): boolean {
-  return state.status === "managed" || state.status === "unmanaged";
+  return state.managed !== true || state.status === "managed";
 }
 
 /**
@@ -481,7 +482,7 @@ export function resolveEffectivePolicySelection(
   selection: LlmSelection,
   catalog: PolicySelectionCatalog
 ): LlmSelection | null {
-  if (state.status === "idle" || state.status === "unmanaged") return selection;
+  if ((state.managed !== true && state.status !== "managed")) return selection;
   if (!isPolicyActionAllowed(state)) return null;
   const policy = managedPolicy(state);
   if (!policy) return null;
@@ -647,7 +648,7 @@ export function isAudioFeatureDenied(
   state: PolicyDecisionSnapshot,
   context: TranscriptionPolicyContext
 ): boolean {
-  return state.status === "managed" && !!state.policy && !isAudioFeatureAllowed(state, context);
+  return (state.managed === true || state.status === "managed") && !isAudioFeatureAllowed(state, context);
 }
 
 export function isAudioFeatureAllowed(
@@ -792,7 +793,7 @@ export function filterModeOptionsByPolicy<T extends { id: InferenceMode }>(
   state: PolicyDecisionSnapshot,
   providerCatalog?: Pick<PolicySelectionCatalog, "byokProviders" | "enterpriseProviders">
 ): T[] {
-  if (state.status === "idle" || state.status === "unmanaged") return options;
+  if ((state.managed !== true && state.status !== "managed")) return options;
   if (state.status !== "managed" || !state.policy) return [];
   return options.filter(
     (option) =>
@@ -820,7 +821,7 @@ export function filterByokProviderOptionsByPolicy<T extends { id: string }>(
   scope: PolicyScope,
   state: PolicyDecisionSnapshot
 ): T[] {
-  if (state.status === "idle" || state.status === "unmanaged") return options;
+  if ((state.managed !== true && state.status !== "managed")) return options;
   if (state.status !== "managed" || !state.policy) return [];
   return options.filter((option) => isProviderAllowedByPolicy(state, scope, option.id));
 }
@@ -829,7 +830,7 @@ export function filterEnterpriseProviderOptionsByPolicy<T extends { id: string }
   options: T[],
   state: PolicyDecisionSnapshot
 ): T[] {
-  if (state.status === "idle" || state.status === "unmanaged") return options;
+  if ((state.managed !== true && state.status !== "managed")) return options;
   if (state.status !== "managed" || !state.policy) return [];
   return options.filter((option) => isEnterpriseProviderAllowed(state, option.id));
 }
@@ -837,9 +838,9 @@ export function filterEnterpriseProviderOptionsByPolicy<T extends { id: string }
 /** Preserve legacy fallback writes only when no managed policy can be overwritten. */
 export function shouldPersistProviderFallback(
   state: PolicyDecisionSnapshot,
-  isSignedIn: boolean
+  _isSignedIn: boolean
 ): boolean {
-  return state.status === "unmanaged" || (state.status === "idle" && !isSignedIn);
+  return state.status === "unmanaged" || (state.status === "idle" && !_isSignedIn);
 }
 
 export function reconcileProviderSelection<T extends { id: string; disabled?: boolean }>(

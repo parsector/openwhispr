@@ -27,7 +27,7 @@ function policyError(code) {
 // A verdict that says what is allowed: a failed lookup or an unreadable policy
 // doesn't, so it can refuse new work but never revokes running work.
 function isResolvedVerdict(verdict) {
-  return verdict?.success === true && (!verdict.managed || isValidPolicyShape(verdict.policy));
+  return verdict != null && (verdict.managed !== true || (verdict.success === true && isValidPolicyShape(verdict.policy)));
 }
 
 /** Main owns identity and policy lookup; renderer arguments never establish unmanaged status. */
@@ -53,15 +53,17 @@ function createLocalModelPolicyGate({
   const leases = new Set();
 
   function verdictFailure(verdict, scope, modelId) {
-    if (!isResolvedVerdict(verdict) || !rules) return policyError("POLICY_UNRESOLVABLE");
     const isBlank = typeof modelId !== "string" || modelId.trim().length === 0;
-    if (!isBlank && !rules.isKnownLocalModelId(scope, modelId))
+    if (!isBlank && rules && !rules.isKnownLocalModelId(scope, modelId))
       return new Error(`Unknown local model: ${modelId}`);
+    if (verdict?.managed !== true) return null;
+    if (!isResolvedVerdict(verdict) || !rules) return policyError("POLICY_UNRESOLVABLE");
     // With nothing managing this user a blank model is the engine's default,
     // as it always was; only a managed policy has to know the exact model.
     if (isBlank && !verdict.managed) return null;
     const state = {
       status: verdict.managed ? "managed" : "unmanaged",
+      managed: verdict.managed,
       policy: verdict.policy ?? null,
       appVersion: getAppVersion(),
     };
@@ -77,7 +79,8 @@ function createLocalModelPolicyGate({
 
   // New work needs the current credential's verdict.
   const failure = (scope, modelId) =>
-    verdictFailure(snapshotIdentity === getIdentity() ? snapshot : null, scope, modelId);
+    verdictFailure(snapshotIdentity === getIdentity() ? snapshot :
+      retained?.managed ? { managed: true, success: false } : null, scope, modelId);
 
   // Work already running keeps the verdict it started under until a newer one lands.
   const activeVerdict = () => (isResolvedVerdict(snapshot) ? snapshot : retained);
@@ -105,6 +108,10 @@ function createLocalModelPolicyGate({
 
   function update(next) {
     const identity = getIdentity();
+    if (next && !next.success && next.managed === undefined &&
+        (snapshot?.managed === true || retained?.managed === true)) {
+      next = { ...next, managed: true };
+    }
     if (!isSnapshotCurrent(next)) return;
     if (next?.authGeneration !== undefined && next.authGeneration !== identity) return;
     if (

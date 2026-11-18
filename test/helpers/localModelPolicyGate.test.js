@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { managedPolicy } = require("./harness/policyFixtures");
@@ -70,6 +71,7 @@ test("main rejects unresolved identity and memory-only lookups; known guest and 
     getIdentity: () => 1,
     getAppVersion: () => "1.11.1",
   });
+  gate.update({ success: false, managed: true, code: "POLICY_UNRESOLVABLE", authGeneration: 1 });
   await assert.rejects(gate.authorize("transcription", "base", { memoryOnly: true }), {
     code: "POLICY_UNRESOLVABLE",
   });
@@ -145,9 +147,9 @@ test("delayed policy from a previous identity never authorizes a new action", as
   assert.equal(authGeneration, 1);
   lookups[0](delayed);
   await assert.rejects(pending, { code: "POLICY_UNRESOLVABLE" });
-  assert.throws(() => gate.authorizeCached("transcription", "base"), {
-    code: "POLICY_UNRESOLVABLE",
-  });
+  const fresh = gate.authorizeCached("transcription", "base");
+  assert.equal(fresh.signal.aborted, false, "a stale verdict cannot manage a new identity");
+  gate.release(fresh);
 });
 
 test("app version failure and effective empty approvals stay distinct", async () => {
@@ -205,7 +207,7 @@ test("the server calling a policy unresolvable refuses new work and stops nothin
   await settle();
   onChange.length = 0;
 
-  gate.update({ success: false, code: "POLICY_UNRESOLVABLE", authGeneration: 1, revision: 1 });
+  gate.update({ success: false, managed: true, code: "POLICY_UNRESOLVABLE", authGeneration: 1, revision: 1 });
 
   assert.equal(gate.failure("transcription", "base").code, "POLICY_UNRESOLVABLE");
   assert.equal(lease.signal.aborted, false);
@@ -360,10 +362,11 @@ test("only an identity with no verdict waits for the lookup", async () => {
 test("a warm-up refused before any verdict runs once on the first one", async () => {
   const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
   const gate = createLocalModelPolicyGate({
-    getPolicy: async () => ({ success: false }),
+    getPolicy: async () => ({ success: false, managed: true, code: "POLICY_UNRESOLVABLE" }),
     getIdentity: () => 1,
     getAppVersion: () => "1.11.1",
   });
+  gate.update({ success: false, managed: true, code: "POLICY_UNRESOLVABLE", authGeneration: 1 });
   await settleRules(gate);
   let runs = 0;
   gate.runOnceVerdictSettles(() => runs++);
@@ -402,7 +405,7 @@ test("the periodic refresh reaches the server on every tick, inside the policy m
   const path = require("node:path");
   const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
   const { createWorkspacePolicyManager } = require("../../src/helpers/workspacePolicyManager");
-  const tempDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "policy-refresh-"));
+  const tempDirectory = createTempDir(path.join(os.tmpdir(), "policy-refresh-"));
   t.after(() => fs.rmSync(tempDirectory, { recursive: true, force: true }));
 
   const FIVE_MINUTES = 5 * 60 * 1000;
@@ -520,7 +523,7 @@ test("a verdict held on disk answers at once, and the refresh behind it can stil
   assert.equal(lease.signal.reason?.code, "POLICY_MODEL_BLOCKED");
 });
 
-test("with nothing held on disk, an identity still waits for the lookup", async () => {
+test("a confirmed managed identity without a usable held policy waits for its lookup", async () => {
   const { createLocalModelPolicyGate } = require("../../src/helpers/localModelPolicyGate");
   let answer;
   const gate = createLocalModelPolicyGate({
@@ -528,7 +531,7 @@ test("with nothing held on disk, an identity still waits for the lookup", async 
       new Promise((done) => {
         answer = done;
       }),
-    getHeldPolicy: async () => ({ success: false }),
+    getHeldPolicy: async () => ({ success: false, managed: true }),
     getIdentity: () => 1,
     getAppVersion: () => "1.11.1",
   });

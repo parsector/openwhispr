@@ -121,7 +121,7 @@ for (const [label, transcription, title] of [
 
 test("refusals another model wouldn't fix stay generic, without a Settings link", async (t) => {
   const { api, toasts, usePolicyStore } = await setup(t);
-  usePolicyStore.setState({ status: "loading", policy: null, appVersion: null });
+  usePolicyStore.setState({ managed: true, status: "loading", policy: null, appVersion: null });
   await React.act(async () => {
     assert.equal(await api.startRecording(), false);
   });

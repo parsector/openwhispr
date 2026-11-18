@@ -328,7 +328,7 @@ test("guests and unmanaged users are never judged on the model id", async () => 
     assert.equal(isTranscriptionSelectionAllowed(state, { mode: "local", provider: "" }), true);
   }
   for (const status of ["loading", "error"]) {
-    const state = { status, policy: null, appVersion: null };
+    const state = { status, managed: true, policy: null, appVersion: null };
     assert.equal(allowed(state, "transcription", "base"), false, status);
   }
   for (const model of ["", " ", "not-a-model"]) {

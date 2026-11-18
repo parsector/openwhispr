@@ -79,7 +79,10 @@ test("technical output values remain LTR inside an Arabic document", () => {
     ["src/components/ui/NixOsPasteInfo.tsx", /<div\s+dir="ltr"[\s\S]*?<pre/],
     ["src/components/integrations/McpPane.tsx", /<CopyableCommand\s+command=\{MCP_URL\}/],
     ["src/components/ui/CopyableCommand.tsx", /<div\s+dir="ltr"[\s\S]*?\{command\}/],
-    ["src/components/settings/WorkspaceMembersTab.tsx", /<bdi dir="ltr">\{member\.email\}<\/bdi>/],
+    [
+      "src/components/settings/WorkspaceMembersTab.tsx",
+      /<bdi dir="ltr"[^>]*>\s*<HighlightMatch text=\{member\.email\}/,
+    ],
     [
       "src/components/settings/WorkspaceInvitationsTab.tsx",
       /<bdi dir="ltr">\{invitation\.email\}<\/bdi>/,

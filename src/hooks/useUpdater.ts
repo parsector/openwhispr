@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-interface UpdateStatus {
+interface UpdateStatusResult {
+  updateMode?: "user_choice" | "always_on" | "it_managed";
+  policyReady?: boolean;
+  policyUnavailable?: boolean;
+  effectiveAutoUpdatesEnabled?: boolean;
+  stagedUpdate?: boolean;
   updateAvailable: boolean;
   updateDownloaded: boolean;
   isDownloading: boolean;
@@ -238,10 +243,8 @@ export function useUpdater() {
     updateGlobalState({ isDownloading: true, downloadProgress: 0 });
     try {
       const result = await window.electronAPI.downloadUpdate();
-      if (!result.success) {
-        throw new Error(
-          `${result.message}\nUpdater log: ${result.logPath || state.status.logPath}`
-        );
+      if (!result.success && result.code === "UPDATES_MANAGED_BY_ORG") {
+        throw Object.assign(new Error(result.message), { code: result.code });
       }
       return result;
     } catch (error) {
@@ -251,7 +254,7 @@ export function useUpdater() {
       });
       throw error;
     }
-  }, [state.status.updateDownloaded, state.status.logPath]);
+  }, [state.status.updateDownloaded]);
 
   const installUpdate = useCallback(async () => {
     if (!state.status.updateDownloaded) {

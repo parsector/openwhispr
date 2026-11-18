@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -11,7 +12,7 @@ const { productOperationAllowed } = require("../../src/helpers/productPolicy");
 
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
-const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "local-model-wiring-"));
+const userDataDirectory = createTempDir(path.join(os.tmpdir(), "local-model-wiring-"));
 process.env.OPENWHISPR_API_URL = "https://api.openwhispr.test";
 
 // The policy manager keeps its own clock; this moves it past its freshness
@@ -123,7 +124,7 @@ const managed = (allowedLocalModels, updatedAt = "2026-11-02T00:00:00.000Z") =>
     },
   });
 
-const LLM_MODEL = "qwen3.5-0.8b-q4_k_m";
+const _LLM_MODEL = "qwen3.5-0.8b-q4_k_m";
 
 function nativeServer() {
   return {
@@ -281,7 +282,7 @@ test("an unresolved verdict never stops a server, even with none ever held", asy
   tokenState = { token: "token-a", generation: 1 };
   const app = build();
   t.after(() => app.teardown());
-  policyFetch = async () => json({ code: "POLICY_UNRESOLVABLE" }, 409);
+  policyFetch = async () => json({ data: { managed: true, policy: null, policyUpdatedAt: null } });
 
   await assert.rejects(app.gate.resolve(), { code: "POLICY_UNRESOLVABLE" });
   app.tokenChanged({ token: "token-b", generation: 2 });
@@ -335,7 +336,7 @@ test("switching accounts cancels old-account work before the new verdict, which 
   // Account A's answer, arriving late, can't authorize account B.
   delayedOldAnswer.resolve(unmanaged());
   await settle();
-  assert.equal(app.gate.failure("transcription", "base").code, "POLICY_UNRESOLVABLE");
+  assert.equal(app.gate.failure("transcription", "base"), null, "an unknown account is allowed until management is proven");
 
   newAnswer.resolve(managed([]));
   await settle();
@@ -473,9 +474,9 @@ test("no first policy answer is taken while registering handlers", async (t) => 
   t.after(() => app.teardown());
   await settle();
   assert.equal(
-    app.gate.failure("transcription", "base").code,
-    "POLICY_UNRESOLVABLE",
-    "a session waiting for its bearer migration isn't a proven guest yet"
+    app.gate.failure("transcription", "base"),
+    null,
+    "pending bearer migration is inert without management evidence"
   );
 });
 
@@ -652,7 +653,7 @@ test("a rotated token the server calls unresolvable stops the running meeting", 
   app.target._activeLocalMeetingLease = await app.gate.authorize("transcription", "base");
   let remoteStops = 0;
   app.target._stopRemoteProductWork = () => remoteStops++;
-  policyFetch = async () => json({ code: "POLICY_UNRESOLVABLE" }, 500);
+  policyFetch = async () => json({ data: { managed: true, policy: null, policyUpdatedAt: null } });
 
   app.tokenChanged({ token: "token-rotated", generation: 2 });
   await settle();

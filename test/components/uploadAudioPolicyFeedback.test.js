@@ -66,7 +66,7 @@ test("upload policy feedback names the disabled feature independently of recordi
     "/components/notes/UploadAudioView.tsx"
   );
   const { usePolicyStore } = await vite.ssrLoadModule("/stores/policyStore.ts");
-  const { useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
+  const { useSettingsStore: _useSettingsStore } = await vite.ssrLoadModule("/stores/settingsStore.ts");
   const scope = {
     allowedModes: ["openwhispr", "providers", "local", "self-hosted", "enterprise"],
     allowedByokProviders: [],

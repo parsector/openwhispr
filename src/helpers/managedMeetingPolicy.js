@@ -3,9 +3,11 @@ function createManagedMeetingPolicy({ getSnapshot }) {
     isMeetingRecordingDisabled() {
       const snapshot = getSnapshot();
       return (
-        snapshot.status === "loading" ||
-        snapshot.status === "invalid" ||
-        snapshot.policy?.features.meetingRecordingEnabled === false
+        snapshot.managed === true && (
+          snapshot.status === "loading" ||
+          snapshot.status === "invalid" ||
+          snapshot.policy?.features.meetingRecordingEnabled === false
+        )
       );
     },
   };

@@ -119,15 +119,15 @@ function resolveEffectivePolicy(device, workspace, scope) {
   // first two settle the verdict.
   const settledManaged =
     (device.managed === true && (device.requireSignIn === true || device.status === "invalid")) ||
-    workspace?.code === "POLICY_UNRESOLVABLE";
-  const managed = settledManaged || workspace?.managed === true;
+    (workspace?.managed === true && workspace.code === "POLICY_UNRESOLVABLE");
+  const managed = device.managed === true || workspace?.managed === true;
   const failure = (status, code, policy = null) => ({
     ...metadata,
-    success: false,
-    status,
+    success: !managed,
+    status: managed ? status : "unmanaged",
     managed,
-    policy,
-    code,
+    policy: managed ? policy : null,
+    code: managed ? code : undefined,
   });
   if (device.status === "loading") return failure("loading", "DEVICE_POLICY_LOADING");
   if (device.status === "invalid") return failure("error", "DEVICE_POLICY_INVALID");
@@ -140,11 +140,11 @@ function resolveEffectivePolicy(device, workspace, scope) {
     if (scope.authenticated && !workspace) return failure("loading", "POLICY_LOADING", policy);
     // The device's restrictions are known even while this credential's
     // workspace verdict is not. Only that unknown source remains pending.
-    if (scope.authenticated && !workspace.success && managed)
+    if (scope.authenticated && !workspace.success && (settledManaged || workspace.managed))
       return failure(
-        settledManaged ? "error" : "loading",
+        workspace.status === "loading" ? "loading" : settledManaged ? "error" : "loading",
         workspace.code ?? "POLICY_UNRESOLVABLE",
-        settledManaged ? null : policy
+        workspace.status === "loading" || !settledManaged ? policy : null
       );
     if (!scope.authenticated && device.requireSignIn)
       return failure("error", "POLICY_SIGN_IN_REQUIRED");
@@ -189,10 +189,16 @@ function createEffectivePolicyManager({
   let updates = null;
   let signature;
   let revision = 0;
-  const workspaceFor = (scope) =>
-    workspace?.accountId === scope.accountId && workspace?.authGeneration === scope.authGeneration
-      ? workspace
+  const workspaceFor = (scope) => {
+    if (workspace?.accountId !== scope.accountId) return null;
+    if (workspace.authGeneration === scope.authGeneration) return workspace;
+    // A rotated credential does not erase established management evidence.
+    // Keep it unresolved until the new credential's workspace verdict arrives.
+    return workspace.managed === true
+      ? { ...workspace, success: false, status: "loading", policy: null,
+          authGeneration: scope.authGeneration }
       : null;
+  };
   function getCurrent() {
     const scope = getScope();
     const device = devicePolicy.getSnapshot();
@@ -247,7 +253,11 @@ function createEffectivePolicyManager({
     },
     updateWorkspace,
     invalidate() {
-      workspace = null;
+      const scope = getScope();
+      workspace = workspace?.accountId === scope.accountId && workspace.managed === true
+        ? { ...workspace, success: false, status: "loading", policy: null,
+            authGeneration: scope.authGeneration }
+        : null;
       return getCurrent();
     },
     // `held` reads only what is already held for the identity. So does a

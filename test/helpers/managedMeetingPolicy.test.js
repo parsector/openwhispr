@@ -15,7 +15,7 @@ test("meeting denial uses the trusted device snapshot on every platform", () => 
 
 test("unresolved and malformed trusted policy deny capture", () => {
   for (const status of ["loading", "invalid"]) {
-    const policy = createManagedMeetingPolicy({ getSnapshot: () => ({ status }) });
+    const policy = createManagedMeetingPolicy({ getSnapshot: () => ({ status, managed: true }) });
     assert.equal(policy.isMeetingRecordingDisabled(), true);
   }
 });

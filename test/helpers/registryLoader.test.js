@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -40,7 +41,7 @@ function signed(version, data = seed, { tested = [CLIENT], extra = {} } = {}) {
 }
 
 function setup(t, options = {}) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "registry-loader-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "registry-loader-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const applied = [];
   const errors = [];

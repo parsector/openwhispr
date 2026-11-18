@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const WhisperManager = require("../../src/helpers/whisper");
@@ -198,7 +199,7 @@ test("with no managed policy a blank speech model reaches the engine default, as
   const os = require("node:os");
   const path = require("node:path");
   const fs = require("node:fs");
-  const modelsDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "blank-model-"));
+  const modelsDirectory = createTempDir(path.join(os.tmpdir(), "blank-model-"));
   t.after(() => fs.rmSync(modelsDirectory, { recursive: true, force: true }));
 
   const whisper = new WhisperManager();
@@ -238,7 +239,7 @@ function warmUpScenarios(t) {
   const fs = require("node:fs");
   const os = require("node:os");
   const path = require("node:path");
-  const modelsDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "warm-up-"));
+  const modelsDirectory = createTempDir(path.join(os.tmpdir(), "warm-up-"));
   t.after(() => fs.rmSync(modelsDirectory, { recursive: true, force: true }));
 
   const pendingGate = () =>

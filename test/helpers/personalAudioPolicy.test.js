@@ -122,12 +122,12 @@ test("managed disabled meeting and upload controls retain their organization ref
   assert.match(upload.error, /organization/);
 });
 
-test("explicit managed policy failure refuses recording with a retryable reason", async (t) => {
+test("a trusted managed response with an unreadable policy refuses recording with a retryable reason", async (t) => {
   const { guard, cleanup } = setupPolicy(
     async () =>
       new Response(
-        JSON.stringify({ code: "POLICY_UNRESOLVABLE", error: "Managed policy is unavailable" }),
-        { status: 503 }
+        JSON.stringify({ data: { managed: true, policy: null, policyUpdatedAt: null } }),
+        { status: 200 }
       )
   );
   t.after(cleanup);

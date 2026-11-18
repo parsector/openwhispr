@@ -173,7 +173,7 @@ test("absent and future modes preserve the manual member-controlled flow", async
 });
 
 test("unresolved policy never authorizes an update or install-on-quit", async () => {
-  const { manager, autoUpdater } = setup({ snapshot: { success: false } });
+  const { manager, autoUpdater } = setup({ snapshot: { success: false, managed: true } });
   assert.equal(autoUpdater.autoInstallOnAppQuit, false);
   manager.setAutoUpdatesEnabled(true);
   assert.equal((await manager.checkForUpdates()).code, "UPDATE_POLICY_UNAVAILABLE");
@@ -366,7 +366,7 @@ test("a failed lookup leaves a held verdict and its download alone; an unresolva
   finish([]);
   assert.equal((await downloading).success, true);
 
-  manager.updatePolicy({ success: false, code: "POLICY_UNRESOLVABLE" });
+  manager.updatePolicy({ success: false, managed: true, code: "POLICY_UNRESOLVABLE" });
   const status = await manager.getUpdateStatus();
   assert.equal(status.policyReady, false);
   assert.equal(status.policyUnavailable, true);
@@ -462,7 +462,7 @@ test("a download after IT policy lifts starts on a fresh token", async () => {
 });
 
 test("a failed lookup with nothing held reports the policy unavailable until a retry resolves it", async () => {
-  let current = { success: false, code: "POLICY_UNAVAILABLE" };
+  let current = { success: false, managed: true, code: "POLICY_UNAVAILABLE" };
   const { manager, autoUpdater } = setup({ getPolicy: async () => current });
   await manager.refreshPolicy();
   let status = await manager.getUpdateStatus();
@@ -487,7 +487,7 @@ test("a held verdict answers without waiting for the network lookup", async () =
 
 test("a startup check refused for want of a verdict runs once the verdict lands", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
-  const { manager, autoUpdater, setPolicy } = setup({ snapshot: { success: false } });
+  const { manager, autoUpdater, setPolicy } = setup({ snapshot: { success: false, managed: true } });
   manager.checkForUpdatesOnStartup();
   t.mock.timers.tick(3000);
   await flush();
@@ -557,7 +557,7 @@ test("managed mode reports an earlier macOS staged update without offering insta
 });
 
 test("a restart into a staged update goes through Squirrel under any policy, without a lookup", async () => {
-  for (const snapshot of [managed("it_managed"), { success: false }]) {
+  for (const snapshot of [managed("it_managed"), { success: false, managed: true }]) {
     let lookups = 0;
     const { manager, autoUpdater } = setup({
       getPolicy: async () => {

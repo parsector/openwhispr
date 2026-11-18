@@ -3,6 +3,7 @@
 // (unresolvable, unavailable, throttled, auth context changed, and any added
 // later), a malformed snapshot, and a timeout (null) are "unavailable".
 function connectorPolicyState(snapshot) {
+  if (snapshot?.managed === false) return "allowed";
   if (!snapshot || snapshot.success !== true || typeof snapshot.managed !== "boolean") {
     return "unavailable";
   }

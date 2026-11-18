@@ -267,7 +267,7 @@ test("the network guard enforces only a device policy, and not while a verdict l
   const failed = resolveEffectivePolicy(absentDevice, { success: false, code: "X" }, member);
   const unresolvable = resolveEffectivePolicy(
     absentDevice,
-    { success: false, code: "POLICY_UNRESOLVABLE" },
+    { success: false, managed: true, code: "POLICY_UNRESOLVABLE" },
     member
   );
   const signInDevice = normalizeDeviceValues({ RequireSignIn: true });
@@ -305,19 +305,19 @@ test("a failed lookup holds nothing closed without evidence that the identity is
   const loading = resolveEffectivePolicy(absentDevice, null, member);
   assert.equal(failed.success, true);
   assert.equal(failed.status, "unmanaged");
-  assert.equal(loading.status, "loading");
+  assert.equal(loading.status, "unmanaged");
   for (const [channel] of channels) {
     assert.equal(productOperationAllowed(failed, "1.11.1", channel), true, channel);
     assert.equal(productOperationAllowed(loading, "1.11.1", channel), true, channel);
   }
   for (const snapshot of [
-    resolveEffectivePolicy(absentDevice, { success: false, code: "POLICY_UNRESOLVABLE" }, member),
+    resolveEffectivePolicy(absentDevice, { success: false, managed: true, code: "POLICY_UNRESOLVABLE" }, member),
     resolveEffectivePolicy(
       normalizeDeviceValues({ RequireSignIn: true }),
       { success: false, code: "POLICY_UNAVAILABLE" },
       member
     ),
-    resolveEffectivePolicy({ status: "loading", managed: false }, null, member),
+    resolveEffectivePolicy({ status: "loading", managed: true }, null, member),
   ])
     for (const [channel] of channels)
       assert.equal(productOperationAllowed(snapshot, "1.11.1", channel), false, channel);
@@ -326,7 +326,7 @@ test("a failed lookup holds nothing closed without evidence that the identity is
 test("only a device policy or the server settles a failed lookup; the account's last verdict leaves it loading", () => {
   const failed = (evidence) =>
     resolveEffectivePolicy(absentDevice, { success: false, ...evidence }, member);
-  assert.equal(failed({ code: "POLICY_UNRESOLVABLE" }).status, "error");
+  assert.equal(failed({ code: "POLICY_UNRESOLVABLE", managed: true }).status, "error");
   assert.equal(
     resolveEffectivePolicy(
       normalizeDeviceValues({ RequireSignIn: true }),
@@ -373,7 +373,7 @@ test("updates follow the user's choice after a failed lookup, and ignore an unre
   assert.equal(resolveUpdatePolicy(absentDevice, failed, member).success, true);
   assert.equal(resolveUpdatePolicy(absentDevice, failed, member).managed, false);
   assert.equal(
-    resolveUpdatePolicy(absentDevice, { success: false, code: "POLICY_UNRESOLVABLE" }, member)
+    resolveUpdatePolicy(absentDevice, { success: false, managed: true, code: "POLICY_UNRESOLVABLE" }, member)
       .success,
     false
   );
@@ -426,7 +426,7 @@ test("held lookups read no network, a failed lookup keeps the held verdict, and 
   });
   await manager.getPolicy({ accountId: "member", expectedAuthGeneration: 1, held: true });
   assert.deepEqual(requests, [["held", { accountId: "member", expectedAuthGeneration: 1 }]]);
-  assert.equal(manager.getCurrent().status, "loading");
+  assert.equal(manager.getCurrent().status, "unmanaged");
   await manager.getPolicy({ accountId: "member", expectedAuthGeneration: 1, refresh: true });
   assert.deepEqual(requests.at(-1), [
     "network",
@@ -457,7 +457,7 @@ test("a later failure doesn't lift a policy the server called unresolvable", () 
     getScope: () => member,
   });
   const identity = { accountId: "member", authGeneration: 1 };
-  manager.updateWorkspace({ ...identity, success: false, code: "POLICY_UNRESOLVABLE" });
+  manager.updateWorkspace({ ...identity, success: false, managed: true, code: "POLICY_UNRESOLVABLE" });
   manager.updateWorkspace({ ...identity, success: false, code: "AUTH_CONTEXT_UNVALIDATED" });
   assert.equal(manager.getCurrent().code, "POLICY_UNRESOLVABLE");
   assert.equal(manager.getCurrent().managed, true);

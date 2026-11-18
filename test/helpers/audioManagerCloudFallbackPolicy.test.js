@@ -853,7 +853,12 @@ test("final dictation leaves a policy still loading to main, and an unresolved o
 
   usePolicyStore.setState({ status: "error", managed: false, policy: null });
   await manager.processAudio(new Blob(["audio"]));
-  assert.equal(nativeCalls, 1);
+  assert.equal(nativeCalls, 2);
+  assert.equal(reported, null, "unmanaged policy errors cannot interrupt local dictation");
+
+  usePolicyStore.setState({ status: "error", managed: true, policy: null });
+  await manager.processAudio(new Blob(["audio"]));
+  assert.equal(nativeCalls, 2);
   assert.equal(reported.code, "POLICY_UNRESOLVABLE");
   assert.equal(reported.description, en.models.policy.unresolved);
 });

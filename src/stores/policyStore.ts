@@ -19,6 +19,8 @@ export interface PolicyState extends PolicyDecisionSnapshot {
   requireSignIn: boolean;
   code?: string;
   bootstrap: () => Promise<void>;
+  /** Compatibility entry point for retained local-feature retry actions. */
+  fetchPolicy: (accountId?: string | null, authGeneration?: number | null) => Promise<void>;
 }
 
 let lifecycleListenersReady = false;
@@ -101,7 +103,7 @@ export function refreshEffectivePolicy(): Promise<void> {
       usePolicyStore.setState({
         status: "error",
         deviceReady: true,
-        code: "DEVICE_POLICY_INVALID",
+        code: usePolicyStore.getState().managed ? "DEVICE_POLICY_INVALID" : undefined,
         policy: null,
       });
     }
@@ -130,6 +132,7 @@ export const usePolicyStore = create<PolicyState>()(() => ({
   localOnly: false,
   requireSignIn: false,
   bootstrap: refreshEffectivePolicy,
+  fetchPolicy: refreshEffectivePolicy,
   accountId: null,
   authGeneration: null,
   revision: 0,

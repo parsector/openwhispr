@@ -1,3 +1,5 @@
+// TODO(run-b): use a static fork-owned catalog without remote refresh or
+// lifecycle filtering, preserving saved model choices absent from the feed.
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { verifyEnvelope, MAX_ENVELOPE_BYTES } = require("../models/registryEnvelope.cjs");

@@ -185,28 +185,32 @@ function createWorkspacePolicyManager({
   }
 
   function errorSnapshot(identity, code, error, httpStatus) {
-    const current = snapshots.get(identityKey(identity));
     return {
       success: false,
       // Only an explicit server refusal (or its persisted marker) proves this
       // identity is managed. A failed network request cannot establish that.
-      managed: requiresManagedPolicy(identity) || current?.data.managed === true,
-      status: "error",
-      revision: current?.revision ?? revision,
+      status: code === "POLICY_UNRESOLVABLE" &&
+        !requiresManagedPolicy(identity) ? "loading" : "error",
+      revision,
       accountId: identity.accountId,
       authGeneration: identity.authGeneration,
-      managed: accountWasManaged(identity.accountId),
+      managed: accountWasManaged(identity.accountId) ||
+        managedPolicyRequired.has(identityKey(identity)) ||
+        snapshots.get(identityKey(identity))?.data.managed === true ||
+        rawCachedData(identity)?.managed === true,
       code,
       error,
       httpStatus,
     };
   }
 
-  function markManagedPolicyRequired(identity, message) {
+  function markManagedPolicyRequired(identity, message, provenManaged = false) {
     const key = identityKey(identity);
     const current = snapshots.get(key);
     const cached = rawCachedData(identity);
-    if (current?.data.managed || cached?.managed) return;
+    // A refusal code cannot establish management for an unmanaged install.
+    if (!provenManaged && !current?.data.managed && !cached?.managed &&
+        !requiresManagedPolicy(identity)) return;
 
     const wasRequired = requiresManagedPolicy(identity);
     managedPolicyRequired.add(key);
@@ -357,6 +361,9 @@ function createWorkspacePolicyManager({
         };
         if (!validatePolicyData(data)) {
           if (data.managed === true) {
+            // The trusted response establishes management even when its
+            // policy is malformed; a refusal code by itself never does.
+            markManagedPolicyRequired(identity, "Managed policy response is malformed", true);
             throw unresolvablePolicyError("Managed policy response is malformed");
           }
           throw new Error("Malformed policy response");

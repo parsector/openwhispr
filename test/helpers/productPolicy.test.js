@@ -106,7 +106,7 @@ test("direct operations enforce provider allowlists and the minimum app version"
   for (const channel of ["process-local-reasoning", "cloud-transcribe"])
     assert.equal(productOperationAllowed(snapshot, "1.11.1", channel), false);
   assert.equal(
-    productOperationAllowed({ success: false }, "1.11.1", "process-local-reasoning"),
+    productOperationAllowed({ success: false, managed: true }, "1.11.1", "process-local-reasoning"),
     false
   );
 });
@@ -173,7 +173,7 @@ test("known pending restrictions selectively revoke running work without admitti
 
 test("a refusal's words follow the policy's state", () => {
   const { policyRefusalKey } = require("../../src/helpers/productPolicy");
-  assert.equal(policyRefusalKey({ status: "loading" }), "common.policyUnresolved");
+  assert.equal(policyRefusalKey({ managed: true, status: "loading" }), "common.policyUnresolved");
   // A failed lookup isn't the organization's decision.
   for (const code of [
     "POLICY_UNAVAILABLE",
@@ -181,7 +181,7 @@ test("a refusal's words follow the policy's state", () => {
     "POLICY_CREDENTIALS_UNREADABLE",
   ])
     assert.equal(
-      policyRefusalKey({ success: false, status: "error", code }),
+      policyRefusalKey({ managed: true, success: false, status: "error", code }),
       "common.policyUnresolved"
     );
   assert.equal(policyRefusalKey({ success: true, status: "managed" }), "common.policyBlocked");

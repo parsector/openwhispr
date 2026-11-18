@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { getEventListeners } = require("node:events");
@@ -9,7 +10,7 @@ const path = require("node:path");
 const Module = require("node:module");
 const { managedPolicy } = require("./harness/policyFixtures");
 
-const scratchDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "local-model-download-"));
+const scratchDirectory = createTempDir(path.join(os.tmpdir(), "local-model-download-"));
 const originalLoad = Module._load;
 
 // Electron's net.request over node:http, so the real downloadFile runs against
@@ -158,7 +159,7 @@ function allowingGate(scope, modelId) {
 let parakeetArchive;
 
 function directory(label) {
-  return fs.mkdtempSync(path.join(scratchDirectory, `${label}-`));
+  return createTempDir(path.join(scratchDirectory, `${label}-`));
 }
 
 function whisperEngine() {

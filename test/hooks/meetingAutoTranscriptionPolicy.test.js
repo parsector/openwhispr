@@ -52,13 +52,13 @@ async function mountCheck(t, cachePrefix, mockModules) {
 test("automatic-start checks use settled auth and live policy after asynchronous work", async (t) => {
   const { usePolicyStore, render, check } = await mountCheck(t, "meeting-auto-policy-");
   await render({ isLoaded: false, isSignedIn: false });
-  assert.equal(check()(), false, "unsettled auth is not evidence of a guest");
+  assert.equal(check()(), true, "unmanaged auth loading does not restrict local recording");
   await render({ isLoaded: true, isSignedIn: false });
   assert.equal(check()(), true);
   const pendingCheck = check();
   await render({ isLoaded: true, isSignedIn: true });
   assert.equal(check(), pendingCheck, "the check stays stable across renders");
-  assert.equal(pendingCheck(), false, "a signed-in window waits for its policy");
+  assert.equal(pendingCheck(), true, "unmanaged accounts need not wait for policy");
   await React.act(async () =>
     usePolicyStore.setState({
       status: "managed",
@@ -80,24 +80,24 @@ test("a settled guest's session refetch doesn't lose an automatic start", async 
   assert.equal(check()(), true);
 });
 
-test("an account switch still blocks automatic starts until it settles", async (t) => {
+test("an unmanaged account switch leaves automatic local starts available", async (t) => {
   const { render, check, usePolicyStore } = await mountCheck(t, "meeting-auto-account-switch-");
   usePolicyStore.setState({ status: "unmanaged", policy: null });
   await render({ isLoaded: true, isSignedIn: true });
   assert.equal(check()(), true);
   await render({ isLoaded: false, isSignedIn: false });
-  assert.equal(check()(), false);
+  assert.equal(check()(), true);
 });
 
-test("a credential holder shown as a guest waits for its policy", async (t) => {
+test("an unmanaged credential holder can record during policy loading", async (t) => {
   const { vite, render, check } = await mountCheck(t, "meeting-auto-credential-");
   const { observeAuthTokenStateEvent } = await vite.ssrLoadModule("/lib/authRequestContext.ts");
   await render({ isLoaded: true, isSignedIn: false });
   assert.equal(check()(), true, "a real guest has no policy to wait for");
   observeAuthTokenStateEvent({ generation: 1, hasToken: true });
-  assert.equal(check()(), false, "a token not yet bound to a session, or a stale offline profile");
+  assert.equal(check()(), true, "a token alone establishes no managed workspace");
   await render({ isLoaded: false, isSignedIn: false });
-  assert.equal(check()(), false, "a sign-in in progress is not a guest's refetch");
+  assert.equal(check()(), true, "unmanaged sign-in remains local");
   observeAuthTokenStateEvent({ generation: 2, hasToken: false });
   assert.equal(check()(), true, "a guest's refetch stays settled");
 });
@@ -112,6 +112,7 @@ for (const status of ["unmanaged", "managed"]) {
     observeAuthTokenStateEvent({ generation: 1, hasToken: true });
     usePolicyStore.setState({
       status,
+      managed: status === "managed",
       policy: status === "managed" ? managedPolicy({}) : null,
       accountId: "previous-account",
       authGeneration: 1,
@@ -119,11 +120,11 @@ for (const status of ["unmanaged", "managed"]) {
     await render({ isLoaded: true, isSignedIn: true });
     assert.equal(check()(), true);
     observeAuthTokenStateEvent({ generation: 2, hasToken: true });
-    assert.equal(check()(), false, "the outgoing document sees the new credential immediately");
+    assert.equal(check()(), status !== "managed", "only known managed credentials wait");
     await render({ isLoaded: true, isSignedIn: false });
-    assert.equal(check()(), false, "an unbound session is not a guest");
+    assert.equal(check()(), status !== "managed", "unmanaged sessions remain allowed");
     await render({ isLoaded: false, isSignedIn: false });
-    assert.equal(check()(), false, "a session refetch cannot restore the old permission");
+    assert.equal(check()(), status !== "managed", "known managed refetches wait");
     usePolicyStore.setState({ accountId: "current-account", authGeneration: 2 });
     await render({ isLoaded: true, isSignedIn: true });
     assert.equal(check()(), true, "the policy bound to the current credential permits a start");
@@ -156,7 +157,9 @@ test("credential rotation suppresses a pending automatic start before capture", 
   const { observeAuthTokenStateEvent } = await vite.ssrLoadModule("/lib/authRequestContext.ts");
   observeAuthTokenStateEvent({ generation: 1, hasToken: true });
   usePolicyStore.setState({
-    status: "unmanaged",
+    status: "managed",
+    managed: true,
+    policy: managedPolicy({}),
     accountId: "previous-account",
     authGeneration: 1,
   });
@@ -195,14 +198,15 @@ test("a recording policy refuses still reports why under automatic policy", asyn
   const snapshots = [
     {
       status: "managed",
+      managed: true,
       appVersion: "1.0.0",
       policy: managedPolicy({
         minAppVersion: "9.0.0",
         meetings: { transcriptionStart: "automatic" },
       }),
     },
-    { status: "error", policy: null },
-    { status: "loading", policy: null },
+    { status: "error", managed: true, policy: null },
+    { status: "loading", managed: true, policy: null },
   ];
   for (const snapshot of snapshots) {
     await React.act(async () => usePolicyStore.setState(snapshot));

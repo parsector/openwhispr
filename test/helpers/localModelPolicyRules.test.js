@@ -42,7 +42,7 @@ test("local model decisions combine scope catalog, status, mode, version and nul
   ]) {
     for (const status of ["idle", "unmanaged", "loading", "error"]) {
       assert.equal(
-        allowed({ status, policy: null, appVersion: null }, scope, id),
+        allowed({ status, managed: !["idle", "unmanaged"].includes(status), policy: null, appVersion: null }, scope, id),
         ["idle", "unmanaged"].includes(status)
       );
     }
@@ -177,7 +177,7 @@ test("a refused model's row only names the organization for a refusal it made", 
     { labelKey: "models.policy.notApproved", hintKey: "models.policy.noneSupported" }
   );
   assert.deepEqual(
-    localModelRowRefusal({ status: "error", policy: null, appVersion: null }, "transcription"),
+    localModelRowRefusal({ managed: true, status: "error", policy: null, appVersion: null }, "transcription"),
     { labelKey: "models.policy.unavailable", hintKey: "models.policy.unresolved" }
   );
   assert.deepEqual(
@@ -200,16 +200,16 @@ test("only a settled verdict denies an audio feature; an unresolved one stops no
   });
 
   for (const unresolved of [
-    { status: "error", policy: null, appVersion: null },
-    { status: "loading", policy: null, appVersion: null },
-    { status: "idle", policy: null, appVersion: null },
+    { managed: true, status: "error", policy: null, appVersion: null },
+    { managed: true, status: "loading", policy: null, appVersion: null },
+    { managed: true, status: "idle", policy: null, appVersion: null },
     { status: "unmanaged", policy: null, appVersion: null },
   ]) {
     assert.equal(isAudioFeatureDenied(unresolved, "meeting"), false, unresolved.status);
     assert.equal(isAudioFeatureDenied(unresolved, "upload"), false, unresolved.status);
   }
   assert.equal(
-    isAudioFeatureAllowed({ status: "error", policy: null, appVersion: null }, "meeting"),
+    isAudioFeatureAllowed({ managed: true, status: "error", policy: null, appVersion: null }, "meeting"),
     false,
     "new work still waits for a verdict"
   );

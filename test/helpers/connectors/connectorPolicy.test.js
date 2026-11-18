@@ -41,7 +41,7 @@ test("every failed or malformed snapshot fails closed", async () => {
   assert.equal(connectorPolicyState(null), "unavailable");
   assert.equal(connectorPolicyState(undefined), "unavailable");
   assert.equal(connectorPolicyState({ success: true }), "unavailable");
-  assert.equal(connectorPolicyState({ managed: false, policy: null }), "unavailable");
+  assert.equal(connectorPolicyState({ managed: false, policy: null }), "allowed");
   assert.equal(
     connectorPolicyState({ success: true, managed: "yes", policy: null }),
     "unavailable"

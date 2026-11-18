@@ -13,6 +13,7 @@ function productPolicyState(snapshot, appVersion) {
         ? "unmanaged"
         : "error",
     policy: snapshot.policy ?? null,
+    managed: snapshot.managed === true,
     appVersion,
     workspaceManaged: snapshot.workspaceManaged,
   };

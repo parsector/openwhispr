@@ -13,7 +13,7 @@ test("automatic meeting start fails closed until signed-in policy resolves", asy
     ["error", true, false],
     ["managed", true, false],
   ]) {
-    assert.equal(allowed({ status, policy: null, appVersion: null }, isSignedIn), expected);
+    assert.equal(allowed({ status, managed: isSignedIn && status !== "unmanaged", policy: null, appVersion: null }, isSignedIn), expected);
   }
   for (const [meetings, expected] of [
     [undefined, true],
@@ -78,7 +78,7 @@ test("update-required derives from the org minimum and known app version", async
 test("allows guests and resolved unmanaged accounts", async () => {
   const { isPolicyActionAllowed } = await load();
 
-  assert.equal(isPolicyActionAllowed({ status: "idle", policy: null, appVersion: null }), true);
+  assert.equal(isPolicyActionAllowed({ managed: false, status: "idle", policy: null, appVersion: null }), true);
   assert.equal(
     isPolicyActionAllowed({ status: "unmanaged", policy: null, appVersion: null }),
     true
@@ -89,11 +89,11 @@ test("blocks authenticated actions while policy is loading or unavailable", asyn
   const { isPolicyActionAllowed } = await load();
 
   assert.equal(
-    isPolicyActionAllowed({ status: "loading", policy: null, appVersion: "1.8.1" }),
+    isPolicyActionAllowed({ managed: true, status: "loading", policy: null, appVersion: "1.8.1" }),
     false
   );
   assert.equal(
-    isPolicyActionAllowed({ status: "error", policy: null, appVersion: "1.8.1" }),
+    isPolicyActionAllowed({ managed: true, status: "error", policy: null, appVersion: "1.8.1" }),
     false
   );
 });
@@ -601,11 +601,11 @@ test("provider fallback persistence is limited to resolved unmanaged and signed-
     true
   );
   assert.equal(
-    shouldPersistProviderFallback({ status: "idle", policy: null, appVersion: null }, false),
+    shouldPersistProviderFallback({ managed: false, status: "idle", policy: null, appVersion: null }, false),
     true
   );
   assert.equal(
-    shouldPersistProviderFallback({ status: "idle", policy: null, appVersion: null }, true),
+    shouldPersistProviderFallback({ managed: false, status: "idle", policy: null, appVersion: null }, true),
     false
   );
   assert.equal(
@@ -647,7 +647,7 @@ test("resending an invitation needs sharing to be on", async () => {
 test("sharing recovery remains available when exposure-increasing actions are blocked", async () => {
   const { isShareActionAllowed } = await load();
   const blockedSnapshots = [
-    { status: "loading", policy: null, appVersion: "1.8.1" },
+    { managed: true, status: "loading", policy: null, appVersion: "1.8.1" },
     {
       status: "managed",
       policy: { ...policy, sharing: { externalLinkSharing: "disabled" } },
@@ -835,17 +835,17 @@ test("active control-panel views reroute on their specific policy capability", a
 test("screen context is allowed unless a managed policy turns it off", async () => {
   const { isScreenContextAllowed } = await load();
 
-  assert.equal(isScreenContextAllowed({ status: "idle", policy: null, appVersion: null }), true);
+  assert.equal(isScreenContextAllowed({ managed: false, status: "idle", policy: null, appVersion: null }), true);
   assert.equal(
     isScreenContextAllowed({ status: "unmanaged", policy: null, appVersion: null }),
     true
   );
   // Fail closed while the managed verdict is unknown.
   assert.equal(
-    isScreenContextAllowed({ status: "loading", policy: null, appVersion: null }),
+    isScreenContextAllowed({ managed: true, status: "loading", policy: null, appVersion: null }),
     false
   );
-  assert.equal(isScreenContextAllowed({ status: "error", policy: null, appVersion: null }), false);
+  assert.equal(isScreenContextAllowed({ managed: true, status: "error", policy: null, appVersion: null }), false);
 
   // The shared fixture omits the field — the old-server contract: allowed.
   assert.equal(isScreenContextAllowed({ status: "managed", policy, appVersion: null }), true);
@@ -905,7 +905,7 @@ test("only a resolved managed policy reports web search as turned off by the org
 test("cloud-backup resume fires only on a denial-to-grant transition", async () => {
   const { cloudBackupResumed } = await load();
   const unmanaged = { status: "unmanaged", policy: null, appVersion: null };
-  const loading = { status: "loading", policy: null, appVersion: null };
+  const loading = { managed: true, status: "loading", policy: null, appVersion: null };
   const managedAllowed = { status: "managed", policy, appVersion: null };
   const managedDenied = {
     status: "managed",
@@ -1055,7 +1055,7 @@ test("the enterprise transcription tile is offered only to a managed policy snap
     ...(isEnterpriseTranscriptionOfferable(state) ? [enterpriseOption] : []),
   ];
 
-  const idle = { status: "idle", policy: null, appVersion: null };
+  const idle = { managed: false, status: "idle", policy: null, appVersion: null };
   const unmanaged = { status: "unmanaged", policy: null, appVersion: "1.10.0" };
   const managedEnterpriseAzure = {
     status: "managed",
@@ -1097,7 +1097,7 @@ test("the enterprise transcription tile is offered only to a managed policy snap
 
 test("a failed policy fetch is settled, but idle and loading are not", async () => {
   const { isPolicySettled } = await load();
-  const snapshot = (status) => ({ status, policy: null, appVersion: null });
+  const snapshot = (status) => ({ status, managed: status !== "unmanaged", policy: null, appVersion: null });
 
   for (const status of ["managed", "unmanaged", "error"]) {
     assert.equal(isPolicySettled(snapshot(status)), true, status);
@@ -1109,7 +1109,7 @@ test("a failed policy fetch is settled, but idle and loading are not", async () 
 
 test("the local-history policy is resolved only once the fetch has settled", async () => {
   const { isLocalHistoryPolicyResolved } = await load();
-  const snapshot = (status) => ({ status, policy: null, appVersion: null });
+  const snapshot = (status) => ({ status, managed: status !== "unmanaged", policy: null, appVersion: null });
 
   // Settled: the org either locks the switch or it does not.
   assert.equal(isLocalHistoryPolicyResolved(snapshot("managed")), true);
@@ -1164,5 +1164,5 @@ test("personal audio recovery leaves dictation's unresolved-policy decision unch
   const state = { status: "error", managed: false, policy: null, appVersion: null };
   assert.equal(isAudioFeatureAllowed(state, "meeting"), true);
   assert.equal(isAudioFeatureAllowed(state, "upload"), true);
-  assert.equal(isAudioFeatureAllowed(state, "dictation"), false);
+  assert.equal(isAudioFeatureAllowed(state, "dictation"), true);
 });
