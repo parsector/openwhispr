@@ -46,7 +46,7 @@ test("one atomic update reaches CJS helpers, ESM readers and derived model lists
     assert.ok(models.REASONING_PROVIDERS.openai.models.some((m) => m.value === "registry-cloud"));
     assert.deepEqual(
       models.getTinfoilModels().map((m) => m.id),
-      ["fresh-tinfoil"]
+      [...seed.cloudProviders.find(p => p.id === "tinfoil").models.map(m => m.id), "fresh-tinfoil"]
     );
     assert.notEqual(
       store.getRegistryData().cloudProviders.find((p) => p.id === "tinfoil").models[0].id,

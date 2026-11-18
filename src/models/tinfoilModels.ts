@@ -1,12 +1,6 @@
 import {
-  isSelectableTinfoilModel,
-  resolveRetiredCloudModel,
-  RETIRED_TINFOIL_MODEL_NAMES,
-} from "../config/retiredCloudModelPolicy.js";
-import {
   applyTinfoilModels,
   getCloudProviderDefaultModelId,
-  getTinfoilModels,
   type CloudModelDefinition,
 } from "./ModelRegistry";
 import { pickProviderDefaultModel } from "./providerDefaultModel";
@@ -15,9 +9,6 @@ import {
   readCachedTinfoilModels,
   writeCachedTinfoilModels,
 } from "./tinfoilModelCache";
-import { INFERENCE_SCOPES, usesCloudModelCatalog } from "../config/inferenceScopes";
-import { getSettings, setStringSetting } from "../stores/settingsStore";
-import { recordRetiredModelSwitch } from "../stores/retiredModelSwitchStore";
 
 /** A chat model as reported by Tinfoil's /v1/models, narrowed by the main process. */
 export interface TinfoilCatalogModel {
@@ -41,7 +32,7 @@ export const DESCRIPTION_KEYS: Record<string, string> = {
 };
 
 function toCloudModels(catalog: TinfoilCatalogModel[]): CloudModelDefinition[] {
-  return catalog.filter(isSelectableTinfoilModel).map((model) => ({
+  return catalog.map((model) => ({
     id: model.id,
     name: model.name,
     description: model.description,
@@ -58,46 +49,6 @@ export function pickDefaultTinfoilModel(
   return pickProviderDefaultModel(models, getCloudProviderDefaultModelId("tinfoil"));
 }
 
-/**
- * Moves any scope still pointing at a model Tinfoil has retired onto one it
- * still serves — otherwise the next request is a 404 the user can't diagnose.
- * Only ever called after a successful fetch, so a missing model really is gone.
- */
-function reconcileSelectedModels(
-  previous: CloudModelDefinition[],
-  models: CloudModelDefinition[]
-): void {
-  const available = new Set(models.map((model) => model.id));
-  const settings = getSettings() as unknown as Record<string, unknown>;
-  const replacement = pickDefaultTinfoilModel(models);
-  if (!replacement) return;
-  const announced = new Set<string>();
-
-  for (const scope of Object.values(INFERENCE_SCOPES)) {
-    const { mode, provider, model } = scope.storeKeys;
-    if (!usesCloudModelCatalog(settings[mode])) continue;
-    if (settings[provider] !== "tinfoil") continue;
-
-    const selected = settings[model];
-    if (typeof selected !== "string" || !selected || available.has(selected)) continue;
-
-    const explicitReplacement = resolveRetiredCloudModel("tinfoil", selected);
-    const target = models.find((m) => m.id === explicitReplacement) ?? replacement;
-    setStringSetting(model, target.id);
-    // Several scopes can share a retired model; say so once.
-    if (announced.has(selected)) continue;
-    announced.add(selected);
-    recordRetiredModelSwitch({
-      provider: "tinfoil",
-      from:
-        RETIRED_TINFOIL_MODEL_NAMES[selected] ??
-        previous.find((m) => m.id === selected)?.name ??
-        selected,
-      to: target.name,
-    });
-  }
-}
-
 let inFlight: Promise<CloudModelDefinition[]> | null = null;
 
 async function fetchAndApply(): Promise<CloudModelDefinition[]> {
@@ -112,10 +63,8 @@ async function fetchAndApply(): Promise<CloudModelDefinition[]> {
     throw new Error("Tinfoil returned no chat models");
   }
 
-  const previous = getTinfoilModels();
   applyTinfoilModels(models);
   writeCachedTinfoilModels(models);
-  reconcileSelectedModels(previous, models);
   return models;
 }
 

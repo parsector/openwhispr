@@ -9,7 +9,17 @@ let tinfoilOverlay: CloudModelDefinition[] | null = cached.length ? cached : nul
 
 export function getCloudModelProviders(): CloudProviderData[] {
   return registryData.cloudProviders.map((provider) =>
-    provider.id === "tinfoil" && tinfoilOverlay ? { ...provider, models: tinfoilOverlay } : provider
+    provider.id === "tinfoil" && tinfoilOverlay
+      ? {
+          ...provider,
+          models: [
+            ...provider.models,
+            ...tinfoilOverlay.filter(
+              (model) => !provider.models.some((shipped) => shipped.id === model.id)
+            ),
+          ],
+        }
+      : provider
   );
 }
 

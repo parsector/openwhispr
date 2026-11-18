@@ -718,35 +718,12 @@ export default function TranscriptionModelPicker({
     onLocalModelSelectRef.current = onLocalModelSelect;
   }, [onLocalModelSelect]);
 
-  const validateAndSelectModel = useCallback((loadedModels: LocalModel[]) => {
-    const current = selectedLocalModelRef.current;
-    if (
-      !current ||
-      !isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", current)
-    )
-      return;
-
-    // The whisper list loads on a mere browse of the Whisper tab, so the
-    // committed selection can be a foreign id (a Parakeet model while nvidia
-    // is committed) — only replace ids this list owns.
-    const currentEntry = loadedModels.find((m) => m.model === current);
-    if (!currentEntry || currentEntry.downloaded) return;
-
-    const downloaded = loadedModels.filter(
-      (m) =>
-        m.downloaded &&
-        isLocalModelAllowedByPolicy(usePolicyStore.getState(), "transcription", m.model)
-    );
-    onLocalModelSelectRef.current(downloaded[0]?.model ?? "", "whisper");
-  }, []);
-
   const loadLocalModels = useCallback(() => {
     const load = async () => {
       try {
         const result = await window.electronAPI?.listWhisperModels();
         if (result?.success) {
           setLocalModels(result.models);
-          validateAndSelectModel(result.models);
         }
       } catch (error) {
         logger.error("Failed to load models", { error }, "models");
@@ -757,7 +734,7 @@ export default function TranscriptionModelPicker({
     const queuedLoad = localModelsLoadQueueRef.current.then(load);
     localModelsLoadQueueRef.current = queuedLoad;
     return queuedLoad;
-  }, [validateAndSelectModel]);
+  }, []);
 
   const loadParakeetModels = useCallback(() => {
     const load = async () => {
@@ -778,6 +755,14 @@ export default function TranscriptionModelPicker({
   }, []);
 
   const effectiveCloudSelection = useMemo(() => {
+    if (
+      !browsedCloudProvider &&
+      selectedCloudModel &&
+      cloudProviders.some((provider) => provider.id === selectedCloudProvider)
+    ) {
+      return { provider: selectedCloudProvider, model: selectedCloudModel };
+    }
+
     // Every provider's URL counts as known, including policy-blocked ones and
     // the ones this scope does not offer: otherwise such a provider's stored URL
     // reads as a custom endpoint and reconciliation would keep pointing "custom"
@@ -1236,14 +1221,13 @@ export default function TranscriptionModelPicker({
             const result = await window.electronAPI?.listWhisperModels();
             if (result?.success) {
               setLocalModels(result.models);
-              validateAndSelectModel(result.models);
             }
           });
         },
         variant: "destructive",
       });
     },
-    [showConfirmDialog, deleteModel, validateAndSelectModel, t]
+    [showConfirmDialog, deleteModel, t]
   );
 
   const currentCloudProvider = useMemo<TranscriptionProviderData | undefined>(
@@ -1608,6 +1592,14 @@ export default function TranscriptionModelPicker({
   return (
     <div className={`space-y-2 ${className}`}>
       <ConnectionCheckAnnouncer announcement={check.announcement} />
+      {effectiveLocal &&
+        selectedLocalModel &&
+        !WHISPER_MODEL_INFO[selectedLocalModel] &&
+        !PARAKEET_MODEL_INFO[selectedLocalModel] && (
+          <p role="status" className="text-sm text-muted-foreground">
+            {t("models.savedUnavailable", { model: selectedLocalModel })}
+          </p>
+        )}
       {!mode && <ModeToggle useLocalWhisper={effectiveLocal} onModeChange={handleModeChange} />}
 
       {!effectiveLocal ? (

@@ -3126,6 +3126,7 @@
     }
   },
   "models": {
+    "savedUnavailable": "Saved choice: {{model}}. This model is not listed in this build. Your choice has been kept.",
     "learnMore": "Learn more",
     "noneAvailable": "No models available",
     "descriptions": {

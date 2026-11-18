@@ -3032,6 +3032,7 @@
     }
   },
   "models": {
+    "savedUnavailable": "保存済みの選択: {{model}}。このモデルはこのビルドに含まれていません。選択は保持されています。",
     "learnMore": "詳細を見る",
     "noneAvailable": "利用可能なモデルがありません",
     "descriptions": {

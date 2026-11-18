@@ -590,7 +590,6 @@ export default function ReasoningModelSelector({
     setReasoningModeProp?.(inferenceMode);
     if (!isProviderValidForMode(localReasoningProvider, inferenceMode)) {
       setLocalReasoningProvider("");
-      setReasoningModel("");
     }
   };
 

@@ -49,7 +49,7 @@ const COLOR_CONFIG: Record<
 };
 
 // The default card without its hover lift: a legacy card can't be picked.
-const LEGACY_CARD_CLASS = "border-border bg-surface-1 dark:border-white/10 dark:bg-white/3";
+const BLOCKED_CARD_CLASS = "border-border bg-surface-1 dark:border-white/10 dark:bg-white/3";
 
 interface ModelCardProps {
   model: ModelCardOption;
@@ -81,9 +81,8 @@ export function ModelCard({
   const isDownloaded = model.isDownloaded;
   const isDownloading = model.isDownloading;
   const modelIsCancelling = model.isCancelling ?? false;
-  const isLegacy = Boolean(model.legacy);
   const isBlocked = Boolean(model.policyBlocked);
-  const isSelectable = !isLegacy && !isBlocked && (!isLocalMode || (isDownloaded && !isSelected));
+  const isSelectable = !isBlocked && (!isLocalMode || (isDownloaded && !isSelected));
   const specHref = model.specUrl ? withUtm(model.specUrl, "model_spec") : undefined;
 
   const handleCardClick = () => {
@@ -111,19 +110,11 @@ export function ModelCard({
     <div
       onClick={handleCardClick}
       title={
-        isBlocked
-          ? t(model.policyRefusal?.hintKey ?? "models.policy.modelBlocked")
-          : isLegacy
-            ? t("models.legacyHint")
-            : undefined
+        isBlocked ? t(model.policyRefusal?.hintKey ?? "models.policy.modelBlocked") : undefined
       }
-      aria-disabled={isLegacy || isBlocked || undefined}
+      aria-disabled={isBlocked || undefined}
       className={`relative w-full p-2 rounded-md border text-start transition-colors duration-200 group overflow-hidden ${
-        isSelected && !isBlocked
-          ? styles.selected
-          : isLegacy || isBlocked
-            ? LEGACY_CARD_CLASS
-            : styles.default
+        isSelected && !isBlocked ? styles.selected : isBlocked ? BLOCKED_CARD_CLASS : styles.default
       } ${isSelectable ? "cursor-pointer" : ""}`}
     >
       <div className="flex items-center gap-1.5">
@@ -152,7 +143,7 @@ export function ModelCard({
           dir="ltr"
           className={cn(
             "text-sm font-semibold truncate tracking-tight",
-            isLegacy ? "text-muted-foreground" : "text-foreground",
+            "text-foreground",
             truncateDescription && (model.description ? "shrink-0 max-w-[60%]" : "min-w-0 flex-1")
           )}
         >
@@ -188,11 +179,6 @@ export function ModelCard({
         {isBlocked && (
           <span className="text-xs text-muted-foreground">
             {t(model.policyRefusal?.labelKey ?? "models.policy.notApproved")}
-          </span>
-        )}
-        {isLegacy && (
-          <span className="text-xs font-medium text-muted-foreground px-1.5 py-0.5 bg-muted rounded-sm shrink-0">
-            {t("models.legacy")}
           </span>
         )}
 
@@ -232,7 +218,7 @@ export function ModelCard({
                   <X size={11} className="me-0.5" />
                   {modelIsCancelling ? "..." : t("common.cancel")}
                 </Button>
-              ) : isLegacy || isBlocked ? null : (
+              ) : isBlocked ? null : (
                 <Button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -283,12 +269,17 @@ export default function ModelCardList({
     isListedModel(model, model.value === selectedModel, model.isDownloaded)
   );
 
-  if (listedModels.length === 0) {
+  if (listedModels.length === 0 && !selectedModel) {
     return <p className="text-sm text-muted-foreground py-2">{t("models.noneAvailable")}</p>;
   }
 
   return (
     <div className={`space-y-0.5 ${className}`}>
+      {selectedModel && !models.some((model) => model.value === selectedModel) && (
+        <p role="status" className="text-sm text-muted-foreground py-2">
+          {t("models.savedUnavailable", { model: selectedModel })}
+        </p>
+      )}
       {listedModels.map((model) => (
         <ModelCard
           key={model.value}

@@ -347,7 +347,7 @@ export function applyTinfoilModels(models: CloudModelDefinition[]): void {
   setTinfoilModelOverlay(models);
   const reasoningProvider = REASONING_PROVIDERS.tinfoil;
   if (reasoningProvider) {
-    reasoningProvider.models = models.map(toReasoningModel);
+    reasoningProvider.models = getTinfoilModels().map(toReasoningModel);
   }
 }
 
@@ -557,6 +557,10 @@ export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiAp
     const upstream = getCloudModel(modelId, provider);
     return { tokenParam: "max_tokens", supportsTemperature: upstream?.supportsTemperature ?? true };
   }
+
+  // Discovery is advisory; unlisted Tinfoil/Groq ids retain their provider dialect.
+  if (provider === "tinfoil" || provider === "groq")
+    return { tokenParam: "max_tokens", supportsTemperature: true };
 
   // Fallback for models not in the registry (custom model IDs, etc.)
   const isLegacy =

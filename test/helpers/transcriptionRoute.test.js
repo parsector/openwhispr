@@ -317,7 +317,7 @@ test("openai and groq route to fixed endpoints with provider-validated models", 
     cloudTranscriptionModel: "voxtral-mini-latest", // stale from a mistral era
   });
   assert.equal(groqStale.endpoint, "https://api.groq.com/openai/v1/audio/transcriptions");
-  assert.equal(groqStale.model, "whisper-large-v3-turbo", "mismatched model degrades to default");
+  assert.equal(groqStale.model, "voxtral-mini-latest", "the explicit saved model remains chosen");
   assert.deepEqual(groqStale.auth, { scheme: "bearer", keyRef: "groq" });
 });
 
@@ -346,7 +346,7 @@ test("openrouter routes to its own base and keeps vendor-prefixed model ids", as
     cloudTranscriptionProvider: "openrouter",
     cloudTranscriptionModel: "whisper-large-v3-turbo",
   });
-  assert.equal(stale.model, "mistralai/voxtral-mini-transcribe-3-0");
+  assert.equal(stale.model, "whisper-large-v3-turbo");
 });
 
 test("a Custom endpoint pointed at OpenRouter stays on the custom key slot", async () => {

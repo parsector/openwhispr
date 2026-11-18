@@ -18,15 +18,13 @@ onboarding).
 | `api.openwhispr.com`                          | HTTPS    | 443  | Cloud API: transcription, optional sync, agent reasoning, and settings.                  |
 | `auth.openwhispr.com`                         | HTTPS    | 443  | Account sign-in and session refresh (Better Auth).                                 |
 
-## Model catalog updates (on by default)
+## Model catalog (offline)
 
-Contacted by every install unless turned off in Settings → Privacy → Model list
-updates, or with `OPENWHISPR_MODEL_REGISTRY_MODE=bundled` in the app's `.env`.
-Blocking it is safe: the app keeps its bundled and last verified model list.
-
-| Host                        | Protocol | Port | Purpose                                                                                                                                                                         |
-| --------------------------- | -------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `raw.githubusercontent.com` | HTTPS    | 443  | Signed model list (`OpenWhispr/model-registry`), fetched at launch and checked every 15 minutes; later checks in a session answer 304 with no body while the list is unchanged. |
+The fork-owned catalog shipped with the build is authoritative. There is no
+publication refresh endpoint or catalog network requirement. An exact local
+cache or backup can supply the same shipped data. Model artifact downloads
+still use their configured URLs, hashes and download trust checks. Tinfoil and
+OpenRouter discovery supply suggestions without replacing a saved choice.
 
 ## Required for streaming transcription
 

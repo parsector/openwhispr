@@ -44,12 +44,12 @@ for (const hasLiveOverlay of [false, true]) {
       );
       assert.equal(
         result.models.some((m) => m.id === "signed-new"),
-        !hasLiveOverlay
+        true
       );
       if (hasLiveOverlay)
         assert.deepEqual(
           result.models.map((m) => m.id),
-          ["live-only"]
+          [...data.cloudProviders.find(p => p.id === "tinfoil").models.map(m => m.id), "live-only"]
         );
     } finally {
       await React.act(async () => root.unmount());

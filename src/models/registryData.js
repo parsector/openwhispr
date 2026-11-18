@@ -5,14 +5,6 @@ import { withAppTranscriptionProviders } from "./appTranscriptionProviders.js";
 const bundled = withAppTranscriptionProviders(bundledCatalog);
 export { bundled as bundledRegistryData };
 
-const PROVIDER_SECTIONS = [
-  "cloudProviders",
-  "enterpriseProviders",
-  "transcriptionProviders",
-  "localProviders",
-];
-const MAP_SECTIONS = ["whisperModels", "parakeetModels"];
-
 function freeze(value) {
   if (value && typeof value === "object") {
     Object.values(value).forEach(freeze);
@@ -21,52 +13,42 @@ function freeze(value) {
   return value;
 }
 
-const retiredKey = (section, providerId, modelId) => `${section}\0${providerId}\0${modelId}`;
-
-// Retired models leave the catalog every picker and route reads, so nothing can offer or
-// select them; the index keeps what lifecycle code needs to move selections on.
+// Lifecycle metadata is descriptive only in this fork.
 function splitRetired(catalog) {
   const visible = structuredClone(catalog);
-  const retired = new Map();
-  // Nothing a catalog holds may stop the app from starting, and every reader expects lists
-  // and maps. Registry CI and model-registry:verify stop these shapes reaching a release.
-  for (const section of PROVIDER_SECTIONS) {
-    if (!Object.hasOwn(visible, section)) continue;
-    const providers = Array.isArray(visible[section]) ? visible[section].filter(Boolean) : [];
-    for (const provider of providers) {
-      const models = Array.isArray(provider.models) ? provider.models : [];
-      for (const model of models)
-        if (model.retired) retired.set(retiredKey(section, provider.id, model.id), model);
-      provider.models = models.filter((model) => !model.retired);
-    }
-    visible[section] = providers;
+  for (const section of [
+    "cloudProviders",
+    "enterpriseProviders",
+    "transcriptionProviders",
+    "localProviders",
+  ]) {
+    visible[section] = Array.isArray(visible[section]) ? visible[section].filter(Boolean) : [];
+    for (const provider of visible[section])
+      provider.models = Array.isArray(provider.models) ? provider.models : [];
   }
-  for (const section of MAP_SECTIONS) {
-    if (!Object.hasOwn(visible, section)) continue;
-    if (!visible[section] || typeof visible[section] !== "object") visible[section] = {};
-    for (const [id, model] of Object.entries(visible[section]))
-      if (model?.retired) {
-        retired.set(retiredKey(section, "", id), model);
-        delete visible[section][id];
-      }
-  }
-  return { visible, retired };
+  for (const section of ["whisperModels", "parakeetModels"])
+    if (
+      !visible[section] ||
+      typeof visible[section] !== "object" ||
+      Array.isArray(visible[section])
+    )
+      visible[section] = {};
+  return { visible };
 }
 
 // A stable top-level reference keeps existing CJS and ESM readers live. Each
 // replacement owns immutable child objects, so in-flight work keeps its config.
-// Until main applies its version-filtered catalog (before any window opens, and to the
+// Until main applies its static catalog (before any window opens, and to the
 // renderer through preload), this holds the bundled data at version -1.
 const initial = splitRetired(bundled);
 export const registryData = { ...freeze(initial.visible) };
-let retired = initial.retired;
 let snapshotData = bundled;
 let version = -1;
 let pending = false;
 const listeners = new Set();
 export const getRegistryData = () => registryData;
 export const getRegistryVersion = () => version;
-// The full catalog, retired entries included, as main verified it.
+// The full fork-owned catalog.
 export const getRegistrySnapshot = () => ({
   data: structuredClone(snapshotData),
   manifestVersion: version,
@@ -74,38 +56,24 @@ export const getRegistrySnapshot = () => ({
 });
 // A catalog this app accepted before could not be loaded yet (see registryLoader).
 export const isCatalogPending = () => pending;
-export const getRetiredModel = (section, providerId, modelId) =>
-  retired.get(retiredKey(section, providerId ?? "", modelId));
-export const listRetiredModels = () =>
-  [...retired].map(([key, model]) => {
-    const [section, providerId, id] = key.split("\0");
-    return { section, providerId, id, model };
-  });
-// Retiring a local model stops new downloads and selections, never a file already on
-// disk: a selection with nothing else to move to keeps running it, and so does work
-// that started before the retirement landed.
+export const getRetiredModel = (_section, _providerId, _modelId) => undefined;
+export const listRetiredModels = () => [];
+// Every shipped or restored installed entry remains runnable.
 export const getRunnableSpeechModel = (section, modelId) =>
-  (Object.hasOwn(registryData[section], modelId) ? registryData[section][modelId] : null) ??
-  getRetiredModel(section, "", modelId) ??
-  null;
-// Every local model of a section this app can run, offered or retired, as [id, model].
-export const listRunnableLocalModels = (section) => [
-  ...(section === "localProviders"
+  Object.hasOwn(registryData[section], modelId) ? registryData[section][modelId] : null;
+export const listRunnableLocalModels = (section) =>
+  section === "localProviders"
     ? registryData.localProviders.flatMap((provider) =>
         provider.models.map((model) => [model.id, model])
       )
-    : Object.entries(registryData[section])),
-  ...listRetiredModels()
-    .filter((entry) => entry.section === section)
-    .map((entry) => [entry.id, entry.model]),
-];
+    : Object.entries(registryData[section]);
 export function subscribeRegistry(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
 
 // Only the verified main loader and its preload/IPC mirror call this boundary.
-// Signature and compatibility checks belong in main, never in the renderer.
+// Main supplies the build catalog plus trusted installed model descriptions.
 export function replaceRegistryData(snapshot) {
   // The one change at the same version: a catalog that was pending has settled. Subscribers
   // run again, so the repairs it held back happen now.
@@ -119,7 +87,6 @@ export function replaceRegistryData(snapshot) {
     return false;
   const next = splitRetired(snapshot.data);
   snapshotData = freeze(structuredClone(snapshot.data));
-  retired = next.retired;
   Object.assign(registryData, freeze(next.visible));
   version = snapshot.manifestVersion;
   pending = snapshot.pending === true;

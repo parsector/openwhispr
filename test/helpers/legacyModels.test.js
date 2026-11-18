@@ -43,10 +43,10 @@ test("no local speech-to-text model is legacy until its pickers honor the flag",
   }
 });
 
-test("a legacy model is listed only while selected or still downloaded", async () => {
+test("lifecycle metadata never hides an unselected or undownloaded model", async () => {
   const { isListedModel } = await import("../../src/models/legacyModels.ts");
   assert.equal(isListedModel({}, false), true);
-  assert.equal(isListedModel({ legacy: true }, false), false);
+  assert.equal(isListedModel({ legacy: true }, false), true);
   assert.equal(isListedModel({ legacy: true }, true), true);
   assert.equal(isListedModel({ legacy: true }, false, true), true);
 });

@@ -2,7 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
-test("one-shot and AI SDK tool/stream dispatch normalize stale Flash selections with the same key", async (t) => {
+test("one-shot and AI SDK tool/stream dispatch preserve saved Flash selections with the same key", async (t) => {
   installBrowserGlobals(t);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => {
@@ -55,10 +55,10 @@ test("one-shot and AI SDK tool/stream dispatch normalize stale Flash selections 
   const model = await getAIModel("tinfoil", "glm-5-3-flash", "synthetic-key");
   await model.doStream({ tools: [{ type: "function", name: "synthetic_tool" }] });
   assert.deepEqual(calls, [
-    { key: "synthetic-key", model: "glm-5-3", kind: "one-shot" },
+    { key: "synthetic-key", model: "glm-5-3-flash", kind: "one-shot" },
     {
       key: "synthetic-key",
-      model: "glm-5-3",
+      model: "glm-5-3-flash",
       kind: "stream",
       tools: [{ type: "function", name: "synthetic_tool" }],
     },
@@ -75,7 +75,7 @@ test("one-shot and AI SDK tool/stream dispatch normalize stale Flash selections 
   assert.equal(custom.modelId, "glm-5-3-flash");
 });
 
-test("retired Tinfoil streaming selections preserve replacement model temperatures", async (t) => {
+test("saved Tinfoil streaming selections preserve model ids and temperatures", async (t) => {
   installBrowserGlobals(t, {
     window: { electronAPI: { getTinfoilKey: async () => "synthetic-key" } },
   });
@@ -134,7 +134,7 @@ test("retired Tinfoil streaming selections preserve replacement model temperatur
         }
         assert.deepEqual(calls.at(-1), {
           key: "synthetic-key",
-          model: "glm-5-3",
+          model: "glm-5-3-flash",
           temperature: temperature === undefined ? 0.3 : 0,
         });
         assert.ok(chunks.some((chunk) => chunk.type === "content" && chunk.text === "Answer"));

@@ -506,34 +506,26 @@ Non-secret env vars persisted to `.env` (via `saveAllKeysToEnvFile()`):
 
 ### 8. Model Registry Architecture
 
-The desktop model catalog lives in the public **`OpenWhispr/model-registry`** repository. Add, retire or correct models there (its README and CONTRIBUTING explain the rules); merging publishes a signed catalog that installed apps pick up between releases. `src/models/modelRegistryData.json` is a vendored copy, not a file to edit: `npm run model-registry:verify` (part of `quality-check`) fails if it differs from what was synced. When a model also needs app code, add the data with `minAppVersion` first, then sync in the same desktop PR as the code:
+The desktop catalog is owned by this fork. Edit `src/models/modelRegistryData.json`,
+then run `npm run model-registry:sync` and `npm run model-registry:verify`.
+The verifier checks local catalog/reader hashes, schema and artifact publisher trust
+offline. No remote publication or signing key can change the shipped choices.
 
-```bash
-npm run model-registry:sync -- --revision <commit on the registry's published branch>
-```
+`registryData.js` is the shared catalog seam for pickers and routing.
+`registrySchema.cjs` and `registrySelection.js` are fork-owned readers;
+`registryMetadata.json` records their local integrity hashes. Cache/backup data
+must match this build. Trusted installed model descriptions may supplement it.
+Artifact SHA-256, publisher, archive structure and download checks remain in force.
 
-(`--source <registry commit>` vendors an unpublished commit for review builds only; re-sync from its publication before release.) The mobile app keeps its own hand-updated copies (see below).
+Lifecycle/minimum-version metadata never hides an entry or changes a saved ID.
+An unavailable saved model remains visible by ID; the user selects a replacement.
+Tinfoil discovery adds suggestions alongside the build's entries. OpenRouter's
+shortlist ranks suggestions without blocking configured IDs. Provider memory
+preserves unlisted choices. Legacy reconciliation exports are inert compatibility
+seams and perform no storage writes. Actual managed device policy still applies.
 
-**Lifecycle:** `legacy: true` keeps a model working but hidden unless selected or (local) downloaded; `retired: true` with an optional `replacement` means it no longer works. Retired entries are stripped from `registryData` (what every picker and route reads) and kept in its retired index; `reconcileRetiredCloudModelSelections()` moves saved selections to the replacement (or the provider default) on startup and on every catalog update, with the retired-model toast, and `resolveRetiredCloudModel()` maps them at request time. Retired local models move the same way: Whisper and sherpa-onnx selections to the replacement or the engine's recommended model (`reconcileRetiredLocalSpeechSelections`), GGUF selections to a replacement on disk or to none (`reconcileRetiredLocalLlmSelections`), and Settings → Developer removes their files (`retiredLocalModels.js`). Moves wait in localStorage (`retiredModelSwitchesQueue`) until the control panel has focus, since it is usually closed or in the tray when a catalog changes. While a catalog is pending (`isCatalogPending`, a cached catalog that can't be used yet or, with updates off, one newer than the bundle), an ID no catalog knows is left alone (`isAwaitingCatalog`): it may be one of that catalog's additions. Otherwise it is repointed to the provider's default with a notice. A verified publication no newer than the catalog in use clears pending and replaces the unusable cache. `registryDownloadTrust.js` checks downloads at runtime, since a stolen signing key skips registry CI: Hugging Face publishers must be on its list (copied from the registry's `trusted-publishers.json`), and a new or moved download must name its hash; a failing entry keeps its shipped copy or leaves. Every Parakeet archive gets the structural check (`validateModelArchive`), hashed or not. `npm run model-registry:release-check` runs in `release.yml` and fails unless the build pins a signed publication the registry still tests and lists under `compat/clients`. Every provider names `defaultModel`; list order is display only.
-
-**Key files:**
-
-- `src/models/modelRegistryData.json`, `registrySchema.cjs`, `registryEnvelope.cjs`, `registrySelection.js`, `registryMetadata.json` (and `registryBundle.json` once published) - vendored from the registry; never edit by hand
-- `src/helpers/registryLoader.js` - main-process loader: applies signed publications through `acceptCatalog` (lenient), only when their `testedClientContracts` include this build's `clientContract`, never throws, keeps a backup cache, honours `OPENWHISPR_MODEL_REGISTRY_MODE=bundled` (Settings → Privacy → Model list updates)
-- `src/models/registryData.js` - the per-process catalog store (`getRegistryData`, `subscribeRegistry`, `getRetiredModel`); `src/models/modelLifecycle.js` - retired/unknown helpers
-- `src/helpers/installedModels.js` - remembers each downloaded local model so it keeps working without its catalog entry
-- `openwhispr-mobile/src/config/providerCatalog.json` - Mobile's trimmed copy of the OpenAI and Groq entries. It, mobile's endpoint rules and its cleanup prompt (`openwhispr-mobile/src/config/prompts/defaultPrompts.json`) are copies, not shared code, so update them by hand when desktop's change (the catalog is covered in `openwhispr-mobile/CONTRIBUTING.md`)
-- `src/models/ModelRegistry.ts` - TypeScript wrapper with helper methods; also derives
-  `REASONING_PROVIDERS` (`buildReasoningProviders()`), consumed by the model pickers
-- `src/models/providerDefaultModel.ts` - `pickProviderDefaultModel()`: the provider's `defaultModel`, else the first model
-- `src/models/legacyModels.ts` - `isListedModel()`: pickers list a legacy entry only while it is selected
-  (muted, marked Legacy and disabled) or, for a local model, while its file is still downloaded so
-  it can be deleted. Speech-to-text pickers don't read the flag yet, so no Whisper or Parakeet
-  entry may carry it (`test/helpers/legacyModels.test.js`).
-- `src/config/retiredCloudModels.ts` - the built-in retirement table, for models retired before the
-  registry existed. Mobile keeps its own copy (`openwhispr-mobile/src/lib/retiredModels.ts`)
-- `src/helpers/modelManagerBridge.js` - Handles local model downloads
-- Adding or removing a local model also means updating `lib/local-model-catalog.ts` in openwhispr-api and openwhispr-admin, or restricted workspaces can't approve it (the API's `npm run catalog:check` reports drift against desktop `main` daily)
+See [the catalog guide](docs/model-catalog.md). Mobile keeps its own catalog and
+is outside this desktop change.
 
 **Local model features:**
 

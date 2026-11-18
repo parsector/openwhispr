@@ -39,15 +39,15 @@ test("per-provider reasoning model memory", async (t) => {
     assert.equal(state().cleanupModel, "parasail-tuned");
   });
 
-  await t.test("a remembered model the provider no longer ships falls back", () => {
+  await t.test("a remembered model remains chosen when absent from the catalog", () => {
     state().switchReasoningProvider("dictationCleanup", "groq", "llama-3.3-70b-versatile");
     state().setCleanupModel("retired-groq-model");
     state().switchReasoningProvider("dictationCleanup", "custom", "");
     state().switchReasoningProvider("dictationCleanup", "groq", "llama-3.3-70b-versatile");
     assert.equal(
       state().cleanupModel,
-      "llama-3.3-70b-versatile",
-      "an unknown remembered model must degrade to the provider default"
+      "retired-groq-model",
+      "a saved model must survive catalog omissions"
     );
   });
 
@@ -128,7 +128,7 @@ test("corrupt persisted reasoning model memory hydrates as empty, not a crash", 
   assert.deepEqual(useSettingsStore.getState().reasoningModelByProvider, {});
 });
 
-test("retired cloud model selections are repointed to the provider default", async (t) => {
+test("retired cloud model selections remain saved", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: {
       _llmScopeKeysMigrated: "1",
@@ -150,10 +150,10 @@ test("retired cloud model selections are repointed to the provider default", asy
   reconcileRetiredCloudModelSelections();
 
   const state = useSettingsStore.getState();
-  assert.notEqual(
+  assert.equal(
     state.cleanupModel,
     "meta-llama/llama-4-scout-17b-16e-instruct",
-    "a registry-retired model must be repointed"
+    "a saved model must not be repointed"
   );
   assert.ok(state.cleanupModel, "repointed to a concrete replacement, not cleared");
   assert.equal(state.chatAgentModel, "gpt-5.2", "shipping models stay untouched");

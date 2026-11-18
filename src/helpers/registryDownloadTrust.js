@@ -37,7 +37,6 @@ function urlIsTrusted(value) {
 }
 
 function isTrusted(model, shipped) {
-  if (model.retired) return true;
   if (![model.hfRepo, model.draftHfRepo].every(publisherIsTrusted)) return false;
   if (![model.downloadUrl, model.manifestUrl].every(urlIsTrusted)) return false;
   // A download this release didn't ship has to name the bytes it expects.

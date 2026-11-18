@@ -20,7 +20,6 @@ import {
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription.js";
 import {
-  acceptsUnlistedTranscriptionModel,
   isModeAllowedByPolicy,
   isTranscriptionSelectionAllowed,
   type PolicyDecisionSnapshot,
@@ -31,8 +30,6 @@ import {
   type TranscriptionProviderBaseUrl,
 } from "../services/transcriptionBaseUrl.ts";
 import type { ManagedEnterpriseRequestContext } from "../types/enterpriseIdentity.ts";
-import { getRegistryData } from "../models/registryData.js";
-import { retiredReplacement } from "../models/modelLifecycle.js";
 
 const BYOK_FILE_SIZE_LIMIT = 25 * 1024 * 1024;
 
@@ -218,36 +215,11 @@ export const XAI_STT_LANGUAGES = new Set([
   "vi",
 ]);
 
-// The live catalog decides first: an offered model is sent as is, and a retired one
-// moves to its replacement. The prefix rules then keep a model the catalog does not know
-// yet (a remote addition before its catalog loads) instead of resetting it;
-// transcriptionRouteModelAgreement.test.js pins them to every shipping model.
+// An explicit model is sent unchanged. Defaults apply only to an empty selection.
 export function resolveByokModel(provider: string, configuredModel?: string): string {
   const trimmed = (configuredModel || "").trim();
   if (provider === "custom") return trimmed || "whisper-1";
-  if (trimmed) {
-    const catalogProvider = getRegistryData().transcriptionProviders.find((p) => p.id === provider);
-    if (catalogProvider?.models.some((model) => model.id === trimmed)) return trimmed;
-    const replacement = retiredReplacement("transcriptionProviders", provider, trimmed);
-    if (replacement) return replacement;
-    const matchesProvider =
-      (provider === "groq" && trimmed.startsWith("whisper-large-v3")) ||
-      (provider === "openai" &&
-        (trimmed.startsWith("gpt-transcribe") ||
-          trimmed.startsWith("gpt-4o") ||
-          trimmed === "whisper-1")) ||
-      // Every OpenRouter id is vendor-prefixed, so the slash is what tells a
-      // real selection apart from one left behind by another provider. Models
-      // outside our curated list pass through deliberately.
-      acceptsUnlistedTranscriptionModel(provider, trimmed) ||
-      (provider === "mistral" && trimmed.startsWith("voxtral-")) ||
-      (provider === "corti" && trimmed.startsWith("corti-")) ||
-      (provider === "gemini" && trimmed.startsWith("gemini-")) ||
-      (provider === "deepgram" && (trimmed.startsWith("nova-") || trimmed.startsWith("flux-"))) ||
-      (provider === "assemblyai" &&
-        (trimmed.startsWith("universal-") || trimmed.startsWith("slam-")));
-    if (matchesProvider) return trimmed;
-  }
+  if (trimmed) return trimmed;
   if (provider === "groq") return "whisper-large-v3-turbo";
   if (provider === "xai") return "grok-stt";
   if (provider === "mistral") return "voxtral-mini-latest";

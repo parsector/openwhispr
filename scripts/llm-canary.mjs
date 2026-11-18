@@ -15,8 +15,8 @@
  * this measures the request users actually make and reports how close it runs
  * to the deadline.
  *
- * Run: node --import tsx scripts/llm-canary.mjs [--published]
- * --published probes the live signed catalog users receive instead of the bundle.
+ * Run: node --import tsx scripts/llm-canary.mjs
+ * Probes the fork-owned catalog shipped in this build.
  * Keys come from LLM_CANARY_<PROVIDER>_KEY env vars; providers without a key
  * are skipped and listed. Exit 1 when any probe on a keyed provider fails, or
  * when no key is configured at all — an all-skip run probed nothing and must

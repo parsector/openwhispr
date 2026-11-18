@@ -3032,6 +3032,7 @@
     }
   },
   "models": {
+    "savedUnavailable": "已保存的选择：{{model}}。此版本未列出该模型。你的选择已保留。",
     "learnMore": "了解更多",
     "noneAvailable": "没有可用的模型",
     "descriptions": {

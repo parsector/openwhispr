@@ -307,7 +307,6 @@ const { registerRegistryIpc } = require("./src/helpers/registryIpc");
 const { replaceRegistryData, bundledRegistryData } = require("./src/models/registryData.js");
 const { configureInstalledModels, withInstalledModels } = require("./src/helpers/installedModels");
 const { withTrustedDownloads } = require("./src/helpers/registryDownloadTrust");
-const registryTrustedKeys = require("./src/models/registryTrustedKeys.json");
 let registryLoader = null;
 let disposeRegistryIpc = null;
 const UpdateManager = require("./src/updater");
@@ -720,7 +719,10 @@ function initializeCoreManagers() {
   windowManager.linuxKeyManager = linuxKeyManager;
   windowManager.permissionGuide = new PermissionGuideManager(windowManager);
   windowManager.agentWindow = new AgentWindowManager(windowManager);
-  windowManager.assistantPasteTarget = new AssistantPasteTarget({ textEditMonitor, selectionManager });
+  windowManager.assistantPasteTarget = new AssistantPasteTarget({
+    textEditMonitor,
+    selectionManager,
+  });
   if (process.platform === "linux") {
     windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
   } else if (process.platform === "win32") {
@@ -1358,8 +1360,7 @@ async function startApp() {
   debugLogger = require("./src/helpers/debugLogger");
   debugLogger.ensureFileLogging();
 
-  // Only local signature/cache verification is awaited. Remote refresh starts
-  // later, so offline startup and settings migrations see a usable catalog.
+  // The fork's shipped catalog is authoritative; cache is an offline duplicate.
   const registryMetadata = require("./src/models/registryMetadata.json");
   configureInstalledModels(path.join(app.getPath("userData"), "installed-models.json"));
   registryLoader = createRegistryLoader({
@@ -1368,9 +1369,6 @@ async function startApp() {
       data: bundledRegistryData,
       manifestVersion: registryMetadata.manifestVersion,
     },
-    clientContract: registryMetadata.clientContract,
-    trustedKeys: registryTrustedKeys,
-    appVersion: app.getVersion(),
     applySnapshot: (snapshot) =>
       replaceRegistryData({
         ...snapshot,
@@ -2241,7 +2239,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
-          if (handleEnterpriseAudioLink(url)) return;
+      if (handleEnterpriseAudioLink(url)) return;
       if (isNoteDeepLink(url)) {
         await handleNoteDeepLink(url);
       } else if (isInvitationDeepLink(url)) {
@@ -2356,9 +2354,7 @@ if (gotSingleInstanceLock) {
     performSyncTeardown();
     Promise.allSettled([
       sidecarRegistry.shutdownAll(),
-      Promise.race([
-        new Promise((resolve) => setTimeout(resolve, 1500)),
-      ]),
+      Promise.race([new Promise((resolve) => setTimeout(resolve, 1500))]),
       // A teamspace delete still in its Undo window, which the toast already reported as done.
       Promise.race([
         isLiveWindow(windowManager?.controlPanelWindow)

@@ -43,7 +43,7 @@ test("each provider's fallback default is a model that provider actually offers"
 
   for (const providerId of PREFIX_VALIDATED_PROVIDERS) {
     const provider = registry.transcriptionProviders.find((p) => p.id === providerId);
-    const fallback = resolveByokModel(providerId, "a-model-from-another-provider");
+    const fallback = resolveByokModel(providerId, "");
     assert.ok(
       provider.models.some((m) => m.id === fallback),
       `${providerId} falls back to ${fallback}, which it does not offer`
@@ -73,16 +73,16 @@ test("a retired provider-shaped model id is preserved, not reset", async () => {
   );
 });
 
-test("a model belonging to another provider degrades to the provider default", async () => {
+test("every explicitly configured model is preserved for its provider to accept or reject", async () => {
   const { resolveByokModel } = await load();
 
-  assert.equal(resolveByokModel("groq", "gpt-4o-mini-transcribe"), "whisper-large-v3-turbo");
-  assert.equal(resolveByokModel("openai", "voxtral-mini-latest"), "gpt-transcribe");
-  assert.equal(resolveByokModel("mistral", "whisper-1"), "voxtral-mini-latest");
-  assert.equal(resolveByokModel("corti", "whisper-1"), "corti-transcribe");
-  assert.equal(resolveByokModel("gemini", "whisper-1"), "gemini-3.5-transcribe");
-  assert.equal(resolveByokModel("deepgram", "whisper-1"), "nova-3");
-  assert.equal(resolveByokModel("assemblyai", "nova-3"), "universal-3-6-pro");
+  assert.equal(resolveByokModel("groq", "gpt-4o-mini-transcribe"), "gpt-4o-mini-transcribe");
+  assert.equal(resolveByokModel("openai", "voxtral-mini-latest"), "voxtral-mini-latest");
+  assert.equal(resolveByokModel("mistral", "whisper-1"), "whisper-1");
+  assert.equal(resolveByokModel("corti", "whisper-1"), "whisper-1");
+  assert.equal(resolveByokModel("gemini", "whisper-1"), "whisper-1");
+  assert.equal(resolveByokModel("deepgram", "whisper-1"), "whisper-1");
+  assert.equal(resolveByokModel("assemblyai", "nova-3"), "nova-3");
 });
 
 // OpenRouter brokers batch HTTP transcription only — it has no realtime socket.

@@ -3032,6 +3032,7 @@
     }
   },
   "models": {
+    "savedUnavailable": "Scelta salvata: {{model}}. Questo modello non è elencato in questa versione. La tua scelta è stata mantenuta.",
     "learnMore": "Scopri di più",
     "noneAvailable": "Nessun modello disponibile",
     "descriptions": {

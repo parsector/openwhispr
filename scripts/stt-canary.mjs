@@ -39,7 +39,7 @@ const { GeminiLiveStreaming } = geminiLive;
 
 // The provider's default is what a fresh AssemblyAI selection dictates with
 // (ModelRegistry.getDefaultTranscriptionModel), so that is the id to probe.
-// Pass --published to probe the live signed catalog users receive.
+// Probes the fork-owned catalog shipped in this build.
 const modelRegistryData = await loadCanaryCatalog();
 const assemblyAi = modelRegistryData.transcriptionProviders.find(
   (provider) => provider.id === "assemblyai"

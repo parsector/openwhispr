@@ -50,32 +50,17 @@ export default function LocalWhisperPicker({
     onModelSelectRef.current = onModelSelect;
   }, [onModelSelect]);
 
-  const validateAndSelectModel = useCallback((loadedModels: WhisperModel[]) => {
-    const current = selectedModelRef.current;
-    if (!current) return;
-
-    const downloaded = loadedModels.filter((m) => m.downloaded);
-    const isCurrentDownloaded = loadedModels.find((m) => m.model === current)?.downloaded;
-
-    if (!isCurrentDownloaded && downloaded.length > 0) {
-      onModelSelectRef.current(downloaded[0].model);
-    } else if (!isCurrentDownloaded && downloaded.length === 0) {
-      onModelSelectRef.current("");
-    }
-  }, []);
-
   const loadModels = useCallback(async () => {
     try {
       const result = await window.electronAPI?.listWhisperModels();
       if (result?.success) {
         setModels(result.models);
-        validateAndSelectModel(result.models);
       }
     } catch (error) {
       console.error("[LocalWhisperPicker] Failed to load models:", error);
       setModels([]);
     }
-  }, [validateAndSelectModel]);
+  }, []);
 
   useEffect(() => {
     if (loadedRegistryVersion.current === registryVersion) return;
@@ -86,14 +71,13 @@ export default function LocalWhisperPicker({
       .then((result) => {
         if (result?.success) {
           setModels(result.models);
-          validateAndSelectModel(result.models);
         }
       })
       .catch((error) => {
         console.error("[LocalWhisperPicker] Failed to load models:", error);
         setModels([]);
       });
-  }, [validateAndSelectModel, registryVersion]);
+  }, [registryVersion]);
 
   const {
     downloads,
@@ -137,14 +121,13 @@ export default function LocalWhisperPicker({
             const result = await window.electronAPI?.listWhisperModels();
             if (result?.success) {
               setModels(result.models);
-              validateAndSelectModel(result.models);
             }
           });
         },
         variant: "destructive",
       });
     },
-    [showConfirmDialog, deleteModel, validateAndSelectModel, t]
+    [showConfirmDialog, deleteModel, t]
   );
 
   const progressDisplay = (() => {

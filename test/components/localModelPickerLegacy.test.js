@@ -95,12 +95,12 @@ async function renderPicker(t, { selectedProvider, selectedModel = "", downloade
   };
 }
 
-test("a provider left with nothing to list opens on one that has models", async (t) => {
+test("a provider with legacy models remains browsable before any download", async (t) => {
   // The user deleted their selected Llama model: the store still says llama.
   const shown = await renderPicker(t, { selectedProvider: "llama" });
-  assert.deepEqual(shown.tabIds, ["qwen"]);
-  assert.equal(shown.openTab, "qwen");
-  assert.deepEqual(shown.modelIds, ["qwen3.5-4b-q4_k_m"]);
+  assert.deepEqual(shown.tabIds, ["llama", "qwen"]);
+  assert.equal(shown.openTab, "llama");
+  assert.deepEqual(shown.modelIds, ["llama-3.2-3b-instruct-q4_k_m", "llama-3.1-8b-instruct-q4_k_m"]);
 });
 
 test("a provider stays open while its legacy model is selected", async (t) => {

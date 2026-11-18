@@ -18,7 +18,7 @@ Object.assign(data.whisperModels.small, {
   fileName: data.whisperModels.base.fileName,
 });
 
-test("only retired files go, and never one an offered model still uses", async (t) => {
+test("lifecycle flags never mark shipped model files for deletion", async (t) => {
   const store = await import("../../src/models/registryData.js");
   store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
   const {
@@ -56,29 +56,18 @@ test("only retired files go, and never one an offered model still uses", async (
     JSON.stringify({ [JSON.stringify(["whisperModels", "", "tiny"])]: seed.whisperModels.tiny })
   );
 
-  assert.deepEqual(
-    listRetiredLocalModels(dirs)
-      .map(({ id }) => id)
-      .sort(),
-    [gguf.id, "parakeet-tdt-110m-en", "tiny"].sort()
-  );
-  // A retired file still selected keeps running, so it isn't a leftover.
+  assert.deepEqual(listRetiredLocalModels(dirs), []);
   const inUse = ["parakeet-tdt-110m-en"];
-  assert.deepEqual(
-    listRetiredLocalModels(dirs, inUse)
-      .map(({ id }) => id)
-      .sort(),
-    [gguf.id, "tiny"].sort()
-  );
+  assert.deepEqual(listRetiredLocalModels(dirs, inUse), []);
   assert.deepEqual(deleteRetiredLocalModels(dirs, inUse), { success: true });
   assert.equal(fs.existsSync(retiredParakeet), true, "the selected one stays");
   assert.deepEqual(deleteRetiredLocalModels(dirs), { success: true });
 
   for (const gone of [retiredGguf, retiredWhisper, retiredParakeet])
-    assert.equal(fs.existsSync(gone), false, gone);
+    assert.equal(fs.existsSync(gone), true, gone);
   for (const kept of [offeredGguf, sharedWhisper, offeredParakeet])
     assert.equal(fs.existsSync(kept), true, kept);
   assert.deepEqual(listRetiredLocalModels(dirs), []);
   const merged = withInstalledModels({ ...seed, whisperModels: {} }, "99.0.0");
-  assert.equal(Object.hasOwn(merged.whisperModels, "tiny"), false, "the record is forgotten too");
+  assert.equal(Object.hasOwn(merged.whisperModels, "tiny"), true, "installed metadata remains available");
 });

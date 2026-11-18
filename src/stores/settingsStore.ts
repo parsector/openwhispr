@@ -3,7 +3,6 @@ import {
   parseSelfHostedSttHeaders,
   serializeSelfHostedSttHeaders,
 } from "../helpers/selfHostedSttHeaders.js";
-import { RETIRED_TINFOIL_MODEL_NAMES } from "../config/retiredCloudModelPolicy.js";
 import { create } from "zustand";
 import { GENERATE_NOTES_KEY } from "../helpers/builtinActions";
 import { API_ENDPOINTS } from "../config/constants";
@@ -26,15 +25,10 @@ import { normalizeToneStyles, type ToneStyles } from "../config/toneStyle";
 import { PROMPT_KIND_LIST, type PromptKind } from "../config/prompts/registry";
 import { sweepRetiredPromptOverrides } from "../config/retiredPrompts";
 import {
-  sweepRetiredCloudModelSelections,
-  type RetiredModelProvider,
-} from "../config/retiredCloudModels";
-import {
   deriveReasoningMode,
   buildReasoningScopePatches,
   inheritsFallbackEndpoint,
 } from "../helpers/reasoningRouting";
-import { findStaleLocalModelKeys } from "../helpers/localModelSelections";
 import {
   INFERENCE_SCOPES,
   type InferenceScope,
@@ -53,20 +47,13 @@ import {
   registryData as modelRegistryData,
   subscribeRegistry,
 } from "../models/registryData.js";
-import {
-  isAwaitingCatalog,
-  offeredReplacement,
-  retiredLocalSpeechReplacement,
-  retiredReplacement,
-} from "../models/modelLifecycle.js";
+import { isAwaitingCatalog, retiredReplacement } from "../models/modelLifecycle.js";
 import { getCloudModelProviders } from "../models/cloudModelCatalog";
 import { pickDefaultModelId } from "../models/providerDefaultModel";
 import { OPENROUTER_DEFAULT_MODEL } from "../utils/openRouterModels";
 // Both are leaves: tinfoilModelCache imports only a type from ModelRegistry and
 // the switch store only zustand and a type, so neither reopens the ModelRegistry
 // cycle.
-import { readCachedTinfoilModels } from "../models/tinfoilModelCache";
-import { queueRetiredModelSwitch, recordRetiredModelSwitch } from "./retiredModelSwitchStore";
 import { MEETING_STREAMING_PROVIDER_IDS } from "../helpers/meetingTranscriptionRouting";
 import { STREAMING_ONLY_PROVIDERS } from "../helpers/transcriptionRoute";
 import { isUploadOnlyTranscriptionModel } from "../models/appTranscriptionProviders.js";
@@ -1081,63 +1068,6 @@ if (Object.keys(healedMeetingFollowModes).length > 0) {
     "settings"
   );
 }
-
-// Resolve names offline, including retired models already removed from the cache.
-// Unseeded replacements fall back to their id, as the live reconcile does.
-function sweptModelName(providerId: RetiredModelProvider, modelId: string): string {
-  if (providerId === "tinfoil" && RETIRED_TINFOIL_MODEL_NAMES[modelId]) {
-    return RETIRED_TINFOIL_MODEL_NAMES[modelId];
-  }
-  const cached = providerId === "tinfoil" ? readCachedTinfoilModels().models : [];
-  const named =
-    cached.find((model) => model.id === modelId) ??
-    modelRegistryData.cloudProviders
-      .find((provider) => provider.id === providerId)
-      ?.models.find((model) => model.id === modelId);
-  return named?.name ?? modelId;
-}
-
-// A scope still pointing at a model its provider has retired 404s on every
-// request. Runs after migrateLLMScopeKeys so scope values live under their
-// final keys, and before the store reads them, so the first request of the
-// session already carries a model the provider serves.
-function migrateRetiredCloudModels() {
-  if (!isBrowser) return;
-  const swept = sweepRetiredCloudModelSelections(
-    localStorage,
-    Object.values(INFERENCE_SCOPES)
-      .map(({ storeKeys }) => storeKeys)
-      .filter(({ mode }) => {
-        const storedMode = localStorage.getItem(mode);
-        // An unset mode loads as the default, openwhispr.
-        return !storedMode || usesCloudModelCatalog(storedMode);
-      })
-  );
-  if (swept.length === 0) return;
-
-  logger.info(
-    "Repointed retired cloud model selections",
-    { swept: swept.map(({ storeKey, from, to }) => ({ storeKey, from, to })) },
-    "settings"
-  );
-
-  // Tell the user their model was switched out; for Tinfoil, getting here
-  // first means reconcileSelectedModels no longer will. Several scopes can
-  // share a retired model, so say so once per model.
-  const announced = new Set<string>();
-  for (const { provider, from, to } of swept) {
-    const key = `${provider}:${from}`;
-    if (announced.has(key)) continue;
-    announced.add(key);
-    recordRetiredModelSwitch({
-      provider,
-      from: sweptModelName(provider, from),
-      to: sweptModelName(provider, to),
-    });
-  }
-}
-
-migrateRetiredCloudModels();
 
 export type SelfHostedSttHeader = { name: string; value: string };
 // Dictation and uploads post to different self-hosted servers (#2049).
@@ -2400,14 +2330,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
     const remembered = memory[`${context}:${providerId}`];
     setStringSetting(keys.provider, providerId);
-    setStringSetting(
-      keys.model,
-      remembered &&
-        (transcriptionModelBelongsToProvider(providerId, remembered, context) ||
-          isAwaitingCatalog("transcriptionProviders", remembered))
-        ? remembered
-        : defaultTranscriptionModel(providerId, context)
-    );
+    setStringSetting(keys.model, remembered || defaultTranscriptionModel(providerId, context));
   },
 
   // LLM twin of switchCloudTranscriptionProvider. The caller supplies the
@@ -2419,11 +2342,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     // Only remember a model the outgoing provider actually owns — after a
     // local/cloud mode round-trip the shared slot can hold a foreign id.
     if (cfg.provider && cfg.provider !== providerId) {
-      if (reasoningModelBelongsToProvider(cfg.provider, cfg.model)) {
+      if (cfg.model) {
         memory[`${scope}:${cfg.provider}`] = cfg.model;
         persistReasoningModelMemory(memory);
       }
-    } else if (reasoningModelBelongsToProvider(providerId, cfg.model)) {
+    } else if (cfg.model) {
       // Reselecting the current provider with a model it owns: keep it.
       setResolvedLLMConfig(scope, { provider: providerId });
       return;
@@ -2431,12 +2354,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     const remembered = memory[`${scope}:${providerId}`];
     setResolvedLLMConfig(scope, {
       provider: providerId,
-      model:
-        remembered &&
-        (reasoningModelBelongsToProvider(providerId, remembered) ||
-          isAwaitingLlmCatalog(remembered))
-          ? remembered
-          : fallbackModel,
+      model: remembered || fallbackModel,
     });
   },
   setCloudTranscriptionMode: createStringSetter("cloudTranscriptionMode"),
@@ -3587,21 +3505,8 @@ export function selectPolicyEffectiveSettings(
     if (selection.mode === "providers") {
       const providerChanged = selection.provider !== rawSelection.provider;
       writable[keys.provider] = selection.provider;
-      const model = state[keys.model] as string;
-      if (
-        providerChanged ||
-        (!transcriptionModelBelongsToProvider(selection.provider, model, keys.context) &&
-          !isAwaitingCatalog("transcriptionProviders", model))
-      ) {
-        const replacement =
-          !providerChanged &&
-          retiredReplacement("transcriptionProviders", selection.provider, model);
-        writable[keys.model] =
-          replacement &&
-          transcriptionModelBelongsToProvider(selection.provider, replacement, keys.context)
-            ? replacement
-            : defaultTranscriptionModel(selection.provider, keys.context);
-      }
+      if (providerChanged)
+        writable[keys.model] = defaultTranscriptionModel(selection.provider, keys.context);
 
       const canonicalBaseUrl = canonicalTranscriptionBaseUrl(selection.provider);
       if (canonicalBaseUrl) {
@@ -3738,86 +3643,16 @@ export function getSettings(): SettingsState {
   return selectPolicyEffectiveSettings(useSettingsStore.getState(), usePolicyStore.getState());
 }
 
-/**
- * Drops any local model selection the model cache no longer backs — a scope left
- * pointing at a deleted model fails at inference time with an error the user has
- * no way to act on. Cleared rather than repointed so the picker asks again.
- */
-export function clearMissingLocalModelSelections(isInstalled: (modelId: string) => boolean): void {
-  const settings = useSettingsStore.getState() as unknown as Record<string, unknown>;
-  const staleKeys: string[] = findStaleLocalModelKeys(
-    Object.values(INFERENCE_SCOPES),
-    settings,
-    isInstalled
-  );
-  for (const key of staleKeys) {
-    setStringSetting(key as keyof SettingsState, "");
-  }
+// Compatibility seams for callers that previously reconciled lifecycle state.
+// A saved selection survives missing files and catalog changes.
+export function clearMissingLocalModelSelections(_isInstalled: (modelId: string) => boolean): void {
+  /* keep the user's choice */
 }
-
-// Another window may have made this move first; the first one tells the user.
-function moveSelection(storeKey: string, to: string): { alreadyMoved: boolean } {
-  const alreadyMoved = isBrowser && localStorage.getItem(storeKey) === to;
-  setStringSetting(storeKey as keyof SettingsState, to);
-  return { alreadyMoved };
+export async function reconcileRetiredLocalLlmSelections(_installed?: Set<string>): Promise<void> {
+  /* keep the user's choice */
 }
-
-function retiredLocalLlm(modelId: string) {
-  for (const provider of modelRegistryData.localProviders) {
-    const retired = getRetiredModel("localProviders", provider.id, modelId);
-    if (retired) return { retired, providerId: provider.id };
-  }
-  return undefined;
-}
-
-/**
- * Moves every local scope off a GGUF model the catalog retired: to its replacement when
- * that is on disk, otherwise to no selection, so the picker asks again.
- */
-export async function reconcileRetiredLocalLlmSelections(installed?: Set<string>): Promise<void> {
-  const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
-  const stale = Object.values(INFERENCE_SCOPES).flatMap(({ storeKeys }) => {
-    const modelId = state[storeKeys.model] as string;
-    const found = state[storeKeys.mode] === "local" ? retiredLocalLlm(modelId) : null;
-    return found ? [{ storeKey: storeKeys.model, modelId, ...found }] : [];
-  });
-  if (stale.length === 0) return;
-  const onDisk =
-    installed ??
-    new Set(
-      ((await window.electronAPI?.modelGetAll?.()) ?? [])
-        .filter((model) => model.isDownloaded)
-        .map((model) => model.id)
-    );
-  for (const { storeKey, modelId, retired, providerId } of stale) {
-    // The user may have picked another model while the disk was read.
-    if ((useSettingsStore.getState() as unknown as Record<string, unknown>)[storeKey] !== modelId)
-      continue;
-    const to =
-      offeredReplacement("localProviders", providerId, modelId, (id) => onDisk.has(id)) ?? "";
-    const { alreadyMoved } = moveSelection(storeKey, to);
-    logger.info("Repointed retired local model", { scope: storeKey, to }, "settings");
-    if (alreadyMoved) continue;
-    const toName = modelRegistryData.localProviders
-      .flatMap((provider) => provider.models)
-      .find((model) => model.id === to)?.name;
-    queueRetiredModelSwitch({
-      provider: "",
-      from: retired.name,
-      to: toName ?? to,
-      messageKey: to ? "reasoning.localModelRetired" : "reasoning.localModelRetiredChooseAnother",
-    });
-  }
-}
-
-/** Reconciles every scope against the models actually on disk. */
 export async function reconcileLocalModelSelections(): Promise<void> {
-  if (!isBrowser || !window.electronAPI?.modelGetAll) return;
-
-  const models = await window.electronAPI.modelGetAll();
-  const installed = new Set(models.filter((model) => model.isDownloaded).map((model) => model.id));
-  await reconcileRetiredLocalLlmSelections(installed);
-  clearMissingLocalModelSelections((modelId) => installed.has(modelId));
+  /* keep the user's choice */
 }
 
 const LOCAL_SPEECH_CONTEXTS = [
@@ -3848,221 +3683,11 @@ export function selectedLocalSpeechModelIds(): string[] {
   return [...new Set(keys.map((key) => state[key]).filter((id) => typeof id === "string"))];
 }
 
-// Retired local speech models already announced as kept, so a selection that stays on one
-// is told once rather than at every launch.
-const KEPT_RETIRED_SPEECH_KEY = "retiredSpeechModelsKeptNoticed";
-
-// Which local speech models are on disk, retired ones included. Null when the disk can't be
-// read, so a selection on a retired file that may still be there isn't moved off it for good.
-async function downloadedSpeechModels(
-  section: "whisperModels" | "parakeetModels",
-  retiredIds: string[]
-): Promise<Set<string> | null> {
-  const api = isBrowser ? window.electronAPI : undefined;
-  try {
-    const whisper = section === "whisperModels";
-    const [list, ...retired] = await Promise.all([
-      whisper ? api?.listWhisperModels?.() : api?.listParakeetModels?.(),
-      ...retiredIds.map((id) =>
-        whisper ? api?.checkModelStatus?.(id) : api?.checkParakeetModelStatus?.(id)
-      ),
-    ]);
-    return new Set(
-      [...(list?.models ?? []), ...retired].flatMap((model) =>
-        model?.downloaded ? [model.model] : []
-      )
-    );
-  } catch {
-    return null;
-  }
-}
-
-// A policy that hasn't resolved yet judges nothing, so it can't steer a permanent move.
-function isSpeechModelAllowed(modelId: string): boolean {
-  const policyState = usePolicyStore.getState();
-  return (
-    !isPolicyActionAllowed(policyState) ||
-    isLocalModelAllowedByPolicy(policyState, "transcription", modelId)
-  );
-}
-
-/**
- * Moves saved Whisper and sherpa-onnx selections off a retired model (see
- * retiredLocalSpeechReplacement for the order); a retired file still on disk keeps running
- * unless its named replacement is downloaded too. Only a context using that engine tells the
- * user: a cloud user still stores the default Whisper model.
- */
 export async function reconcileRetiredLocalSpeechSelections(): Promise<void> {
-  const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
-  const contexts = LOCAL_SPEECH_CONTEXTS.flatMap(
-    ([useLocal, provider, whisper, parakeet, cohere]) => {
-      const inUse = (engine: string): boolean =>
-        state[useLocal] === true && state[provider] === engine;
-      return [
-        { section: "whisperModels", storeKey: whisper, inUse: inUse("whisper") },
-        { section: "parakeetModels", storeKey: parakeet, inUse: inUse("nvidia") },
-        { section: "parakeetModels", storeKey: cohere, inUse: inUse("cohere") },
-      ] as const;
-    }
-  );
-  const stale = [
-    ...contexts,
-    { section: "whisperModels", storeKey: "fallbackWhisperModel", inUse: false } as const,
-  ].flatMap((context) => {
-    const from = state[context.storeKey] as string;
-    const retired = from ? getRetiredModel(context.section, "", from) : undefined;
-    return retired ? [{ ...context, from, retired }] : [];
-  });
-  if (stale.length === 0) return;
-
-  const retiredIds = (section: string): string[] => [
-    ...new Set(stale.filter((entry) => entry.section === section).map((entry) => entry.from)),
-  ];
-  const [whisperOnDisk, parakeetOnDisk] = await Promise.all([
-    downloadedSpeechModels("whisperModels", retiredIds("whisperModels")),
-    downloadedSpeechModels("parakeetModels", retiredIds("parakeetModels")),
-  ]);
-  let kept: string[] = [];
-  try {
-    kept = isBrowser ? JSON.parse(localStorage.getItem(KEPT_RETIRED_SPEECH_KEY) ?? "[]") : [];
-  } catch {
-    // Unreadable: announce again.
-  }
-
-  for (const { section, storeKey, inUse, from, retired } of stale) {
-    // The user may have picked another model while the disk was read.
-    if ((useSettingsStore.getState() as unknown as Record<string, unknown>)[storeKey] !== from)
-      continue;
-    const onDisk = section === "whisperModels" ? whisperOnDisk : parakeetOnDisk;
-    if (!onDisk) continue;
-    const to = retiredLocalSpeechReplacement(
-      section,
-      from,
-      (id) => onDisk.has(id),
-      isSpeechModelAllowed
-    );
-    if (!to) {
-      const keptKey = `${section}:${from}`;
-      if (!inUse || !onDisk.has(from) || kept.includes(keptKey)) continue;
-      kept = [...kept, keptKey];
-      if (isBrowser) localStorage.setItem(KEPT_RETIRED_SPEECH_KEY, JSON.stringify(kept));
-      queueRetiredModelSwitch({
-        provider: "",
-        from: retired.name,
-        to: "",
-        messageKey: "reasoning.localModelRetiredKept",
-      });
-      continue;
-    }
-    const { alreadyMoved } = moveSelection(storeKey, to);
-    logger.info("Repointed retired local speech model", { scope: storeKey, from, to }, "settings");
-    if (!inUse || alreadyMoved) continue;
-    queueRetiredModelSwitch({
-      provider: "",
-      from: retired.name,
-      to: modelRegistryData[section][to]?.name ?? to,
-      messageKey: "reasoning.localModelRetired",
-    });
-  }
+  /* keep the user's choice */
 }
-
-/**
- * Repoints every scope still selecting a model the catalog has retired at its
- * replacement (or the provider's default), and tells the user; otherwise every request
- * fails with an error they can't act on. A cloud model that belongs to another provider
- * is repointed to this provider's default, with its own notice. While a catalog is
- * pending (isAwaitingCatalog), an ID no catalog knows is left alone instead: it may be
- * one of that catalog's additions. An enterprise scope only follows a named replacement,
- * since its other IDs are deployment names. Custom, OpenRouter and Tinfoil ids are
- * skipped: they're free-form or reconciled from the live catalog in tinfoilModels.ts.
- */
 export function reconcileRetiredCloudModelSelections(): void {
-  const state = useSettingsStore.getState() as unknown as Record<string, unknown>;
-  const repoint = (
-    section: "cloudProviders" | "enterpriseProviders" | "transcriptionProviders",
-    storeKey: string,
-    provider: string,
-    from: string,
-    to: string,
-    announce: boolean,
-    storedTo = to
-  ) => {
-    const { alreadyMoved } = moveSelection(storeKey, storedTo);
-    logger.info(
-      "Repointed retired model selection",
-      { scope: storeKey, from, to: storedTo },
-      "settings"
-    );
-    if (!announce || alreadyMoved) return;
-    const retired = getRetiredModel(section, provider, from);
-    const providerDef = modelRegistryData[section].find((p) => p.id === provider);
-    queueRetiredModelSwitch({
-      provider,
-      providerName: providerDef?.name ?? provider,
-      from: retired?.name ?? from,
-      to: providerDef?.models.find((model) => model.id === to)?.name ?? to,
-      ...(retired ? {} : { messageKey: "reasoning.modelUnavailableSwitched" }),
-    });
-  };
-  const cloudProviders = getCloudModelProviders();
-  for (const scope of Object.values(INFERENCE_SCOPES)) {
-    const mode = state[scope.storeKeys.mode];
-    const provider = state[scope.storeKeys.provider] as string;
-    const model = state[scope.storeKeys.model] as string;
-    if (!provider || !model) continue;
-    if (mode === "enterprise") {
-      const offered = modelRegistryData.enterpriseProviders.find((p) => p.id === provider)?.models;
-      // Bedrock stores profile IDs for the user's region; the catalog lists us. ones.
-      const bedrock = provider === "bedrock";
-      const catalogId = bedrock ? adjustBedrockModelForRegion(model, "us-east-1") : model;
-      const named = offeredReplacement("enterpriseProviders", provider, catalogId, (id) =>
-        Boolean(offered?.some((m) => m.id === id))
-      );
-      if (named)
-        repoint(
-          "enterpriseProviders",
-          scope.storeKeys.model,
-          provider,
-          catalogId,
-          named,
-          true,
-          bedrock ? adjustBedrockModelForRegion(named, state.bedrockRegion as string) : named
-        );
-      continue;
-    }
-    if (!usesCloudModelCatalog(mode) || provider === "tinfoil") continue;
-    const providerDef = cloudProviders.find((p) => p.id === provider);
-    if (!providerDef || reasoningModelBelongsToProvider(provider, model)) continue;
-    const replacement =
-      retiredReplacement("cloudProviders", provider, model, cloudProviders) ??
-      (isAwaitingLlmCatalog(model) ? null : pickDefaultModelId(providerDef));
-    // An OpenWhispr Cloud scope only stores this pair and never sends it, so moving it
-    // is not news to its user.
-    if (replacement)
-      repoint(
-        "cloudProviders",
-        scope.storeKeys.model,
-        provider,
-        model,
-        replacement,
-        mode === "providers"
-      );
-  }
-  for (const keys of TRANSCRIPTION_CONTEXT_KEYS) {
-    if (state[keys.mode] !== "providers") continue;
-    const provider = state[keys.provider] as string;
-    const model = state[keys.model] as string;
-    if (!provider || !model || !getRetiredModel("transcriptionProviders", provider, model))
-      continue;
-    // Each context offers its own models (meetings stream), so the move stays within them,
-    // as the policy repair does.
-    const replacement =
-      offeredReplacement("transcriptionProviders", provider, model, (id) =>
-        transcriptionModelBelongsToProvider(provider, id, keys.context)
-      ) ?? defaultTranscriptionModel(provider, keys.context);
-    if (replacement)
-      repoint("transcriptionProviders", keys.model, provider, model, replacement, true);
-  }
+  /* keep the user's choice */
 }
 
 export function getEffectiveCleanupModel() {

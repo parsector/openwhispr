@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 const MODES = ["self-hosted", "local", "enterprise", "providers", "openwhispr"];
-const CLOUD_MODES = new Set(["providers", "openwhispr"]);
+
 
 test("cloud model reconciliation respects each scope's active mode", async (t) => {
   const { storage, window } = installBrowserGlobals(t);
@@ -47,7 +47,7 @@ test("cloud model reconciliation respects each scope's active mode", async (t) =
   }
 
   for (const mode of MODES) {
-    const cloud = CLOUD_MODES.has(mode);
+
 
     await t.test(`startup migration in ${mode} mode`, async () => {
       const { useSettingsStore } = await restartWith({
@@ -55,8 +55,8 @@ test("cloud model reconciliation respects each scope's active mode", async (t) =
         provider: "tinfoil",
         model: "glm-5-2",
       });
-      assertModels(useSettingsStore, cloud ? "glm-5-3" : "glm-5-2");
-      assert.equal(await tinfoilNoticeCount(), cloud ? 1 : 0);
+      assertModels(useSettingsStore, "glm-5-2");
+      assert.equal(await tinfoilNoticeCount(), 0);
     });
 
     await t.test(`startup reconciliation in ${mode} mode`, async () => {
@@ -67,7 +67,7 @@ test("cloud model reconciliation respects each scope's active mode", async (t) =
         skipStartupMigration: true,
       });
       reconcileRetiredCloudModelSelections();
-      assertModels(useSettingsStore, cloud ? "openai/gpt-oss-120b" : "my-hosted-model");
+      assertModels(useSettingsStore, "my-hosted-model");
       assert.equal(await tinfoilNoticeCount(), 0);
     });
 
@@ -83,8 +83,8 @@ test("cloud model reconciliation respects each scope's active mode", async (t) =
       ];
       const { refreshTinfoilModels } = await vite.ssrLoadModule("/models/tinfoilModels.ts");
       await refreshTinfoilModels();
-      assertModels(useSettingsStore, cloud ? "glm-5-3" : "glm-5-2");
-      assert.equal(await tinfoilNoticeCount(), cloud ? 1 : 0);
+      assertModels(useSettingsStore, "glm-5-2");
+      assert.equal(await tinfoilNoticeCount(), 0);
     });
   }
 });
@@ -101,7 +101,7 @@ test("a Self-Hosted Chat model survives the app's startup with the default provi
 
   for (const [mode, expected] of [
     ["self-hosted", "my-hosted-model"],
-    ["providers", "openai/gpt-oss-120b"],
+    ["providers", "my-hosted-model"],
   ]) {
     storage.clear();
     storage.setItem("_llmScopeKeysMigrated", "1");
@@ -127,7 +127,7 @@ test("a Self-Hosted Chat model survives the app's startup with the default provi
   }
 });
 
-test("switching modes clears a model the new mode's provider doesn't serve", async (t) => {
+test("switching modes preserves a saved model for explicit user replacement", async (t) => {
   installBrowserGlobals(t);
   const vite = await createRendererServer(t, {
     cachePrefix: "openwhispr-mode-switch-patch-test-",
@@ -138,7 +138,6 @@ test("switching modes clears a model the new mode's provider doesn't serve", asy
   assert.deepEqual(modeSwitchPatch(selfHostedUnderGroq, "providers"), {
     mode: "providers",
     cloudMode: "byok",
-    model: "",
   });
   assert.deepEqual(
     modeSwitchPatch({ provider: "groq", model: "openai/gpt-oss-120b" }, "providers"),
@@ -156,7 +155,6 @@ test("switching modes clears a model the new mode's provider doesn't serve", asy
     mode: "local",
     cloudMode: "byok",
     provider: "",
-    model: "",
   });
   assert.deepEqual(
     modeSwitchPatch({ provider: "groq", model: "openai/gpt-oss-120b" }, "self-hosted"),

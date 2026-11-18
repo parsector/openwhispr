@@ -26,7 +26,7 @@ test("the registry offers Deepgram via OpenRouter to Upload only", async () => {
   assert.equal(isUploadOnlyTranscriptionModel("deepgram", "nova-3"), false);
 });
 
-test("a remembered Deepgram-via-OpenRouter pick survives in Upload, not dictation", async (t) => {
+test("a remembered Deepgram-via-OpenRouter choice is never silently replaced", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: {
       _providerSettingsMigrated: "1",
@@ -49,7 +49,7 @@ test("a remembered Deepgram-via-OpenRouter pick survives in Upload, not dictatio
   const state = () => useSettingsStore.getState();
 
   state().switchCloudTranscriptionProvider("dictation", "openrouter");
-  assert.equal(state().cloudTranscriptionModel, "mistralai/voxtral-mini-transcribe-3-0");
+  assert.equal(state().cloudTranscriptionModel, DEEPGRAM_VIA_OPENROUTER);
 
   state().switchCloudTranscriptionProvider("upload", "openrouter");
   assert.equal(state().uploadCloudTranscriptionModel, DEEPGRAM_VIA_OPENROUTER);

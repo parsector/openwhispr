@@ -39,17 +39,16 @@ test("per-provider transcription model memory", async (t) => {
     assert.equal(state().cloudTranscriptionModel, "parasail-tuned");
   });
 
-  await t.test("a remembered model that no longer matches the provider falls back", () => {
+  await t.test("a remembered unlisted model remains chosen", () => {
     state().switchCloudTranscriptionProvider("dictation", "groq");
     state().setCloudTranscriptionModel("retired-groq-model");
     state().switchCloudTranscriptionProvider("dictation", "custom");
     state().switchCloudTranscriptionProvider("dictation", "groq");
-    assert.notEqual(
+    assert.equal(
       state().cloudTranscriptionModel,
       "retired-groq-model",
-      "an unknown remembered model must degrade to the provider default"
+      "a saved model must survive catalog omissions"
     );
-    assert.match(state().cloudTranscriptionModel, /^whisper-large-v3/);
   });
 
   await t.test("scopes have independent memory and writes", () => {
@@ -124,7 +123,7 @@ test("per-provider transcription model memory", async (t) => {
     state().setCloudTranscriptionModel("whisper-large-v3-turbo");
     state().switchCloudTranscriptionProvider("dictation", "groq");
     state().switchCloudTranscriptionProvider("dictation", "openrouter");
-    assert.equal(state().cloudTranscriptionModel, "mistralai/voxtral-mini-transcribe-3-0");
+    assert.equal(state().cloudTranscriptionModel, "whisper-large-v3-turbo");
   });
 
   await t.test("setCloudTranscriptionForAllScopes seeds memory in every scope", () => {

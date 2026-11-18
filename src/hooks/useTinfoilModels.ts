@@ -48,9 +48,9 @@ export function useTinfoilModels(enabled: boolean): UseTinfoilModelsResult {
     }
 
     try {
-      const fresh = await refreshTinfoilModels();
+      await refreshTinfoilModels();
       if (isMountedRef.current) {
-        setModels(fresh);
+        setModels(getTinfoilModels());
       }
     } catch (err) {
       // Leave the known list in place: without an answer we can't tell a

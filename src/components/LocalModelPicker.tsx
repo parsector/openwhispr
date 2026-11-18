@@ -118,22 +118,8 @@ export default function LocalModelPicker({
   }, [modelType]);
 
   useEffect(() => {
-    const initAndValidate = async () => {
-      const downloaded = await loadDownloadedModels();
-      // Only clear ids this picker owns — a foreign id (e.g. a cloud model)
-      // must survive untouched.
-      if (
-        downloaded &&
-        selectedModel &&
-        isLocalModelAllowedByPolicy(usePolicyStore.getState(), scope, selectedModel) &&
-        knownModelIds.has(selectedModel) &&
-        !downloaded.has(selectedModel)
-      ) {
-        onModelSelect("");
-      }
-    };
-    initAndValidate();
-  }, [loadDownloadedModels, selectedModel, onModelSelect, knownModelIds, scope]);
+    void loadDownloadedModels();
+  }, [loadDownloadedModels]);
 
   const handleDownloadComplete = useCallback(async () => {
     await loadDownloadedModels();
@@ -165,11 +151,7 @@ export default function LocalModelPicker({
       const selectedWhenStarted = selectionStateRef.current.selectedModel;
 
       downloadModel(modelId, (downloadedId) => {
-        const {
-          selectedModel: current,
-          downloadedModels: downloaded,
-          knownModelIds: known,
-        } = selectionStateRef.current;
+        const { selectedModel: current } = selectionStateRef.current;
         if (
           current !== selectedWhenStarted ||
           !isLocalModelAllowedByPolicy(usePolicyStore.getState(), scope, downloadedId) ||
@@ -177,8 +159,7 @@ export default function LocalModelPicker({
         )
           return;
 
-        const selectionGone = known.has(current) && !downloaded.has(current);
-        if (!current || selectionGone) {
+        if (!current) {
           onModelSelect(downloadedId);
         }
       });
@@ -219,6 +200,11 @@ export default function LocalModelPicker({
 
   return (
     <div className={className}>
+      {selectedModel && !knownModelIds.has(selectedModel) && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("models.savedUnavailable", { model: selectedModel })}
+        </p>
+      )}
       <ProviderTabs
         providers={listedProviders}
         selectedId={displayedProviderId}

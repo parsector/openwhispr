@@ -100,11 +100,11 @@ test("a shipped download without a hash can't move", () => {
   assert.deepEqual(withTrustedDownloads(data, seed).whisperModels.tiny, seed.whisperModels.tiny);
 });
 
-test("retired entries stay, so their retirement still applies", () => {
+test("retirement metadata never bypasses artifact publisher trust", () => {
   const data = structuredClone(seed);
   const provider = localProvider(data);
   Object.assign(provider.models[0], { retired: true, hfRepo: "evil-org/gone" });
-  assert.equal(localProvider(withTrustedDownloads(data, seed)).models[0].retired, true);
+  assert.deepEqual(localProvider(withTrustedDownloads(data, seed)).models[0], localProvider(seed).models[0]);
 });
 
 test("the list covers the registry's publishers in use", () => {
