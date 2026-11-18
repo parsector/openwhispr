@@ -90,8 +90,8 @@ export function SuperwallEntitlementBridge() {
     reconcileStoreBilling()
       .then(() => refreshUsage('usage-refresh-after-store-reconciliation'))
       .catch((error) => {
-        // Keep the backend/webhook source usable when RevenueCat is not
-        // configured or temporarily unavailable, and retry next app mount.
+        // Keep the webhook source usable when reconciliation is temporarily
+        // unavailable, and retry next app mount.
         reconciledBillingUserIdRef.current = null;
         reportError('authenticated-store-reconciliation', error);
       });

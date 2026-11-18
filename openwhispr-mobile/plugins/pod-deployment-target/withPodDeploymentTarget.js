@@ -1,6 +1,6 @@
 const { withPodfile } = require('expo/config-plugins');
 
-// Pod resource-bundle targets (SDWebImage, Sentry, RevenueCat, ...) keep the
+// Pod resource-bundle targets (SDWebImage, Sentry, ...) keep the
 // deployment target from their podspec, as low as 9.0. React Native's
 // post_install raises only the pods' code targets (to 15.1), so Xcode 27, which
 // supports 15.0+, rejects the bundles during build planning. Raise every Pods

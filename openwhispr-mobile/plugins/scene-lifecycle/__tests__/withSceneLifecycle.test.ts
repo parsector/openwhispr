@@ -1,7 +1,7 @@
 const { adoptSceneLifecycle, SCENE_MANIFEST } = require('../withSceneLifecycle');
 
-// AppDelegate.swift from expo-template-bare-minimum@55, with react-native-appsflyer's edits.
-const EXPO_55_APP_DELEGATE = `import react_native_appsflyer
+// Expo 55 template with a synthetic native plugin hook to verify preservation.
+const EXPO_55_APP_DELEGATE = `import TestNativePlugin
 internal import Expo
 import React
 import ReactAppDependencyProvider
@@ -17,7 +17,7 @@ class AppDelegate: ExpoAppDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-    AppsFlyerAttribution.shared.handleLaunchOptions(launchOptions)
+    TestNativePlugin.shared.handleLaunchOptions(launchOptions)
     let delegate = ReactNativeDelegate()
     let factory = ExpoReactNativeFactory(delegate: delegate)
     delegate.dependencyProvider = RCTAppDependencyProvider()
@@ -42,7 +42,7 @@ class AppDelegate: ExpoAppDelegate {
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
-    AppsFlyerAttribution.shared.handleOpen(url, options: options)
+    TestNativePlugin.shared.handleOpen(url, options: options)
     return super.application(app, open: url, options: options) || RCTLinkingManager.application(app, open: url, options: options)
   }
 }
@@ -72,8 +72,8 @@ describe('withSceneLifecycle', () => {
   it('leaves the URL handling and other plugins edits in AppDelegate untouched', () => {
     const result = adoptSceneLifecycle(EXPO_55_APP_DELEGATE, SCENE_DELEGATE);
 
-    expect(result).toContain('AppsFlyerAttribution.shared.handleLaunchOptions(launchOptions)');
-    expect(result).toContain('AppsFlyerAttribution.shared.handleOpen(url, options: options)');
+    expect(result).toContain('TestNativePlugin.shared.handleLaunchOptions(launchOptions)');
+    expect(result).toContain('TestNativePlugin.shared.handleOpen(url, options: options)');
     expect(result).toContain('class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {');
   });
 

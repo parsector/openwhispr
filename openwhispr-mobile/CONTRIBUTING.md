@@ -72,7 +72,7 @@ The `android`, `ios`, and `prebuild` npm scripts use POSIX environment-variable 
 Use [.env.example](./.env.example) as the canonical variable reference. It groups configuration into:
 
 - hosted API and transcription settings;
-- optional Sentry, AppsFlyer, Superwall, RevenueCat, and Google Calendar integrations;
+- optional Sentry, Superwall, and Google Calendar integrations;
 - keyboard audio behavior; and
 - local bundle identifiers, URL schemes, and display names.
 
