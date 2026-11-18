@@ -111,3 +111,16 @@ test("interrupted midway resumes and retries previous failed attempts without du
   assert.equal(f.database.db.prepare("SELECT count(*) n FROM voice_embedding_migrations WHERE sample_id='a'").get().n, 1);
   assert.equal(f.database.db.prepare("SELECT count(*) n FROM voice_embedding_migrations WHERE state='migrated'").get().n, 3);
 });
+
+test("migration audit follows explicit exemplar ownership changes and survives merging away the source person", async t => {
+  const f = fixture(t);
+  f.clip("owned");
+  await migration.migrate(f.database, f.store, { extractor: f.extractor });
+  const survivor = f.database.createNamedSpeakerProfile("Survivor");
+  f.database.db.prepare("UPDATE voice_exemplar_audio SET profile_id=? WHERE id='owned'").run(survivor.id);
+  f.database.db.prepare("DELETE FROM speaker_profiles WHERE id=?").run(f.person.id);
+  const audit = f.database.db.prepare("SELECT * FROM voice_embedding_migrations WHERE sample_id='owned'").get();
+  assert.ok(audit, "merging a person must preserve the migration audit for retained evidence");
+  assert.equal(audit.profile_id, survivor.id);
+  assert.equal(audit.state, "migrated");
+});

@@ -17,7 +17,12 @@ function open(db) {
     reason TEXT,
     started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at TEXT
-  )`);
+  );
+  CREATE TRIGGER IF NOT EXISTS transfer_voice_migration_audit
+    AFTER UPDATE OF profile_id ON voice_exemplar_audio BEGIN
+      UPDATE voice_embedding_migrations SET profile_id=NEW.profile_id WHERE sample_id=NEW.id;
+    END;
+  `);
 }
 const hash = (bytes) =>
   createHash("sha256")

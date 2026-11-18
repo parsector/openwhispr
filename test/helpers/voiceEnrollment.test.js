@@ -460,7 +460,8 @@ test('twenty-recording review benchmark preserves ordering and grouped reasons o
     new Set(['close_match', 'overlapping_speech']));
   assert.deepEqual(cold.map(row => row.noteId), [...cold.map(row => row.noteId)].sort((a, b) => b - a));
   assert.ok(coldResolutions >= 20);
-  assert.ok(resolved > 0, 'eligibility must be recomputed from current evidence');
+  assert.ok(coldResolutions <= 40, 'fresh eligibility must use bounded passes, not a rescan per pending note');
+  assert.equal(resolved, 20, 'each recording must be rechecked once on the next open');
   console.log(`review cache benchmark: cold ${coldResolutions} span resolutions / ${coldMs.toFixed(1)} ms; warm ${resolved} / ${warmMs.toFixed(1)} ms`);
 });
 

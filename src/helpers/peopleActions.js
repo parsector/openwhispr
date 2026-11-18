@@ -1721,10 +1721,13 @@ function reviewRowsPage(
   return { rows, pending, cached };
 }
 function listReviewRows(database, selectedProfileId = null, store = null, includeAll = false) {
-  let page = reviewRowsPage(database, selectedProfileId, store, includeAll);
-  for (const noteId of page.pending)
-    page = reviewRowsPage(database, selectedProfileId, store, includeAll, noteId);
-  return page.rows;
+  if (!store) return assembleReviewRows(database, selectedProfileId, includeAll, new Map(), null);
+  let { facts, pending } = cachedReviewFacts(database, store, REVIEW_RULES_VERSION);
+  // Refresh a pending batch together. Calling the paged API for every note
+  // would recheck all previous notes each time, making a cold scan quadratic.
+  for (const noteId of pending) computeReviewNote(database, store, noteId, REVIEW_RULES_VERSION);
+  if (pending.length) ({ facts } = cachedReviewFacts(database, store, REVIEW_RULES_VERSION));
+  return assembleReviewRows(database, selectedProfileId, includeAll, facts, store);
 }
 
 module.exports = {
