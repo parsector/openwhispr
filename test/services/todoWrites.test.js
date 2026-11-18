@@ -13,6 +13,7 @@ const { createToolRegistry: chatTools } = require("../../src/services/tools/inde
 const { CommitmentStore } = require("../../src/helpers/commitments/store");
 const { createTodo, updateTodo } = require("../../src/helpers/commitments/toolWrite");
 const { getTodo, listTodos } = require("../../src/helpers/commitments/toolRead");
+const { installBrowserGlobals } = require("../lib/rendererTestHarness");
 
 function database() {
   const db = new DatabaseSync(":memory:");
@@ -117,7 +118,8 @@ test("agent updates obey user pins and all three creation paths retain attributi
   } finally { data.db.close(); }
 });
 
-test("assistant write tools use the shared store path and Assistant attribution", async () => {
+test("assistant write tools use the shared store path and Assistant attribution", async (t) => {
+  installBrowserGlobals(t);
   const data = database();
   global.window = { electronAPI: {
     todosToolCreate: async (args) => createTodo(data, args, "Assistant"),

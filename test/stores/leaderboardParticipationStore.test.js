@@ -392,9 +392,30 @@ test("simultaneous participation reads for one account share one request", async
 // account would flash a skeleton over an answer that is almost certainly
 // still right; a different account must never be shown the old one. Any other
 // read still drops to loading: the board's 403 recovery reloads on that.
+test("a local opt-out retires a participation read already in flight", async (t) => {
+  let releaseRead;
+  const { context, requests, storage, store } = await loadStore(t, {
+    initialStorage: { [participationKey("user_1")]: "true" },
+    cloudApiRequest: async () => {
+      await new Promise((resolve) => (releaseRead = resolve));
+      return participation(true);
+    },
+  });
+  const reading = store.getState().refresh(context);
+  await waitFor(() => typeof releaseRead === "function");
+  storage.removeItem(participationKey("user_1"));
+  await store.getState().refresh(context);
+  releaseRead();
+  await reading;
+  assert.equal(store.getState().enabled, false);
+  assert.equal(store.getState().ready, true);
+  assert.equal(requests.length, 1, "opt-out adds no participation request");
+});
+
 test("a mount's same-account re-read keeps its answer on screen until the new one lands", async (t) => {
   let releaseRead;
   const { context, store } = await loadStore(t, {
+    initialStorage: { [participationKey("user_1")]: "true" },
     cloudApiRequest: async () => {
       if (store.getState().answeredUserId) {
         await new Promise((resolve) => {
@@ -432,6 +453,7 @@ test("recovery replaces a mount check and shares its fresh read with other refre
   let releaseRead;
   let reads = 0;
   const { context, requests, store } = await loadStore(t, {
+    initialStorage: { [participationKey("user_1")]: "true" },
     cloudApiRequest: async () => {
       reads += 1;
       if (reads === 1) {
@@ -463,6 +485,7 @@ test("recovery replaces a mount check and shares its fresh read with other refre
 
 test("a successful read clears an earlier write error", async (t) => {
   const { context, store } = await loadStore(t, {
+    initialStorage: { [participationKey("user_1")]: "true" },
     cloudApiRequest: async () => participation(true),
   });
   store.setState({ answeredUserId: "user_1", answeredAt: Date.now(), error: "write", ready: true });

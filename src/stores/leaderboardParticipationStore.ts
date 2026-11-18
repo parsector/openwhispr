@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { clearCachedLeaderboards } from "../lib/insightsCache";
 import {
   readPendingLeaderboardLeave,
   writePendingLeaderboardLeave,
@@ -30,8 +31,15 @@ interface LeaderboardParticipationState {
   /** An opt-out this device still owes the account. The toggle already reads
    *  off, so this is what keeps a leave that has not landed from passing as done. */
   leavePending: boolean;
+  /** The account and time of the last successful read, so a remount can skip a fresh one. */
+  answeredUserId: string | null;
+  answeredAt: number;
   reset: () => void;
-  refresh: (context: LeaderboardParticipationAuthContext) => Promise<void>;
+  /** `keepAnswer` keeps a same-account answer on screen while it re-reads. */
+  refresh: (
+    context: LeaderboardParticipationAuthContext,
+    options?: { keepAnswer?: boolean }
+  ) => Promise<void>;
   publishAnswer: (
     enabled: boolean,
     configured: boolean,
@@ -50,7 +58,9 @@ interface LeaderboardParticipationState {
 let readId = 0;
 // Keep write invalidation separate so an older account cannot clear a newer account's pending state.
 let writeId = 0;
-let activeRefresh: { key: string; promise: Promise<void> } | null = null;
+let activeRefresh: { key: string; promise: Promise<void>; keepCurrentAnswer: boolean } | null =
+  null;
+
 const participationKey = (userId: string) => `leaderboardParticipation:${userId}`;
 const hasOptedIn = (userId: string) => localStorage.getItem(participationKey(userId)) === "true";
 
@@ -62,6 +72,8 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     error: null,
     updating: false,
     leavePending: false,
+    answeredUserId: null,
+    answeredAt: 0,
 
     reset: () => {
       readId += 1;
@@ -76,6 +88,8 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
         error: null,
         updating: false,
         leavePending: false,
+        answeredUserId: null,
+        answeredAt: 0,
       });
     },
 
@@ -89,13 +103,25 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     // Read-only, and only when a caller asks: the account preference is the one
     // source of truth for who is on a leaderboard, and nothing here may join or
     // leave one on the user's behalf.
-    refresh: async (context) => {
+    refresh: async (context, { keepAnswer = false } = {}) => {
       if (!hasOptedIn(context.userId)) {
-        set({ enabled: false, configured: true, ready: true, error: null, leavePending: false });
+        readId += 1;
+        activeRefresh = null;
+        set({
+          enabled: false,
+          configured: true,
+          ready: true,
+          error: null,
+          leavePending: false,
+          answeredUserId: context.userId,
+          answeredAt: Date.now(),
+        });
         return;
       }
       const key = `${context.userId}:${context.authGeneration}`;
-      if (activeRefresh?.key === key) {
+      const keepCurrentAnswer = keepAnswer && get().answeredUserId === context.userId;
+      // Recovery retires a mount check: its older answer cannot settle a board refusal.
+      if (activeRefresh?.key === key && (keepAnswer || !activeRefresh.keepCurrentAnswer)) {
         await activeRefresh.promise;
         return;
       }
@@ -105,16 +131,23 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
 
       const promise = (async () => {
         const currentReadId = ++readId;
-        set({ ready: false, error: null });
+        // A mount's re-read of the same account keeps its answer on screen until this
+        // one lands. Any other read drops to loading, which is what lets the board's
+        // 403 recovery reload once the answer settles.
+        if (!keepCurrentAnswer) {
+          set({ ready: false, error: null });
+        }
         try {
-          // Only an explicit local opt-in reaches this read. A pending opt-out
-          // is delivered separately and cannot re-enable the local answer.
+          // Only explicit local participation permits a remote preference read.
           const participation = await LeaderboardService.getParticipation(context);
           if (currentReadId !== readId) return;
           set({
             enabled: participation.enabled,
             configured: participation.configured,
             leavePending: false,
+            error: null,
+            answeredUserId: context.userId,
+            answeredAt: Date.now(),
           });
         } catch (error) {
           if (currentReadId !== readId) return;
@@ -124,12 +157,18 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
           // recovery re-read, fail, and immediately re-issue the same 403 forever.
           // The surface offers a Retry rather than a Join, which would ask an
           // account that may already be on a leaderboard to join it again.
-          set({ enabled: false, configured: false, error: "read" });
+          set({
+            enabled: false,
+            configured: false,
+            error: "read",
+            answeredUserId: null,
+            answeredAt: 0,
+          });
         } finally {
           if (currentReadId === readId) set({ ready: true });
         }
       })();
-      activeRefresh = { key, promise };
+      activeRefresh = { key, promise, keepCurrentAnswer };
       try {
         await promise;
       } finally {
@@ -138,6 +177,10 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     },
 
     join: async (context) => {
+      // Cleared before the write, so a board read already in flight can't keep the
+      // roster this write changes. The view already shows the change, so nothing
+      // needs telling.
+      clearCachedLeaderboards({ revalidate: false });
       const generation = readId;
       const currentWriteId = ++writeId;
       set({ updating: true });
@@ -168,6 +211,8 @@ export const useLeaderboardParticipationStore = create<LeaderboardParticipationS
     },
 
     leave: async (context) => {
+      // Cleared before the write, as in join.
+      clearCachedLeaderboards({ revalidate: false });
       const generation = readId;
       const currentWriteId = ++writeId;
       set({ updating: true });

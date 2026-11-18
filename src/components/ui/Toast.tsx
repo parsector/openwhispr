@@ -428,6 +428,8 @@ const Toast: React.FC<
         onMouseLeave={handleMouseLeave}
       >
         <DictationErrorCard
+          role={variant === "destructive" ? "alert" : "status"}
+          tone={variant === "destructive" ? "error" : undefined}
           title={title}
           description={description}
           descriptionHotkey={descriptionHotkey}

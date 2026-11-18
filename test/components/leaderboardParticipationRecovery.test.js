@@ -10,6 +10,7 @@ test("a board participation refusal supersedes the mount's older joined answer",
   let root;
   t.after(() => act(() => root?.unmount()));
   installBrowserGlobals(t, {
+    initialStorage: { "leaderboardParticipation:user-a": "true" },
     window: {
       clearInterval() {},
       electronAPI: { getOAuthProtocolRegistered: async () => true },

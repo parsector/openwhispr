@@ -1333,7 +1333,14 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                       useTodosStore.getState().requestComposer();
                       setActiveView("todos");
                     }}
-                    onNewChat={agentAllowedByPolicy ? () => setActiveView("chat") : undefined}
+                    onNewChat={
+                      agentAllowedByPolicy
+                        ? () => {
+                            startNewChat();
+                            setActiveView("chat");
+                          }
+                        : undefined
+                    }
                   />
                   <ProfileMenu
                     onOpenSettings={(section) => {

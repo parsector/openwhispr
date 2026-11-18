@@ -153,12 +153,13 @@ test("MCP cannot read another account's note, search hit, folder, or space", asy
   finally { Module._load = originalLoad; }
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(`
-    CREATE TABLE spaces (id INTEGER PRIMARY KEY, name TEXT, kind TEXT, deleted_at TEXT, sort_order INTEGER DEFAULT 0);
+    CREATE TABLE spaces (id INTEGER PRIMARY KEY, name TEXT, kind TEXT, deleted_at TEXT, sort_order INTEGER DEFAULT 0, account_id TEXT, workspace_id TEXT, is_default_private INTEGER DEFAULT 0);
     CREATE TABLE space_accounts (space_id INTEGER, account_id TEXT);
-    CREATE TABLE folders (id INTEGER PRIMARY KEY, name TEXT, space_id INTEGER, account_id TEXT, deleted_at TEXT, sort_order INTEGER DEFAULT 0, created_at TEXT);
+    CREATE TABLE folders (id INTEGER PRIMARY KEY, name TEXT, space_id INTEGER, account_id TEXT, deleted_at TEXT, sort_order INTEGER DEFAULT 0, created_at TEXT, cloud_id TEXT, is_default INTEGER DEFAULT 0);
     CREATE TABLE notes (id INTEGER PRIMARY KEY, title TEXT, content TEXT, enhanced_content TEXT, transcript TEXT, space_id INTEGER, folder_id INTEGER, account_id TEXT, note_type TEXT, deleted_at TEXT, created_at TEXT);
     CREATE VIRTUAL TABLE notes_fts USING fts5(title, content, content='notes', content_rowid='id');
     INSERT INTO spaces (id, name, kind) VALUES (1, 'Private', 'private'), (2, 'Team A', 'team'), (3, 'Team B', 'team');
+    UPDATE spaces SET account_id = 'account-a', is_default_private = 1 WHERE id = 1;
     INSERT INTO space_accounts VALUES (2, 'account-a'), (3, 'account-b');
     INSERT INTO folders (id, name, space_id, account_id) VALUES (1, 'A folder', 2, 'account-a'), (2, 'B folder', 3, 'account-b');
     INSERT INTO notes (id, title, content, space_id, folder_id, account_id) VALUES (1, 'Visible', 'visible text', 2, 1, 'account-a'), (2, 'Foreign', 'foreign secret', 3, 2, 'account-b');
@@ -166,7 +167,8 @@ test("MCP cannot read another account's note, search hit, folder, or space", asy
   `);
   const database = Object.create(DatabaseManager.prototype);
   database.db = sqlite;
-  database.setActiveAccountId("account-a");
+  // This fixture bypasses the constructor and its account-switch bookkeeping.
+  database.activeAccountId = "account-a";
   const f = fixture();
   const server = createMcpHttpServer({ tokens: f.tokens, tools: createTools(database, () => ({ search: async () => [{ noteId: 2, score: 0.9 }] })), port: 0 });
   try {
