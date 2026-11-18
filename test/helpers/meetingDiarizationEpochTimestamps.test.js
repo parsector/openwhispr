@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Module = require("node:module");
 const fs = require("node:fs");
 const os = require("node:os");
+const path = require("node:path");
 const vm = require("node:vm");
 const crypto = require("node:crypto");
 const ts = require("typescript");
@@ -72,7 +73,7 @@ const START_MS = 1792414000000;
 // Runs main's real _startOrSkipDiarization and resolves with the payload it
 // sends. `outcome` picks the diarized, skipped or failed path.
 const runMainDiarization = (mainSegments, { retracted = [], outcome = "diarized", finalName,
-  sessionConfig = null, diarizedSegments = null, onDiarize = null,
+  diarizedSource = "system", sessionConfig = null, diarizedSegments = null, onDiarize = null,
   audioStore = null, whisperManager = null } = {}) =>
   new Promise((resolve) => {
     const diarizationManager = new DiarizationManager();

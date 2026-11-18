@@ -1,3 +1,4 @@
+const { EMBEDDING_DIM } = require("../constants/speakerDetection.json");
 const exemplarAudio = require("./voiceExemplarAudio");
 const {
   classifyEvidence,
@@ -262,7 +263,9 @@ function start(
       terminal(sample, "legacy_audio_unavailable");
       return;
     }
-    if (sample.embedding?.length !== 2048) {
+    // TODO(run-b): recovery still preserves legacy 512-dimension / 2048-byte vectors.
+    // Retain the approved clip for migration; recognition excludes these vectors.
+    if (![2048, EMBEDDING_DIM * 4].includes(sample.embedding?.length)) {
       terminal(sample, "legacy_embedding_unavailable", true);
       return;
     }

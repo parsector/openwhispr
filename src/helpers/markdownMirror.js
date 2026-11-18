@@ -552,8 +552,7 @@ class MarkdownMirror {
   // every time.
   transcriptSegments(note) {
     try {
-      const segments = JSON.parse(note?.transcript || "[]");
-      return Array.isArray(segments) ? segments : [];
+      return require("./transcriptDocument").readTranscriptDocument(note?.transcript).rows;
     } catch {
       return [];
     }

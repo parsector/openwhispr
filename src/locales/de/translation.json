@@ -674,12 +674,6 @@
       "title": "Bedienungshilfen-Berechtigungen benötigt",
       "description": "Wir haben festgestellt, dass OpenWhispr Bedienungshilfen-Berechtigungen benötigt, um korrekt zu funktionieren. Bitte aktivieren Sie diese unten."
     },
-    "billing": {
-      "pastDueTitle": "Ihre Zahlung konnte nicht verarbeitet werden",
-      "pastDueDescription": "Der Cloud-Zugriff dieses Kontos ist derzeit eingeschränkt.",
-      "bannerDescription": "Der Cloud-Zugriff dieses Kontos ist derzeit eingeschränkt. Das wöchentliche Limit beträgt {{limit}} Wörter.",
-      "updatePayment": "Zahlung aktualisieren"
-    },
     "history": {
       "couldNotLoadTitle": "Verlauf konnte nicht geladen werden",
       "couldNotLoadDescription": "Beim Laden der Transkriptionen ist ein Fehler aufgetreten. Bitte schließen Sie die App und öffnen Sie sie erneut.",
@@ -1735,10 +1729,6 @@
         "description": "Updates, Speicher & Entwicklertools",
         "label": "System"
       },
-      "plansBilling": {
-        "description": "Tarife, Nutzung & Abrechnung",
-        "label": "Tarife & Abrechnung"
-      },
       "workspaceGeneral": {
         "label": "Allgemein",
         "description": "Name und Symbol des Workspace"
@@ -1904,19 +1894,6 @@
         "spaces_other": "{{count}} Teamspaces",
         "refreshFailed": "Teams konnten nicht aktualisiert werden. Die Liste ist möglicherweise veraltet.",
         "cellMenuLabel": "{{team}}: {{value}}",
-        "paywall": {
-          "title": "Teams sind im Business-Tarif enthalten",
-          "body": "Teamspaces sind kostenlos. Wechseln Sie zu Business, um Personen in Teams zu gruppieren.",
-          "bodyAskOwner": "Teamspaces sind kostenlos. Bitten Sie {{owner}}, auf Business zu wechseln, um Personen in Teams zu gruppieren.",
-          "bodyAskOwnerUnknown": "Teamspaces sind kostenlos. Bitten Sie den Inhaber Ihres Workspace, auf Business zu wechseln, um Personen in Teams zu gruppieren.",
-          "upgrade": "Auf Business upgraden",
-          "notNow": "Nicht jetzt",
-          "lapsedTitle": "Der Tarif dieses Workspace ist nicht aktiv",
-          "lapsedBody": "Aktualisieren Sie die Abrechnung, um Teams zu erstellen. Ihre bestehenden Teams funktionieren weiter.",
-          "lapsedBodyAskOwner": "Bitten Sie {{owner}}, die Abrechnung zu aktualisieren, um Teams zu erstellen. Ihre bestehenden Teams funktionieren weiter.",
-          "lapsedBodyAskOwnerUnknown": "Bitten Sie den Inhaber des Workspace, die Abrechnung zu aktualisieren, um Teams zu erstellen. Ihre bestehenden Teams funktionieren weiter.",
-          "updateBilling": "Abrechnung aktualisieren"
-        },
         "form": {
           "title": "Team erstellen",
           "subtitle": "Eine Abkürzung, um mehrere Personen auf einmal hinzuzufügen.",
@@ -2098,29 +2075,6 @@
         "open": "Konsole öffnen"
       },
       "staleList": "OpenWhispr ist nicht erreichbar. Angezeigt werden Ihre Workspaces von Ihrer letzten Verbindung.",
-      "billing": {
-        "plan": "Plan",
-        "seats": "Plätze",
-        "ownerOnly": "Nur der Workspace-Inhaber kann das Abonnement verwalten.",
-        "nextInvoice": "Nächste Rechnung",
-        "manageStripe": "In Stripe verwalten",
-        "startSubscription": "Abonnement starten",
-        "planLabel": {
-          "business": "Business",
-          "pro": "Pro",
-          "free": "Free",
-          "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Aktiv",
-          "trialing": "Testphase",
-          "past_due": "Überfällig",
-          "canceled": "Gekündigt",
-          "incomplete": "Unvollständig",
-          "unpaid": "Unbezahlt"
-        },
-        "provisionedPlan": "Von OpenWhispr eingerichtet. Wenden Sie sich an den Vertrieb, um Tarif oder Plätze zu ändern."
-      },
       "people": {
         "title": "Personen",
         "description": "Verwalten Sie die Personen in Ihrem Workspace und ihre Rollen.",
@@ -2542,24 +2496,6 @@
           "generic": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut."
         }
       },
-      "billing": {
-        "couldNotOpenDescription": "Die Abrechnungsseite konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
-        "couldNotOpenTitle": "Abrechnung konnte nicht geöffnet werden",
-        "manageBilling": "Abrechnung verwalten",
-        "opening": "Wird geöffnet...",
-        "updatePaymentMethod": "Zahlungsmethode aktualisieren",
-        "contactOwnerTitle": "Wenden Sie sich an den Workspace-Inhaber",
-        "contactOwnerDescription": "Nur der Workspace-Inhaber kann die Abrechnung für diesen Workspace ändern.",
-        "manageInAppStore": "Im App Store verwalten",
-        "manageInGooglePlay": "In Google Play verwalten",
-        "managedInMobileStore": "Abrechnung über den App-Store Ihres Smartphones. Verwalten Sie das Abo auf Ihrem Smartphone."
-      },
-      "checkout": {
-        "couldNotOpenDescription": "Die Checkout-Seite konnte nicht geöffnet werden. Bitte versuchen Sie es erneut.",
-        "couldNotOpenTitle": "Checkout konnte nicht geöffnet werden",
-        "opening": "Wird geöffnet...",
-        "upgradeToPro": "Auf Pro upgraden"
-      },
       "pastDue": {
         "description": "Sie sind vorerst im kostenlosen Tarif. Aktualisieren Sie Ihre Zahlungsmethode, um wieder Pro zu erhalten.",
         "title": "Ihre Zahlung konnte nicht verarbeitet werden"
@@ -2579,105 +2515,6 @@
         "pro": "Pro",
         "business": "Business",
         "trial": "Testversion"
-      },
-      "pricing": {
-        "title": "Tarife",
-        "billedYearly": "Jährliche Abrechnung",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "für immer",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2.000 Wörter/Woche Transkription",
-            "5 Stunden Meeting-Aufnahmen/Monat",
-            "## Immer kostenlos",
-            "Unbegrenzte lokale KI-Modelle",
-            "Unbegrenzte Cloud-Transkription mit eigenen API-Schlüsseln",
-            "Über 100 Sprachen unterstützt",
-            "Benutzerdefiniertes Wörterbuch",
-            "Keine Datenspeicherung",
-            "Community-Support"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/Monat",
-          "annualPrice": "$80",
-          "annualPeriod": "/Jahr",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Alle Free-Funktionen +",
-          "features": [
-            "Unbegrenzte Cloud-Transkription",
-            "20 Stunden Meeting-Aufnahmen/Monat",
-            "Geräteübergreifende Synchronisierung",
-            "Notizen per öffentlichem Link teilen",
-            "Persönlicher API-Zugang",
-            "MCP-Integration in all deinen Apps",
-            "Mobile App",
-            "E-Mail-Support"
-          ],
-          "cta": "Jetzt starten",
-          "switchToAnnual": "Zum Jahresabo wechseln"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$16",
-          "monthlyPeriod": "/Monat",
-          "annualPrice": "$160",
-          "annualPeriod": "/Jahr",
-          "annualEquivalent": "$13.33",
-          "includesPrefix": "Alle Pro-Funktionen +",
-          "badge": "Beliebteste Wahl",
-          "features": [
-            "Unbegrenzte Meeting-Aufnahmen",
-            "Workspace-Rollen & Mitgliederverwaltung",
-            "Assistentenmodus",
-            "Chat über Ihre Daten",
-            "Prioritäts-Support"
-          ],
-          "cta": "Jetzt starten",
-          "switchToAnnual": "Zum Jahresabo wechseln"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "Individuell",
-          "subtitle": "Für erweiterte Sicherheit & Support",
-          "includesPrefix": "Alle Business-Funktionen +",
-          "features": [
-            "Verwaltete API-Guthaben",
-            "Cloud-Synchronisierung über Geräte hinweg",
-            "Team-Funktionen & Verwaltung",
-            "SSO & Compliance",
-            "Dedizierter Support"
-          ],
-          "cta": "Vertrieb kontaktieren",
-          "upgradeCta": "Auf Enterprise upgraden",
-          "askOwner": "Bitte {{name}}, euren Workspace zu upgraden."
-        },
-        "currentPlan": "Aktueller Tarif",
-        "coveredByWorkspace": "In Ihrem Workspace-Tarif enthalten",
-        "upgrade": "Upgrade",
-        "downgrade": "Downgrade",
-        "planSwitched": "Plan erfolgreich aktualisiert",
-        "confirmSwitch": {
-          "title": "Planwechsel bestätigen",
-          "description": "Zu {{plan}} ({{interval}}) wechseln",
-          "monthly": "monatlich",
-          "yearly": "jährlich",
-          "chargeToday": "Heutige Belastung",
-          "accountCredit": "Kontoguthaben",
-          "newPrice": "Neuer Preis",
-          "nextBilling": "Nächste Abrechnung",
-          "mo": "mo",
-          "yr": "yr",
-          "cancel": "Abbrechen",
-          "confirm": "Bestätigen"
-        },
-        "yourPersonalPlan": "Ihr persönlicher Tarif",
-        "yourWorkspacePlan": "Tarif Ihres Workspace",
-        "manage": "Verwalten"
       },
       "rollingWeeklyLimit": "Rollierendes Wochenlimit",
       "signedOutPlans": {
@@ -3287,56 +3124,6 @@
         "reserved": "Diesen Header setzt OpenWhispr selbst.",
         "invalidValue": "Dieser Wert enthält ein Zeichen, das ein Header nicht übertragen kann, etwa ein typografisches Anführungszeichen."
       }
-    },
-    "unifiedBilling": {
-      "workspaceTitle": "Workspace-Abrechnung",
-      "workspaceDescription": "Jeder Workspace hat seinen eigenen Plan, eigene Plätze und einen Abrechnungsinhaber.",
-      "billableSeat": "Ihr Platz wird abgerechnet",
-      "nonBillableSeat": "Nur Admin-Zugriff · kein kostenpflichtiger Platz",
-      "managedBy": "Die Abrechnung wird von {{owner}} verwaltet.",
-      "addSeat": "Platz hinzufügen",
-      "seatUpdated_one": "Workspace-Kapazität auf {{count}} Platz aktualisiert",
-      "seatUpdated_other": "Workspace-Kapazität auf {{count}} Plätze aktualisiert",
-      "seatUpdateFailed": "Workspace-Plätze konnten nicht aktualisiert werden",
-      "businessWorkspaceOnly": "Für Workspaces verfügbar",
-      "personalPlanTitle": "Persönlicher Plan",
-      "providedBy": "Persönlicher Plan: Free · Bezahlter Zugriff bereitgestellt von {{workspaces}}",
-      "confirmSeats": {
-        "title": "Workspace-Platz hinzufügen?",
-        "description_one": "{{workspace}} auf {{count}} Platz erweitern. Stripe berechnet die Änderung anteilig.",
-        "description_other": "{{workspace}} auf {{count}} Plätze erweitern. Stripe berechnet die Änderung anteilig.",
-        "newCapacity": "Neue Kapazität",
-        "chargeToday": "Heute fällig",
-        "confirm": "Platz hinzufügen"
-      }
-    },
-    "enterpriseCheckout": {
-      "title": "Auf Enterprise upgraden",
-      "description": "Workspace, Plätze und Abrechnungszeitraum wählen. Die Zahlung erfolgt im Stripe-Checkout.",
-      "allSubscribed": "Die Workspaces, die dir gehören, sind bereits auf Enterprise oder können hier nicht geändert werden. Für Plan-Änderungen kontaktiere den Vertrieb.",
-      "workspaceLabel": "Workspace",
-      "seatsLabel": "Plätze",
-      "seatsHint_one": "{{count}} Platz derzeit belegt",
-      "seatsHint_other": "{{count}} Plätze derzeit belegt",
-      "intervalLabel": "Abrechnungszeitraum",
-      "interval": {
-        "monthly": "Monatlich",
-        "annual": "Jährlich"
-      },
-      "proratedCharge": "Anteiliger Betrag",
-      "prorationNote": "Die anteilige Differenz wird der nächsten Rechnung hinzugefügt.",
-      "errors": {
-        "previewFailed": "Upgrade-Vorschau konnte nicht geladen werden.",
-        "alreadyEnterprise": "Dieser Workspace ist bereits auf Enterprise.",
-        "subscriptionInactive": "Das Abonnement dieses Workspace ist nicht aktiv. Zahlungsdaten aktualisieren und erneut versuchen.",
-        "priceNotConfigured": "Enterprise-Preise sind derzeit nicht verfügbar. Bitte den Vertrieb kontaktieren."
-      },
-      "priceNote": "Der endgültige Preis wird beim Checkout angezeigt.",
-      "continueCta": "Weiter zum Checkout",
-      "upgradeDescription": "Upgrade von {{workspace}} von {{plan}} auf Enterprise. Plätze und Abrechnungszeitraum bleiben erhalten; die Änderung gilt sofort.",
-      "upgradeCta": "Jetzt upgraden",
-      "upgradedTitle": "Upgrade auf Enterprise abgeschlossen",
-      "upgradedDescription": "{{workspace}} ist jetzt auf Enterprise."
     }
   },
   "models": {
@@ -3714,8 +3501,7 @@
       "description": "Fügen Sie Teammitglieder per E-Mail hinzu. Sie erhalten einen Beitrittslink.",
       "emailLabel": "E-Mail",
       "emailPlaceholder": "teammitglied@example.com",
-      "roleLabel": "Rolle",
-      "seatUsage": "{{used}} von {{seats}} Plätzen belegt",
+      "roleLabel": "Workspace-Rolle",
       "submit": "Einladung senden",
       "submitting": "Sende…",
       "sentTitle": "Einladung gesendet",
@@ -3724,21 +3510,16 @@
       "sentNoEmailDescription": "{{email}} wurde eingeladen, aber die E-Mail konnte nicht zugestellt werden. Senden Sie sie später erneut oder teilen Sie den Einladungslink anders.",
       "errorTitle": "Einladung konnte nicht gesendet werden",
       "role": {
-        "admin": "Administrator",
-        "member": "Mitglied"
+        "admin": "Workspace-Administrator",
+        "member": "Workspace-Mitglied"
       },
       "roleDescription": {
-        "admin": "Verwaltet Mitglieder",
-        "member": "Nutzt den Workspace"
+        "admin": "Verwaltet Mitglieder, Einladungen, Teams und Einstellungen.",
+        "member": "Nutzt den Workspace."
       },
-      "seatCost": "Bei Annahme wird deinem Tarif ein Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
       "emailHint": "Trennen Sie E-Mail-Adressen durch Kommas. Alle erhalten dieselbe Rolle.",
       "removeRecipient": "{{email}} entfernen",
       "suggestions": "Vorschläge",
-      "seatCostMany_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
-      "seatCostMany_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt · geschätzte anteilige Kosten: {{amount}}.",
-      "seatCostManyUnpriced_one": "Wenn alle annehmen, wird Ihrem Tarif {{count}} Platz hinzugefügt.",
-      "seatCostManyUnpriced_other": "Wenn alle annehmen, werden Ihrem Tarif {{count}} Plätze hinzugefügt.",
       "submit_one": "{{count}} Einladung senden",
       "submit_other": "{{count}} Einladungen senden",
       "sentTitle_one": "{{count}} Einladung gesendet",
@@ -3776,13 +3557,8 @@
       "tryResending": "Erneut senden",
       "removeLast_one": "Die letzte {{count}} entfernen",
       "removeLast_other": "Die letzten {{count}} entfernen",
-      "seatsLeft_one": "Nur noch {{count}} Platz frei. Entfernen Sie {{excess}} oder führen Sie ein Upgrade durch.",
-      "seatsLeft_other": "Nur noch {{count}} Plätze frei. Entfernen Sie {{excess}} oder führen Sie ein Upgrade durch.",
-      "seatsLeftAskOwner_one": "Nur noch {{count}} Platz frei. Entfernen Sie {{excess}} oder bitten Sie {{owner}}, Plätze hinzuzufügen.",
-      "seatsLeftAskOwner_other": "Nur noch {{count}} Plätze frei. Entfernen Sie {{excess}} oder bitten Sie {{owner}}, Plätze hinzuzufügen.",
       "seatsNone": "Keine Plätze mehr frei. Führen Sie ein Upgrade durch, um weitere hinzuzufügen.",
       "seatsNoneAskOwner": "Keine Plätze mehr frei. Bitten Sie {{owner}}, Plätze hinzuzufügen.",
-      "upgrade": "Upgrade",
       "ceilingLeft_one": "Sie können noch {{count}} Person einladen. Entfernen Sie {{excess}}, um fortzufahren.",
       "ceilingLeft_other": "Sie können noch {{count}} Personen einladen. Entfernen Sie {{excess}}, um fortzufahren.",
       "rateLimitedLeft_one": "Gerade kann nur noch {{count}} Einladung versendet werden. Entfernen Sie {{excess}}, um sie zu senden, oder versuchen Sie es später erneut.",
@@ -5231,7 +5007,8 @@
       "hotkeyToSpeak": "{{hotkey}} zum Sprechen",
       "recording": "Aufnahme...",
       "processing": "Verarbeitung...",
-      "waitingForMicrophone": "Warte auf Mikrofon…"
+      "waitingForMicrophone": "Warte auf Mikrofon…",
+      "clickToSpeak": "Klicken zum Sprechen"
     },
     "buttons": {
       "cancelRecording": "Aufnahme abbrechen",
@@ -6067,8 +5844,7 @@
       "alreadySent": "Für diese Anfrage bereits erledigt"
     },
     "beta": "Beta",
-    "locked": "In diesem Build nicht verfügbar",
-    "upsell": "Konnektoren sind in kostenpflichtigen Tarifen enthalten. Upgrade, damit der Assistent in deinen Tools arbeiten kann."
+    "locked": "In diesem Build nicht verfügbar"
   },
   "notesView": {
     "searchPlaceholder": "Notizen durchsuchen…",
@@ -7195,21 +6971,6 @@
     "keyUnavailable": "Audio konnte nicht gespeichert werden, da der Verschlüsselungsschlüssel nicht verfügbar ist.",
     "reapproval": "Stimme muss erneut bestätigt werden"
   },
-  "upgradePrompt": {
-    "paymentFailed": "Ihre Zahlung konnte nicht verarbeitet werden",
-    "weeklyLimit": "Sie haben Ihr wöchentliches Cloud-Limit erreicht",
-    "pastDueDescription": "Sie sind vorerst im kostenlosen Tarif – keine Sorge, Sie haben weiterhin {{limit}} Wörter pro Woche.\nAktualisieren Sie Ihre Zahlungsmethode, um wieder unbegrenztes Pro zu erhalten.",
-    "limitDescription": "{{used}} von {{limit}} Wörtern verwendet.\nIhre Transkription wurde gespeichert und eingefügt.",
-    "updatePayment": "Zahlungsmethode aktualisieren",
-    "updatePaymentDescription": "Zurück zu unbegrenzten Pro-Transkriptionen.",
-    "upgradeToPro": "Auf Pro upgraden",
-    "upgradeDescription": "Unbegrenzte Transkriptionen ab $8/Monat.",
-    "useApiKey": "Eigenen API-Schlüssel verwenden",
-    "useApiKeyDescription": "Verwenden Sie Ihren eigenen Schlüssel für unbegrenzte Nutzung.",
-    "switchToLocal": "Zu lokal wechseln",
-    "switchToLocalDescription": "Offline-Transkription. Keine Limits.",
-    "rollingWeeklyLimit": "Rollierendes Wochenlimit"
-  },
   "skills": {
     "pane": {
       "description": "Bring dem Assistenten deine Abläufe einmal bei. Er nutzt sie, wann immer sie passen.",
@@ -7537,15 +7298,26 @@
     },
     "waitingForAnswer": "Warte auf Antwort"
   },
-  "affiliate": {
-    "remove": "Creator-Link entfernen",
-    "haveLink": "Hast du einen Creator-Link?",
-    "label": "Creator-Link (optional)",
-    "placeholder": "Link deines Creators einfügen",
-    "saved": "Creator-Link gespeichert.",
-    "checking": "Link wird geprüft…",
-    "unavailable": "Dein Link konnte nicht geprüft werden. Versuche es erneut oder leere das Feld, um fortzufahren.",
-    "privacy": "Creator-Links sind mit deinen aktuellen Tracking-Einstellungen nicht verfügbar. Leere das Feld, um fortzufahren.",
-    "review": "Dein Link ist zur Prüfung gespeichert."
+  "assistant": {
+    "panel": {
+      "selectionHint": "Text zum Bearbeiten auswählen mit",
+      "selectedContext": "Ausgewählter Text hinzugefügt",
+      "removeSelectedContext": "Ausgewählten Text entfernen",
+      "newConversation": "Neue Unterhaltung",
+      "copyToClipboard": "In die Zwischenablage kopieren",
+      "suggestions": {
+        "summarizeNotes": "Meine letzten Notizen zusammenfassen",
+        "calendar": "Was steht in meinem Kalender?",
+        "draft": "Hilf mir, etwas zu entwerfen"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Aufruf",
+        "calling": "Abruf",
+        "using": "Nutzung"
+      },
+      "toolFallback": "Werkzeug"
+    }
   }
 }

@@ -1,3 +1,4 @@
+const { EMBEDDING_DIM } = require("../../src/constants/speakerDetection.json");
 const createTempDir = require("../lib/tempDir");
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -225,7 +226,7 @@ function fixture(t) {
   audio.recordingProvenance = id => ({ noteId: id,
     noteIdentity: db.db.prepare('SELECT client_note_id FROM notes WHERE id = ?').get(id)?.client_note_id,
     status: 'complete', recordingId: recordingIds.get(id), tracks: { mic: { chunks: [{ file: 'retained.opus' }] } } });
-  const vector = (x, y = 0) => Float32Array.from({ length: 512 }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
+  const vector = (x, y = 0) => Float32Array.from({ length: EMBEDDING_DIM }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
   const extractor = { extractEmbeddingFromSamples: async () => vector(1) };
   const note = (suffix, count = 1, { labelled = true } = {}) => {
     const saved = db.saveNote(`Meeting ${suffix}`, '', 'meeting');
@@ -687,7 +688,7 @@ test("a candidate already saved is reported as approved", async (t) => {
       candidate.track,
       candidate.startSample,
       candidate.endSample,
-      Buffer.alloc(2048),
+      Buffer.alloc((EMBEDDING_DIM * 4)),
       JSON.stringify(candidate.rowIds),
       candidate.meetingDate
     );
@@ -1066,7 +1067,7 @@ test('deleting recording audio preserves approved audio and vectors and blocks r
   store.delete(noteId);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM review_row_cache WHERE note_id = ?').get(noteId).n, 0);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
-  assert.equal(f.db.db.prepare('SELECT length(embedding) n FROM speaker_profiles WHERE id = ?').get(f.person.id).n, 2048);
+  assert.equal(f.db.db.prepare('SELECT length(embedding) n FROM speaker_profiles WHERE id = ?').get(f.person.id).n, (EMBEDDING_DIM * 4));
   assert.deepEqual(enrollment.play(f.db, store, candidate.id).wav, wav);
   assert.equal(enrollment.listCandidates(f.db, store, f.person.id).length, 0);
   assert.equal(enrollment.undo(f.db, decision.id).success, false);
@@ -1194,7 +1195,7 @@ test('hard note deletion scrubs note-owned actions and preserves durable audio a
   assert.equal(f.db.hardDeleteNote(noteId).success, true);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_exemplars').get().n, 0);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM voice_enrollment_actions').get().n, 0);
-  assert.equal(f.db.db.prepare('SELECT length(embedding) n FROM speaker_profiles WHERE id = ?').get(f.person.id).n, 2048);
+  assert.equal(f.db.db.prepare('SELECT length(embedding) n FROM speaker_profiles WHERE id = ?').get(f.person.id).n, (EMBEDDING_DIM * 4));
   assert.equal(enrollment.play(f.db, f.audio, candidate.id).state, 'available');
 });
 
@@ -1267,7 +1268,7 @@ test('merge does not reoffer transferred spans and restores source ownership aft
   enrollment.removeNoteEvidence(f.db.db, target.noteId);
   assert.equal(people.undoPersonAction(f.db, merged.id).success, true);
   const survivorProfile = f.db.db.prepare('SELECT length(embedding) n, sample_count FROM speaker_profiles WHERE id = ?').get(survivor.id);
-  assert.equal(survivorProfile.n, 2048);
+  assert.equal(survivorProfile.n, (EMBEDDING_DIM * 4));
   assert.equal(survivorProfile.sample_count, 1);
   assert.equal(enrollment.listSamples(f.db, survivor.id).length, 1);
   assert.equal(enrollment.listSamples(f.db, f.person.id).length, 1);

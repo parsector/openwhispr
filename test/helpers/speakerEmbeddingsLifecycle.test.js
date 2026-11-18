@@ -1,3 +1,4 @@
+const { EMBEDDING_DIM } = require("../../src/constants/speakerDetection.json");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -51,7 +52,7 @@ function createHarness() {
         });
       }
       events.push(`${name}.done`);
-      return { output: { data: new Float32Array(512).fill(1) } };
+      return { output: { data: new Float32Array(EMBEDDING_DIM).fill(1) } };
     },
     async release() {
       events.push(`${name}.release`);

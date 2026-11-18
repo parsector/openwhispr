@@ -674,12 +674,6 @@
       "title": "Autorisations d'accessibilité nécessaires",
       "description": "Nous avons détecté qu'OpenWhispr a besoin des autorisations d'accessibilité pour fonctionner correctement. Veuillez les activer ci-dessous."
     },
-    "billing": {
-      "pastDueTitle": "Nous n'avons pas pu traiter votre paiement",
-      "pastDueDescription": "L’accès Cloud de ce compte est actuellement limité.",
-      "bannerDescription": "L’accès Cloud de ce compte est actuellement limité. La limite hebdomadaire est de {{limit}} mots.",
-      "updatePayment": "Mettre à jour le paiement"
-    },
     "history": {
       "couldNotLoadTitle": "Impossible de charger votre historique",
       "couldNotLoadDescription": "Un problème est survenu lors du chargement des transcriptions. Fermez puis rouvrez l'application.",
@@ -1735,10 +1729,6 @@
         "description": "Mises à jour, stockage & outils de développement",
         "label": "Système"
       },
-      "plansBilling": {
-        "description": "Forfaits, utilisation & facturation",
-        "label": "Forfaits & facturation"
-      },
       "workspaceGeneral": {
         "label": "Général",
         "description": "Nom et icône de l'espace de travail"
@@ -1904,19 +1894,6 @@
         "spaces_other": "{{count}} teamspaces",
         "refreshFailed": "Impossible d'actualiser les équipes. Cette liste n'est peut-être pas à jour.",
         "cellMenuLabel": "{{team}} : {{value}}",
-        "paywall": {
-          "title": "Les équipes sont dans l'offre Business",
-          "body": "Les teamspaces sont gratuits. Passez à l'offre supérieure pour regrouper des personnes en équipes.",
-          "bodyAskOwner": "Les teamspaces sont gratuits. Demandez à {{owner}} de passer à l'offre supérieure pour regrouper des personnes en équipes.",
-          "bodyAskOwnerUnknown": "Les teamspaces sont gratuits. Demandez au propriétaire de l'espace de travail de passer à l'offre supérieure pour regrouper des personnes en équipes.",
-          "upgrade": "Passer à Business",
-          "notNow": "Plus tard",
-          "lapsedTitle": "L'abonnement de cet espace de travail n'est pas actif",
-          "lapsedBody": "Mettez à jour la facturation pour créer des équipes. Vos équipes existantes continuent de fonctionner.",
-          "lapsedBodyAskOwner": "Demandez à {{owner}} de mettre à jour la facturation pour créer des équipes. Vos équipes existantes continuent de fonctionner.",
-          "lapsedBodyAskOwnerUnknown": "Demandez au propriétaire de l'espace de travail de mettre à jour la facturation pour créer des équipes. Vos équipes existantes continuent de fonctionner.",
-          "updateBilling": "Mettre à jour la facturation"
-        },
         "form": {
           "title": "Créer une équipe",
           "subtitle": "Un raccourci pour ajouter plusieurs personnes à la fois.",
@@ -2098,29 +2075,6 @@
         "open": "Ouvrir la console"
       },
       "staleList": "Impossible de joindre OpenWhispr. Vos espaces de travail sont affichés tels qu'ils étaient lors de votre dernière connexion.",
-      "billing": {
-        "plan": "Plan",
-        "seats": "Sièges",
-        "ownerOnly": "Seul le propriétaire de l'espace de travail peut gérer l'abonnement.",
-        "nextInvoice": "Prochaine facture",
-        "manageStripe": "Gérer dans Stripe",
-        "startSubscription": "Démarrer l'abonnement",
-        "planLabel": {
-          "business": "Business",
-          "pro": "Pro",
-          "free": "Gratuit",
-          "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Actif",
-          "trialing": "Période d'essai",
-          "past_due": "En retard",
-          "canceled": "Annulé",
-          "incomplete": "Incomplet",
-          "unpaid": "Impayé"
-        },
-        "provisionedPlan": "Configuré par OpenWhispr. Contactez l'équipe commerciale pour modifier le forfait ou les places."
-      },
       "people": {
         "title": "Personnes",
         "description": "Gérez les personnes de votre espace de travail et leurs rôles.",
@@ -2548,24 +2502,6 @@
           "generic": "Une erreur est survenue. Veuillez réessayer."
         }
       },
-      "billing": {
-        "couldNotOpenDescription": "Nous avons eu un problème pour ouvrir la page de facturation. Veuillez réessayer.",
-        "couldNotOpenTitle": "Impossible d'ouvrir la facturation",
-        "manageBilling": "Gérer la facturation",
-        "opening": "Ouverture...",
-        "updatePaymentMethod": "Mettre à jour le moyen de paiement",
-        "contactOwnerTitle": "Contactez le propriétaire de l'espace de travail",
-        "contactOwnerDescription": "Seul le propriétaire de l'espace de travail peut modifier sa facturation.",
-        "manageInAppStore": "Gérer dans l'App Store",
-        "manageInGooglePlay": "Gérer dans Google Play",
-        "managedInMobileStore": "Facturé via la boutique d'applications de votre téléphone. Gérez-le depuis votre téléphone."
-      },
-      "checkout": {
-        "couldNotOpenDescription": "Nous avons eu un problème pour ouvrir la page de paiement. Veuillez réessayer.",
-        "couldNotOpenTitle": "Impossible d'ouvrir le paiement",
-        "opening": "Ouverture...",
-        "upgradeToPro": "Passer à Pro"
-      },
       "pastDue": {
         "description": "Vous êtes temporairement sur le plan gratuit. Mettez à jour votre moyen de paiement pour revenir à Pro.",
         "title": "Nous n'avons pas pu traiter votre paiement"
@@ -2585,105 +2521,6 @@
         "pro": "Pro",
         "business": "Business",
         "trial": "Essai"
-      },
-      "pricing": {
-        "title": "Forfaits",
-        "billedYearly": "Facturation annuelle",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "pour toujours",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2 000 mots/semaine de transcription",
-            "5 heures d'enregistrements de réunions/mois",
-            "## Toujours gratuit",
-            "Modèles d'IA locaux illimités",
-            "Transcription cloud illimitée avec vos propres clés API",
-            "Plus de 100 langues prises en charge",
-            "Dictionnaire personnalisé",
-            "Aucune conservation de données",
-            "Support communautaire"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/mois",
-          "annualPrice": "$80",
-          "annualPeriod": "/an",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Toutes les fonctionnalités Free +",
-          "features": [
-            "Transcription cloud illimitée",
-            "20 heures d'enregistrements de réunions/mois",
-            "Synchronisation entre appareils",
-            "Partagez des notes via des liens publics",
-            "Accès personnel à l'API",
-            "Intégration MCP dans toutes vos apps",
-            "Application mobile",
-            "Support par e-mail"
-          ],
-          "cta": "Commencer",
-          "switchToAnnual": "Passer à l'annuel"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$16",
-          "monthlyPeriod": "/mois",
-          "annualPrice": "$160",
-          "annualPeriod": "/an",
-          "annualEquivalent": "$13.33",
-          "includesPrefix": "Toutes les fonctionnalités Pro +",
-          "badge": "Le plus populaire",
-          "features": [
-            "Enregistrements de réunions illimités",
-            "Rôles et gestion des membres de l'espace de travail",
-            "Mode assistant",
-            "Discutez avec vos données",
-            "Support prioritaire"
-          ],
-          "cta": "Commencer",
-          "switchToAnnual": "Passer à l'annuel"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "Sur devis",
-          "subtitle": "Pour une sécurité avancée et un support dédié",
-          "includesPrefix": "Toutes les fonctionnalités Business +",
-          "features": [
-            "Crédits API gérés",
-            "Synchronisation cloud entre appareils",
-            "Fonctionnalités d'équipe et administration",
-            "SSO et conformité",
-            "Support dédié"
-          ],
-          "cta": "Contacter les ventes",
-          "upgradeCta": "Passer à Enterprise",
-          "askOwner": "Demandez à {{name}} de mettre à niveau votre espace de travail."
-        },
-        "currentPlan": "Forfait actuel",
-        "coveredByWorkspace": "Inclus dans votre plan d'espace de travail",
-        "upgrade": "Passer au supérieur",
-        "downgrade": "Rétrograder",
-        "planSwitched": "Forfait mis à jour avec succès",
-        "confirmSwitch": {
-          "title": "Confirmer le changement",
-          "description": "Passer à {{plan}} ({{interval}})",
-          "monthly": "mensuel",
-          "yearly": "annuel",
-          "chargeToday": "Montant aujourd'hui",
-          "accountCredit": "Crédit sur le compte",
-          "newPrice": "Nouveau prix",
-          "nextBilling": "Prochaine facturation",
-          "mo": "mo",
-          "yr": "yr",
-          "cancel": "Annuler",
-          "confirm": "Confirmer"
-        },
-        "yourPersonalPlan": "Votre forfait personnel",
-        "yourWorkspacePlan": "Le forfait de votre espace de travail",
-        "manage": "Gérer"
       },
       "rollingWeeklyLimit": "Limite hebdomadaire glissante",
       "signedOutPlans": {
@@ -3293,56 +3130,6 @@
         "reserved": "OpenWhispr définit lui-même cet en-tête.",
         "invalidValue": "Cette valeur contient un caractère qu’un en-tête ne peut pas transmettre, comme un guillemet typographique."
       }
-    },
-    "unifiedBilling": {
-      "workspaceTitle": "Facturation de l'espace de travail",
-      "workspaceDescription": "Chaque espace de travail a son propre plan, ses sièges et son responsable de facturation.",
-      "billableSeat": "Votre siège est facturable",
-      "nonBillableSeat": "Accès administrateur uniquement · aucun siège payant",
-      "managedBy": "La facturation est gérée par {{owner}}.",
-      "addSeat": "Ajouter un siège",
-      "seatUpdated_one": "Capacité de l'espace de travail mise à jour : {{count}} siège",
-      "seatUpdated_other": "Capacité de l'espace de travail mise à jour : {{count}} sièges",
-      "seatUpdateFailed": "Impossible de mettre à jour les sièges de l'espace de travail",
-      "businessWorkspaceOnly": "Disponible pour les espaces de travail",
-      "personalPlanTitle": "Plan personnel",
-      "providedBy": "Plan personnel : Gratuit · Accès payant fourni par {{workspaces}}",
-      "confirmSeats": {
-        "title": "Ajouter un siège à l'espace de travail ?",
-        "description_one": "Passer {{workspace}} à {{count}} siège. Stripe calculera le changement au prorata.",
-        "description_other": "Passer {{workspace}} à {{count}} sièges. Stripe calculera le changement au prorata.",
-        "newCapacity": "Nouvelle capacité",
-        "chargeToday": "Montant facturé aujourd'hui",
-        "confirm": "Ajouter un siège"
-      }
-    },
-    "enterpriseCheckout": {
-      "title": "Passer à Enterprise",
-      "description": "Choisissez l'espace de travail, les sièges et le cycle de facturation. Le paiement s'effectue dans Stripe Checkout.",
-      "allSubscribed": "Les espaces de travail que vous possédez sont déjà sur Enterprise ou ne peuvent pas être modifiés ici. Pour tout changement de plan, contactez le service commercial.",
-      "workspaceLabel": "Espace de travail",
-      "seatsLabel": "Sièges",
-      "seatsHint_one": "{{count}} siège actuellement utilisé",
-      "seatsHint_other": "{{count}} sièges actuellement utilisés",
-      "intervalLabel": "Cycle de facturation",
-      "interval": {
-        "monthly": "Mensuel",
-        "annual": "Annuel"
-      },
-      "proratedCharge": "Montant au prorata",
-      "prorationNote": "La différence au prorata est ajoutée à votre prochaine facture.",
-      "errors": {
-        "previewFailed": "Impossible de charger l'aperçu de la mise à niveau.",
-        "alreadyEnterprise": "Cet espace de travail est déjà sur Enterprise.",
-        "subscriptionInactive": "L'abonnement de cet espace de travail n'est pas actif. Mettez à jour vos informations de facturation et réessayez.",
-        "priceNotConfigured": "Les tarifs Enterprise ne sont pas disponibles pour le moment. Veuillez contacter le service commercial."
-      },
-      "priceNote": "Le prix final est affiché lors du paiement.",
-      "continueCta": "Continuer vers le paiement",
-      "upgradeDescription": "Passez {{workspace}} de {{plan}} à Enterprise. Les sièges et le cycle de facturation sont conservés ; le changement prend effet immédiatement.",
-      "upgradeCta": "Mettre à niveau",
-      "upgradedTitle": "Mise à niveau effectuée",
-      "upgradedDescription": "{{workspace}} est maintenant sur Enterprise."
     }
   },
   "models": {
@@ -3720,8 +3507,7 @@
       "description": "Ajoutez des coéquipiers par e-mail. Ils recevront un lien pour rejoindre.",
       "emailLabel": "E-mail",
       "emailPlaceholder": "collegue@exemple.com",
-      "roleLabel": "Rôle",
-      "seatUsage": "{{used}} sur {{seats}} sièges utilisés",
+      "roleLabel": "Rôle dans l'espace",
       "submit": "Envoyer l'invitation",
       "submitting": "Envoi…",
       "sentTitle": "Invitation envoyée",
@@ -3730,21 +3516,16 @@
       "sentNoEmailDescription": "{{email}} a été invité, mais l'e-mail n'a pas pu être délivré. Renvoyez-le plus tard ou partagez le lien d'invitation autrement.",
       "errorTitle": "Impossible d'envoyer l'invitation",
       "role": {
-        "admin": "Administrateur",
-        "member": "Membre"
+        "admin": "Administrateur de l'espace",
+        "member": "Membre de l'espace"
       },
       "roleDescription": {
-        "admin": "Gère les membres",
-        "member": "Utilise l'espace de travail"
+        "admin": "Gère les membres, les invitations, les équipes et les paramètres.",
+        "member": "Utilise l'espace de travail."
       },
-      "seatCost": "En cas d’acceptation, un siège sera ajouté à votre offre · facturation au prorata estimée à {{amount}}.",
       "emailHint": "Séparez les adresses par des virgules. Tout le monde reçoit le même rôle.",
       "removeRecipient": "Retirer {{email}}",
       "suggestions": "Suggestions",
-      "seatCostMany_one": "Si toutes les invitations sont acceptées, {{count}} siège sera ajouté à votre offre · facturation au prorata estimée à {{amount}}.",
-      "seatCostMany_other": "Si toutes les invitations sont acceptées, {{count}} sièges seront ajoutés à votre offre · facturation au prorata estimée à {{amount}}.",
-      "seatCostManyUnpriced_one": "Si toutes les invitations sont acceptées, {{count}} siège sera ajouté à votre offre.",
-      "seatCostManyUnpriced_other": "Si toutes les invitations sont acceptées, {{count}} sièges seront ajoutés à votre offre.",
       "submit_one": "Envoyer {{count}} invitation",
       "submit_other": "Envoyer {{count}} invitations",
       "sentTitle_one": "{{count}} invitation envoyée",
@@ -3782,13 +3563,8 @@
       "tryResending": "Renvoyer",
       "removeLast_one": "Retirer la dernière {{count}}",
       "removeLast_other": "Retirer les {{count}} dernières",
-      "seatsLeft_one": "Il ne reste que {{count}} siège. Retirez-en {{excess}} ou passez à l'offre supérieure.",
-      "seatsLeft_other": "Il ne reste que {{count}} sièges. Retirez-en {{excess}} ou passez à l'offre supérieure.",
-      "seatsLeftAskOwner_one": "Il ne reste que {{count}} siège. Retirez-en {{excess}} ou demandez à {{owner}} d'ajouter des sièges.",
-      "seatsLeftAskOwner_other": "Il ne reste que {{count}} sièges. Retirez-en {{excess}} ou demandez à {{owner}} d'ajouter des sièges.",
       "seatsNone": "Il ne reste aucun siège. Passez à l'offre supérieure pour en ajouter.",
       "seatsNoneAskOwner": "Il ne reste aucun siège. Demandez à {{owner}} d'ajouter des sièges.",
-      "upgrade": "Passer au supérieur",
       "ceilingLeft_one": "Vous pouvez encore inviter {{count}} personne. Retirez-en {{excess}} pour continuer.",
       "ceilingLeft_other": "Vous pouvez encore inviter {{count}} personnes. Retirez-en {{excess}} pour continuer.",
       "rateLimitedLeft_one": "Seule {{count}} invitation de plus peut partir pour le moment. Retirez-en {{excess}} pour l'envoyer, ou réessayez plus tard.",
@@ -5258,7 +5034,8 @@
       "hotkeyToSpeak": "{{hotkey}} pour parler",
       "recording": "Enregistrement...",
       "processing": "Traitement...",
-      "waitingForMicrophone": "En attente du microphone…"
+      "waitingForMicrophone": "En attente du microphone…",
+      "clickToSpeak": "Cliquez pour parler"
     },
     "buttons": {
       "cancelRecording": "Annuler l’enregistrement",
@@ -6094,8 +5871,7 @@
       "alreadySent": "Déjà fait pour cette demande"
     },
     "beta": "Bêta",
-    "locked": "Indisponible dans cette version",
-    "upsell": "Les connecteurs sont inclus dans les forfaits payants. Passez à un forfait payant pour que l'assistant agisse dans vos outils."
+    "locked": "Indisponible dans cette version"
   },
   "notesView": {
     "searchPlaceholder": "Rechercher des notes…",
@@ -7222,21 +6998,6 @@
     "keyUnavailable": "L’audio n’a pas pu être enregistré car la clé de chiffrement est indisponible.",
     "reapproval": "La voix doit être réapprouvée"
   },
-  "upgradePrompt": {
-    "paymentFailed": "Nous n'avons pas pu traiter votre paiement",
-    "weeklyLimit": "Vous avez atteint votre limite cloud hebdomadaire",
-    "pastDueDescription": "Vous êtes temporairement sur le plan gratuit — pas de souci, vous avez encore {{limit}} mots par semaine.\nMettez à jour votre moyen de paiement pour revenir à Pro illimité.",
-    "limitDescription": "{{used}} de {{limit}} mots utilisés.\nVotre transcription a été sauvegardée et collée.",
-    "updatePayment": "Mettre à jour le moyen de paiement",
-    "updatePaymentDescription": "Retrouvez les transcriptions Pro illimitées.",
-    "upgradeToPro": "Passer à Pro",
-    "upgradeDescription": "Transcriptions illimitées à partir de $8/mois.",
-    "useApiKey": "Utiliser votre propre clé API",
-    "useApiKeyDescription": "Apportez votre propre clé pour un usage illimité.",
-    "switchToLocal": "Passer en local",
-    "switchToLocalDescription": "Transcription hors ligne. Sans limites.",
-    "rollingWeeklyLimit": "Limite hebdomadaire glissante"
-  },
   "skills": {
     "pane": {
       "description": "Apprenez une fois vos méthodes de travail à l'assistant. Il les utilise dès qu'elles s'appliquent.",
@@ -7564,15 +7325,26 @@
     },
     "waitingForAnswer": "En attente de réponse"
   },
-  "affiliate": {
-    "remove": "Supprimer le lien du créateur",
-    "haveLink": "Vous avez un lien de créateur ?",
-    "label": "Lien du créateur (facultatif)",
-    "placeholder": "Collez le lien de votre créateur",
-    "saved": "Lien du créateur enregistré.",
-    "checking": "Vérification de votre lien…",
-    "unavailable": "Impossible de vérifier votre lien. Réessayez ou videz le champ pour continuer.",
-    "privacy": "Les liens de créateurs ne sont pas disponibles avec vos paramètres de suivi actuels. Videz le champ pour continuer.",
-    "review": "Votre lien a été enregistré pour vérification."
+  "assistant": {
+    "panel": {
+      "selectionHint": "Sélectionnez du texte à modifier avec",
+      "selectedContext": "Texte sélectionné ajouté",
+      "removeSelectedContext": "Supprimer le texte sélectionné",
+      "newConversation": "Nouvelle conversation",
+      "copyToClipboard": "Copier dans le presse-papiers",
+      "suggestions": {
+        "summarizeNotes": "Résumer mes notes récentes",
+        "calendar": "Qu’y a-t-il dans mon calendrier ?",
+        "draft": "Aidez-moi à rédiger quelque chose"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Invocation",
+        "calling": "Appel",
+        "using": "Utilisation"
+      },
+      "toolFallback": "Outil"
+    }
   }
 }

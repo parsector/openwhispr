@@ -674,12 +674,6 @@
       "title": "需要輔助使用權限",
       "description": "我們偵測到 OpenWhispr 需要輔助使用權限才能正常運作。請在下方啟用。"
     },
-    "billing": {
-      "pastDueTitle": "我們無法處理你的付款",
-      "pastDueDescription": "此帳戶目前的雲端存取受限。",
-      "bannerDescription": "此帳戶目前的雲端存取受限。每週上限為 {{limit}} 字。",
-      "updatePayment": "更新付款"
-    },
     "history": {
       "couldNotLoadTitle": "無法載入歷史記錄",
       "couldNotLoadDescription": "載入轉錄記錄時發生錯誤。請嘗試關閉並重新開啟應用程式。",
@@ -1641,10 +1635,6 @@
         "description": "成員、團隊空間與 API 金鑰",
         "label": "工作區"
       },
-      "plansBilling": {
-        "description": "方案、用量與帳單",
-        "label": "方案與帳單"
-      },
       "workspaceGeneral": {
         "label": "一般",
         "description": "工作區名稱與圖示"
@@ -1753,24 +1743,6 @@
           "generic": "發生錯誤，請再試一次。"
         }
       },
-      "billing": {
-        "couldNotOpenDescription": "開啟帳單頁面時發生問題。請再試一次。",
-        "couldNotOpenTitle": "無法開啟帳單頁面",
-        "manageBilling": "管理帳單",
-        "opening": "開啟中...",
-        "updatePaymentMethod": "更新付款方式",
-        "contactOwnerTitle": "請聯絡工作區擁有者",
-        "contactOwnerDescription": "只有工作區擁有者才能更新該工作區的帳單。",
-        "manageInAppStore": "在 App Store 中管理",
-        "manageInGooglePlay": "在 Google Play 中管理",
-        "managedInMobileStore": "透過手機的應用程式商店計費。請在手機上管理訂閱。"
-      },
-      "checkout": {
-        "couldNotOpenDescription": "開啟結帳頁面時發生問題。請再試一次。",
-        "couldNotOpenTitle": "無法開啟結帳頁面",
-        "opening": "開啟中...",
-        "upgradeToPro": "升級至 Pro"
-      },
       "pastDue": {
         "description": "你目前使用的是免費方案。更新付款方式即可恢復 Pro。",
         "title": "我們無法處理你的付款"
@@ -1792,105 +1764,6 @@
         "trial": "試用"
       },
       "rollingWeeklyLimit": "滾動式每週額度",
-      "pricing": {
-        "title": "方案",
-        "billedYearly": "按年計費",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "永久",
-          "features": [
-            "## OpenWhispr Cloud",
-            "每週 2,000 字轉錄",
-            "每月 5 小時會議錄製",
-            "## 永久免費",
-            "無限本地 AI 模型",
-            "使用自己的 API 金鑰無限雲端轉錄",
-            "支援 100+ 種語言",
-            "自訂詞典",
-            "零資料留存",
-            "社群支援"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$80",
-          "annualPeriod": "/年",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "所有 Free 功能 +",
-          "features": [
-            "無限雲端轉錄",
-            "每月 20 小時會議錄製",
-            "跨裝置同步",
-            "透過公開連結分享筆記",
-            "個人 API 存取",
-            "在所有應用程式中整合 MCP",
-            "行動應用程式",
-            "電子郵件支援"
-          ],
-          "cta": "開始使用",
-          "switchToAnnual": "切換為年付"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$16",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$160",
-          "annualPeriod": "/年",
-          "annualEquivalent": "$13.33",
-          "includesPrefix": "所有 Pro 功能 +",
-          "badge": "最熱門",
-          "features": [
-            "無限會議錄製",
-            "工作區角色與成員管理",
-            "助理模式",
-            "與您的資料對話",
-            "優先支援"
-          ],
-          "cta": "開始使用",
-          "switchToAnnual": "切換為年付"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "自訂",
-          "subtitle": "提供進階安全保障與支援",
-          "includesPrefix": "所有 Business 功能 +",
-          "features": [
-            "託管 API 額度",
-            "跨裝置雲端同步",
-            "團隊功能與管理",
-            "SSO 與合規",
-            "專屬支援"
-          ],
-          "cta": "聯繫銷售",
-          "upgradeCta": "升級至 Enterprise",
-          "askOwner": "請 {{name}} 升級您的工作區。"
-        },
-        "currentPlan": "目前方案",
-        "coveredByWorkspace": "已包含在您的工作區方案中",
-        "upgrade": "升級",
-        "downgrade": "降級",
-        "planSwitched": "方案已成功更新",
-        "confirmSwitch": {
-          "title": "確認更換方案",
-          "description": "切換至 {{plan}}（{{interval}}）",
-          "monthly": "月付",
-          "yearly": "年付",
-          "chargeToday": "今日收費",
-          "accountCredit": "帳戶餘額",
-          "newPrice": "新價格",
-          "nextBilling": "下次計費",
-          "mo": "月",
-          "yr": "年",
-          "cancel": "取消",
-          "confirm": "確認"
-        },
-        "yourPersonalPlan": "你的個人方案",
-        "yourWorkspacePlan": "你的工作區方案",
-        "manage": "管理"
-      },
       "signedOutPlans": {
         "button": "建立免費帳號"
       },
@@ -2644,19 +2517,6 @@
         "spaces_other": "{{count}} 個 Teamspace",
         "refreshFailed": "無法重新整理團隊。此清單可能不是最新的。",
         "cellMenuLabel": "{{team}}：{{value}}",
-        "paywall": {
-          "title": "團隊屬於 Business 方案",
-          "body": "Teamspace 免費使用。升級後即可將成員分組為團隊。",
-          "bodyAskOwner": "Teamspace 免費使用。請 {{owner}} 升級，即可將成員分組為團隊。",
-          "bodyAskOwnerUnknown": "Teamspace 免費使用。請讓工作區擁有者升級，即可將成員分組為團隊。",
-          "upgrade": "升級至 Business",
-          "notNow": "暫不",
-          "lapsedTitle": "此工作區的方案未生效",
-          "lapsedBody": "請更新帳單資訊以建立團隊。現有團隊仍可正常使用。",
-          "lapsedBodyAskOwner": "請聯絡 {{owner}} 更新帳單資訊以建立團隊。現有團隊仍可正常使用。",
-          "lapsedBodyAskOwnerUnknown": "請聯絡工作區擁有者更新帳單資訊以建立團隊。現有團隊仍可正常使用。",
-          "updateBilling": "更新帳單"
-        },
         "form": {
           "title": "建立團隊",
           "subtitle": "一次新增多人的捷徑。",
@@ -2838,29 +2698,6 @@
         "open": "開啟主控台"
       },
       "staleList": "無法連線至 OpenWhispr。顯示的是你上次連線時的工作區。",
-      "billing": {
-        "plan": "方案",
-        "seats": "席次",
-        "ownerOnly": "只有工作區擁有者可以管理訂閱。",
-        "nextInvoice": "下期帳單",
-        "manageStripe": "在 Stripe 中管理",
-        "startSubscription": "開始訂閱",
-        "planLabel": {
-          "business": "Business",
-          "pro": "Pro",
-          "free": "免費",
-          "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "使用中",
-          "trialing": "試用中",
-          "past_due": "逾期未付",
-          "canceled": "已取消",
-          "incomplete": "未完成",
-          "unpaid": "未付款"
-        },
-        "provisionedPlan": "由 OpenWhispr 設定。如需變更方案或席位，請聯絡銷售團隊。"
-      },
       "people": {
         "title": "人員",
         "description": "管理工作區中的人員及其角色。",
@@ -3193,56 +3030,6 @@
           "remove": "移除訪客"
         }
       }
-    },
-    "unifiedBilling": {
-      "workspaceTitle": "工作區帳單",
-      "workspaceDescription": "每個工作區都有自己的方案、席次與帳單負責人。",
-      "billableSeat": "您的席次需計費",
-      "nonBillableSeat": "僅管理員存取 · 無付費席次",
-      "managedBy": "帳單由 {{owner}} 管理。",
-      "addSeat": "新增席次",
-      "seatUpdated_one": "工作區容量已更新為 {{count}} 個席次",
-      "seatUpdated_other": "工作區容量已更新為 {{count}} 個席次",
-      "seatUpdateFailed": "無法更新工作區席次",
-      "businessWorkspaceOnly": "適用於工作區",
-      "personalPlanTitle": "個人方案",
-      "providedBy": "個人方案：免費 · 付費存取由 {{workspaces}} 提供",
-      "confirmSeats": {
-        "title": "要新增工作區席次嗎？",
-        "description_one": "將 {{workspace}} 增加至 {{count}} 個席次。Stripe 將按比例計費。",
-        "description_other": "將 {{workspace}} 增加至 {{count}} 個席次。Stripe 將按比例計費。",
-        "newCapacity": "新容量",
-        "chargeToday": "今日收費",
-        "confirm": "新增席次"
-      }
-    },
-    "enterpriseCheckout": {
-      "title": "升級至 Enterprise",
-      "description": "選擇工作區、席位數量與計費週期。付款將在 Stripe Checkout 中完成。",
-      "allSubscribed": "您擁有的工作區已是 Enterprise 方案或無法在此變更。如需變更方案，請聯絡銷售團隊。",
-      "workspaceLabel": "工作區",
-      "seatsLabel": "席位",
-      "seatsHint_one": "目前已使用 {{count}} 個席位",
-      "seatsHint_other": "目前已使用 {{count}} 個席位",
-      "intervalLabel": "計費週期",
-      "interval": {
-        "monthly": "按月",
-        "annual": "按年"
-      },
-      "proratedCharge": "按比例費用",
-      "prorationNote": "按比例計算的差額將計入下一張帳單。",
-      "errors": {
-        "previewFailed": "無法載入升級預覽。",
-        "alreadyEnterprise": "該工作區已在 Enterprise 方案中。",
-        "subscriptionInactive": "該工作區的訂閱未啟用。請更新帳單資訊後重試。",
-        "priceNotConfigured": "Enterprise 價格暫不可用。請聯絡銷售。"
-      },
-      "priceNote": "最終價格將在結帳時顯示。",
-      "continueCta": "繼續結帳",
-      "upgradeDescription": "將 {{workspace}} 從{{plan}}升級至 Enterprise。席位與計費週期維持不變，變更立即生效。",
-      "upgradeCta": "立即升級",
-      "upgradedTitle": "已升級至 Enterprise",
-      "upgradedDescription": "{{workspace}} 現已升級至 Enterprise。"
     }
   },
   "models": {
@@ -4863,7 +4650,8 @@
       "hotkeyToSpeak": "{{hotkey}} 說話",
       "recording": "錄音中...",
       "processing": "處理中...",
-      "waitingForMicrophone": "等待麥克風…"
+      "waitingForMicrophone": "等待麥克風…",
+      "clickToSpeak": "點擊開始說話"
     },
     "buttons": {
       "cancelRecording": "取消錄音",
@@ -5699,8 +5487,7 @@
       "alreadySent": "已在此請求中完成"
     },
     "beta": "測試版",
-    "locked": "此版本不可用",
-    "upsell": "連接器包含在付費方案中。升級後，助理即可在您的工具中執行操作。"
+    "locked": "此版本不可用"
   },
   "calendar": {
     "title": "Google 日曆",
@@ -5963,8 +5750,7 @@
       "description": "透過電子郵件新增團隊成員，他們會收到加入連結。",
       "emailLabel": "電子郵件",
       "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "角色",
-      "seatUsage": "已使用 {{used}} / {{seats}} 個席次",
+      "roleLabel": "工作區角色",
       "submit": "傳送邀請",
       "submitting": "傳送中…",
       "sentTitle": "邀請已傳送",
@@ -5973,21 +5759,16 @@
       "sentNoEmailDescription": "已邀請 {{email}}，但電子郵件無法送達。請稍後重新傳送，或以其他方式分享邀請連結。",
       "errorTitle": "無法傳送邀請",
       "role": {
-        "admin": "管理員",
-        "member": "成員"
+        "admin": "工作區管理員",
+        "member": "工作區成員"
       },
       "roleDescription": {
-        "admin": "管理成員",
-        "member": "使用工作區"
+        "admin": "管理成員、邀請、團隊和設定。",
+        "member": "使用工作區。"
       },
-      "seatCost": "接受邀請後將為你的方案新增一個席位 · 預計按比例收取 {{amount}}。",
       "emailHint": "以逗號分隔多個電子郵件地址。所有人都會獲得相同的角色。",
       "removeRecipient": "移除 {{email}}",
       "suggestions": "建議",
-      "seatCostMany_one": "全部接受後將為你的方案新增 {{count}} 個席位 · 預計按比例收取 {{amount}}。",
-      "seatCostMany_other": "全部接受後將為你的方案新增 {{count}} 個席位 · 預計按比例收取 {{amount}}。",
-      "seatCostManyUnpriced_one": "全部接受後將為你的方案新增 {{count}} 個席位。",
-      "seatCostManyUnpriced_other": "全部接受後將為你的方案新增 {{count}} 個席位。",
       "submit_one": "傳送 {{count}} 份邀請",
       "submit_other": "傳送 {{count}} 份邀請",
       "sentTitle_one": "已傳送 {{count}} 份邀請",
@@ -6025,13 +5806,8 @@
       "tryResending": "重新傳送",
       "removeLast_one": "移除最後 {{count}} 個",
       "removeLast_other": "移除最後 {{count}} 個",
-      "seatsLeft_one": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或升級方案。",
-      "seatsLeft_other": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或升級方案。",
-      "seatsLeftAskOwner_one": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或請 {{owner}} 新增席次。",
-      "seatsLeftAskOwner_other": "僅剩 {{count}} 個席次。請移除 {{excess}} 個，或請 {{owner}} 新增席次。",
       "seatsNone": "沒有剩餘席次。請升級方案以新增更多席次。",
       "seatsNoneAskOwner": "沒有剩餘席次。請 {{owner}} 新增席次。",
-      "upgrade": "升級",
       "ceilingLeft_one": "還可邀請 {{count}} 人。請移除 {{excess}} 個以繼續。",
       "ceilingLeft_other": "還可邀請 {{count}} 人。請移除 {{excess}} 個以繼續。",
       "rateLimitedLeft_one": "目前只能再傳送 {{count}} 封邀請。請移除 {{excess}} 個地址後傳送，或稍後再試。",
@@ -7195,21 +6971,6 @@
     "keyUnavailable": "加密金鑰無法使用，因此無法儲存音訊。",
     "reapproval": "聲音需要重新核准"
   },
-  "upgradePrompt": {
-    "paymentFailed": "我們無法處理你的付款",
-    "weeklyLimit": "你已達到每週雲端使用上限",
-    "pastDueDescription": "你目前使用的是免費方案，別擔心，每週仍有 {{limit}} 字的額度。\n更新付款方式即可恢復無限制的 Pro 方案。",
-    "limitDescription": "已使用 {{used}} / {{limit}} 字。\n你的轉錄已儲存並貼上。",
-    "updatePayment": "更新付款方式",
-    "updatePaymentDescription": "恢復無限制的 Pro 轉錄。",
-    "upgradeToPro": "升級至 Pro",
-    "upgradeDescription": "無限轉錄，每月最低 $8 起。",
-    "useApiKey": "使用你自己的 API Key",
-    "useApiKeyDescription": "自備金鑰，無限使用。",
-    "switchToLocal": "切換至本機模式",
-    "switchToLocalDescription": "離線轉錄，無任何限制。",
-    "rollingWeeklyLimit": "滾動式每週額度"
-  },
   "skills": {
     "pane": {
       "description": "把您的工作流程教給助理一次，之後在合適的時候它都會使用。",
@@ -7537,15 +7298,26 @@
     },
     "waitingForAnswer": "等待回答"
   },
-  "affiliate": {
-    "remove": "移除創作者連結",
-    "haveLink": "有創作者連結嗎？",
-    "label": "創作者連結（選填）",
-    "placeholder": "貼上創作者的連結",
-    "saved": "創作者連結已儲存。",
-    "checking": "正在檢查連結…",
-    "unavailable": "無法檢查此連結。請重試，或清空輸入欄以繼續。",
-    "privacy": "目前的追蹤設定不支援創作者連結。請清空輸入欄以繼續。",
-    "review": "您的連結已儲存，等待審核。"
+  "assistant": {
+    "panel": {
+      "selectionHint": "選取要編輯的文字，然後按",
+      "selectedContext": "已加入所選文字",
+      "removeSelectedContext": "移除所選文字",
+      "newConversation": "新對話",
+      "copyToClipboard": "複製到剪貼簿",
+      "suggestions": {
+        "summarizeNotes": "摘要我最近的筆記",
+        "calendar": "我的行事曆上有哪些安排？",
+        "draft": "幫我起草一些內容"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "呼叫中",
+        "calling": "請求中",
+        "using": "使用中"
+      },
+      "toolFallback": "工具"
+    }
   }
 }

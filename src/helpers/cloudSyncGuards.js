@@ -33,7 +33,7 @@ export function isCloudEntryNewer(cloudUpdatedAt, localUpdatedAt) {
 // be: a pull keeps local text over a blank the cloud never marked as a clear,
 // and resending that text would overwrite newer text written elsewhere. So it
 // stays out, and the summary metadata with the summary.
-import { publicTranscript } from "./transcriptDocument";
+import { publicTranscript } from "./transcriptDocument.js";
 
 export function buildNoteUpdatePayload(note, cloudFolderId) {
   const revisioned = hasNoteRevision(note.cloud_revision);

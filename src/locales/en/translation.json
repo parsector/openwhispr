@@ -674,12 +674,6 @@
       "title": "Accessibility permissions needed",
       "description": "We've detected that OpenWhispr needs accessibility permissions to work properly. Please enable them below."
     },
-    "billing": {
-      "pastDueTitle": "We couldn't process your payment",
-      "pastDueDescription": "Your account currently has limited Cloud access.",
-      "bannerDescription": "Your account currently has limited Cloud access. The weekly limit is {{limit}} words.",
-      "updatePayment": "Update Payment"
-    },
     "history": {
       "couldNotLoadTitle": "Couldn't load your history",
       "couldNotLoadDescription": "Something went wrong loading your transcriptions. Try closing and reopening the app.",
@@ -1735,10 +1729,6 @@
         "description": "Updates, storage & developer tools",
         "label": "System"
       },
-      "plansBilling": {
-        "description": "Plans, usage & billing",
-        "label": "Plans & Billing"
-      },
       "workspaceGeneral": {
         "label": "General",
         "description": "Workspace name and icon"
@@ -1904,19 +1894,6 @@
         "spaces_other": "{{count}} teamspaces",
         "refreshFailed": "Couldn't refresh teams. This list may be out of date.",
         "cellMenuLabel": "{{team}}: {{value}}",
-        "paywall": {
-          "title": "Teams are on the Business plan",
-          "body": "Teamspaces are free. Upgrade to group people into teams.",
-          "bodyAskOwner": "Teamspaces are free. Ask {{owner}} to upgrade to group people into teams.",
-          "bodyAskOwnerUnknown": "Teamspaces are free. Ask your workspace owner to upgrade to group people into teams.",
-          "upgrade": "Upgrade to Business",
-          "notNow": "Not now",
-          "lapsedTitle": "This workspace's plan isn't active",
-          "lapsedBody": "Update billing to create teams. Your existing teams keep working.",
-          "lapsedBodyAskOwner": "Ask {{owner}} to update billing to create teams. Your existing teams keep working.",
-          "lapsedBodyAskOwnerUnknown": "Ask your workspace owner to update billing to create teams. Your existing teams keep working.",
-          "updateBilling": "Update billing"
-        },
         "form": {
           "title": "Create team",
           "subtitle": "A shortcut for adding several people at once.",
@@ -2098,29 +2075,6 @@
         "open": "Open console"
       },
       "staleList": "Couldn't reach OpenWhispr. Showing your workspaces from the last time you were connected.",
-      "billing": {
-        "plan": "Plan",
-        "seats": "Seats",
-        "ownerOnly": "Only the workspace owner can manage the subscription.",
-        "nextInvoice": "Next invoice",
-        "manageStripe": "Manage in Stripe",
-        "startSubscription": "Start subscription",
-        "planLabel": {
-          "business": "Business",
-          "pro": "Pro",
-          "free": "Free",
-          "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "Active",
-          "trialing": "Trialing",
-          "past_due": "Past due",
-          "canceled": "Canceled",
-          "incomplete": "Incomplete",
-          "unpaid": "Unpaid"
-        },
-        "provisionedPlan": "Set up by OpenWhispr. Contact sales to change the plan or seats."
-      },
       "people": {
         "title": "People",
         "description": "Manage people in your workspace and their roles.",
@@ -2542,24 +2496,6 @@
           "generic": "Something went wrong. Please try again."
         }
       },
-      "billing": {
-        "couldNotOpenDescription": "We had trouble opening the billing page. Please try again.",
-        "couldNotOpenTitle": "Couldn't open billing",
-        "manageBilling": "Manage Billing",
-        "opening": "Opening...",
-        "updatePaymentMethod": "Update Payment Method",
-        "contactOwnerTitle": "Contact your workspace owner",
-        "contactOwnerDescription": "Only the workspace owner can update billing for this workspace.",
-        "manageInAppStore": "Manage in App Store",
-        "manageInGooglePlay": "Manage in Google Play",
-        "managedInMobileStore": "Billed through your phone's app store. Manage it from your phone."
-      },
-      "checkout": {
-        "couldNotOpenDescription": "We had trouble opening the checkout page. Please try again.",
-        "couldNotOpenTitle": "Couldn't open checkout",
-        "opening": "Opening...",
-        "upgradeToPro": "Upgrade to Pro"
-      },
       "pastDue": {
         "description": "You're on the free plan for now. Update your payment method to get back to Pro.",
         "title": "We couldn't process your payment"
@@ -2579,105 +2515,6 @@
         "pro": "Pro",
         "business": "Business",
         "trial": "Trial"
-      },
-      "pricing": {
-        "title": "Plans",
-        "billedYearly": "Billed yearly",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "forever",
-          "features": [
-            "## OpenWhispr Cloud",
-            "2,000 words/week transcription",
-            "5 hours of meeting recordings/month",
-            "## Always free",
-            "Unlimited local AI models",
-            "Unlimited cloud transcription with your own API keys",
-            "100+ languages supported",
-            "Custom dictionary",
-            "Zero data retention",
-            "Community support"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$80",
-          "annualPeriod": "/yr",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "All Free features +",
-          "features": [
-            "Unlimited cloud transcription",
-            "20 hours of meeting recordings/month",
-            "Sync across devices",
-            "Share notes with public links",
-            "Personal API access",
-            "MCP integration in all your apps",
-            "Mobile app",
-            "Email support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$16",
-          "monthlyPeriod": "/mo",
-          "annualPrice": "$160",
-          "annualPeriod": "/yr",
-          "annualEquivalent": "$13.33",
-          "includesPrefix": "All Pro features +",
-          "badge": "Most Popular",
-          "features": [
-            "Unlimited meeting recordings",
-            "Workspace roles & member management",
-            "Assistant mode",
-            "Chat over your data",
-            "Priority support"
-          ],
-          "cta": "Get Started",
-          "switchToAnnual": "Switch to Annual"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "Custom",
-          "subtitle": "For advanced security & support",
-          "includesPrefix": "All Business features +",
-          "features": [
-            "Managed API credits",
-            "Cloud sync across devices",
-            "Team features & admin",
-            "SSO & compliance",
-            "Dedicated support"
-          ],
-          "cta": "Contact Sales",
-          "upgradeCta": "Upgrade to Enterprise",
-          "askOwner": "Ask {{name}} to upgrade your workspace."
-        },
-        "currentPlan": "Current plan",
-        "coveredByWorkspace": "Included with your workspace plan",
-        "upgrade": "Upgrade",
-        "downgrade": "Downgrade",
-        "planSwitched": "Plan updated successfully",
-        "confirmSwitch": {
-          "title": "Confirm plan change",
-          "description": "Switch to {{plan}} ({{interval}})",
-          "monthly": "monthly",
-          "yearly": "yearly",
-          "chargeToday": "Charge today",
-          "accountCredit": "Account credit",
-          "newPrice": "New price",
-          "nextBilling": "Next billing",
-          "mo": "mo",
-          "yr": "yr",
-          "cancel": "Cancel",
-          "confirm": "Confirm"
-        },
-        "yourPersonalPlan": "Your personal plan",
-        "yourWorkspacePlan": "Your workspace's plan",
-        "manage": "Manage"
       },
       "rollingWeeklyLimit": "Rolling weekly limit",
       "signedOutPlans": {
@@ -3287,56 +3124,6 @@
         "reserved": "OpenWhispr sets this header itself.",
         "invalidValue": "This value has a character a header can't carry, such as a curly quote."
       }
-    },
-    "unifiedBilling": {
-      "workspaceTitle": "Workspace billing",
-      "workspaceDescription": "Each workspace has its own plan, seats, and billing owner.",
-      "billableSeat": "Your seat is billable",
-      "nonBillableSeat": "Admin-only access · no paid seat",
-      "managedBy": "Billing is managed by {{owner}}.",
-      "addSeat": "Add seat",
-      "seatUpdated_one": "Workspace capacity updated to {{count}} seat",
-      "seatUpdated_other": "Workspace capacity updated to {{count}} seats",
-      "seatUpdateFailed": "Couldn't update workspace seats",
-      "businessWorkspaceOnly": "Available for workspaces",
-      "personalPlanTitle": "Personal plan",
-      "providedBy": "Personal plan: Free · Paid access provided by {{workspaces}}",
-      "confirmSeats": {
-        "title": "Add a workspace seat?",
-        "description_one": "Increase {{workspace}} to {{count}} seat. Stripe will prorate the change.",
-        "description_other": "Increase {{workspace}} to {{count}} seats. Stripe will prorate the change.",
-        "newCapacity": "New capacity",
-        "chargeToday": "Charge today",
-        "confirm": "Add seat"
-      }
-    },
-    "enterpriseCheckout": {
-      "title": "Upgrade to Enterprise",
-      "description": "Choose a workspace, seats, and billing cycle. Payment is completed in Stripe Checkout.",
-      "allSubscribed": "The workspaces you own are already on Enterprise or can't be changed here. To make plan changes, contact sales.",
-      "workspaceLabel": "Workspace",
-      "seatsLabel": "Seats",
-      "seatsHint_one": "{{count}} seat currently in use",
-      "seatsHint_other": "{{count}} seats currently in use",
-      "intervalLabel": "Billing cycle",
-      "interval": {
-        "monthly": "Monthly",
-        "annual": "Annual"
-      },
-      "proratedCharge": "Prorated charge",
-      "prorationNote": "The prorated difference is added to your next invoice.",
-      "errors": {
-        "previewFailed": "Couldn't load the upgrade preview.",
-        "alreadyEnterprise": "This workspace is already on Enterprise.",
-        "subscriptionInactive": "This workspace's subscription isn't active. Update your billing details and try again.",
-        "priceNotConfigured": "Enterprise pricing isn't available right now. Please contact sales."
-      },
-      "priceNote": "Final pricing is shown at checkout.",
-      "continueCta": "Continue to checkout",
-      "upgradeDescription": "Upgrade {{workspace}} from {{plan}} to Enterprise. Seats and billing cycle carry over; the change takes effect immediately.",
-      "upgradeCta": "Upgrade now",
-      "upgradedTitle": "Upgraded to Enterprise",
-      "upgradedDescription": "{{workspace}} is now on Enterprise."
     }
   },
   "models": {
@@ -3866,8 +3653,7 @@
       "description": "Add teammates by email. They'll get a link to join.",
       "emailLabel": "Email",
       "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "Role",
-      "seatUsage": "Using {{used}} of {{seats}} seats",
+      "roleLabel": "Workspace role",
       "submit": "Send invite",
       "submitting": "Sending…",
       "sentTitle": "Invite sent",
@@ -3876,21 +3662,16 @@
       "sentNoEmailDescription": "{{email}} was invited, but the email couldn't be delivered. Resend it later or share the invite link another way.",
       "errorTitle": "Couldn't send invitation",
       "role": {
-        "admin": "Admin",
-        "member": "Member"
+        "admin": "Workspace Admin",
+        "member": "Workspace Member"
       },
       "roleDescription": {
-        "admin": "Manages members",
-        "member": "Uses the workspace"
+        "admin": "Manages members, invites, teams, and settings.",
+        "member": "Uses the workspace."
       },
-      "seatCost": "If accepted, adds a seat to your plan · estimated prorated charge {{amount}}.",
       "emailHint": "Separate emails with commas. Everyone gets the same role.",
       "removeRecipient": "Remove {{email}}",
       "suggestions": "Suggestions",
-      "seatCostMany_one": "If all are accepted, adds {{count}} seat to your plan · estimated prorated charge {{amount}}.",
-      "seatCostMany_other": "If all are accepted, adds {{count}} seats to your plan · estimated prorated charge {{amount}}.",
-      "seatCostManyUnpriced_one": "If all are accepted, adds {{count}} seat to your plan.",
-      "seatCostManyUnpriced_other": "If all are accepted, adds {{count}} seats to your plan.",
       "submit_one": "Send {{count}} invite",
       "submit_other": "Send {{count}} invites",
       "sentTitle_one": "{{count}} invitation sent",
@@ -3928,13 +3709,8 @@
       "tryResending": "Try resending",
       "removeLast_one": "Remove the last {{count}}",
       "removeLast_other": "Remove the last {{count}}",
-      "seatsLeft_one": "Only {{count}} seat left. Remove {{excess}} or upgrade.",
-      "seatsLeft_other": "Only {{count}} seats left. Remove {{excess}} or upgrade.",
-      "seatsLeftAskOwner_one": "Only {{count}} seat left. Remove {{excess}} or ask {{owner}} to add seats.",
-      "seatsLeftAskOwner_other": "Only {{count}} seats left. Remove {{excess}} or ask {{owner}} to add seats.",
       "seatsNone": "No seats left. Upgrade to add more.",
       "seatsNoneAskOwner": "No seats left. Ask {{owner}} to add seats.",
-      "upgrade": "Upgrade",
       "ceilingLeft_one": "You can invite {{count}} more person. Remove {{excess}} to continue.",
       "ceilingLeft_other": "You can invite {{count}} more people. Remove {{excess}} to continue.",
       "rateLimitedLeft_one": "Only {{count}} more invitation can go out right now. Remove {{excess}} to send it, or try again later.",
@@ -5383,7 +5159,8 @@
       "hotkeyToSpeak": "{{hotkey}} to talk",
       "recording": "Recording...",
       "processing": "Processing...",
-      "waitingForMicrophone": "Waiting for microphone…"
+      "waitingForMicrophone": "Waiting for microphone…",
+      "clickToSpeak": "Click to speak"
     },
     "buttons": {
       "cancelRecording": "Cancel recording",
@@ -6219,8 +5996,7 @@
       "alreadySent": "Already done for this request"
     },
     "beta": "Beta",
-    "locked": "Unavailable in this build",
-    "upsell": "Connectors are included with paid plans. Upgrade to let the assistant work in your tools."
+    "locked": "Unavailable in this build"
   },
   "notesView": {
     "searchPlaceholder": "Search notes…",
@@ -7195,21 +6971,6 @@
     "keyUnavailable": "Audio could not be saved because the encryption key is unavailable.",
     "reapproval": "Voice needs reapproval"
   },
-  "upgradePrompt": {
-    "paymentFailed": "We couldn't process your payment",
-    "weeklyLimit": "You've reached your weekly Cloud limit",
-    "pastDueDescription": "You're on the free plan for now — don't worry, you still get {{limit}} words per week.\nUpdate your payment method to get back to unlimited Pro.",
-    "limitDescription": "{{used}} of {{limit}} words used.\nYour transcription was saved and pasted.",
-    "updatePayment": "Update payment method",
-    "updatePaymentDescription": "Get back to unlimited Pro transcriptions.",
-    "upgradeToPro": "Upgrade to Pro",
-    "upgradeDescription": "Get unlimited transcriptions from as little as $8/month.",
-    "useApiKey": "Use your own API key",
-    "useApiKeyDescription": "Bring your own key for unlimited use.",
-    "switchToLocal": "Switch to local",
-    "switchToLocalDescription": "Offline transcription. No limits.",
-    "rollingWeeklyLimit": "Rolling weekly limit"
-  },
   "skills": {
     "pane": {
       "description": "Teach the assistant your workflows once. It uses them whenever they fit.",
@@ -7537,15 +7298,26 @@
     },
     "waitingForAnswer": "Waiting for answer"
   },
-  "affiliate": {
-    "remove": "Remove creator link",
-    "haveLink": "Have a creator link?",
-    "label": "Creator link (optional)",
-    "placeholder": "Paste your creator’s link",
-    "saved": "Creator link saved.",
-    "checking": "Checking your link…",
-    "unavailable": "We couldn’t check your link. Try again, or clear the field to continue.",
-    "privacy": "Creator links are unavailable with your current tracking settings. Clear the field to continue.",
-    "review": "Your referral is saved for review."
+  "assistant": {
+    "panel": {
+      "selectionHint": "Select text to edit with",
+      "selectedContext": "Selected text added",
+      "removeSelectedContext": "Remove selected text",
+      "newConversation": "New conversation",
+      "copyToClipboard": "Copy to clipboard",
+      "suggestions": {
+        "summarizeNotes": "Summarize my recent notes",
+        "calendar": "What is on my calendar?",
+        "draft": "Help me draft something"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "Invoking",
+        "calling": "Calling",
+        "using": "Using"
+      },
+      "toolFallback": "Tool"
+    }
   }
 }

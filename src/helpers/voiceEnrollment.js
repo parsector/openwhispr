@@ -1,3 +1,6 @@
+const { EMBEDDING_DIM, EMBEDDING_VERSION } = require("../constants/speakerDetection.json");
+// TODO(run-b): migrate approved 512-dimension / 2048-byte samples from their encrypted clips.
+// Dimension checks exclude legacy evidence without erasing approvals or mixing vector spaces.
 // Voice evidence is local and opt-in. Only this module promotes approved audio
 // to a usable profile; naming a row never calls it.
 const { randomUUID, createHash } = require("node:crypto");
@@ -166,7 +169,7 @@ function state(db, profileId) {
   const resolved = all.filter(
     (sample) => sample.durable_audio && classifyEvidence(db, sample).state === "resolved"
   );
-  const good = resolved.filter((sample) => sample.embedding?.length === 2048 && clean(db, sample));
+  const good = resolved.filter((sample) => sample.embedding?.length === (EMBEDDING_DIM * 4) && clean(db, sample));
   const invalid = good.length !== resolved.length;
   const vectors = good.map((sample) => unit(vector(sample.embedding)));
   const conflict = vectors.some(
@@ -246,7 +249,7 @@ function listSamples(database, profileId) {
   const db = database.db;
   const all = samples(db, profileId);
   const vectors = all.map((sample) =>
-    sample.embedding?.length === 2048 ? unit(vector(sample.embedding)) : null
+    sample.embedding?.length === (EMBEDDING_DIM * 4) ? unit(vector(sample.embedding)) : null
   );
   const averages = vectors.map((value, i) =>
     value && vectors.length > 1
@@ -289,7 +292,7 @@ function resolveProfile(db, profileId) {
     const meetingVectors = [...grouped.values()].map((items) =>
       unit(
         Float32Array.from(
-          { length: 512 },
+          { length: EMBEDDING_DIM },
           (_, i) => items.reduce((sum, item) => sum + item[i], 0) / items.length
         )
       )
@@ -298,7 +301,7 @@ function resolveProfile(db, profileId) {
       meetingVectors.length &&
       unit(
         Float32Array.from(
-          { length: 512 },
+          { length: EMBEDDING_DIM },
           (_, i) => meetingVectors.reduce((sum, item) => sum + item[i], 0) / meetingVectors.length
         )
       );
@@ -309,9 +312,10 @@ function resolveProfile(db, profileId) {
 function rebuild(db, profileId) {
   const { result, embedding } = resolveProfile(db, profileId);
   db.prepare(
-    "UPDATE speaker_profiles SET embedding = ?, sample_count = ?, voice_usable = ?, voice_needs_reapproval = ? WHERE id = ?"
+    "UPDATE speaker_profiles SET embedding = ?, embedding_version = ?, sample_count = ?, voice_usable = ?, voice_needs_reapproval = ? WHERE id = ?"
   ).run(
     embedding,
+    embedding.length ? EMBEDDING_VERSION : null,
     result.cleanSpans,
     Number(result.usable),
     Number(result.requiresReview || result.conflict || result.invalid),
@@ -906,7 +910,7 @@ async function embed(wav, extractor) {
       mono[i] = a + (b - a) * (source - lo);
     }
     const output = await extractor.extractEmbeddingFromSamples(mono);
-    if (!output || output.length !== 512) return null;
+    if (!output || output.length !== EMBEDDING_DIM) return null;
     const normalized = unit(output);
     if (!normalized) return null;
     windows.push(normalized);
@@ -919,7 +923,7 @@ async function embed(wav, extractor) {
     return null;
   return unit(
     Float32Array.from(
-      { length: 512 },
+      { length: EMBEDDING_DIM },
       (_, i) => windows.reduce((sum, item) => sum + item[i], 0) / windows.length
     )
   );

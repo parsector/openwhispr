@@ -14,7 +14,7 @@ function readTranscriptDocument(raw) {
   ).filter((row) => row && typeof row === "object" && !Array.isArray(row));
   const highWater = Math.max(
     0,
-    Number(Array.isArray(parsed) ? 0 : parsed.unknownNumberHighWater) || 0,
+    Number(Array.isArray(parsed) ? 0 : parsed?.unknownNumberHighWater) || 0,
     ...rows.map((row) =>
       Math.max(Number(row.unknownNumber) || 0, Number(row.unknownNumberHighWater) || 0)
     )

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -69,7 +70,7 @@ test.before(() => {
   delete require.cache[diarizationModulePath];
   IPCHandlers = require(handlersModulePath);
   DiarizationManager = require(diarizationModulePath);
-  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-meeting-diarize-test-"));
+  tmpDir = createTempDir(path.join(os.tmpdir(), "ow-meeting-diarize-test-"));
 });
 
 test.after(() => {
@@ -157,7 +158,7 @@ test("a call with three remote voices keeps all three when no count is set", asy
   assert.equal(speakersOf(lines).length, 3);
 });
 
-test("one remote voice split across clusters stays one speaker", async () => {
+test("similar clusters remain separate without decisive mutual evidence", async () => {
   voices = new Map([
     ["speaker_00", [1, 0]],
     ["speaker_01", [0.8, 0.6]],
@@ -165,7 +166,7 @@ test("one remote voice split across clusters stays one speaker", async () => {
 
   const { lines } = await diarizeMeeting(turns(["speaker_00", "speaker_01"], 30, 8));
 
-  assert.deepEqual(speakersOf(lines), ["speaker_0"]);
+  assert.deepEqual(speakersOf(lines), ["speaker_0", "speaker_1"]);
 });
 
 test("a one-on-one call's backchannel slivers stay with the one remote voice", async () => {
@@ -181,8 +182,8 @@ test("a one-on-one call's backchannel slivers stay with the one remote voice", a
   assert.deepEqual(speakersOf(lines), ["speaker_0"]);
 });
 
-// A count set by hand is an upper bound on the speakers (#2021).
-test("a count set by hand bounds the speakers instead of forcing the cluster count", async () => {
+// Fork counts are advisory; only decisive mutual acoustic evidence permits a merge.
+test("a hand-set count is advisory and cannot force a third voice into another", async () => {
   voices = new Map([
     ["speaker_00", [1, 0, 0]],
     ["speaker_01", [0, 1, 0]],
@@ -198,24 +199,24 @@ test("a count set by hand bounds the speakers instead of forcing the cluster cou
     sessionConfig: { enabled: true, expectedCount: 3, explicit: true },
   });
 
-  assert.equal(speakersOf(lines).length, 2);
+  assert.equal(speakersOf(lines).length, 3);
   const labelAt = (seconds) => lines.find((line) => line.timestamp === seconds).speaker;
-  assert.equal(labelAt(610), labelAt(20), "the third voice joins the nearer of the two");
+  assert.notEqual(labelAt(610), labelAt(20), "an advisory count cannot merge distinct evidence");
 });
 
 // Sherpa splits even one voice into many clusters; without voices to merge them,
 // a call with no count can't be told from a group call.
-test("when voices can't be read, a call with no count keeps one remote speaker", async () => {
+test("unreadable voices retain distinct unknown clusters", async () => {
   voicesUnreadable = true;
 
   const { lines } = await diarizeMeeting(turns(["speaker_00", "speaker_01", "speaker_02"], 30, 8));
 
-  assert.equal(speakersOf(lines).length, 1);
+  assert.equal(speakersOf(lines).length, 3);
 });
 
 // A cluster whose voice can't be read (only sub-1.5 s turns, or a failed
 // extraction) can't be told from a split of the one voice that was read.
-test("a cluster without a readable voice doesn't split a one-on-one call", async () => {
+test("an unreadable cluster is not silently merged into another identity", async () => {
   voices = new Map([["speaker_00", [1, 0]]]);
   const output = [
     ...turns(["speaker_00"], 30, 8),
@@ -228,7 +229,7 @@ test("a cluster without a readable voice doesn't split a one-on-one call", async
 
   const { lines } = await diarizeMeeting(output);
 
-  assert.deepEqual(speakersOf(lines), ["speaker_0"]);
+  assert.deepEqual(speakersOf(lines), ["speaker_0", "speaker_1"]);
 });
 
 // The cap counts voices, so a cluster without one, however long, mustn't take
@@ -279,7 +280,7 @@ test("an in-person session keeps a brief second voice beside the user", async ()
 // With no count, live identification labels every remote line with its one
 // speaker, and that speaker's name with it. After the split the name belongs
 // to the voice it matches only.
-test("a live speaker's name stays only on the voice it matches once the call is split", async () => {
+test("a cached live name without eligible approval cannot name either final voice", async () => {
   embeddingModelAvailable = true;
   voices = new Map([
     ["speaker_00", [1, 0]],
@@ -299,12 +300,12 @@ test("a live speaker's name stays only on the voice it matches once the call is 
     );
   }
   assert.deepEqual([...namesBySpeaker].map(([speaker, names]) => [speaker, [...names]]).sort(), [
-    ["speaker_0", ["Bob"]],
+    ["speaker_0", [null]],
     ["speaker_1", [null]],
   ]);
 });
 
-test("live names stay when the voices can't be read to place them", async () => {
+test("unreadable evidence cannot preserve an unapproved cached name", async () => {
   embeddingModelAvailable = true;
   voicesUnreadable = true;
 
@@ -315,13 +316,13 @@ test("live names stay when the voices can't be read to place them", async () => 
   });
 
   assert.equal(speakersOf(lines).length, 2);
-  assert.deepEqual([...new Set(lines.map((line) => line.speakerName))], ["Bob"]);
+  assert.deepEqual([...new Set(lines.map((line) => line.speakerName))], [null]);
 });
 
 // Without live identification (macOS loopback), the renderer still names a 1:1
 // call's remote lines after the attendee. With one voice there is nothing to
 // place, so that name stays.
-test("a single remote voice keeps its name when live identification didn't run", async () => {
+test("an attendee label alone cannot name the single remote voice", async () => {
   embeddingModelAvailable = true;
   voices = new Map([["speaker_00", [1, 0]]]);
 
@@ -330,7 +331,7 @@ test("a single remote voice keeps its name when live identification didn't run",
     liveLabel: { speaker: "speaker_0", speakerName: "Alice" },
   });
 
-  assert.deepEqual([...new Set(lines.map((line) => line.speakerName))], ["Alice"]);
+  assert.deepEqual([...new Set(lines.map((line) => line.speakerName))], [null]);
 });
 
 // The renderer names lines from live identifications that main never stored a
@@ -386,7 +387,7 @@ test("a count set by hand keeps a brief second remote voice", async () => {
   assert.equal(speakersOf(lines).length, 2);
 });
 
-test("a live name goes to the voice it sounds most like, not the first one close enough", async () => {
+test("acoustic similarity alone cannot transfer an unapproved cached name", async () => {
   embeddingModelAvailable = true;
   voices = new Map([
     ["speaker_00", [0.62, 0.78, 0]],
@@ -401,13 +402,13 @@ test("a live name goes to the voice it sounds most like, not the first one close
   const namesOf = (speaker) => [
     ...new Set(lines.filter((line) => line.speaker === speaker).map((line) => line.speakerName)),
   ];
-  assert.deepEqual(namesOf("speaker_1"), ["Bob"]);
+  assert.deepEqual(namesOf("speaker_1"), [null]);
   assert.deepEqual(namesOf("speaker_0"), [null]);
 });
 
 // With no count, the live speaker is the first remote voice heard. When live
 // identification left it unnamed, that voice still gets a stored profile's name.
-test("a voice matched to an unnamed live speaker still takes its profile's name", async () => {
+test("a raw profile cache cannot automatically enroll or name an unknown live speaker", async () => {
   embeddingModelAvailable = true;
   voices = new Map([
     ["speaker_00", [1, 0]],
@@ -425,7 +426,7 @@ test("a voice matched to an unnamed live speaker still takes its profile's name"
   const namesOf = (speaker) => [
     ...new Set(lines.filter((line) => line.speaker === speaker).map((line) => line.speakerName)),
   ];
-  assert.deepEqual(namesOf("speaker_0"), ["Alice"]);
+  assert.deepEqual(namesOf("speaker_0"), [null]);
 });
 
 const startingAt = (seconds, turnList) =>
@@ -455,7 +456,7 @@ test("a count set by hand keeps a quiet third remote voice", async () => {
   assert.notEqual(speakerAt(lines, 600), speakerAt(lines, 13));
 });
 
-test("a count set by hand keeps two remote voices apart when they only sound alike", async () => {
+test("similar voices remain separate with and without an advisory count", async () => {
   voices = new Map([
     ["speaker_00", [1, 0]],
     ["speaker_01", [0.55, 0.835]],
@@ -468,10 +469,10 @@ test("a count set by hand keeps two remote voices apart when they only sound ali
   assert.equal(speakersOf(counted.lines).length, 2);
 
   const uncounted = await diarizeMeeting(output);
-  assert.equal(speakersOf(uncounted.lines).length, 1);
+  assert.equal(speakersOf(uncounted.lines).length, 2);
 });
 
-test("with a count, a cluster without a readable voice doesn't take a voice's place", async () => {
+test("a counted unreadable cluster remains distinct from the two readable voices", async () => {
   voices = new Map([
     ["speaker_00", [1, 0]],
     ["speaker_01", [0, 1]],
@@ -486,13 +487,12 @@ test("with a count, a cluster without a readable voice doesn't take a voice's pl
     sessionConfig: { enabled: true, expectedCount: 3, explicit: true },
   });
 
-  assert.equal(speakersOf(lines).length, 2);
+  assert.equal(speakersOf(lines).length, 3);
   assert.notEqual(speakerAt(lines, 600), speakerAt(lines, 0));
 });
 
-// With no count a one-on-one is the likeliest call. A sliver clustering splits
-// off the one remote voice can sound unlike the rest of it.
-test("a sliver split off a one-on-one's voice doesn't become a second speaker", async () => {
+// The fork does not infer a one-on-one call merely because no count was chosen.
+test("a distinct sliver is retained when evidence does not justify merging it", async () => {
   voices = new Map([
     ["speaker_00", [1, 0]],
     ["speaker_01", [0.4, 0.917]],
@@ -504,13 +504,13 @@ test("a sliver split off a one-on-one's voice doesn't become a second speaker", 
 
   const { lines } = await diarizeMeeting(output);
 
-  assert.deepEqual(speakersOf(lines), ["speaker_0"]);
+  assert.deepEqual(speakersOf(lines), ["speaker_0", "speaker_1"]);
 });
 
 // The renderer locks a name the user gave a live speaker onto every line that
 // speaker labelled, and main can't see the lock. It tells the renderer which
 // voice the name went to, so the lock comes off the other voices.
-test("a split tells the renderer which voice each live speaker's name went to", async () => {
+test("a split cannot move a human label through an automatic naming path", async () => {
   embeddingModelAvailable = true;
   voices = new Map([
     ["speaker_00", [0, 1]],
@@ -523,7 +523,8 @@ test("a split tells the renderer which voice each live speaker's name went to", 
     liveSpeakerState,
     liveLabel,
   });
-  assert.deepEqual(split.splitLiveSpeakers, { speaker_0: { speaker: "speaker_1", name: "Bob" } });
+  assert.equal(split.splitLiveSpeakers, undefined);
+  assert.ok(split.lines.every(line => line.speakerName === null));
 
   const oneVoice = await diarizeMeeting(turns(["speaker_01"], 30, 8), {
     liveSpeakerState,

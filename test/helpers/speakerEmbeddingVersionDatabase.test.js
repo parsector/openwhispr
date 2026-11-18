@@ -55,7 +55,7 @@ test("a database from an earlier build gains the version column, its rows left s
   assert.deepEqual(upgraded.getNoteSpeakerEmbeddings(note.id), []);
 });
 
-test("only current-version voices are returned for matching", (t) => {
+test("current-version cache alone cannot enroll a voice for matching", (t) => {
   const db = createDb(t);
   if (!db) return;
   const note = db.saveNote("Meeting", "", "meeting").note;
@@ -70,7 +70,7 @@ test("only current-version voices are returned for matching", (t) => {
 
   assert.deepEqual(
     db.getSpeakerProfiles(true).map((profile) => profile.display_name),
-    ["Current"]
+    []
   );
   assert.equal(db.getSpeakerProfiles().length, 2);
   assert.deepEqual(
@@ -97,14 +97,14 @@ test("labeling a stale profile replaces its voice in place, then blends as befor
   assert.ok(Math.abs(valuesOf(blended)[0] - 0.7) < 1e-6);
 });
 
-// attachEmailToProfile merges the two profiles when the email belongs to another.
+// Explicit cache maintenance is separate from human identity and enrollment.
 test("merging profiles keeps the current voice and never blends across versions", (t) => {
   const db = createDb(t);
   if (!db) return;
 
   const staleWinner = insertProfile(db, "Stale", { email: "a@example.com", samples: 10 });
   const currentLoser = insertProfile(db, "Current", { version: EMBEDDING_VERSION, samples: 2 });
-  let merged = db.attachEmailToProfile(currentLoser, "a@example.com");
+  let merged = db.mergeSpeakerProfiles(profileRow(db, currentLoser), profileRow(db, staleWinner));
   assert.equal(merged.id, staleWinner);
   assert.equal(merged.embedding_version, EMBEDDING_VERSION);
   assert.equal(merged.sample_count, 2);
@@ -112,7 +112,7 @@ test("merging profiles keeps the current voice and never blends across versions"
 
   const stale = insertProfile(db, "Old", { email: "b@example.com", samples: 4 });
   const alsoStale = insertProfile(db, "Older", { samples: 6 });
-  merged = db.attachEmailToProfile(alsoStale, "b@example.com");
+  merged = db.mergeSpeakerProfiles(profileRow(db, alsoStale), profileRow(db, stale));
   assert.equal(merged.id, alsoStale);
   assert.equal(merged.embedding_version, null);
   assert.equal(profileRow(db, stale), undefined);
@@ -124,10 +124,11 @@ test("merging profiles keeps the current voice and never blends across versions"
     value: 1,
   });
   const second = insertProfile(db, "Second", { version: EMBEDDING_VERSION, samples: 3, value: 0 });
-  merged = db.attachEmailToProfile(second, "c@example.com");
+  merged = db.mergeSpeakerProfiles(profileRow(db, second), profileRow(db, first));
   assert.equal(merged.sample_count, 4);
   assert.ok(Math.abs(valuesOf(merged)[0] - 0.25) < 1e-6);
   assert.equal(profileRow(db, first), undefined);
+  assert.deepEqual(db.getSpeakerProfiles(true), [], "cache merges never grant enrollment approval");
 });
 
 // A note recorded before the current embeddings has no voice to enroll.

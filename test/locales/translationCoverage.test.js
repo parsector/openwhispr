@@ -17,10 +17,6 @@ const INTERPOLATION = /\{\{\s*([\w.]+)/g;
 const ARABIC_PLURAL_CATEGORIES = ["zero", "one", "two", "few", "many", "other"];
 const ARABIC_PLURAL_BASES = [
   "settingsPage.workspace.members.description",
-  "settingsPage.workspace.teams.memberCount",
-  "settingsPage.workspace.teams.grantsAccessToSpaces",
-  "settingsPage.workspace.teams.deleteConfirmSpaceAccess",
-  "settingsPage.workspace.invites.expiresIn",
   "settingsPage.workspace.teamspaces.adminCount",
   "settingsPage.workspace.teamspaces.form.createdInviteFailed",
   "settingsPage.workspace.teams.form.createdInvitedMany",
@@ -41,8 +37,6 @@ const ARABIC_PLURAL_BASES = [
   "workspaces.cancelInvitations.done",
   "workspaces.cancelInvitations.partial",
   "workspaces.removeMembers.failedTitle",
-  "settingsPage.unifiedBilling.seatUpdated",
-  "settingsPage.unifiedBilling.confirmSeats.description",
   "settingsPage.privacy.retentionDays",
   "settingsPage.privacy.audioStorageHistoryFiles",
   "settingsPage.privacy.hoursAgo",
@@ -53,16 +47,12 @@ const ARABIC_PLURAL_BASES = [
   "workspaces.invite.sentMany",
   "workspaces.invite.noEmail",
   "workspaces.invite.someFailed",
-  "workspaces.invite.seatsLeft",
-  "workspaces.invite.seatsLeftAskOwner",
   "workspaces.invite.ceilingLeft",
   "workspaces.invite.skippedMany",
   "workspaces.invite.skippedNotAdded",
   "workspaces.invite.removeLast",
   "workspaces.invite.createdTitle",
   "workspaces.invite.rateLimitedLeft",
-  "workspaces.invite.seatCostMany",
-  "workspaces.invite.seatCostManyUnpriced",
   "notes.spaces.noteCount",
   "notes.spaces.invitedTo",
   "notes.addToFolder.addCount",
@@ -95,7 +85,6 @@ const ARABIC_PLURAL_BASES = [
   "skills.upload.submitCount",
 ];
 const ARABIC_NUMBER_NEUTRAL_TEMPLATES = {
-  "workspaces.invite.seatUsage": "المقاعد المستخدمة: {{used}} من أصل {{seats}}",
   "notes.upload.partialWarningCount":
     "عدد الأجزاء الصوتية التي تعذر تفريغها: {{failed}} من أصل {{total}}.",
   "emailVerification.resendIn": "إعادة الإرسال بعد {{seconds}} ث",
@@ -391,7 +380,7 @@ const GROUP_FREE_KEYS = [
   "notes.structureIntro.teamSpace.description",
   "workspaces.invite.roleDescription.admin",
 ];
-const GROUP_VERB_PREFIXES = ["settingsPage.workspace.teams.paywall"];
+const GROUP_VERB_PREFIXES = [];
 
 test("no workspace copy says group", () => {
   const found = [];

@@ -877,7 +877,7 @@ test("a pass requested during a dictionary edit runs once the edit finishes", as
   assert.equal(cloud.logFor("/api/notes/list").length, 1);
 });
 
-test("canSync gating: private backup requires sign-in, subscription and consent", async (t) => {
+test("canSync gating: private backup requires sign-in and consent, with no plan gate", async (t) => {
   const ctx = await setup(t, { team: true });
   if (!ctx) return;
   const { db, cloud } = ctx;
@@ -892,8 +892,7 @@ test("canSync gating: private backup requires sign-in, subscription and consent"
   assert.equal(cloud.log.length, 0, "sync ran while signed out");
   assert.equal(localStorageStub.getItem("lastSyncedAt"), null);
 
-  // Collaboration is free, so an unsubscribed account still syncs shared
-  // notes and team spaces. Nothing private leaves the machine.
+  // A plan cannot gate collaboration or explicitly enabled Private backup.
   enableSync();
   localStorageStub.removeItem("isSubscribed");
   const freeService = new SyncService();
@@ -901,16 +900,17 @@ test("canSync gating: private backup requires sign-in, subscription and consent"
   stopSyncTimers(freeService);
   assert.ok(cloud.log.length > 0, "a free signed-in account must still sync collaboration");
   assert.equal(db.getNote(teamNote.id).sync_status, "synced", "the teamspace note pushes");
-  assert.equal(db.getNote(note.id).sync_status, "pending");
+  assert.equal(db.getNote(note.id).sync_status, "synced");
 
   // Backup off is not sign-out: team-space membership still syncs, but nothing
   // private may leave the machine.
   enableSync();
   localStorageStub.removeItem("cloudBackupEnabled");
+  const consentNote = db.saveNote("Consent off", "kept local", "personal").note;
   const teamOnlyService = new SyncService();
   await teamOnlyService.syncAll(true);
   stopSyncTimers(teamOnlyService);
-  assert.equal(db.getNote(note.id).sync_status, "pending");
+  assert.equal(db.getNote(consentNote.id).sync_status, "pending");
 
   // Ordinary personal notes join collaboration only once every backup gate is open.
   enableSync();
@@ -924,7 +924,7 @@ test("canSync gating: private backup requires sign-in, subscription and consent"
   const sent = cloud.log.flatMap((call) =>
     call.path === "/api/notes/batch-create" ? call.body.notes.map((n) => n.client_note_id) : []
   );
-  assert.deepEqual(sent, [teamNote.client_note_id, note.client_note_id]);
+  assert.deepEqual(sent, [note.client_note_id, teamNote.client_note_id, consentNote.client_note_id]);
 });
 
 test("a backed-up private note moves into a teamspace with the same cloud identity", async (t) => {
@@ -2298,7 +2298,7 @@ test("a detached team copy takes the account that can see it", (t) => {
     ["solo", solo, null],
     ["shared", shared, null],
     ["owned", owned, "account-c"],
-  ].map(([name, space, account]) => {
+  ].map(([name, space, _account]) => {
     insertCloudCopy(db, {
       client_note_id: `${name}-kept`,
       cloud_id: `cloud-${name}`,

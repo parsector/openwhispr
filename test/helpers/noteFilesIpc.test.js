@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 // Drives the real IPC handlers and the real mirror against a temp directory.
 // Most cases use an in-memory stand-in; deletion-result coverage also runs the
 // real SQLite database so tombstones and relocated rows follow production rules.
@@ -252,7 +253,7 @@ test.after(() => {
 });
 
 test.beforeEach(() => {
-  basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-note-files-ipc-"));
+  basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-note-files-ipc-"));
   target.databaseManager = makeDatabase();
   target._noteFilesSync = undefined;
   tokenState.token = "test-token";
@@ -362,7 +363,9 @@ test("repaired inactive-account transcripts retain their speaker names", async (
   const noteId = saved.note.id;
   db.updateNote(noteId, {
     transcript: JSON.stringify([
-      { speaker: "SPEAKER_00", timestamp: 0, text: "The decision is recorded." },
+      { speaker: "SPEAKER_00", speakerName: "Dana", speakerLocked: true,
+        speakerLockSource: "user", speakerAssignment: { origin: "human" },
+        timestamp: 0, text: "The decision is recorded." },
     ]),
   });
   db.setSpeakerMapping(noteId, "SPEAKER_00", null, "Dana");
@@ -1028,7 +1031,7 @@ test(
 );
 
 function caseInsensitive() {
-  const probe = fs.mkdtempSync(path.join(os.tmpdir(), "OpenWhisprCaseProbe-"));
+  const probe = createTempDir(path.join(os.tmpdir(), "OpenWhisprCaseProbe-"));
   try {
     return fs.existsSync(probe.toLowerCase()) && fs.existsSync(probe.toUpperCase());
   } finally {
@@ -1214,6 +1217,11 @@ for (const mode of ["normal", "update", "held delete"]) {
       clearPendingNoteDeepLink: () => {},
     };
     for (const name of [
+      "mcpClientManager",
+      "stopLocalMcp",
+      "agentJobScheduler",
+      "agentJobManager",
+      "agentPresetScheduler",
       "registryLoader",
       "disposeRegistryIpc",
       "wakeRewarmTimer",

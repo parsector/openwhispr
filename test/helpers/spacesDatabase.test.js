@@ -624,19 +624,18 @@ test("migration 6 is idempotent across launches", (t) => {
   assert.deepEqual(second.db.prepare("SELECT * FROM folders ORDER BY id").all(), folders);
 });
 
-test("the identity index refuses a second private row for the same account and workspace", (t) => {
+test("legacy fork private sections survive until their explicit identity migration", (t) => {
   const db = createDb(t);
   if (!db) return;
   const insert = db.db.prepare(
     "INSERT INTO spaces (client_space_id, kind, name, account_id, workspace_id, deleted_at) VALUES (?, 'private', 'Personal', ?, ?, ?)"
   );
-  const unique = /UNIQUE constraint failed/;
 
-  assert.throws(() => insert.run(randomUUID(), null, null, null), unique, "a second stand-in");
+  assert.doesNotThrow(() => insert.run(randomUUID(), null, null, null));
   insert.run(randomUUID(), "a", null, null);
-  assert.throws(() => insert.run(randomUUID(), "a", null, null), unique, "a second pending row");
+  assert.doesNotThrow(() => insert.run(randomUUID(), "a", null, null));
   insert.run(randomUUID(), "a", "w1", null);
-  assert.throws(() => insert.run(randomUUID(), "a", "w1", null), unique);
+  assert.doesNotThrow(() => insert.run(randomUUID(), "a", "w1", null));
   insert.run(randomUUID(), "a", "w2", null);
   insert.run(randomUUID(), "b", "w1", null);
   insert.run(randomUUID(), "a", "w1", "2026-01-01T00:00:00Z");
@@ -645,6 +644,10 @@ test("the identity index refuses a second private row for the same account and w
       "INSERT INTO spaces (client_space_id, kind, name, account_id, workspace_id) VALUES (?, 'team', 'Team', 'a', 'w1')"
     )
     .run(randomUUID());
+  assert.equal(db.db.prepare("SELECT count(*) AS n FROM spaces WHERE kind = 'private' AND account_id = 'a' AND workspace_id = 'w1' AND deleted_at IS NULL").get().n, 2);
+  db.setActiveAccountId("a");
+  const selected = db.getPrivateSpaceId("w1");
+  assert.equal(db.getPrivateSpaceId("w1"), selected, "selection remains stable without merging legacy sections");
 });
 
 test("migration 6 keeps attributed folder ids and cloud ids", (t) => {

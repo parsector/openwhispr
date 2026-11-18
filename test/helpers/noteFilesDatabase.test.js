@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 // The mirror against the real database, for what a stand-in can't show: the real
 // rows, account scoping and soft deletes. Skips where the native binding is built
 // for Electron; run with ELECTRON_RUN_AS_NODE=1 npx electron --test <this file>.
@@ -37,7 +38,7 @@ try {
 }
 
 function setup(t) {
-  userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-note-files-db-"));
+  userDataDir = createTempDir(path.join(os.tmpdir(), "openwhispr-note-files-db-"));
   const basePath = path.join(userDataDir, "notes");
   t.after(() => fs.rmSync(userDataDir, { recursive: true, force: true }));
   let db;

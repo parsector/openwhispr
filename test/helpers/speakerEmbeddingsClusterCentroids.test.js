@@ -1,3 +1,4 @@
+const { EMBEDDING_DIM } = require("../../src/constants/speakerDetection.json");
 const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -64,7 +65,7 @@ test.before(() => {
   wavPath = writeWav([0.25, 0.5]);
   speakerEmbeddings._extractEmbeddingFromSamples = async (samples) => {
     extracted.push(samples);
-    return new Float32Array(512).fill(samples[0]);
+    return new Float32Array(EMBEDDING_DIM).fill(samples[0]);
   };
 });
 

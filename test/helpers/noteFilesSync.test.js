@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -18,7 +19,7 @@ try {
 }
 
 async function createFixture(t) {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-note-batch-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-note-batch-"));
   const entries = new Map();
   const state = { notes: [], accountId: "a", writtenNoteIds: [] };
   const containers = {

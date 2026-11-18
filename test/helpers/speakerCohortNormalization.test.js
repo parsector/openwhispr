@@ -1,7 +1,8 @@
+const { EMBEDDING_DIM } = require("../../src/constants/speakerDetection.json");
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { rankProfiles } = require('../../src/helpers/speakerCohortNormalization');
-const v = (x, y) => Float32Array.from({ length: 512 }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
+const v = (x, y) => Float32Array.from({ length: EMBEDDING_DIM }, (_, i) => i === 0 ? x : i === 1 ? y : 0);
 const cosine = (a, b) => a[0] * b[0] + a[1] * b[1];
 
 test('recording cohort separates a room-wide match from a distinctive voice', () => {

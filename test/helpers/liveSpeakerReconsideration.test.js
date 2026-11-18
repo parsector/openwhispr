@@ -1,3 +1,4 @@
+const { EMBEDDING_DIM } = require("../../src/constants/speakerDetection.json");
 const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -27,7 +28,7 @@ const retainedSpeakerAudio = require("../lib/retainedSpeakerAudio");
 Module._load = originalLoad;
 
 const vector = (x, y = 0) =>
-  Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? x : i === 1 ? y : 0));
+  Float32Array.from({ length: EMBEDDING_DIM }, (_, i) => (i === 0 ? x : i === 1 ? y : 0));
 function fixture(t) {
   dir = createTempDir(path.join(os.tmpdir(), "ow-reconsider-"));
   const ownDir = dir;

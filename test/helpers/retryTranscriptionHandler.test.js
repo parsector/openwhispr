@@ -1732,7 +1732,7 @@ test("main enterprise audio resolution honors provider and mode policy before HT
   await assert.rejects(realtime.createSocket(), { code: "MANAGED_CONFIG_CHANGED" });
   assert.equal(request.mock.callCount(), 1);
   assert.equal(socket.mock.callCount(), 1);
-  policySnapshot = { success: false, code: "POLICY_UNRESOLVABLE" };
+  policySnapshot = { success: false, managed: true, code: "POLICY_UNRESOLVABLE" };
   await assert.rejects(fakeThis.enterpriseAudioRuntime.resolve({}, "realtime"), {
     code: "POLICY_UNRESOLVABLE",
   });
@@ -1864,7 +1864,9 @@ test("a retry that turns remote doesn't upload on a verdict still on its way", a
     tokenState = previousTokenState;
     await fakeThis.refreshEffectivePolicy();
   });
-  // A rotated token whose lookup hasn't answered, with nothing held.
+  // A known managed account's rotated token whose lookup hasn't answered.
+  policySnapshot = { success: false, managed: true, status: "loading", code: "POLICY_UNRESOLVABLE" };
+  await fakeThis.refreshEffectivePolicy();
   policyLookupGate = lookup.promise;
   tokenState = { ...tokenState, generation: tokenState.generation + 1 };
   fetches.length = 0;

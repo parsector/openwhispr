@@ -583,12 +583,9 @@ test("HTTP policy denials and malformed success payloads remain unavailable", as
   }
 });
 
-test("a positive managed-unresolvable signal cannot reuse an unmanaged cache", async (t) => {
+test("an explicitly managed invalid response cannot reuse an unmanaged cache", async (t) => {
   for (const failedResponse of [
-    response(503, {
-      error: "Organization policy could not be resolved.",
-      code: "POLICY_UNRESOLVABLE",
-    }),
+    response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } }),
     response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } }),
   ]) {
     const responses = [
@@ -620,10 +617,7 @@ test("an unresolvable session can't fall back to its unmanaged verdict on a late
     const responses = [
       () => response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } }),
       () =>
-        response(503, {
-          error: "Organization policy could not be resolved.",
-          code: "POLICY_UNRESOLVABLE",
-        }),
+        response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } }),
       laterFailure,
     ];
     const context = setup(async () => responses.shift()());
@@ -641,10 +635,7 @@ test("an unresolvable session can't fall back to its unmanaged verdict on a late
 test("a managed cache remains fail-closed during an unresolvable refresh", async (t) => {
   const responses = [
     response(200, validPolicy()),
-    response(503, {
-      error: "Organization policy could not be resolved.",
-      code: "POLICY_UNRESOLVABLE",
-    }),
+    response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } }),
   ];
   const context = setup(async () => responses.shift());
   t.after(context.cleanup);
@@ -659,12 +650,9 @@ test("a managed cache remains fail-closed during an unresolvable refresh", async
   assert.deepEqual(fallback.policy, managed.policy);
 });
 
-test("a first-ever unresolvable verdict still fails closed after restart", async (t) => {
+test("a first explicitly managed invalid verdict stays fail-closed after restart", async (t) => {
   const context = setup(async () =>
-    response(503, {
-      error: "Organization policy could not be resolved.",
-      code: "POLICY_UNRESOLVABLE",
-    })
+    response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } })
   );
   t.after(context.cleanup);
   const request = { accountId: "account-a", expectedAuthGeneration: 1 };
@@ -698,10 +686,7 @@ test("a managed-unresolvable signal survives throttling, other windows, and rest
       if (requestCount === 1) {
         return response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } });
       }
-      return response(503, {
-        error: "Organization policy could not be resolved.",
-        code: "POLICY_UNRESOLVABLE",
-      });
+      return response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } });
     },
     {
       now: () => currentTime,
@@ -892,10 +877,7 @@ test("peekPolicy never offers one account's verdict to another", async (t) => {
 test("peekPolicy never offers an unmanaged verdict once the org policy is unresolvable", async (t) => {
   const responses = [
     response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } }),
-    response(503, {
-      error: "Organization policy could not be resolved.",
-      code: "POLICY_UNRESOLVABLE",
-    }),
+    response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } }),
   ];
   const context = setup(async () => responses.shift());
   t.after(context.cleanup);
@@ -1030,7 +1012,7 @@ test("screen-context capture stays available to unmanaged users and plain outage
 });
 
 test("screen-context capture fails closed while a managed policy is unresolvable", async (t) => {
-  const context = setup(async () => response(503, { code: "POLICY_UNRESOLVABLE" }));
+  const context = setup(async () => response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } }));
   t.after(context.cleanup);
   const request = { accountId: "account-a", expectedAuthGeneration: 1 };
 
@@ -1109,7 +1091,7 @@ test("unbound rotations retain account policy markers and permitted recovery sta
       if (phase === "offline") throw new Error("offline");
       if (phase === "unsupported") return response(404, {});
       return phase === "unresolvable"
-        ? response(403, { code: "POLICY_UNRESOLVABLE" })
+        ? response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } })
         : response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } });
     },
   });
@@ -1324,7 +1306,9 @@ test("a rotated credential keeps the account's fail-closed marker", async (t) =>
     proxyFetch: async () =>
       status === 200
         ? response(200, { data: { managed: false, policy: null, policyUpdatedAt: null } })
-        : response(status, { code: "POLICY_UNRESOLVABLE", error: "unresolvable" }),
+        : status === 503
+          ? response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } })
+          : response(status, {}),
   });
   t.after(context.cleanup);
   await context.manager.getPolicy({ accountId: "account-a", expectedAuthGeneration: 1 });
@@ -1417,7 +1401,7 @@ for (const status of [404, 501]) {
         const context = rotationSetup({
           successfulRefreshMs: 5 * 60 * 1000,
           proxyFetch: async () => {
-            if (phase === "required") return response(403, { code: "POLICY_UNRESOLVABLE" });
+            if (phase === "required") return response(200, { data: { managed: true, policy: null, policyUpdatedAt: null } });
             if (phase === "offline") throw new Error("offline");
             if (phase === "permitted")
               return response(200, {

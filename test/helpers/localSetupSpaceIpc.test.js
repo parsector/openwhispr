@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
@@ -7,7 +8,7 @@ const path = require("node:path");
 
 // The model managers read Electron at module scope; give them a stub so their
 // exported disk-space factors can be loaded outside Electron.
-const electronHome = fs.mkdtempSync(path.join(os.tmpdir(), "local-setup-space-home-"));
+const electronHome = createTempDir(path.join(os.tmpdir(), "local-setup-space-home-"));
 const originalLoad = Module._load;
 Module._load = function loadWithElectronStub(request, parent, isMain) {
   if (request === "electron") {
@@ -32,7 +33,7 @@ const helpers = path.resolve(__dirname, "../../src/helpers");
 const downloadUtils = require(path.join(helpers, "downloadUtils"));
 
 function freshRoot(t) {
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "local-setup-space-"));
+  const base = createTempDir(path.join(os.tmpdir(), "local-setup-space-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   return path.join(base, ".cache", "openwhispr");
 }

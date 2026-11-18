@@ -674,12 +674,6 @@
       "title": "アクセシビリティの許可が必要です",
       "description": "OpenWhispr が正しく動作するにはアクセシビリティの許可が必要です。以下で有効にしてください。"
     },
-    "billing": {
-      "pastDueTitle": "お支払いを処理できませんでした",
-      "pastDueDescription": "このアカウントのクラウド利用は現在制限されています。",
-      "bannerDescription": "このアカウントのクラウド利用は現在制限されています。週間上限は {{limit}} 語です。",
-      "updatePayment": "お支払い方法を更新"
-    },
     "history": {
       "couldNotLoadTitle": "履歴を読み込めませんでした",
       "couldNotLoadDescription": "文字起こし履歴の読み込み中に問題が発生しました。アプリを閉じて再度開いてください。",
@@ -1641,10 +1635,6 @@
         "description": "メンバー、チームスペース、API キー",
         "label": "ワークスペース"
       },
-      "plansBilling": {
-        "description": "プラン、使用状況、請求",
-        "label": "プランと請求"
-      },
       "workspaceGeneral": {
         "label": "一般",
         "description": "ワークスペースの名前とアイコン"
@@ -1753,24 +1743,6 @@
           "generic": "問題が発生しました。もう一度お試しください。"
         }
       },
-      "billing": {
-        "couldNotOpenDescription": "請求ページを開く際に問題が発生しました。もう一度お試しください。",
-        "couldNotOpenTitle": "請求を開けませんでした",
-        "manageBilling": "請求を管理",
-        "opening": "開いています...",
-        "updatePaymentMethod": "お支払い方法を更新",
-        "contactOwnerTitle": "ワークスペースのオーナーにご連絡ください",
-        "contactOwnerDescription": "このワークスペースの請求を更新できるのはオーナーのみです。",
-        "manageInAppStore": "App Store で管理",
-        "manageInGooglePlay": "Google Play で管理",
-        "managedInMobileStore": "スマートフォンのアプリストアで請求されています。スマートフォンから管理してください。"
-      },
-      "checkout": {
-        "couldNotOpenDescription": "購入ページを開く際に問題が発生しました。もう一度お試しください。",
-        "couldNotOpenTitle": "購入ページを開けませんでした",
-        "opening": "開いています...",
-        "upgradeToPro": "Pro にアップグレード"
-      },
       "pastDue": {
         "description": "現在は無料プランをご利用中です。お支払い方法を更新して Pro に戻しましょう。",
         "title": "お支払いを処理できませんでした"
@@ -1790,105 +1762,6 @@
         "pro": "Pro",
         "business": "Business",
         "trial": "トライアル"
-      },
-      "pricing": {
-        "title": "プラン",
-        "billedYearly": "年払い",
-        "free": {
-          "name": "Free",
-          "price": "$0",
-          "period": "永久",
-          "features": [
-            "## OpenWhispr Cloud",
-            "週2,000ワードの文字起こし",
-            "月5時間の会議録音",
-            "## 永久無料",
-            "無制限のローカルAIモデル",
-            "独自のAPIキーで無制限のクラウド文字起こし",
-            "100以上の言語に対応",
-            "カスタム辞書",
-            "データ保持なし",
-            "コミュニティサポート"
-          ]
-        },
-        "pro": {
-          "name": "Pro",
-          "monthlyPrice": "$8",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$80",
-          "annualPeriod": "/年",
-          "annualEquivalent": "$6.67",
-          "includesPrefix": "Free の全機能 +",
-          "features": [
-            "無制限のクラウド文字起こし",
-            "月20時間の会議録音",
-            "デバイス間の同期",
-            "公開リンクでノートを共有",
-            "個人APIアクセス",
-            "すべてのアプリでMCP統合",
-            "モバイルアプリ",
-            "メールサポート"
-          ],
-          "cta": "始める",
-          "switchToAnnual": "年払いに切り替え"
-        },
-        "business": {
-          "name": "Business",
-          "monthlyPrice": "$16",
-          "monthlyPeriod": "/月",
-          "annualPrice": "$160",
-          "annualPeriod": "/年",
-          "annualEquivalent": "$13.33",
-          "includesPrefix": "Pro の全機能 +",
-          "badge": "一番人気",
-          "features": [
-            "無制限の会議録音",
-            "ワークスペースのロールとメンバー管理",
-            "アシスタントモード",
-            "データとチャット",
-            "優先サポート"
-          ],
-          "cta": "始める",
-          "switchToAnnual": "年払いに切り替え"
-        },
-        "enterprise": {
-          "name": "Enterprise",
-          "price": "カスタム",
-          "subtitle": "高度なセキュリティとサポート向け",
-          "includesPrefix": "Business の全機能 +",
-          "features": [
-            "管理されたAPIクレジット",
-            "デバイス間のクラウド同期",
-            "チーム機能と管理",
-            "SSO とコンプライアンス",
-            "専任サポート"
-          ],
-          "cta": "営業に問い合わせる",
-          "upgradeCta": "Enterpriseにアップグレード",
-          "askOwner": "{{name}}さんにワークスペースのアップグレードを依頼してください。"
-        },
-        "currentPlan": "現在のプラン",
-        "coveredByWorkspace": "ワークスペースのプランに含まれています",
-        "upgrade": "アップグレード",
-        "downgrade": "ダウングレード",
-        "planSwitched": "プランが正常に更新されました",
-        "confirmSwitch": {
-          "title": "プラン変更の確認",
-          "description": "{{plan}}（{{interval}}）に変更",
-          "monthly": "月額",
-          "yearly": "年額",
-          "chargeToday": "本日のご請求",
-          "accountCredit": "アカウントクレジット",
-          "newPrice": "新しい料金",
-          "nextBilling": "次回請求日",
-          "mo": "mo",
-          "yr": "yr",
-          "cancel": "キャンセル",
-          "confirm": "確認"
-        },
-        "yourPersonalPlan": "あなたの個人プラン",
-        "yourWorkspacePlan": "ワークスペースのプラン",
-        "manage": "管理"
       },
       "rollingWeeklyLimit": "週間利用上限（ローリング）",
       "signedOutPlans": {
@@ -2644,19 +2517,6 @@
         "spaces_other": "{{count}} 個の Teamspace",
         "refreshFailed": "チームを更新できませんでした。この一覧は最新ではない可能性があります。",
         "cellMenuLabel": "{{team}}：{{value}}",
-        "paywall": {
-          "title": "チームは Business プランで利用できます",
-          "body": "Teamspace は無料です。アップグレードすると、メンバーをチームにまとめられます。",
-          "bodyAskOwner": "Teamspace は無料です。メンバーをチームにまとめるには、{{owner}} にアップグレードを依頼してください。",
-          "bodyAskOwnerUnknown": "Teamspace は無料です。メンバーをチームにまとめるには、ワークスペースのオーナーにアップグレードを依頼してください。",
-          "upgrade": "Business にアップグレード",
-          "notNow": "あとで",
-          "lapsedTitle": "このワークスペースのプランは有効ではありません",
-          "lapsedBody": "チームを作成するには、請求情報を更新してください。既存のチームは引き続き使えます。",
-          "lapsedBodyAskOwner": "チームを作成するには、{{owner}} に請求情報の更新を依頼してください。既存のチームは引き続き使えます。",
-          "lapsedBodyAskOwnerUnknown": "チームを作成するには、ワークスペースのオーナーに請求情報の更新を依頼してください。既存のチームは引き続き使えます。",
-          "updateBilling": "請求情報を更新"
-        },
         "form": {
           "title": "チームを作成",
           "subtitle": "複数の人を一度に追加するためのショートカットです。",
@@ -2838,29 +2698,6 @@
         "open": "コンソールを開く"
       },
       "staleList": "OpenWhispr に接続できませんでした。前回接続したときのワークスペースを表示しています。",
-      "billing": {
-        "plan": "プラン",
-        "seats": "シート",
-        "ownerOnly": "サブスクリプションを管理できるのはワークスペースのオーナーのみです。",
-        "nextInvoice": "次回の請求",
-        "manageStripe": "Stripe で管理",
-        "startSubscription": "サブスクリプションを開始",
-        "planLabel": {
-          "business": "Business",
-          "pro": "Pro",
-          "free": "Free",
-          "enterprise": "Enterprise"
-        },
-        "status": {
-          "active": "有効",
-          "trialing": "トライアル中",
-          "past_due": "支払い期限超過",
-          "canceled": "キャンセル済み",
-          "incomplete": "未完了",
-          "unpaid": "未払い"
-        },
-        "provisionedPlan": "OpenWhispr が設定したプランです。プランやシート数の変更は営業担当にお問い合わせください。"
-      },
       "people": {
         "title": "ユーザー",
         "description": "ワークスペースのユーザーとそのロールを管理します。",
@@ -3193,56 +3030,6 @@
           "remove": "ゲストを削除"
         }
       }
-    },
-    "unifiedBilling": {
-      "workspaceTitle": "ワークスペースの請求",
-      "workspaceDescription": "各ワークスペースには独自のプラン、シート、請求管理者があります。",
-      "billableSeat": "あなたのシートは課金対象です",
-      "nonBillableSeat": "管理者専用アクセス · 有料シートなし",
-      "managedBy": "請求は {{owner}} が管理しています。",
-      "addSeat": "シートを追加",
-      "seatUpdated_one": "ワークスペースの容量を {{count}} シートに更新しました",
-      "seatUpdated_other": "ワークスペースの容量を {{count}} シートに更新しました",
-      "seatUpdateFailed": "ワークスペースのシートを更新できませんでした",
-      "businessWorkspaceOnly": "ワークスペースで利用可能",
-      "personalPlanTitle": "個人プラン",
-      "providedBy": "個人プラン: Free · 有料アクセスは {{workspaces}} から提供",
-      "confirmSeats": {
-        "title": "ワークスペースのシートを追加しますか？",
-        "description_one": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
-        "description_other": "{{workspace}} を {{count}} シートに拡張します。Stripe が日割りで請求します。",
-        "newCapacity": "新しい容量",
-        "chargeToday": "本日の請求額",
-        "confirm": "シートを追加"
-      }
-    },
-    "enterpriseCheckout": {
-      "title": "Enterpriseにアップグレード",
-      "description": "ワークスペース、シート数、請求サイクルを選択してください。支払いはStripe Checkoutで完了します。",
-      "allSubscribed": "所有しているワークスペースは既にEnterpriseであるか、ここでは変更できません。プランの変更は営業までお問い合わせください。",
-      "workspaceLabel": "ワークスペース",
-      "seatsLabel": "シート数",
-      "seatsHint_one": "現在{{count}}シート使用中",
-      "seatsHint_other": "現在{{count}}シート使用中",
-      "intervalLabel": "請求サイクル",
-      "interval": {
-        "monthly": "月払い",
-        "annual": "年払い"
-      },
-      "proratedCharge": "日割り料金",
-      "prorationNote": "日割り計算された差額は次回の請求書に追加されます。",
-      "errors": {
-        "previewFailed": "アップグレードのプレビューを読み込めませんでした。",
-        "alreadyEnterprise": "このワークスペースはすでに Enterprise プランです。",
-        "subscriptionInactive": "このワークスペースのサブスクリプションが有効ではありません。請求情報を更新して再度お試しください。",
-        "priceNotConfigured": "Enterprise の料金は現在ご利用いただけません。営業までお問い合わせください。"
-      },
-      "priceNote": "最終的な価格はチェックアウト時に表示されます。",
-      "continueCta": "チェックアウトへ進む",
-      "upgradeDescription": "{{workspace}}を{{plan}}からEnterpriseにアップグレードします。シート数と請求サイクルは引き継がれ、変更は即時に適用されます。",
-      "upgradeCta": "今すぐアップグレード",
-      "upgradedTitle": "Enterpriseにアップグレードしました",
-      "upgradedDescription": "{{workspace}}はEnterpriseになりました。"
     }
   },
   "models": {
@@ -4863,7 +4650,8 @@
       "hotkeyToSpeak": "{{hotkey}} で話す",
       "recording": "録音中...",
       "processing": "処理中...",
-      "waitingForMicrophone": "マイクを待っています…"
+      "waitingForMicrophone": "マイクを待っています…",
+      "clickToSpeak": "クリックして話す"
     },
     "buttons": {
       "cancelRecording": "録音をキャンセル",
@@ -5699,8 +5487,7 @@
       "alreadySent": "このリクエストで既に実行済みです"
     },
     "beta": "ベータ",
-    "locked": "このビルドでは利用できません",
-    "upsell": "コネクタは有料プランに含まれています。アップグレードすると、アシスタントがあなたのツールで操作できるようになります。"
+    "locked": "このビルドでは利用できません"
   },
   "calendar": {
     "title": "Google カレンダー",
@@ -5963,8 +5750,7 @@
       "description": "メールアドレスでチームメイトを追加します。参加用のリンクが送信されます。",
       "emailLabel": "メールアドレス",
       "emailPlaceholder": "teammate@example.com",
-      "roleLabel": "役割",
-      "seatUsage": "{{seats}} シート中 {{used}} シートを使用中",
+      "roleLabel": "ワークスペースのロール",
       "submit": "招待を送信",
       "submitting": "送信中…",
       "sentTitle": "招待を送信しました",
@@ -5973,21 +5759,16 @@
       "sentNoEmailDescription": "{{email}} を招待しましたが、メールを配信できませんでした。後で再送信するか、別の方法で招待リンクを共有してください。",
       "errorTitle": "招待を送信できませんでした",
       "role": {
-        "admin": "管理者",
-        "member": "メンバー"
+        "admin": "ワークスペースの管理者",
+        "member": "ワークスペースのメンバー"
       },
       "roleDescription": {
-        "admin": "メンバーを管理できます",
-        "member": "ワークスペースを利用できます"
+        "admin": "メンバー、招待、チーム、設定を管理します。",
+        "member": "ワークスペースを利用します。"
       },
-      "seatCost": "承諾されるとプランに 1 席追加され、日割りの見積額 {{amount}} が請求されます。",
       "emailHint": "メールアドレスはカンマで区切ります。全員に同じロールが付与されます。",
       "removeRecipient": "{{email}} を削除",
       "suggestions": "候補",
-      "seatCostMany_one": "すべて承諾されるとプランに {{count}} 席追加され、日割りの見積額 {{amount}} が請求されます。",
-      "seatCostMany_other": "すべて承諾されるとプランに {{count}} 席追加され、日割りの見積額 {{amount}} が請求されます。",
-      "seatCostManyUnpriced_one": "すべて承諾されるとプランに {{count}} 席追加されます。",
-      "seatCostManyUnpriced_other": "すべて承諾されるとプランに {{count}} 席追加されます。",
       "submit_one": "{{count}} 件の招待を送信",
       "submit_other": "{{count}} 件の招待を送信",
       "sentTitle_one": "{{count}} 件の招待を送信しました",
@@ -6025,13 +5806,8 @@
       "tryResending": "再送信する",
       "removeLast_one": "最後の {{count}} 件を削除",
       "removeLast_other": "最後の {{count}} 件を削除",
-      "seatsLeft_one": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、アップグレードしてください。",
-      "seatsLeft_other": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、アップグレードしてください。",
-      "seatsLeftAskOwner_one": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、{{owner}} にシートの追加を依頼してください。",
-      "seatsLeftAskOwner_other": "残りのシートは {{count}} 席だけです。{{excess}} 件を削除するか、{{owner}} にシートの追加を依頼してください。",
       "seatsNone": "残りのシートはありません。追加するにはアップグレードしてください。",
       "seatsNoneAskOwner": "残りのシートはありません。{{owner}} にシートの追加を依頼してください。",
-      "upgrade": "アップグレード",
       "ceilingLeft_one": "あと {{count}} 人を招待できます。続けるには {{excess}} 件を削除してください。",
       "ceilingLeft_other": "あと {{count}} 人を招待できます。続けるには {{excess}} 件を削除してください。",
       "rateLimitedLeft_one": "現在送信できる招待はあと {{count}} 件のみです。送信するには {{excess}} 件を削除するか、後でもう一度お試しください。",
@@ -7195,21 +6971,6 @@
     "keyUnavailable": "暗号化キーを利用できないため、音声を保存できませんでした。",
     "reapproval": "音声の再承認が必要です"
   },
-  "upgradePrompt": {
-    "paymentFailed": "お支払いを処理できませんでした",
-    "weeklyLimit": "週間のクラウド上限に達しました",
-    "pastDueDescription": "現在は無料プランをご利用中です。ご安心ください、週 {{limit}} ワードまで引き続きご利用いただけます。\nお支払い方法を更新して、無制限の Pro に戻しましょう。",
-    "limitDescription": "{{used}} / {{limit}} ワード使用済み。\n文字起こしは保存・貼り付けされました。",
-    "updatePayment": "お支払い方法を更新",
-    "updatePaymentDescription": "無制限の Pro 文字起こしに戻りましょう。",
-    "upgradeToPro": "Pro にアップグレード",
-    "upgradeDescription": "月額 $8 から無制限の文字起こしを。",
-    "useApiKey": "自分の API キーを使用",
-    "useApiKeyDescription": "自分のキーで無制限に利用できます。",
-    "switchToLocal": "ローカルに切り替え",
-    "switchToLocalDescription": "オフライン文字起こし。制限なし。",
-    "rollingWeeklyLimit": "週間利用上限（ローリング）"
-  },
   "skills": {
     "pane": {
       "description": "ワークフローを一度アシスタントに教えると、合う場面でいつでも使われます。",
@@ -7537,15 +7298,26 @@
     },
     "waitingForAnswer": "回答を待っています"
   },
-  "affiliate": {
-    "remove": "クリエイターリンクを削除",
-    "haveLink": "クリエイターのリンクをお持ちですか？",
-    "label": "クリエイターのリンク（任意）",
-    "placeholder": "クリエイターのリンクを貼り付け",
-    "saved": "クリエイターのリンクを保存しました。",
-    "checking": "リンクを確認中…",
-    "unavailable": "リンクを確認できませんでした。もう一度お試しいただくか、入力欄を空にして続行してください。",
-    "privacy": "現在のトラッキング設定ではクリエイターのリンクを利用できません。入力欄を空にして続行してください。",
-    "review": "リンクを審査用に保存しました。"
+  "assistant": {
+    "panel": {
+      "selectionHint": "編集するテキストを選択",
+      "selectedContext": "選択したテキストを追加",
+      "removeSelectedContext": "選択したテキストを削除",
+      "newConversation": "新しい会話",
+      "copyToClipboard": "クリップボードにコピー",
+      "suggestions": {
+        "summarizeNotes": "最近のノートを要約して",
+        "calendar": "カレンダーの予定を教えて",
+        "draft": "文章の下書きを手伝って"
+      }
+    },
+    "toolActivity": {
+      "verbs": {
+        "invoking": "呼び出し中",
+        "calling": "実行中",
+        "using": "使用中"
+      },
+      "toolFallback": "ツール"
+    }
   }
 }

@@ -1,4 +1,4 @@
-const { EMBEDDING_VERSION } = require("../constants/speakerDetection.json");
+const { EMBEDDING_DIM, EMBEDDING_VERSION } = require("../constants/speakerDetection.json");
 const Database = require("better-sqlite3");
 const { dictionaryWordKey } = require("../utils/dictionaryWordKey");
 const {
@@ -19,7 +19,7 @@ const debugLogger = require("./debugLogger");
 const { buildNoteSearchQuery } = require("./noteSearch");
 const { normalizeStoredSpeakerCount } = require("./speakerCount");
 const { parseEventTime } = require("./calendarAvailability");
-const { isCloudEntryNewer } = require("./cloudSyncGuards");
+const { isCloudEntryNewer, normalizeTimestamp } = require("./cloudSyncGuards");
 // An explicit zone marks an instant this app captured at dictation time. A
 // naive timestamp may instead be a sync artifact: upsertTranscriptionFromCloud
 // keeps the cloud created_at but lets timestamp default to the local pull, so
@@ -1917,9 +1917,6 @@ class DatabaseManager {
         `);
         this.db.pragma("user_version = 5");
       }
-      if (this.db.pragma("user_version", { simple: true }) < 6) {
-        this.db.pragma("user_version = 6");
-      }
 
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS apple_calendars (
@@ -2663,14 +2660,18 @@ class DatabaseManager {
       this.db.exec(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_cloud_space_id ON spaces(cloud_space_id) WHERE cloud_space_id IS NOT NULL"
       );
+      // The fork already used user_version 6 for its FTS repair. The missing
+      // space-owner column distinguishes those databases from upstream's split.
+      const needsPrivateSpaceSplit = !this.db.pragma("table_info(spaces)")
+        .some((column) => column.name === "account_id");
       try {
         this.db.exec("ALTER TABLE spaces ADD COLUMN account_id TEXT");
       } catch (err) {
         if (!err.message.includes("duplicate column")) throw err;
       }
-      this.db.exec(
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_spaces_private_identity ON spaces(COALESCE(account_id, ''), COALESCE(workspace_id, '')) WHERE kind = 'private' AND deleted_at IS NULL"
-      );
+      // TODO(run-b): reconcile legacy fork private-space identities before
+      // adding upstream's unique index. Existing local sections must survive
+      // upgrade, including several rows without an account/workspace identity.
       try {
         // Marks the account's default private space once its default workspace
         // is bound, so it is found again after the account changes, before the
@@ -2805,7 +2806,9 @@ class DatabaseManager {
       // also require version 6 (`>= 6 && < N`), never a bare `< N`: on a device
       // whose split failed it would set N and the split would never run again
       // (test/helpers/databaseUserVersionSteps.test.js).
-      if (this.db.pragma("user_version", { simple: true }) < 6) {
+      if (this.db.pragma("user_version", { simple: true }) < 6 || needsPrivateSpaceSplit) {
+        // A failed split must retry even on a fork database formerly marked 6.
+        if (needsPrivateSpaceSplit) this.db.pragma("user_version = 5");
         try {
           this._splitPrivateSpaceByAccount();
         } catch (error) {
@@ -6158,6 +6161,11 @@ class DatabaseManager {
           .get(id);
         if (current && current.space_id !== updates.space_id) {
           updates.folder_sync_operation = "set";
+          const targetSpace = this.getSpace(updates.space_id);
+          if (targetSpace.kind === "team" &&
+              !this._sameWorkspaceForTeamMove(current.space_id, targetSpace)) {
+            return { success: false, error: "Cannot move between workspaces" };
+          }
           const newKind = this.db
             .prepare("SELECT kind FROM spaces WHERE id = ?")
             .get(updates.space_id)?.kind;
@@ -6796,6 +6804,7 @@ class DatabaseManager {
         if (folder.cloud_id || syncedNote) return teamRowSyncedRefusal();
       }
       const nextAccountId = this._accountIdForSpace(spaceId);
+      const leftTeam = oldKind === "team" && space.kind === "private" ? 1 : 0;
       const notes = this.db.transaction(() => {
         this.db
           .prepare(
@@ -6948,12 +6957,12 @@ class DatabaseManager {
 
   // Every one of these is a live private space of the signed-in account.
   _ownPrivateSpaces(...spaceIds) {
-    if (!this.activeAccountId) return false;
     const own = this.db.prepare(
       `SELECT 1 FROM spaces
-       WHERE id = ? AND kind = 'private' AND account_id = ? AND deleted_at IS NULL`
+       WHERE id = ? AND kind = 'private' AND account_id IS ? AND deleted_at IS NULL
+         AND (? IS NOT NULL OR workspace_id IS NULL)`
     );
-    return spaceIds.every((id) => own.get(id, this.activeAccountId));
+    return spaceIds.every((id) => own.get(id, this.activeAccountId, this.activeAccountId));
   }
 
   // Legacy cloud rows have no workspace placement. Preserve their known local
@@ -6967,7 +6976,7 @@ class DatabaseManager {
            JOIN spaces target_space ON target_space.id = ?
            WHERE current_space.id = ? AND current_space.kind = 'private'
              AND target_space.kind = 'private' AND current_space.deleted_at IS NULL
-             AND current_space.account_id = target_space.account_id`
+             AND current_space.account_id IS target_space.account_id`
         )
         .get(targetSpaceId, currentSpaceId)
     );
@@ -8045,15 +8054,19 @@ class DatabaseManager {
     return this.db
       .prepare(
         `SELECT id, title, folder_id, space_id,
-           CASE WHEN json_valid(transcript) AND json_type(transcript) = 'array'
-             AND json_array_length(transcript) > 0 THEN 1 ELSE 0 END AS has_transcript,
+           CASE WHEN json_valid(transcript) THEN
+             CASE WHEN json_type(transcript) = 'array' THEN json_array_length(transcript) > 0
+               WHEN json_type(transcript, '$.rows') = 'array' THEN json_array_length(transcript, '$.rows') > 0
+               ELSE 0 END ELSE 0 END AS has_transcript,
            CASE WHEN note_type = 'upload'
              AND trim(COALESCE(content, ''), ?) = ''
              AND trim(COALESCE(enhanced_content, ''), ?) = ''
              AND EXISTS (
                SELECT 1 FROM json_each(
                  CASE WHEN json_valid(transcript) AND json_type(transcript) = 'array'
-                   THEN transcript ELSE '[]' END
+                   THEN transcript
+                   WHEN json_valid(transcript) AND json_type(transcript, '$.rows') = 'array'
+                   THEN json_extract(transcript, '$.rows') ELSE '[]' END
                ) AS segment
                WHERE CASE WHEN segment.type = 'object' THEN
                  json_type(segment.value, '$.text') = 'text'
@@ -10621,8 +10634,10 @@ class DatabaseManager {
           embeddingBuffer.byteOffset,
           embeddingBuffer.byteLength / 4
         );
-        const updated = stored.length ? new Float32Array(stored.length) : incoming;
-        if (stored.length)
+        const sameSpace = existing.embedding_version === EMBEDDING_VERSION && stored.length === incoming.length && incoming.length === EMBEDDING_DIM;
+        const sampleCountExpr = sameSpace ? "sample_count + 1" : "1";
+        const updated = sameSpace ? new Float32Array(stored.length) : incoming;
+        if (sameSpace)
           for (let i = 0; i < stored.length; i++) updated[i] = 0.3 * incoming[i] + 0.7 * stored[i];
         const updatedBuf = Buffer.from(updated.buffer, updated.byteOffset, updated.byteLength);
         const finalEmail = normalizedEmail || existing.email || null;
@@ -10699,8 +10714,8 @@ class DatabaseManager {
     const lSamples = loser.sample_count || 1;
     const total = wSamples + lSamples;
 
-    const winnerCurrent = winner.embedding_version === EMBEDDING_VERSION;
-    const loserCurrent = loser.embedding_version === EMBEDDING_VERSION;
+    const winnerCurrent = winner.embedding_version === EMBEDDING_VERSION && winner.embedding?.length === EMBEDDING_DIM * 4;
+    const loserCurrent = loser.embedding_version === EMBEDDING_VERSION && loser.embedding?.length === EMBEDDING_DIM * 4;
 
     // Identity (name/email/mappings) always merges; the embedding must never be
     // blended across feature-extraction versions, so only combine same-space
@@ -10765,7 +10780,7 @@ class DatabaseManager {
       const query = includeEmbedding
         ? `SELECT * FROM speaker_profiles WHERE
           EXISTS (SELECT 1 FROM voice_exemplar_audio WHERE profile_id = speaker_profiles.id)
-          OR (sample_count > 0 AND length(embedding) = 2048 AND
+          OR (sample_count > 0 AND length(embedding) = ${EMBEDDING_DIM * 4} AND
             EXISTS (SELECT 1 FROM voice_exemplars WHERE profile_id = speaker_profiles.id))`
         : `SELECT id, display_name, email, sample_count, voice_usable, created_at, updated_at
            FROM speaker_profiles`;
@@ -10797,6 +10812,7 @@ class DatabaseManager {
           return {
             ...profile,
             embedding,
+            embedding_version: embedding.length === EMBEDDING_DIM * 4 ? EMBEDDING_VERSION : null,
             sample_count: result.cleanSpans,
             voice_usable: Number(result.usable),
           };
@@ -10804,7 +10820,7 @@ class DatabaseManager {
         .filter(
           (profile) =>
             profile.sample_count > 0 &&
-            profile.embedding?.length === 2048 &&
+            profile.embedding?.length === EMBEDDING_DIM * 4 &&
             (includeProvisional || profile.voice_usable === 1)
         );
     } catch (error) {
@@ -11217,15 +11233,7 @@ class DatabaseManager {
     }
   }
 
-  upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId = null, options = {}) {
-    if (!this.db) throw new Error("Database not initialized");
-    if (!options.insideTransaction)
-      return this.db.transaction(() =>
-        this.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId, {
-          ...options,
-          insideTransaction: true,
-        })
-      )();
+  getNoteForCloudRow(clientNoteId, cloudId) {
     try {
       if (!this.db) throw new Error("Database not initialized");
       const byKey = clientNoteId ? this.getNoteByClientId(clientNoteId) : null;
@@ -11454,8 +11462,13 @@ class DatabaseManager {
     cloudNote,
     localFolderId,
     localSpaceId = null,
-    { newKeyIfTaken = false } = {}
+    { newKeyIfTaken = false, insideTransaction = false } = {}
   ) {
+    if (!this.db) throw new Error("Database not initialized");
+    if (!insideTransaction)
+      return this.db.transaction(() => this.upsertNoteFromCloud(
+        cloudNote, localFolderId, localSpaceId, { newKeyIfTaken, insideTransaction: true }
+      ))();
     try {
       if (!this.db) throw new Error("Database not initialized");
       const requestedFolderId = localFolderId;
@@ -11521,6 +11534,10 @@ class DatabaseManager {
       const clearsContent = cleared.includes("content");
       const clearsSummary = cleared.includes("enhanced_content");
       cloudNote = { ...cloudNote };
+      if (!cloudNote.client_note_id) {
+        cloudNote.client_note_id = existing?.client_note_id ?? randomUUID();
+      }
+      if (cloudNote.title == null) cloudNote.title = "Untitled Note";
       const cloudTranscriptForLabels = require("./transcriptDocument").publicTranscript(
         cloudNote.transcript
       );
@@ -11628,6 +11645,14 @@ class DatabaseManager {
             }
           )
         : null;
+      const receiptIsCurrent = versioned
+        ? !hasNoteRevision(existing?.cloud_revision) || cloudNote.revision >= existing.cloud_revision
+        : normalizeTimestamp(cloudNote.updated_at) >= normalizeTimestamp(existing?.updated_at);
+      const keepsPendingFolder = Boolean(existing?.folder_sync_operation &&
+        !(receiptIsCurrent && existing.folder_id === localFolderId && existing.space_id === spaceId));
+      const keepsPendingParticipants = Boolean(existing?.participants_sync_operation &&
+        !(receiptIsCurrent && Object.hasOwn(cloudNote, "participants") &&
+          existing.participants === cloudNote.participants));
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhancement_template_id, enhanced_at_content_hash, note_type, source_file,
@@ -11650,10 +11675,10 @@ class DatabaseManager {
           transcript = CASE
             WHEN COALESCE(excluded.transcript, '') = '' AND COALESCE(transcript, '') <> ''
             THEN transcript ELSE excluded.transcript END,
-          folder_id = CASE WHEN folder_sync_operation IS NOT NULL THEN folder_id ELSE excluded.folder_id END,
-          space_id = CASE WHEN folder_sync_operation IS NOT NULL THEN space_id ELSE excluded.space_id END,
-          account_id = CASE WHEN folder_sync_operation IS NOT NULL THEN account_id ELSE excluded.account_id END,
-          participants = CASE WHEN participants_sync_operation IS NOT NULL THEN participants
+          folder_id = CASE WHEN ${Number(keepsPendingFolder)} THEN folder_id ELSE excluded.folder_id END,
+          space_id = CASE WHEN ${Number(keepsPendingFolder)} THEN space_id ELSE excluded.space_id END,
+          account_id = CASE WHEN ${Number(keepsPendingFolder)} THEN account_id ELSE excluded.account_id END,
+          participants = CASE WHEN ${Number(keepsPendingParticipants)} THEN participants
             ELSE COALESCE(excluded.participants, participants) END,
           calendar_event_id = COALESCE(excluded.calendar_event_id, calendar_event_id),
           diarization_enabled = COALESCE(excluded.diarization_enabled, diarization_enabled),
@@ -11661,7 +11686,10 @@ class DatabaseManager {
           updated_by_user_id = ${updaterUpdate},
           owner_user_id = COALESCE(excluded.owner_user_id, owner_user_id),
           created_by_user_id = ${creatorUpdate},
-          sync_status = CASE WHEN folder_sync_operation IS NOT NULL OR participants_sync_operation IS NOT NULL
+          folder_sync_operation = ${keepsPendingFolder ? "folder_sync_operation" : "NULL"},
+          participants_sync_operation = ${keepsPendingParticipants ? "participants_sync_operation" : "NULL"},
+          sync_status = CASE WHEN deleted_at IS NOT NULL THEN sync_status
+            WHEN ${Number(keepsPendingFolder || keepsPendingParticipants)}
             THEN 'pending' ELSE 'synced' END,
           left_team = 0,
           updated_at = excluded.updated_at,

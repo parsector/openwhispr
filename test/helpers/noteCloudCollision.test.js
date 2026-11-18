@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -285,7 +286,7 @@ test("startup cloud-note merging retains speaker names for safe legacy transcrip
   }
   const [, unchanged, edited] = copies.map((note) => db.getNote(note.id));
   assert.equal(unchanged.account_id, "account-a");
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-startup-note-files-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-startup-note-files-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
   const legacyDir = path.join(basePath, "Personal");
   fs.mkdirSync(legacyDir);

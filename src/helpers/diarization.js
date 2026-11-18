@@ -35,14 +35,12 @@ const ECHO_DUPLICATE_MERGE_LIMIT = 3;
 
 const SEGMENTATION_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2";
-const EMBEDDING_MODEL_URL =
-  "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
+const { EMBEDDING_MODEL_URL, EMBEDDING_MODEL_FILE: EMBEDDING_ONNX } = require("../constants/speakerDetection.json");
 const SILERO_VAD_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
 
 const SEGMENTATION_DIR = "sherpa-onnx-pyannote-segmentation-3-0";
 const SEGMENTATION_ONNX = path.join(SEGMENTATION_DIR, "model.onnx");
-const EMBEDDING_ONNX = "3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx";
 const SILERO_VAD_ONNX = "silero_vad.onnx";
 
 class DiarizationManager {
