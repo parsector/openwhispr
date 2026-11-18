@@ -66,7 +66,7 @@ async function mountList(t, overrides = {}) {
     resolveAlias: { "@": path.resolve(__dirname, "../../src") },
     mockModules: {
       "react-i18next": `
-        const t = (key) => key;
+        const t = (key, values) => key === "models.savedUnavailable" ? "Saved choice: " + values.model + ". Choice kept." : key;
         export function useTranslation() { return { t }; }
       `,
       // Expose every row without needing a scroll container or browser layout.
@@ -105,12 +105,20 @@ async function mountList(t, overrides = {}) {
   }
   root = createRoot(container);
   await React.act(async () => root.render(React.createElement(Harness)));
-  const input = () => tree.props.children[0].props.children[1];
+  const find = (node, predicate) => {
+    if (Array.isArray(node)) return node.map((child) => find(child, predicate)).find(Boolean);
+    if (!node || typeof node !== "object") return null;
+    return predicate(node) ? node : find(node.props?.children, predicate);
+  };
+  const input = () => find(tree, (node) => node.props?.role === "combobox");
   const rows = () =>
-    tree.props.children[1]
-      ? tree.props.children[1].props.children.props.children.map((row) => row.props.children)
+    find(tree, (node) => node.props?.role === "listbox")
+      ? find(tree, (node) => node.props?.role === "listbox").props.children.map(
+          (row) => row.props.children
+        )
       : [];
   return {
+    notice: () => find(tree, (node) => node.props?.role === "status")?.props.children,
     selected,
     rows,
     setProps: (patch) => {
@@ -127,6 +135,15 @@ async function mountList(t, overrides = {}) {
     key: (key) => React.act(async () => input().props.onKeyDown({ key, preventDefault() {} })),
   };
 }
+
+test("a missing saved ID remains visible without being replaced by a recommendation", async (t) => {
+  const list = await mountList(t, { selectedModel: "private/typed-id" });
+  assert.match(list.notice(), /private\/typed-id.*Choice kept/);
+  assert.deepEqual(list.selected, []);
+  await list.search("not-in-the-catalog");
+  assert.match(list.notice(), /private\/typed-id/);
+  assert.deepEqual(list.selected, []);
+});
 
 test("larger providers lead, ties use provider name, and small providers share Other", async (t) => {
   const list = await mountList(t, { selectedModel: RANKING[1] });

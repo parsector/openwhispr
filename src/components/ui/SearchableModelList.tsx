@@ -207,6 +207,11 @@ export default function SearchableModelList({
 
   return (
     <div className="space-y-2">
+      {selectedModel && !selectedOption && (
+        <p role="status" className="text-sm text-muted-foreground">
+          {t("models.savedUnavailable", { model: selectedModel })}
+        </p>
+      )}
       <div dir="ltr" className="relative">
         <Search
           size={14}

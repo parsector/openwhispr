@@ -84,8 +84,8 @@ interface OpenRouterCatalogModel {
 export const openRouterModelList = (needs: readonly ModelCapability[] = []) =>
   needs.includes("image") ? OPENROUTER_VISION_MODELS : OPENROUTER_TEXT_MODELS;
 
-// Whether a /models entry is offered to a scope with `needs`: it is on that scope's
-// tested list, and still lists tool support where the scope sends tools.
+// Whether a /models entry is recommended to a scope with `needs`. Discovery
+// entries outside this tested list remain selectable.
 export function offersOpenRouterModel(
   model: OpenRouterCatalogModel,
   needs: readonly ModelCapability[] = []

@@ -105,18 +105,18 @@ test("backs off after a failure instead of refetching on every call", async () =
   assert.equal(calls, 1);
 });
 
-test("excludes explicitly retired models even while the live endpoint serves them", async () => {
+test("keeps served models regardless of historical retirement or deprecation metadata", async () => {
   const { getTinfoilChatModels } = loadCatalog(async () =>
     okResponse([
       CHAT_MODEL,
       { ...CHAT_MODEL, id: "glm-5-3-flash", deprecated: true },
       { ...CHAT_MODEL, id: "glm-5-2" },
-      // A future deprecation is not an instruction to migrate an unrelated model.
+      // Deprecation metadata cannot hide any model from discovery.
       { ...CHAT_MODEL, id: "future-model", deprecated: true },
     ])
   );
   assert.deepEqual(
     (await getTinfoilChatModels()).map((m) => m.id),
-    ["glm-5-3", "future-model"]
+    ["glm-5-3", "glm-5-3-flash", "glm-5-2", "future-model"]
   );
 });

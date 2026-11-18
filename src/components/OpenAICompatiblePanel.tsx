@@ -29,7 +29,7 @@ interface ModelOption {
   label: string;
   description?: string;
   ownedBy?: string;
-  eligibleForScope: boolean;
+  suggested: boolean;
 }
 
 interface OpenAICompatiblePanelProps {
@@ -84,16 +84,14 @@ export default function OpenAICompatiblePanel({
   const apiKey = keyDraft.value("apiKey", savedApiKey);
   // OpenRouter's tested list supplies the recommendation ranking for this scope.
   const testedModels = provider === "openrouter" ? openRouterModelList(modelNeeds) : null;
-  // The list reads the key, the model and the address setter through refs, so neither a key
+  // The list reads the key and the address setter through refs, so neither a key
   // change, a pick nor a parent's new setter on each render reloads it.
   const apiKeyRef = useRef(apiKey);
-  const modelRef = useRef(model);
   const setBaseUrlRef = useRef(setBaseUrl);
   useEffect(() => {
     apiKeyRef.current = apiKey;
-    modelRef.current = model;
     setBaseUrlRef.current = setBaseUrl;
-  }, [apiKey, model, setBaseUrl]);
+  }, [apiKey, setBaseUrl]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -250,18 +248,16 @@ export default function OpenAICompatiblePanel({
                 label: value,
                 description,
                 ownedBy,
-                eligibleForScope:
-                  provider !== "openrouter" || offersOpenRouterModel(item, modelNeeds),
+                suggested: provider !== "openrouter" || offersOpenRouterModel(item, modelNeeds),
               };
             })
-            .filter(
-              (option): option is ModelOption =>
-                option !== null && (option.eligibleForScope || option.value === modelRef.current)
-            );
-          // A saved pick that is off the list ranks -1, so it leads.
-          return testedModels
-            ? options.sort((a, b) => testedModels.indexOf(a.value) - testedModels.indexOf(b.value))
-            : options;
+            .filter((option): option is ModelOption => option !== null);
+          // The shortlist ranks suggestions; every discovered ID stays selectable.
+          const rank = (option: ModelOption) =>
+            option.suggested
+              ? (testedModels?.indexOf(option.value) ?? Number.MAX_SAFE_INTEGER)
+              : Number.MAX_SAFE_INTEGER;
+          return testedModels ? options.sort((a, b) => rank(a) - rank(b)) : options;
         };
 
         // When the entered base yields no models, fall back through sibling
@@ -390,15 +386,10 @@ export default function OpenAICompatiblePanel({
     loadRemoteModels(undefined, true);
   }, [applyBase, isDraftDirty, trimmedDraft, loadRemoteModels]);
 
-  // Preserve an incompatible saved pick only while it is selected, without reloading the catalog.
+  // Discovery and capability metadata are suggestions, never a model allowlist.
   const displayedModels = useMemo(
-    (): ModelOption[] =>
-      isDraftDirty
-        ? []
-        : modelOptions.filter(
-            (option): boolean => option.eligibleForScope || option.value === model
-          ),
-    [isDraftDirty, modelOptions, model]
+    (): ModelOption[] => (isDraftDirty ? [] : modelOptions),
+    [isDraftDirty, modelOptions]
   );
   const queryUrl = buildApiUrl(hasBase ? normalizedBase : baseUrlPlaceholder, "/models");
 
@@ -525,7 +516,9 @@ export default function OpenAICompatiblePanel({
             models={displayedModels}
             selectedModel={model}
             onModelSelect={setModel}
-            modelRanking={testedModels ?? undefined}
+            modelRanking={testedModels?.filter((id) =>
+              modelOptions.some((option) => option.value === id && option.suggested)
+            )}
           />
         ) : (
           <ModelCardList

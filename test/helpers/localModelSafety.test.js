@@ -40,7 +40,7 @@ test("a Cohere model without English falls back to a language it supports", () =
   }
 });
 
-test("the installed record keeps out a model the running app is too old for", (t) => {
+test("the installed record ignores minimum-app-version publisher restrictions", (t) => {
   const store = require("../../src/models/registryData.js");
   const installed = require("../../src/helpers/installedModels");
   const dir = createTempDir(path.join(os.tmpdir(), "installed-gate-"));
@@ -59,11 +59,12 @@ test("the installed record keeps out a model the running app is too old for", (t
     store.replaceRegistryData({ data: old.data, manifestVersion: old.manifestVersion + 2 })
   );
   installed.rememberInstalledModel("whisperModels", "", "future-whisper");
-  assert.equal(
-    installed.withInstalledModels(structuredClone(seed), "1.12.0").whisperModels["future-whisper"],
-    undefined
-  );
-  assert.ok(
-    installed.withInstalledModels(structuredClone(seed), "99.0.0").whisperModels["future-whisper"]
-  );
+  for (const appVersion of ["1.12.0", "99.0.0"]) {
+    assert.deepEqual(
+      installed.withInstalledModels(structuredClone(seed), appVersion).whisperModels[
+        "future-whisper"
+      ],
+      data.whisperModels["future-whisper"]
+    );
+  }
 });

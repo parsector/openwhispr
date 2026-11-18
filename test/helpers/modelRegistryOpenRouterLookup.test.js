@@ -5,6 +5,17 @@ const modelRegistryData = require("../../src/models/modelRegistryData.json");
 
 const load = () => import("../../src/models/ModelRegistry.ts");
 
+test("OpenRouter keeps its request dialect for saved bare and private model ids", async () => {
+  const { getOpenAiApiConfig } = await load();
+  for (const id of ["my-private-alias", "gpt-4.1", "google/gemini-3.5-flash-lite"]) {
+    assert.deepEqual(getOpenAiApiConfig(id, "openrouter"), {
+      tokenParam: "max_tokens",
+      supportsTemperature: true,
+    });
+  }
+  assert.equal(getOpenAiApiConfig("gpt-4.1", "openai").tokenParam, "max_completion_tokens");
+});
+
 // OpenRouter ids carry a vendor prefix the registry stores without. The
 // screen-context gate reads supportsVision off the registry entry, so a miss
 // here drops every screenshot for an OpenRouter agent (#2203).

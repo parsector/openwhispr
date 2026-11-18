@@ -20,8 +20,8 @@ missing-model error. Downloading a different local model never replaces a
 nonempty saved choice. The user explicitly selects a replacement.
 
 Tinfoil discovery adds models to the fork list; omissions cannot remove shipped
-entries or change saved IDs. OpenRouter's shortlist continues ranking/filtering
-suggestions, while its existing typed/saved-ID path remains available. Provider
+entries or change saved IDs. OpenRouter's shortlist ranks suggestions while the
+full discovered list remains selectable and saved IDs stay visible. Provider
 memory retains unlisted saved IDs across switches. Actual managed device policy
 still applies; lifecycle metadata cannot establish management or a plan gate.
 

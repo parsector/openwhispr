@@ -48,18 +48,32 @@ test("a sherpa default is read from PARAKEET_MODEL, and cloud mode yields no def
   );
 });
 
-test("a retired model is listed only while it is on disk", async () => {
+test("retirement does not hide installed or downloadable transcription models", async () => {
   const store = await import("../../src/models/registryData.js");
   const data = structuredClone(registry);
   Object.assign(data.whisperModels.tiny, { retired: true });
   Object.assign(data.whisperModels.small, { retired: true });
   store.replaceRegistryData({ data, manifestVersion: store.getRegistryVersion() + 1 });
   try {
-    const ids = listLocalTranscriptionModels({ ...managers(new Set(["tiny"])), env: {} }).map(
-      (m) => m.model
+    const models = listLocalTranscriptionModels({ ...managers(new Set(["tiny"])), env: {} });
+    assert.deepEqual(
+      models.find((m) => m.model === "tiny"),
+      {
+        provider: "whisper",
+        model: "tiny",
+        downloaded: true,
+        default: false,
+      }
     );
-    assert.ok(ids.includes("tiny"), "still runs from disk");
-    assert.equal(ids.includes("small"), false, "nothing to run, so not offered");
+    assert.deepEqual(
+      models.find((m) => m.model === "small"),
+      {
+        provider: "whisper",
+        model: "small",
+        downloaded: false,
+        default: false,
+      }
+    );
   } finally {
     store.replaceRegistryData({
       data: structuredClone(registry),

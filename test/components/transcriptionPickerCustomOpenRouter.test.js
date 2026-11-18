@@ -166,15 +166,10 @@ test("opening Settings keeps an OpenRouter model outside the shortlist", async (
   }
 });
 
-// Deepgram via OpenRouter drops the dictionary, so it is offered in Upload only.
-// A dictation pick saved before that must be moved off when Settings opens,
-// even though other OpenRouter ids outside the shortlist are kept.
-test("opening Settings moves dictation off Deepgram via OpenRouter; Upload keeps it", async (t) => {
+// Dictionary support can guide suggestions, but opening Settings must preserve
+// the saved provider and model in both scopes.
+test("opening Settings preserves Deepgram via OpenRouter in dictation and Upload", async (t) => {
   const { useSettingsStore, mount } = await loadPicker(t);
-  const expected = {
-    dictation: "mistralai/voxtral-mini-transcribe-3-0",
-    upload: "deepgram/nova-3",
-  };
   for (const context of ["dictation", "upload"]) {
     useSettingsStore.setState({
       useLocalWhisper: false,
@@ -188,7 +183,12 @@ test("opening Settings moves dictation off Deepgram via OpenRouter; Upload keeps
 
     assert.equal(
       useSettingsStore.getState()[key(context, "cloudTranscriptionModel")],
-      expected[context],
+      "deepgram/nova-3",
+      context
+    );
+    assert.equal(
+      useSettingsStore.getState()[key(context, "cloudTranscriptionProvider")],
+      "openrouter",
       context
     );
   }

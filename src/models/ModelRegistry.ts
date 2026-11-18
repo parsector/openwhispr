@@ -539,23 +539,22 @@ export interface OpenAiApiConfig {
 }
 
 export function getOpenAiApiConfig(modelId: string, provider?: string): OpenAiApiConfig {
+  // OpenRouter speaks standard Chat Completions, including private aliases and
+  // bare ids. Its dialect takes precedence over a native vendor's token parameter.
+  // Sampling params pass through to the upstream vendor, so a model the
+  // registry knows rejects temperature (Claude Opus 4.7+, #1417) must keep it
+  // omitted here too — OpenRouter forwards the 400 rather than stripping it.
+  if (provider === "openrouter") {
+    const upstream = getCloudModel(modelId, provider);
+    return { tokenParam: "max_tokens", supportsTemperature: upstream?.supportsTemperature ?? true };
+  }
+
   const model = getCloudModel(modelId);
   if (model?.tokenParam) {
     return {
       tokenParam: model.tokenParam,
       supportsTemperature: model.supportsTemperature ?? true,
     };
-  }
-
-  // OpenRouter's vendor-prefixed ids (openai/gpt-4o, anthropic/claude-…) speak
-  // standard Chat Completions. Scoped to the provider so vendor-prefixed ids on
-  // custom endpoints keep the request shape they had before OpenRouter landed.
-  // Sampling params pass through to the upstream vendor, so a model the
-  // registry knows rejects temperature (Claude Opus 4.7+, #1417) must keep it
-  // omitted here too — OpenRouter forwards the 400 rather than stripping it.
-  if (provider === "openrouter" && modelId.includes("/")) {
-    const upstream = getCloudModel(modelId, provider);
-    return { tokenParam: "max_tokens", supportsTemperature: upstream?.supportsTemperature ?? true };
   }
 
   // Discovery is advisory; unlisted Tinfoil/Groq ids retain their provider dialect.

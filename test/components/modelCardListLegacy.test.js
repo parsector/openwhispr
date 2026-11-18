@@ -45,20 +45,23 @@ async function loadModelCardList(t) {
   return { ModelCardList: module.default, ModelCard: module.ModelCard, render };
 }
 
-const listedIds = (tree) => tree.props.children.map((card) => card.props.model.value);
+const listedIds = (tree) =>
+  React.Children.toArray(tree.props.children)
+    .filter((card) => card.props?.model)
+    .map((card) => card.props.model.value);
 
-test("a legacy model is listed only while it is the selection", async (t) => {
+test("every legacy model remains listed regardless of the saved selection", async (t) => {
   const { ModelCardList, render } = await loadModelCardList(t);
   const models = [CURRENT, RETIRED, KEPT];
   const onModelSelect = () => {};
 
   assert.deepEqual(
     listedIds(await render(ModelCardList, { models, selectedModel: "kept", onModelSelect })),
-    ["current", "kept"]
+    ["current", "retired", "kept"]
   );
   assert.deepEqual(
     listedIds(await render(ModelCardList, { models, selectedModel: "current", onModelSelect })),
-    ["current"]
+    ["current", "retired", "kept"]
   );
 });
 
@@ -71,36 +74,32 @@ test("a downloaded legacy local model stays listed so it can be deleted", async 
     onDownload: () => {},
     onDelete: () => {},
   });
-  assert.deepEqual(listedIds(tree), ["current", "retired"]);
+  assert.deepEqual(listedIds(tree), ["current", "retired", "kept"]);
 });
 
-test("a legacy card is marked, can't be picked, and offers no download", async (t) => {
+test("legacy metadata permits selection, download and deletion", async (t) => {
   const { ModelCard, render } = await loadModelCardList(t);
   const selected = [];
   const deleted = [];
+  const downloads = [];
   const card = async (model, isSelected) =>
     render(ModelCard, {
       model,
       isSelected,
       onSelect: (id) => selected.push(id),
-      onDownload: () => {},
+      onDownload: (id) => downloads.push(id),
       onDelete: (id) => deleted.push(id),
     });
 
   const downloaded = await card({ ...RETIRED, isDownloaded: true }, false);
-  assert.equal(downloaded.props["aria-disabled"], true);
-  assert.equal(downloaded.props.title, "models.legacyHint");
-  assert.doesNotMatch(
-    downloaded.props.className,
-    /hover:/,
-    "no hover lift on a card that can't be picked"
-  );
-  assert.ok(
+  assert.equal(downloaded.props["aria-disabled"], undefined);
+  assert.equal(downloaded.props.title, undefined);
+  assert.equal(
     findElement(downloaded, (node) => node.props?.children === "models.legacy"),
-    "a Legacy badge says why"
+    null
   );
   downloaded.props.onClick();
-  assert.deepEqual(selected, []);
+  assert.deepEqual(selected, ["retired"]);
   const remove = findElement(
     downloaded,
     (node) => typeof node.props?.onClick === "function" && node.props.size === "icon"
@@ -109,15 +108,16 @@ test("a legacy card is marked, can't be picked, and offers no download", async (
   assert.deepEqual(deleted, ["retired"]);
 
   const notDownloaded = await card(KEPT, true);
-  assert.equal(
-    findElement(notDownloaded, (node) => [node.props?.children].flat().includes("common.download")),
-    null,
-    "no Download button"
+  const download = findElement(notDownloaded, (node) =>
+    [node.props?.children].flat().includes("common.download")
   );
+  assert.ok(download, "legacy entries remain downloadable");
+  download.props.onClick({ stopPropagation() {} });
+  assert.deepEqual(downloads, ["kept"]);
 
   const current = await card({ ...CURRENT, isDownloaded: true }, false);
   assert.equal(current.props["aria-disabled"], undefined);
   assert.equal(current.props.title, undefined);
   current.props.onClick();
-  assert.deepEqual(selected, ["current"]);
+  assert.deepEqual(selected, ["retired", "current"]);
 });

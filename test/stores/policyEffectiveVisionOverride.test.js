@@ -156,8 +156,9 @@ test("the vision picker shows no Active model after policy clears its selection"
   const visionMarkup = renderEditor("dictationAgentVision");
   assert.ok(visionMarkup.includes("GPT-6 Astra"), "the model list is actually rendered");
   assert.ok(!visionMarkup.includes(`>${i18n.t("common.active")}<`));
-  // gpt-5-mini is legacy: listed only where it is the selection.
-  assert.ok(!visionMarkup.includes("GPT-5 Mini"));
+  // Allowed-provider entries remain visible regardless of lifecycle metadata;
+  // the blocked override still has no active selection.
+  assert.ok(visionMarkup.includes("GPT-5 Mini"), "legacy entries remain selectable");
   const agentMarkup = renderEditor("dictationAgent");
   assert.ok(agentMarkup.includes("GPT-5 Mini"));
   assert.ok(agentMarkup.includes(`>${i18n.t("common.active")}<`));

@@ -302,7 +302,7 @@ const openRouterListProps = async (t, modelNeeds, model = "", fetch = openRouter
 const openRouterList = async (...args) =>
   (await openRouterListProps(...args)).models.map((option) => option.value);
 
-test("OpenRouter removes a saved model without tools after another model is selected", async (t) => {
+test("OpenRouter retains discovered models without tools after another model is selected", async (t) => {
   const incompatibleModel = "openai/gpt-4.1";
   const catalog = t.mock.fn(
     respond(200, {
@@ -327,24 +327,32 @@ test("OpenRouter removes a saved model without tools after another model is sele
     panel
       .find((node) => Array.isArray(node.props?.models))[0]
       .props.models.map((option) => option.value);
-  assert.deepEqual(choices(), [incompatibleModel, HAIKU], "the saved pick stays visible");
+  assert.deepEqual(
+    choices(),
+    [HAIKU, incompatibleModel],
+    "the saved pick stays available after suggestions"
+  );
 
   await panel.setProps({ model: HAIKU });
-  assert.deepEqual(choices(), [HAIKU], "the former saved pick is no longer selectable");
+  assert.deepEqual(choices(), [HAIKU, incompatibleModel], "a former selection remains selectable");
   assert.equal(catalog.mock.callCount(), 1, "selection changes reuse the loaded catalog");
 });
 
-test("OpenRouter lists only the tested models the scope's requests can use", async (t) => {
-  await t.test("text features skip batch variants and untested models", async (t) => {
+test("OpenRouter ranks tested models as suggestions without filtering discovery", async (t) => {
+  await t.test("unlisted and batch variants remain selectable", async (t) => {
     const list = await openRouterListProps(t);
     assert.deepEqual(
       list.models.map((option) => option.value),
-      [HAIKU]
+      [HAIKU, `${HAIKU}:batch`, MISTRAL]
     );
     assert.ok(list.modelRanking.includes(HAIKU), "short lists keep provider grouping too");
   });
-  await t.test("a saved pick stays listed, first, even when the scope can't use it", async (t) => {
-    assert.deepEqual(await openRouterList(t, ["tools"], MISTRAL), [MISTRAL, HAIKU]);
+  await t.test("a saved pick stays available outside the shortlist", async (t) => {
+    assert.deepEqual(await openRouterList(t, ["tools"], MISTRAL), [
+      HAIKU,
+      `${HAIKU}:batch`,
+      MISTRAL,
+    ]);
   });
   const { OPENROUTER_TEXT_MODELS, OPENROUTER_VISION_MODELS } =
     await import("../../src/utils/openRouterModels.ts");
