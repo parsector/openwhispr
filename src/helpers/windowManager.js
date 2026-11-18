@@ -1099,13 +1099,34 @@ this._dictationAttempt = null;
     );
   }
 
-  _shouldBlockDictationInput() {
-    return Boolean(this.agentWindow?.isRecording());
+  _shouldBlockDictationInput(inputKind = DICTATION_INPUT_KIND.DICTATION) {
+    if (this.agentWindow?.isRecording()) return true;
+    const blocked = shouldBlockDictationWhilePanelOpen({
+      assistantPanelOpen: this._assistantPanelOpen,
+      assistantPanelBusy: this._assistantPanelBusy,
+      inputKind,
+      companionAvailable: this._isAgentDictationPillAvailable(),
+    });
+    // A dictation press that lost to a missing companion re-kicks its load
+    // (a companion mid-load is left alone), so the surface can come back and
+    // the next press can land.
+    if (blocked && this._assistantPanelOpen && inputKind === DICTATION_INPUT_KIND.DICTATION) {
+      this.showAgentDictationPill();
+    }
+    // Fail-closed by design: while the companion is recreating after a crash
+    // (blocked && !companionAvailable above), a blocked "dictation" press
+    // could actually be a STOP of an already-running recording, not a start —
+    // this blanket block doesn't distinguish them. That costs the user one
+    // extra press with a hot mic (Escape/the cancel hotkey still work in the
+    // meantime). If that gap ever needs closing, a future reader should
+    // consider letting the press through when `this._isDictatingToggle` is
+    // already true, rather than loosening the block for starts too.
+    return blocked;
   }
 
   _sendDictationToggle(channel, inputKind) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
-    if (this._shouldBlockDictationInput()) {
+    if (this._shouldBlockDictationInput(inputKind)) {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
@@ -1148,8 +1169,12 @@ this._dictationAttempt = null;
     }
   }
 
-  setDictationLifecycleState(state, attempt) {
+  setDictationLifecycleState(state, inputKindOrAttempt) {
+    const isInputKind = Object.values(DICTATION_INPUT_KIND).includes(inputKindOrAttempt);
+    const inputKind = isInputKind ? inputKindOrAttempt : DICTATION_INPUT_KIND.DICTATION;
+    const attempt = isInputKind ? undefined : inputKindOrAttempt;
     const nextState = normalizeDictationLifecycle(state);
+    const nextInputKind = normalizeDictationInputKind(inputKind);
     if (attempt !== undefined) {
       if (nextState === DICTATION_LIFECYCLE.PREPARING && !this._dictationAttempt) {
         if (this.agentWindow?.isRecording()) return false;
@@ -1158,11 +1183,16 @@ this._dictationAttempt = null;
       if (this._dictationAttempt !== attempt) return false;
     }
     if (nextState === DICTATION_LIFECYCLE.IDLE) this._dictationAttempt = null;
-    if (nextState === this._dictationLifecycleState) return true;
+    if (nextState === this._dictationLifecycleState && nextInputKind === this._dictationInputKind) return true;
+    if (this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE && nextState !== DICTATION_LIFECYCLE.IDLE) {
+      this.assistantPasteTarget?.noteRecordingStart();
+    }
 
     this._dictationLifecycleState = nextState;
+    this._dictationInputKind = nextInputKind;
     this._isDictatingToggle = isDictationRecording(nextState);
     this.syncUserRecording();
+    this._sendAgentDictationPillState();
     this.onDictationStateChanged?.();
     return true;
   }
@@ -1243,7 +1273,7 @@ this._dictationAttempt = null;
 
   sendStartDictation() {
     if (!this._isOnboardingInputAllowed("dictation")) return;
-    if (this._shouldBlockDictationInput()) {
+    if (this._shouldBlockDictationInput("dictation")) {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
@@ -1271,7 +1301,7 @@ this._dictationAttempt = null;
 
   sendPrepareDictation({ inputKind = "dictation" } = {}) {
     if (!this._isOnboardingInputAllowed(inputKind)) return;
-    if (this._shouldBlockDictationInput()) {
+    if (this._shouldBlockDictationInput(inputKind)) {
       return;
     }
     if (this.hotkeyManager.isInListeningMode()) {
@@ -1281,7 +1311,7 @@ this._dictationAttempt = null;
       return;
     }
     if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-      this.mainWindow.webContents.send("prepare-dictation");
+      this.mainWindow.webContents.send("prepare-dictation", { inputKind });
     }
   }
 
@@ -1640,6 +1670,7 @@ this._dictationAttempt = null;
     if (this._onboardingActive) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("preview-text", text);
+    this._sendAgentDictationPreview("preview-text", text);
     // Partials arrive several times a second; re-showing a visible window
     // restacks it (and re-fires "show") on every chunk (#1262).
     if (!this.mainWindow.isVisible()) {
@@ -1652,6 +1683,7 @@ this._dictationAttempt = null;
     if (this._onboardingActive) return;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("preview-append", text);
+    this._sendAgentDictationPreview("preview-append", text);
   }
 
   holdTranscriptionPreview(options = {}) {
@@ -1661,6 +1693,7 @@ this._dictationAttempt = null;
       showCleanup: !!options.showCleanup,
     };
     this.mainWindow.webContents.send("preview-hold", payload);
+    this._sendAgentDictationPreview("preview-hold", payload);
   }
 
   completeTranscriptionPreview(text) {
@@ -1668,6 +1701,7 @@ this._dictationAttempt = null;
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     const payload = { text };
     this.mainWindow.webContents.send("preview-result", payload);
+    this._sendAgentDictationPreview("preview-result", payload);
     this.enforceMainWindowOnTop();
   }
 
@@ -1681,6 +1715,7 @@ this._dictationAttempt = null;
   hideTranscriptionPreview() {
     if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
     this.mainWindow.webContents.send("preview-hide");
+    this._sendAgentDictationPreview("preview-hide");
   }
 
   // The display the user is working on is the one showing the app being dictated
@@ -1850,6 +1885,7 @@ this._dictationAttempt = null;
   _hideNormalAppSurfaces() {
     this.hideDictationPanel();
     this.hideTranscriptionPreview();
+    this.hideAgentDictationPill();
     this.agentWindow?.dismiss();
     this.dismissMeetingNotification({ flushQueued: false });
   }
@@ -2049,6 +2085,7 @@ this._dictationAttempt = null;
   }
 
   hideDictationPanel() {
+    if (this._assistantPanelOpen || this._assistantPanelBusy) return;
     this._mainWindowPlacementCoordinator.cancelPending();
     if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.hide();
   }

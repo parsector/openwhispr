@@ -456,7 +456,7 @@ test("prepare-dictation goes out only for a press the onboarding demo allows", (
   manager.sendPrepareDictation();
   manager.sendPrepareDictation({ inputKind: "assistant" });
 
-  assert.deepEqual(sent, [{ channel: "prepare-dictation", payload: undefined }]);
+  assert.deepEqual(sent, [{ channel: "prepare-dictation", payload: { inputKind: "assistant" } }]);
 });
 
 // The normal app: onboarding is over.
