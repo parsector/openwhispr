@@ -1,5 +1,3 @@
-import { getLocalModel } from "../models/ModelRegistry";
-
 const LOCAL_TOOL_MIN_PARAMS_B = 4;
 
 export function estimateModelSizeB(modelId: string): number | null {
@@ -46,7 +44,7 @@ export function toolEndpointKey(
 export function endpointSupportsToolCalls(choice: ToolEndpointChoice | null | undefined): boolean {
   if (!choice?.model) return true;
   if (choice.mode === "local") {
-    return getLocalModel(choice.model)?.supportsTools ?? modelSupportsToolCalls(choice.model);
+    return modelSupportsToolCalls(choice.model);
   }
   if (toolEndpointKey(choice) !== null) return choice.supportsToolCalls !== false;
   return true;

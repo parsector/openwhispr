@@ -53,6 +53,7 @@ interface SettingsModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialSection?: string;
+  onOpenTeamspace?: (spaceId: number) => void;
   onOpenNote?: (noteId: number, rowId: string) => void;
 }
 
@@ -60,6 +61,7 @@ export default function SettingsModal({
   open,
   onOpenChange,
   initialSection,
+  onOpenTeamspace,
   onOpenNote,
 }: SettingsModalProps): React.ReactElement {
   const { t } = useTranslation();

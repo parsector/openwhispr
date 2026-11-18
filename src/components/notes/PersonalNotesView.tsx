@@ -1,3 +1,4 @@
+import { DeviceNoteView } from "./DeviceNoteView";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";

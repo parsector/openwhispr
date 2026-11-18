@@ -24,7 +24,6 @@ import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useAuth } from "../../hooks/useAuth";
 import { useDelayedFlag } from "../../hooks/useDelayedFlag";
 import { useHeldTeamIds } from "../../hooks/useHeldTeamIds";
-import { SpaceInviteSeatNotice } from "./SpaceInviteSeatNotice";
 import SpaceNameField from "./SpaceNameField";
 import { SpacePeopleField } from "./SpacePeopleField";
 import { workspaceCan } from "../../lib/capabilities";
@@ -580,9 +579,6 @@ export default function CreateSpaceDialog({
                       disabled={isCreating}
                       placeholder={t("settingsPage.workspace.teamspaces.form.peoplePlaceholder")}
                     />
-                  )}
-                  {workspaceId && emails.length > 0 && !isCreating && (
-                    <SpaceInviteSeatNotice workspaceId={workspaceId} addressCount={emails.length} />
                   )}
                 </div>
               )}

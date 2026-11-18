@@ -1,4 +1,3 @@
-import CreatorLinkField from "./CreatorLinkField";
 import { EnterpriseAudioSettings } from "./settings/EnterpriseAudioSettings";
 import { useRegistryVersion } from "../hooks/useRegistryVersion";
 import React, { useState, useCallback, useEffect, useRef } from "react";
@@ -182,6 +181,7 @@ interface SettingsPageProps {
   onNavigateToSection?: (section: SettingsSectionType, subTab?: string) => void;
   /** When a legacy section ID was used (e.g. `meetings`), land on the matching sub-tab. */
   initialSubTab?: string;
+  onOpenTeamspace?: (spaceId: number) => void;
   onOpenNote?: (noteId: number, rowId: string) => void;
   onChooseWorkspace?: () => void;
 }
@@ -1205,6 +1205,7 @@ export default function SettingsPage({
   activeSection = "general",
   onNavigateToSection,
   initialSubTab,
+  onOpenTeamspace,
   onOpenNote,
   onChooseWorkspace,
 }: SettingsPageProps) {
@@ -1914,7 +1915,7 @@ export default function SettingsPage({
     leavePending: leaderboardLeavePending,
     ready: leaderboardParticipationReady,
     updating: leaderboardParticipationUpdating,
-  } = useLeaderboardParticipation({ autoRefresh: activeSection === "privacyData" });
+  } = useLeaderboardParticipation();
   const [leaderboardPreferencePending, setLeaderboardPreferencePending] = useState(false);
   const updateLeaderboardParticipation = useCallback(
     async (enabled: boolean) => {

@@ -1,5 +1,21 @@
 import { selfHostedSttRequest } from "./selfHostedSttHeaders.js";
 import i18n from "../i18n";
+import { TRANSCRIPTION_AUDIO_CONSTRAINTS } from "./microphoneSelection";
+import { isLocalChoiceRefusal, isLocalModelAllowedByPolicy, localModelRefusal } from "../stores/policyRules";
+import { runningPolicyCheck } from "../services/reasoningPolicy";
+import { batchTranscriptionHttpError } from "./transcriptionRoute.ts";
+import { isTranscriptionPolicyRefusal } from "./transcriptionFallback";
+import { dictionaryReachesTranscriptionModel } from "../utils/dictionaryPromptCap.js";
+import { createSelectionCompletionMarker } from "./selectionEditing";
+import { isOpenAiRealtimeSelection, isGeminiLiveSelection } from "./dictationStreamingRouting";
+function isAgentScopeBlocked(settings) {
+  return (
+    !!settings.useDictationAgent && !!settings.policyBlockedLocalScopes?.includes("dictationAgent")
+  );
+}
+const DICTATION_MODEL_BUSY_WAIT_MS = 2000;
+const isUnknownLocalModelError = (error) =>
+  /Invalid (model name|Parakeet model):/.test(error?.message ?? "");
 import ReasoningService from "../services/ReasoningService";
 import {
   EMPTY_OUTPUT_MESSAGE_KEY,
@@ -35,11 +51,7 @@ import { MicStreamHold } from "./micStreamHold";
 import { PcmTap } from "./pcmTap";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { followsSystemDefaultMic } from "./micSelectionRecovery";
-import {
-  isCacheableMicrophoneResolution,
-  resolvePreferredMicrophone,
-  TRANSCRIPTION_AUDIO_CONSTRAINTS,
-} from "./microphoneSelection";
+import { isCacheableMicrophoneResolution, resolvePreferredMicrophone } from "./microphoneSelection";
 import { isStaleDeviceError } from "./staleMicDevice";
 import { shouldSaveDiscardedRecording } from "./discardedRecording";
 import { countSpokenWords, localDateKey, resolveAnalyticsMode } from "./analytics";
@@ -58,14 +70,10 @@ import {
   effectiveLocalHistoryEnabled,
   isAgentAllowed,
   isLlmSelectionAllowed,
-  isLocalChoiceRefusal,
-  isLocalModelAllowedByPolicy,
   isTranscriptionContextAllowed,
   isTranscriptionSelectionAllowed,
-  localModelRefusal,
 } from "../stores/policyRules";
 import { usePolicyStore } from "../stores/policyStore";
-import { runningPolicyCheck } from "../services/reasoningPolicy";
 import {
   getBatchTranscriptionModel,
   getCloudModel,
@@ -77,7 +85,6 @@ import {
 } from "../models/ModelRegistry";
 import { TINFOIL_PROXY_REQUIRED_ERROR } from "../services/transcriptionBaseUrl";
 import {
-  batchTranscriptionHttpError,
   byokFileSizeLimit,
   resolveByokModel,
   resolveTranscriptionRoute,
@@ -96,7 +103,6 @@ import {
 } from "./selfHostedTranscription";
 import {
   isManagedOrukeetStream,
-  isTranscriptionPolicyRefusal,
   resolveStreamingFallbackTarget,
   resolveStreamingStartFallback,
 } from "./transcriptionFallback";
@@ -148,7 +154,6 @@ import {
 } from "../utils/dictionaryEchoFilter.js";
 import {
   dictionaryPromptLimit,
-  dictionaryReachesTranscriptionModel,
   formatDictionaryPrompt,
   joinDictionaryPromptTiers,
   PROMPT_HEAD_TERMS,
@@ -178,7 +183,6 @@ import {
   buildSelectionEditUserPrompt,
   buildLocalSelectionEditSystemPrompt,
   buildLocalSelectionEditUserPrompt,
-  createSelectionCompletionMarker,
   extractLocalSelectionEditReplacement,
   SELECTION_EDIT_RESPONSE_FORMAT,
   extractSelectionEditReplacement,
@@ -186,8 +190,7 @@ import {
   isSelectionQuestionResponse,
 } from "./selectionEditing";
 import {
-  isOpenAiRealtimeSelection,
-  isGeminiLiveSelection,
+  REALTIME_MODELS,
   defaultStreamingProviderName,
   orukeetDetectedLanguageFields,
   resolveManagedOrukeetRoute,
@@ -282,12 +285,6 @@ function translationChainReachable(settings) {
   }).reachable;
 }
 
-function isAgentScopeBlocked(settings) {
-  return (
-    !!settings.useDictationAgent && !!settings.policyBlockedLocalScopes?.includes("dictationAgent")
-  );
-}
-
 function resolveReasoningRoute(
   text,
   settings,
@@ -316,9 +313,7 @@ function resolveReasoningRoute(
 
   const kind = resolveDictationRouteKind({
     cleanupReachable,
-    // A blocked assistant still takes its own commands, and refuses them by name
-    // in the agent window: one never falls back to cleanup and gets pasted as text.
-    agentReachable: agent.reachable || isAgentScopeBlocked(settings),
+    agentReachable: agent.reachable,
     // A translation recording ignores the wake word, so skip the scan.
     agentInvoked:
       !translationRequested &&
@@ -410,14 +405,14 @@ function resolveReasoningRoute(
         ...(attach ? { screenContext, textOnlySystemPrompt: systemPrompt } : {}),
         // Selection edits run on this (dictation) scope, so they need it
         // reachable; standalone commands resolve the same scope again in the
-        // agent window and report their own configuration problems there.
+        // panel and report their own configuration problems in-conversation.
         selectionEditReachable: agent.reachable,
         // Detection and stripping must read the transcript identically, so both
         // inputs ride the route rather than being re-read after the await.
         wakeWordLanguage,
         snippets: settings.snippets,
-        // The assistant re-decides attach/drop for its own request, so carry
-        // the raw screenshot past this attach gate for that path.
+        // The panel re-decides attach/drop for its own request, so carry the
+        // raw screenshot past this attach gate for that path.
         ...(screenContext ? { rawScreenContext: screenContext } : {}),
       },
     };
@@ -440,9 +435,6 @@ const isValidApiKey = (key, provider = "openai") => {
   const placeholder = PLACEHOLDER_KEYS[provider] || PLACEHOLDER_KEYS.openai;
   return key !== placeholder;
 };
-
-// Dictation won't wait out another model's answer: past this it goes in as spoken.
-const DICTATION_MODEL_BUSY_WAIT_MS = 2000;
 
 // Realtime providers expose no finalize handshake (unlike Deepgram/AssemblyAI/
 // Corti), so the transcript tail lands whenever it lands — wait, don't sleep.
@@ -631,11 +623,6 @@ const SELECTION_EDIT_FAILURE_COPY = {
   [TRUNCATED_OUTPUT_MESSAGE_KEY]: "truncatedResponse",
 };
 
-// A local model the app does not know is a setup problem, never a reason to send a
-// local-mode user's audio to a cloud provider.
-const isUnknownLocalModelError = (error) =>
-  /Invalid (model name|Parakeet model):/.test(error?.message ?? "");
-
 class AudioManager {
   constructor() {
     this.mediaRecorder = null;
@@ -654,10 +641,7 @@ class AudioManager {
     this._micOpenReported = false;
     this.preparedMicCapture = new PreparedMicCapture({
       dispose: (prepared) => this._disposePrepared(prepared),
-      onActiveChange: () => {
-        this._syncMicOpenGate();
-        this.onStateChange?.(this.getState());
-      },
+      onActiveChange: () => this._syncMicOpenGate(),
     });
     const micSettings = getSettings();
     this._micHoldSeconds = Number(micSettings.micWarmHoldSeconds) || 0;
@@ -711,7 +695,7 @@ class AudioManager {
       this.cancelPreparedMicCapture();
       this.micStreamHold.drop();
       // The main process keeps the OS default mic until told it changed, so
-      // re-resolve now, or the next hotkey press would pin the old default.
+      // re-resolve now rather than on the next hotkey press (~2s on Windows).
       window.electronAPI?.getSystemDefaultMicrophone?.({ refresh: true })?.catch(() => {});
     };
     navigator.mediaDevices?.addEventListener?.("devicechange", this._onDeviceChange);
@@ -759,6 +743,7 @@ class AudioManager {
     this._shownCleanupSetupKey = null;
     this._processingCancellationGeneration = 0;
     this._activeProcessingPipeline = null;
+    this.assistantSelectionContext = null;
     this.screenContextPromise = null;
     this.toneStylePromise = null;
     this.lastToneAppCategory = null;
@@ -785,13 +770,11 @@ class AudioManager {
     this._streamingMicSwapPromise = null;
     this.micRecovery = new ActiveMicRecoveryController({
       mediaDevices: navigator.mediaDevices,
-      // Recovery waits for the default-mic lookup; a dictation's start and warm-up don't (#2765).
       acquire: async (reason) => {
         try {
           const constraints = await this.getAudioConstraints(
             false,
-            reason === "devicechange" || reason === "devicechange-ended",
-            true
+            reason === "devicechange" || reason === "devicechange-ended"
           );
           return await navigator.mediaDevices.getUserMedia(constraints);
         } catch (error) {
@@ -800,7 +783,7 @@ class AudioManager {
             { error: error.message },
             "audio"
           );
-          const fallback = await this.getAudioConstraints(true, false, true);
+          const fallback = await this.getAudioConstraints(true);
           return navigator.mediaDevices.getUserMedia(fallback);
         }
       },
@@ -1082,6 +1065,17 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.selectionCapturePromise = null;
   }
 
+  setAssistantSelectionContext(context) {
+    this.assistantSelectionContext = normalizeAgentSelectionContext(context);
+    if (this.assistantSelectionContext) this.selectionCapturePromise = null;
+  }
+
+  consumeAssistantSelectionContext() {
+    const context = this.assistantSelectionContext;
+    this.assistantSelectionContext = null;
+    return context;
+  }
+
   setTranslationRequested(requested) {
     this.translationRequested = requested;
     this.translationApplied = false;
@@ -1103,7 +1097,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   // Kicked off at voice-agent recording start, alongside the screenshot, so the
-  // read resolves while the user is still speaking.
+  // read resolves while the user is still speaking. The editable-caret probe
+  // only matters when auto-paste could deliver to that caret, so the flag
+  // spares the main process a binary spawn otherwise.
   beginSelectionCapture() {
     this.selectionCapturePromise = window.electronAPI?.captureSelectedText?.() ?? null;
     // Marks the stored promise handled without consuming it: a failure nobody is
@@ -1147,8 +1143,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this.toneStyleStartDeadline = performance.now() + 250;
   }
 
-  // Consumed by the cleanup route, and by an agent command's rewrite of the
-  // selection. Translation keeps its source's tone.
+  // Consumed by the cleanup route, and by an agent command for an answer
+  // typed at the caret or a rewrite of the selection. Translation keeps its
+  // source's tone.
   async consumeToneStyle() {
     const pending = this.toneStylePromise;
     this.toneStylePromise = null;
@@ -1432,12 +1429,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     } catch (e) {
       logger.debug("Pre-roll recorder unavailable", { error: e.message }, "audio");
     }
-  }
-
-  // Managed enterprise STT outranks the local lane, so the local engine never
-  // sees this recording, and its refusal must not stop the enterprise route.
-  _runsLocalPreview() {
-    return Boolean(getSettings().useLocalWhisper) && !getManagedTranscriptionResolution();
   }
 
   // Offline local engines decode a renderer-captured 16 kHz WAV as-is, so the
@@ -1751,6 +1742,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       return true;
     } catch (error) {
+
       // A prepared value the recording never adopted still owns a live stream
       // (and possibly a pre-roll recorder); release it before any retry.
       freshTap?.close();
@@ -2376,8 +2368,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Settles once the result is delivered and saved; the recording's spool
       // waits for it, so a main process that hangs on the paste or the save
       // can't take the audio with it.
+
       if (wasCancelled()) return;
-      this._recordDictationCompleted(result);
+
       pipeline.resultHandled = this.onTranscriptionComplete?.(result);
 
       if (result?.source === "openwhispr") {
@@ -3001,7 +2994,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  // Assistant-first banking: the command is answered in the agent window with
+  // Panel-first banking: the command streams into the assistant panel with
   // the chat's tools and memory once transcription completes; nothing types
   // at the cursor. The transcript flows back as the result text so history
   // and previews stay truthful.
@@ -3034,8 +3027,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     return extras;
   }
 
-  // Assistant-first commands make no LLM call here — the agent window resolves
-  // the Voice Assistant scope itself — so the org policy guard must run at bank time.
+  // Panel-first commands make no LLM call here — the panel resolves the Voice
+  // Assistant scope itself — so the org policy guard must run at bank time.
   _bankPanelAgentCommand(text, agentName, config, { selectedText } = {}) {
     this.assertAgentAllowedByPolicy();
     const settings = getSettings();
@@ -3994,12 +3987,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   getCustomPrompt() {
     return getSettings().customPrompts.cleanup || undefined;
-  }
-
-  // A custom cleanup prompt takes no tone, as on the server, so only the
-  // built-in prompt depends on the app being dictated into.
-  cleanupTakesTone(settings) {
-    return settings.toneStyleEnabled && !this.getCustomPrompt();
   }
 
   getKeyterms() {
@@ -5625,6 +5612,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return true;
     } catch (error) {
       const stopRequested = this.stopRequestedDuringStreamingStart;
+
       this._settleStreamingStart();
       this.stopRequestedDuringStreamingStart = false;
 
@@ -5782,6 +5770,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async cancelStreamingRecording() {
+
     if (this._streamingStopPromise) {
       if (this._streamingStopMode === "finalize") {
         this._requestStreamingCancellation();
@@ -6483,11 +6472,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       };
       if (wasCancelled()) return true;
       if (wasCancelled()) return true;
-      this._recordDictationCompleted({
-        ...completion,
-        clientTranscriptionId,
-        analyticsOccurredAt: resultAnalyticsOccurredAt,
-      });
       delivery.resultHandled = this.onTranscriptionComplete?.({
         success: true,
         text: finalText,
@@ -6750,6 +6734,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this._onDeviceChange) {
       navigator.mediaDevices?.removeEventListener?.("devicechange", this._onDeviceChange);
     }
+  }
+
+  _runsLocalPreview() {
+    return Boolean(getSettings().useLocalWhisper) && !getManagedTranscriptionResolution();
+  }
+
+  cleanupTakesTone(settings) {
+    return settings.toneStyleEnabled && !this.getCustomPrompt();
   }
 }
 

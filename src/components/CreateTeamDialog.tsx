@@ -192,9 +192,7 @@ function CreateTeamForm({
     } catch (error) {
       const classified = classifyTeamError(error);
       if (classified.kind === "planRequired") {
-        // The capability the form was opened on is stale, so it catches up before the paywall.
-        // The form unmounts with its entries: upgrading takes the person to another page, and
-        // they start the create again from the Teams page when they come back.
+        // Refresh stale server permissions and report the refusal as an ordinary error.
         void useWorkspaceStore
           .getState()
           .refresh({ fresh: true })

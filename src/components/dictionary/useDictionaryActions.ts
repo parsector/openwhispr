@@ -159,7 +159,6 @@ export function useDictionaryActions({
     (reason: SharedDictionaryActionReason, listName: string): string => {
       switch (reason) {
         case "listFull":
-        case "planRequired":
         case "ssoRequired":
         case "notMember":
         case "invalid":

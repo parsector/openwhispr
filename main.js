@@ -318,6 +318,7 @@ const LinuxKeyManager = require("./src/helpers/linuxKeyManager");
 const TextEditMonitor = require("./src/helpers/textEditMonitor");
 const SelectionManager = require("./src/helpers/selectionManager");
 const { PermissionGuideManager } = require("./src/helpers/permissionGuideManager");
+const { AssistantPasteTarget } = require("./src/helpers/assistantPasteTarget");
 const { AgentWindowManager } = require("./src/helpers/agentWindowManager");
 const WhisperCudaManager = require("./src/helpers/whisperCudaManager");
 const WhisperVulkanManager = require("./src/helpers/whisperVulkanManager");
@@ -719,6 +720,7 @@ function initializeCoreManagers() {
   windowManager.linuxKeyManager = linuxKeyManager;
   windowManager.permissionGuide = new PermissionGuideManager(windowManager);
   windowManager.agentWindow = new AgentWindowManager(windowManager);
+  windowManager.assistantPasteTarget = new AssistantPasteTarget({ textEditMonitor, selectionManager });
   if (process.platform === "linux") {
     windowManager.hotkeyManager.nativeListenerProbe = () => linuxKeyManager.checkAvailability();
   } else if (process.platform === "win32") {
@@ -972,7 +974,6 @@ function handleEnterpriseAudioLink(url) {
 app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
-  if (handleAffiliateDeepLink(url)) return;
 
   if (handleEnterpriseAudioLink(url)) return;
   if (isNoteDeepLink(url)) {
@@ -989,44 +990,6 @@ app.on("open-url", (event, url) => {
 
   windowManager?.showControlPanel();
 });
-
-const pendingAffiliateDeepLinks = [];
-let affiliateWindowReady = false;
-
-async function flushPendingAffiliateDeepLink() {
-  if (!pendingAffiliateDeepLinks.length || !affiliateWindowReady || !windowManager) return;
-  const urls = pendingAffiliateDeepLinks.splice(0);
-  try {
-    const affiliateLinks = require("./src/helpers/affiliateLinks");
-    let captured = false;
-    for (const url of urls) {
-      if (affiliateLinks.capture(url, OAUTH_PROTOCOL)) captured = true;
-    }
-    if (!captured) return;
-    await windowManager.createControlPanelWindow();
-    windowManager.showControlPanel();
-    if (isLiveWindow(windowManager.controlPanelWindow)) {
-      windowManager.controlPanelWindow.webContents.send("affiliate-link");
-    }
-  } catch (error) {
-    debugLogger?.error("Creator link window could not be opened", { error: error.message });
-  }
-}
-
-function handleAffiliateDeepLink(url) {
-  try {
-    if (url.length > 4096) return false;
-    const parsed = new URL(url);
-    if (parsed.protocol !== `${OAUTH_PROTOCOL}:` || parsed.hostname !== "affiliate") return false;
-    // Packaged configuration may not be loaded when macOS first delivers open-url.
-    pendingAffiliateDeepLinks.push(url);
-    void flushPendingAffiliateDeepLink();
-    return true;
-  } catch {
-    debugLogger?.error("Creator link could not be saved");
-    return false;
-  }
-}
 
 function isInvitationDeepLink(url) {
   return url.slice(`${OAUTH_PROTOCOL}://`.length).startsWith("invitations/");
@@ -1525,15 +1488,11 @@ async function startApp() {
   if (!startMinimized) {
     await windowManager.createControlPanelWindow();
   }
-  affiliateWindowReady = true;
-  await flushPendingAffiliateDeepLink();
 
   // Windows/Linux cold start delivers protocol URLs via argv (macOS uses
   // open-url); without this scan a deep link that launches the app is lost.
   const initialProtocolUrl = process.argv.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
-  if (initialProtocolUrl && handleAffiliateDeepLink(initialProtocolUrl)) {
-    await flushPendingNoteDeepLink();
-  } else if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
+  if (initialProtocolUrl && handleEnterpriseAudioLink(initialProtocolUrl)) {
     // The renderer consumes the saved setup request after settings mount.
   } else if (initialProtocolUrl && isNoteDeepLink(initialProtocolUrl)) {
     await handleNoteDeepLink(initialProtocolUrl);
@@ -2282,8 +2241,7 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
-      if (handleAffiliateDeepLink(url)) return;
-      if (handleEnterpriseAudioLink(url)) return;
+          if (handleEnterpriseAudioLink(url)) return;
       if (isNoteDeepLink(url)) {
         await handleNoteDeepLink(url);
       } else if (isInvitationDeepLink(url)) {
@@ -2399,7 +2357,6 @@ if (gotSingleInstanceLock) {
     Promise.allSettled([
       sidecarRegistry.shutdownAll(),
       Promise.race([
-        ipcHandlers?.metaActivation?.shutdown(),
         new Promise((resolve) => setTimeout(resolve, 1500)),
       ]),
       // A teamspace delete still in its Undo window, which the toast already reported as done.

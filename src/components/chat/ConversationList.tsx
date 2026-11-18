@@ -1,3 +1,5 @@
+import { resolveAssistantScopeSpaceIds } from "../../lib/assistantNoteScope";
+import { useWorkspaceStore } from "../../stores/workspaceStore";
 import { useChatTurnStore } from "../../stores/chatTurnStore";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Plus, Search, Archive as ArchiveIcon } from "../icons";
@@ -8,6 +10,9 @@ import { groupItemsByDate } from "../../utils/dateGrouping";
 import ConversationItem, { type ConversationPreview } from "./ConversationItem";
 import ConversationDateGroup from "./ConversationDateGroup";
 import EmptyConversationList from "./EmptyConversationList";
+import type { ConversationPreview as ConversationRow } from "../../types/electron";
+import { isConversationInScope } from "../../lib/assistantNoteScope";
+
 
 type FlatItem =
   { type: "header"; label: string } | { type: "conversation"; data: ConversationPreview };
@@ -98,26 +103,20 @@ export default function ConversationList({
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, false, scopeSpaceIds),
         window.electronAPI?.getAgentConversationsWithPreview?.(200, 0, true, scopeSpaceIds),
       ]);
-      const toPreview = (c: {
-        id: number;
-        title: string;
-        last_message?: string;
-        note_id?: number | null;
-        note_title?: string | null;
-        note_deleted_at?: string | null;
-        created_at: string;
-        updated_at: string;
-        archived_at?: string;
-      }) => ({
+      if (!current()) return;
+      const inScope = (c: ConversationRow) => isConversationInScope(c, scopeSpaceIds);
+      const toPreview = (c: ConversationRow) => ({
         id: c.id,
         title: c.title || "Untitled",
-        preview: c.last_message,
+        preview: c.last_message ?? undefined,
         created_at: c.created_at,
         updated_at: c.updated_at,
         is_archived: !!c.archived_at,
+        is_fork: c.parent_conversation_id != null,
+        // A note that's gone entirely has no title to show; the chat reads as a plain one.
         sourceNote:
           c.note_id != null && c.note_title != null
-            ? { title: c.note_title, deleted: Boolean(c.note_deleted_at) }
+            ? { title: c.note_title, deleted: c.note_deleted_at != null }
             : undefined,
       });
       const shownArchived = (archived ?? []).filter(inScope);
@@ -169,7 +168,6 @@ export default function ConversationList({
   useEffect(() => {
     const refresh = () => void loadConversations();
     const disposers = [
-      window.electronAPI?.onAgentJobMessageAdded?.(refresh),
       window.electronAPI?.onNoteUpdated?.(refresh),
       window.electronAPI?.onNoteSynced?.(refresh),
       window.electronAPI?.onNoteDeleted?.(refresh),

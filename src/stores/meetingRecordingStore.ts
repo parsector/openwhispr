@@ -1012,8 +1012,12 @@ export async function retryMeetingRecording(): Promise<void> {
 // Resolves false only when workspace policy refuses the recording; every other
 // outcome (including setup failures, which are reported through the store) is
 // "accepted" so callers don't roll back UI they didn't own.
-export async function startRecording(args: StartRecordingArgs): Promise<boolean> {
-  if (isRecordingFlag || isStartingFlag) return true;
+export type StartRecordingResult = boolean | "cancelled";
+
+export async function startRecording(args: StartRecordingArgs): Promise<StartRecordingResult> {
+  if (isRecordingFlag && !isStartingFlag) return true;
+  if (isStartingFlag && !args.canAutoStart) return true;
+  if (args.canAutoStart && !args.canAutoStart()) return false;
   retryRecordingArgs = args;
   const policy = usePolicyStore.getState();
   if (!isMeetingAllowedByPolicy(policy)) {
@@ -2668,7 +2672,6 @@ if (typeof window !== "undefined") {
         fallbackTranscript: seed?.fallbackTranscript,
         segments: recordedSegments,
         removedSegments: data.removedSegments,
-        splitLiveSpeakers: data.splitLiveSpeakers,
       });
 
       const existingById = new Map(existing.map((row) => [row.id, row]));
@@ -2770,8 +2773,7 @@ if (typeof window !== "undefined") {
           fallbackTranscript: seed.fallbackTranscript,
           segments: recordedSegments,
           removedSegments: data.removedSegments,
-          splitLiveSpeakers: data.splitLiveSpeakers,
-        });
+          });
         sessionSeedLength -= merged.removedCount;
         const currentById = new Map(current.segments.map((row) => [row.id, row]));
         const installed = merged.segments.map((row) => {

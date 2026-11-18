@@ -1,3 +1,4 @@
+import { parseTranscriptSegments } from "../../utils/parseTranscriptSegments";
 import {
   prepareAutomaticSpeakerScope,
   resolveAutomaticSpeaker,
@@ -1971,8 +1972,8 @@ export default function NoteEditor({
             {speakerSplitReport}
           </p>
         )}
-        {/* Only the org's meeting switch earns a banner; other restrictions just disable recording. */}
-        {canEditNote && !recordingAllowed && recordingRefusal === "disabled" && (
+        {/* Explain managed meeting and model restrictions beside their settings action. */}
+        {canEditNote && !recordingAllowed && (recordingRefusal === "disabled" || recordingChoiceRefusal) && (
           <div className="h-8 mt-2 shrink-0 border-y border-warning/20 bg-warning/8 dark:bg-warning/10">
             <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "flex h-full items-center gap-2 px-5")}>
               <AlertTriangle
@@ -1983,10 +1984,20 @@ export default function NoteEditor({
                 role="status"
                 className="text-[11px] text-amber-700 dark:text-warning/90 flex-1 truncate"
               >
-                {t(MEETING_RECORDING_REFUSAL_KEYS.disabled)}
+                {t(recordingChoiceRefusal?.messageKey ?? MEETING_RECORDING_REFUSAL_KEYS.disabled)}
               </p>
+              {recordingChoiceRefusal && (
+                <button
+                  type="button"
+                  onClick={() => openProviderSettings("noteRecording")}
+                  className="shrink-0 rounded-sm text-[11px] font-medium text-amber-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 dark:text-warning/90"
+                >
+                  {t("providerErrors.openSettings")}
+                </button>
+              )}
             </div>
-          )}
+          </div>
+        )}
 
         {/* notes that link here with [[title]]. */}
         <NoteBacklinks

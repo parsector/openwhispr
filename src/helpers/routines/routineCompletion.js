@@ -6,7 +6,7 @@ function isMarkerOnly(reply, marker) {
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith("```"));
   const last = lines.pop()?.replace(/^[*_`]+|[*_`.!]+$/g, "");
-  if (last !== marker) return false;
+  if (last?.toUpperCase() !== marker.toUpperCase()) return false;
   const lead = lines.join("\n");
   return lead.length <= 200 && !/^(?:#|[-*+]\s|\d+[.)]\s)/m.test(lead);
 }

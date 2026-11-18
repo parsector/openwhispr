@@ -164,10 +164,8 @@ export function resolveUnavailableCapabilities(
   if (!input.isSignedIn) {
     unavailableConnector(CONNECTORS_NAME, "signedOut", locations.account);
   } else if (connectors.blockedByOrg) {
-    // Organization policy takes precedence over the account entitlement.
+    // The organization may restrict connectors.
     unavailableConnector(CONNECTORS_NAME, "policyOff");
-  } else if (!connectors.hasPlan) {
-    unavailableConnector(CONNECTORS_NAME, "unavailableInBuild");
   } else if (!connectors.allowed) {
     unavailableConnector(CONNECTORS_NAME, "policyLoading");
   } else {
@@ -246,7 +244,7 @@ export function describeUnavailable(unavailable: ReadonlyArray<UnavailableCapabi
   }
   if (delivering.length > 0) {
     // Writing the text never needed a connector: only sending it does. Connecting helps only a
-    // connector that isn't connected; one that needs a paid plan or a sign-in can't be connected yet.
+    // connector that isn't connected; sign-in may still be needed.
     const canConnect = delivering.every(
       (item) => item.reason === "notConnected" || item.reason === "needsReconnect"
     );
@@ -258,8 +256,7 @@ export function describeUnavailable(unavailable: ReadonlyArray<UnavailableCapabi
           ? 'on how they can have you send it for them (for example: "Connect Slack and I can ' +
             'post this for you.")'
           : "on what sending it needs, as its line below says, never on connecting it, which " +
-            "they can't do yet (on a free plan, for example: \"Sending Slack messages needs a " +
-            "paid OpenWhispr plan, so I've written it here for you to copy.\")") +
+            "the unavailable capability requires") +
         "; leave that sentence out when only their admin can turn it on. For anything else, " +
         "briefly tell them how to enable it:\n" +
         describeList(delivering)

@@ -59,7 +59,6 @@ import { TeamsService } from "../../services/TeamsService";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { SpaceInvitation, SpaceItem, Team, TeamRole } from "../../types/electron";
 import { isolate } from "../../utils/bidiIsolate";
-import { SpaceInviteSeatNotice } from "./SpaceInviteSeatNotice";
 import { SpaceMembersTable, type SpaceMembersStatus } from "./SpaceMembersTable";
 import { SpacePeopleField } from "./SpacePeopleField";
 
@@ -889,21 +888,37 @@ export default function SpaceMembersPanel({
               {line.text}
             </p>
           )}
-          {summary.emails.length > 0 && !adding && (
-            <SpaceInviteSeatNotice workspaceId={workspaceId} addressCount={summary.emails.length} />
-          )}
         </div>
       )}
 
-      {workspace && (
-        <InviteTeammateDialog
-          open={inviteOpen}
-          onOpenChange={setInviteOpen}
-          workspaceId={workspace.id}
-          workspaceName={workspace.name}
-          spaceIds={[spaceId]}
-          initialEmail={inviteEmail}
-          onInvited={(email) => setInvitedEmails((current) => [...current, email])}
+      <SpaceMembersTable
+        status={membersStatus}
+        rows={rows}
+        teamEmoji={teamEmoji}
+        label={t("notes.spaces.teamsMembers.title", { space: spaceName })}
+        canManage={canManage}
+        pendingIds={pendingIds}
+        onRetry={() => void reloadMembers()}
+        onRoleChange={handleRoleChange}
+        onRemove={handleRemove}
+      />
+
+      {steppingDown && (
+        <WorkspaceActionDialog
+          open
+          icon="info"
+          title={t(`${COPY}.stepDownTitle`, { space: spaceName })}
+          body={t(`${COPY}.stepDownBody`)}
+          primary={{
+            label: t(`${COPY}.stepDownConfirm`),
+            onClick: () => {
+              changePersonRole(steppingDown, "member");
+              setSteppingDown(null);
+            },
+            tone: "destructive",
+          }}
+          cancelLabel={t("common.cancel")}
+          onDismiss={() => setSteppingDown(null)}
         />
       )}
 

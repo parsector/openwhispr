@@ -428,3 +428,22 @@ module.exports = {
   WindowPositionUtil,
   resolveOverlayWindowType,
 };
+
+
+
+Object.assign(module.exports, {
+  fitMeetingNotificationWindow,
+  MAIN_WINDOW_CONFIG,
+  CONTROL_PANEL_CONFIG,
+  ONBOARDING_WINDOW_SIZES,
+  NOTIFICATION_WINDOW_CONFIG,
+  ASSISTANT_PANEL_SIZE_LIMITS,
+  fitAssistantContentWindowToWorkArea,
+  fitAssistantWindowToWorkArea,
+  fitDictationErrorContentWindowToWorkArea,
+  fitDictationErrorWindowToWorkArea,
+  resolveHorizontalWindowDirection,
+  WINDOW_SIZES,
+  WindowPositionUtil,
+  resolveOverlayWindowType,
+});

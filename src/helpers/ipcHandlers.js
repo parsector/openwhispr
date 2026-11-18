@@ -3,6 +3,7 @@ const { registryData: modelRegistryData, getRunnableSpeechModel, listRunnableLoc
 const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 const speakerScope = require("./noteSpeakerScope");
 const rosterPolicy = require("./speakerRosterPolicy");
+const { isSpeakerLocked } = require("./speakerAssignmentPolicy");
 const { textLength } = require("./logRedaction");
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
@@ -29,7 +30,6 @@ const { BYOK_API_KEYS } = require("../config/secretKeys");
 const { dictionaryWordKey } = require("../utils/dictionaryWordKey");
 const tokenStore = require("./tokenStore");
 const accountScopeBinding = require("./accountScopeBinding");
-const affiliateLinks = require("./affiliateLinks");
 const { createNoteFilesSync } = require("./noteFilesSync");
 const { registerProductHelpIpc, remoteHelpPolicyState } = require("./productHelp");
 const { captureAuthFence, createCloudApiRequestHandler } = require("./cloudApiRequest");
@@ -120,6 +120,7 @@ const STALE_SYNC_ACK = { success: false, changes: 0, stale: true };
 // the account it was sent as, and main accepts that only when it is the one
 // the push's sign-in was scoped to, so a window left over from another sign-in
 // can't move a row. A renderer can only name an account it has scoped to.
+const INVITE_SUGGESTION_LIMIT = 5;
 const scopedAccountByGeneration = new Map();
 function syncSenderAccount(accountId, authGeneration) {
   return typeof accountId === "string" &&
@@ -322,7 +323,6 @@ const { createAbortError } = require("./abortError");
 const { describeCortiTokenFailure, testProviderConnection } = require("./providerConnectionTest");
 const { createConnectionCheckCache } = require("./connectionCheckCache");
 const { PAID_KEY_CHECKS_FILE, createPaidKeyCheck } = require("./paidKeyCheck");
-const productEventsFile = () => path.join(app.getPath("userData"), "product-events.json");
 const {
   ENTERPRISE_AUDIO_DEVICE_ID_FILE,
   registerEnterpriseAudioSetup,
@@ -3651,6 +3651,44 @@ class IPCHandlers {
       return this.windowManager.setDictationLifecycleState(state, attempt);
     });
 
+    ipcMain.on("dictation-lifecycle-state-changed", (event, state, inputKind) => {
+      const dictationWindow = this.windowManager.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return;
+      }
+      this.windowManager.setDictationLifecycleState(state, inputKind);
+    });
+
+    ipcMain.on("show-agent-dictation-final-transcript", (event, text) => {
+      const dictationWindow = this.windowManager.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return;
+      }
+      if (typeof text !== "string" || !text.trim()) return;
+      this.windowManager.showAgentDictationFinalTranscript(text);
+    });
+
+    ipcMain.on("dictation-audio-level-changed", (event, level) => {
+      const dictationWindow = this.windowManager.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return;
+      }
+      this.windowManager.setDictationAudioLevel(level);
+    });
+
+
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {
       // Both renderer windows re-sync this on mount — ignore same-value updates (#1080).
@@ -4588,7 +4626,6 @@ class IPCHandlers {
         ...state,
         binding: accountScopeBinding.read(),
       });
-      affiliateLinks.setAccountScope(accountId, state.generation);
       const accountChanged = this.databaseManager.activeAccountId !== accountId;
       // Every window asks again whenever its auth state moves, so most calls repeat the scope
       // this process last applied. A repeat changes nothing below: the claims only find rows
@@ -4731,10 +4768,13 @@ class IPCHandlers {
           });
           const snapshots = this._captureMirrorDeletionNotes({ account_id: accountId });
           const result = this.databaseManager.deleteAccountData(accountId);
+          this.audioStorageManager?.deleteAudioForTranscriptions(
+            result.deletedTranscriptionIds ?? []
+          );
           this.notifyVectorChanges();
           for (const noteId of result.deletedNoteIds) {
             this.meetingAudioStore.purge(noteId);
-            this._asyncMirrorDelete(noteId);
+            this._asyncMirrorDelete(noteId, snapshots);
           }
           for (const note of result.relocatedNotes) {
             if (!note.deleted_at) this._asyncMirrorWrite(note);
@@ -4749,7 +4789,6 @@ class IPCHandlers {
               error: error.message,
             });
           }
-          if (productEventsFailure) throw productEventsFailure;
           return { success: true, ...result };
         } catch (error) {
           return { success: false, code: "LOCAL_ACCOUNT_CLEANUP_FAILED", error: error.message };
@@ -5238,6 +5277,7 @@ class IPCHandlers {
       this.databaseManager.restoreNoteAfterDeniedDelete(id)
     );
     ipcMain.handle("db-hard-delete-note", (_, id) => {
+      const snapshots = this._captureMirrorDeletionNotes({ id });
       this.meetingAudioStore.purge(id);
       const result = this.databaseManager.hardDeleteNote(id);
       if (result?.success) {
@@ -5257,6 +5297,44 @@ class IPCHandlers {
         setImmediate(() => broadcastToWindows("note-deleted", { id }));
       }
       return result;
+    });
+
+    ipcMain.handle("db-get-note-for-cloud-row", (_, clientNoteId, cloudId) =>
+      this.databaseManager.getNoteForCloudRow(clientNoteId, cloudId)
+    );
+
+    ipcMain.handle(
+      "db-upsert-conversation-from-cloud",
+      (_, cloudConv, messages, snapshot, expectedAuthGeneration) =>
+        isStaleSyncAck(expectedAuthGeneration)
+          ? STALE_SYNC_ACK
+          : this.databaseManager.upsertConversationFromCloud(cloudConv, messages, snapshot)
+    );
+
+    ipcMain.handle("db-clear-conversation-create-attempted", (_, id) =>
+      this.databaseManager.clearConversationCreateAttempted(id)
+    );
+
+    ipcMain.handle("search-invite-contacts", async (_event, query, exclude) => {
+      try {
+        const excluded = new Set(
+          (Array.isArray(exclude) ? exclude : []).map((email) => String(email).toLowerCase())
+        );
+        const { contacts } = searchContacts(
+          this.databaseManager.getContactLookupSources(),
+          String(query ?? ""),
+          { limit: excluded.size + INVITE_SUGGESTION_LIMIT }
+        );
+        return {
+          success: true,
+          contacts: contacts
+            .filter((contact) => !excluded.has(contact.email.toLowerCase()))
+            .slice(0, INVITE_SUGGESTION_LIMIT)
+            .map(({ email, name }) => ({ email, name })),
+        };
+      } catch {
+        return { success: false, contacts: [] };
+      }
     });
 
     // Folders sync
@@ -5393,7 +5471,7 @@ class IPCHandlers {
         }
         for (const noteId of result.deletedNoteIds ?? []) {
           this.meetingAudioStore.purge(noteId);
-          this._asyncMirrorDelete(noteId);
+          this._asyncMirrorDelete(noteId, snapshots);
         }
         setImmediate(() => {
           if (result.folder) broadcastToWindows("folder-synced", result.folder);
@@ -6894,13 +6972,6 @@ class IPCHandlers {
       } catch (e) {
         errors.push(`Audio key: ${e.message}`);
       }
-      try {
-        this.productEvents?.dispose();
-        this.productEvents = null;
-        createProductEventsStore(productEventsFile()).erase();
-      } catch (e) {
-        errors.push(`Product events cleanup: ${e.message}`);
-      }
 
       // Close DB connection before deleting the file
       try {
@@ -6989,8 +7060,6 @@ class IPCHandlers {
           "globe-preference-state.json",
           ".system-audio-permission",
           "account-scope-binding.json",
-          "affiliate-candidate.json",
-          "affiliate-candidate.json.tmp",
           "installed-models.json",
           "model-registry.json",
           "model-registry.json.backup",
@@ -8891,6 +8960,91 @@ class IPCHandlers {
       return { success: true };
     });
 
+    ipcMain.handle("set-assistant-panel-open", (event, open) => {
+      const dictationWindow = this.windowManager?.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return { success: false, error: "Not the dictation window" };
+      }
+      this.windowManager.setAssistantPanelOpen(open);
+      return { success: true };
+    });
+
+    // The panel takes the app its voice command was spoken over as Paste into app's target
+    // ("adopt"), or drops any target when it opens without one ("forget"). True when there is
+    // a target that isn't OpenWhispr.
+    ipcMain.handle("assistant-paste-target", async (event, action) => {
+      const target = this.windowManager?.assistantPasteTarget;
+      if (!target || event.sender !== this.windowManager?.mainWindow?.webContents) return false;
+      if (action === "adopt") return target.adopt();
+      target.clear();
+      return false;
+    });
+
+    // Busy state is enforced in the main process so a hotkey cannot trigger
+    // native capture side effects before the renderer has a chance to reject it.
+    ipcMain.handle("set-assistant-panel-busy", (event, busy) => {
+      const dictationWindow = this.windowManager?.mainWindow;
+      if (
+        !dictationWindow ||
+        dictationWindow.isDestroyed() ||
+        event.sender !== dictationWindow.webContents
+      ) {
+        return { success: false, error: "Not the dictation window" };
+      }
+      this.windowManager.setAssistantPanelBusy(busy);
+      return { success: true };
+    });
+
+    const isAgentDictationPill = (event) => {
+      const pillWindow = this.windowManager?.agentDictationPillWindow;
+      return pillWindow && !pillWindow.isDestroyed() && event.sender === pillWindow.webContents;
+    };
+
+    // The pill disables its own controls when an assistant or translation
+    // capture owns the lifecycle, but that state travels by IPC — a click can
+    // race it. Re-check here so a stale pill can never toggle or cancel a
+    // recording it does not own.
+    const isAgentDictationPillInteractive = () =>
+      this.windowManager.getAgentDictationPillState().interactive;
+
+    ipcMain.handle("toggle-agent-panel-dictation", (event) => {
+      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
+        return { success: false };
+      }
+      this.windowManager.sendToggleDictation();
+      return { success: true };
+    });
+
+    ipcMain.handle("cancel-agent-panel-dictation", (event) => {
+      if (!isAgentDictationPill(event) || !isAgentDictationPillInteractive()) {
+        return { success: false };
+      }
+      this.windowManager.sendCancelActiveDictation();
+      return { success: true };
+    });
+
+    ipcMain.handle("get-agent-dictation-pill-state", (event) => {
+      return isAgentDictationPill(event)
+        ? this.windowManager.getAgentDictationPillState()
+        : { lifecycle: "idle", interactive: false, horizontalDirection: "left" };
+    });
+
+    ipcMain.handle("resize-agent-dictation-pill-to-content", (event, surfaceHeight = null) => {
+      if (!isAgentDictationPill(event)) return { success: false };
+      return this.windowManager.resizeAgentDictationPillToContent(surfaceHeight);
+    });
+
+    ipcMain.handle("set-agent-dictation-pill-interactivity", (event, interactive) => {
+      if (!isAgentDictationPill(event)) return { success: false };
+      this.windowManager.setAgentDictationPillInteractivity(Boolean(interactive));
+      return { success: true };
+    });
+
+
     ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));
 
     ipcMain.handle("toggle-media-playback", () => {
@@ -9246,11 +9400,78 @@ class IPCHandlers {
       logger: debugLogger,
     });
     this.workspacePolicyManager = workspacePolicyManager;
-    const { createAudioFeaturePolicy } = require("./audioFeaturePolicy");
-    this._audioFeaturePolicy = createAudioFeaturePolicy({
-      getPolicy: async (event, { refresh = false } = {}) => {
-        const generation = tokenStore.getState().generation;
-        const authHeaders = event.sender
+    let cookieGeneration = null;
+    // The credential generation whose session was last read. Until it is, no
+    // bearer doesn't prove a guest: a cookie session may await its migration.
+    let credentialsGeneration = null;
+    const getScope = () => {
+      const state = tokenStore.getState();
+      const active = accountScopeBinding.resolveActiveAccountScope({
+        ...state,
+        binding: accountScopeBinding.read(),
+      });
+      return {
+        // A binding the credential doesn't match names no account (see
+        // accountScopeBinding), so a guest or cookie session has none.
+        accountId:
+          active?.accountId ??
+          (typeof this.databaseManager.activeAccountId === "string"
+            ? this.databaseManager.activeAccountId
+            : null),
+        authGeneration: state.generation,
+        authenticated:
+          Boolean(state.token) ||
+          typeof this.databaseManager.activeAccountId === "string" ||
+          cookieGeneration === state.generation,
+      };
+    };
+    this.effectivePolicyManager = createEffectivePolicyManager({
+      devicePolicy: this.managedDevicePolicy,
+      workspacePolicyManager: {
+        heldPolicy: (request) => workspacePolicyManager.heldPolicy(request),
+        // A session cookie the API rejects has expired: with no bearer and no
+        // account this is a guest, not an identity waiting on its policy.
+        getPolicy: async (request) => {
+          const policy = await workspacePolicyManager.getPolicy(request);
+          if (
+            !request.authHeaders?.Authorization &&
+            typeof this.databaseManager.activeAccountId !== "string" &&
+            policy.code !== "POLICY_UNRESOLVABLE" &&
+            policy.httpStatus === 401
+          )
+            cookieGeneration = null;
+          return policy;
+        },
+      },
+      getScope,
+      broadcast: (snapshot, updatePolicy) => {
+        // Known restrictions still apply while the workspace decision is pending.
+        if (snapshot.status !== "loading" || !snapshot.deviceReady || snapshot.policy)
+          this._audioFeaturePolicy?.update(snapshot);
+        if (snapshot.workspaceRequired || snapshot.authGeneration === credentialsGeneration)
+          this._localModelPolicy?.update(snapshot);
+        // The updater would take a verdict still loading for a failed lookup.
+        if (updatePolicy.status !== "loading") this.updateManager?.updatePolicy?.(updatePolicy);
+        if (
+          !snapshot.deviceReady ||
+          snapshot.localOnly ||
+          (snapshot.status === "error" && snapshot.managed)
+        )
+          this._stopRemoteProductWork();
+        else if (snapshot.success || snapshot.policy) {
+          this._retireDisallowedProductWork(snapshot);
+          if (snapshot.success) this._startRemoteProductWork();
+        }
+        broadcastToWindows("effective-policy-changed", snapshot);
+      },
+    });
+    this.refreshEffectivePolicy = async (event, { refresh = false, held = false } = {}) => {
+      const scope = getScope();
+      if (this.managedDevicePolicy.getSnapshot().status === "loading")
+        return this.effectivePolicyManager.getCurrent();
+      let authHeaders;
+      try {
+        authHeaders = event?.sender
           ? await getAuthHeader(event)
           : await getAuthHeaderFromWindow(
               [this.windowManager.controlPanelWindow, this.windowManager.mainWindow].find(
@@ -17197,13 +17418,11 @@ class IPCHandlers {
 
   // Returns, per named live speaker, the voice its name went to.
   _reconcileLiveSpeakerState(liveSpeakerState, speakerEmbeddingsMap, enrichedSegments) {
-    const namedVoices = new Map();
     if (!liveSpeakerState || !speakerEmbeddingsMap) {
-      return namedVoices;
+      return new Set();
     }
 
     const speakerEmbeddings = require("./speakerEmbeddings");
-    const { VOICE_MATCH_SIMILARITY } = require("./diarizationPolicy");
     const reconciledSpeakers = new Set();
     const usedLiveSpeakers = new Set();
     const noteMappings = new Map();
@@ -17228,23 +17447,26 @@ class IPCHandlers {
       return noteMappings.get(noteId);
     };
 
-    // Closest pairs first: with no count, one live speaker stands for every
-    // remote voice, and its name belongs to the voice it sounds most like, not
-    // to the first one that clears the bar.
-    const pairs = [];
     for (const [mappedId, embeddingArray] of Object.entries(speakerEmbeddingsMap)) {
-      const embedding = new Float32Array(embeddingArray);
+      let bestEntry = null;
+      let bestSimilarity = 0;
+
       for (const entry of liveEntries) {
-        const similarity = speakerEmbeddings.cosineSimilarity(embedding, entry.embedding);
-        if (similarity > VOICE_MATCH_SIMILARITY) {
-          pairs.push({ mappedId, bestEntry: entry, similarity });
+        if (usedLiveSpeakers.has(entry.speakerId)) {
+          continue;
+        }
+
+        const similarity = speakerEmbeddings.cosineSimilarity(
+          new Float32Array(embeddingArray),
+          entry.embedding
+        );
+        if (similarity > bestSimilarity) {
+          bestSimilarity = similarity;
+          bestEntry = entry;
         }
       }
-    }
-    pairs.sort((a, b) => b.similarity - a.similarity);
 
-    for (const { mappedId, bestEntry } of pairs) {
-      if (reconciledSpeakers.has(mappedId) || usedLiveSpeakers.has(bestEntry.speakerId)) {
+      if (!bestEntry || bestSimilarity <= 0.6) {
         continue;
       }
 
@@ -17295,7 +17517,8 @@ class IPCHandlers {
         runId: bestEntry.speakerDecision?.runId,
       });
     }
-    return namedVoices;
+
+    return reconciledSpeakers;
   }
 
   // The renderer's base covers the transcript it resumes; mappings and embeddings
@@ -17370,6 +17593,7 @@ class IPCHandlers {
     retractedSegments = [],
     otherTrackAudio = null
   ) {
+    this._diarizationSpeakerReservations ??= new Map();
     const recognitionScope = speakerScope.readScope(this.databaseManager, noteId);
     const startMs =
       (Number.isFinite(audioStartedAt) && audioStartedAt) ||
@@ -17455,7 +17679,9 @@ class IPCHandlers {
                 speakerStatus: "locked",
                 speakerLockSource: "user",
               }
-            : row;
+            : row.speakerName === undefined && !isSpeakerLocked(row)
+              ? { ...row, speakerName: null }
+              : row;
         });
         speakerScope.enforceRows(this.databaseManager, noteId, payload.segments, {
           runId: sessionId,
@@ -17467,6 +17693,13 @@ class IPCHandlers {
           scope: recognitionScope,
           includeUnrecorded: true,
         });
+        // An omitted IPC field would retain a renderer's stale automatic name.
+        // Clear rejected identities explicitly after the policy boundary runs.
+        payload.segments = payload.segments.map((row) =>
+          row.speakerName === undefined && !isSpeakerLocked(row)
+            ? { ...row, speakerName: null }
+            : row
+        );
       }
       debugLogger.info(
         "Meeting speaker centroid completion",
@@ -17559,10 +17792,29 @@ class IPCHandlers {
 
     const fs = require("fs");
 
-    const speakerCap = this._resolveSpeakerCap({ sessionConfig, noteId, diarizedSource });
+    const observedSpeakerIds = new Set(
+      transcriptSegments
+        .filter((segment) => segment.source === "system" && segment.speaker)
+        .map((segment) => segment.speaker)
+    );
+    for (const speakerId of Object.keys(liveSpeakerState || {})) {
+      observedSpeakerIds.add(speakerId);
+    }
+
+    if (observedSpeakerIds.size > 10) {
+      debugLogger.warn("Excessive speaker count from live identification", {
+        observedSpeakers: observedSpeakerIds.size,
+      });
+    }
+
+    const { numSpeakers, cap } = this._resolveSpeakerExpectation({
+      sessionConfig,
+      noteId,
+      observedSpeakerIds,
+      diarizedSource,
+    });
     // Reserved before the async work so a "record more" started while this runs
-    // numbers its speakers past every cluster the result can name. With no count
-    // the cap is settled after clustering, and it never exceeds MAX_SPEAKER_COUNT - 1.
+    // numbers its speakers past every cluster the result can name.
     if (noteId != null) {
       this._diarizationSpeakerReservations.set(sessionId, {
         noteId,
@@ -18127,6 +18379,34 @@ class IPCHandlers {
       this._asyncMirrorDelete(id, snapshots);
     }
     return result;
+  }
+
+  _resolveSpeakerExpectation({ sessionConfig, noteId, observedSpeakerIds, diarizedSource }) {
+    // Only a count the user set explicitly outranks the note: participants added
+    // mid-meeting postdate the config snapshot taken at recording start.
+    let expectedTotal = sessionConfig?.explicit ? sessionConfig.expectedCount : null;
+
+    if (!expectedTotal && noteId != null) {
+      try {
+        expectedTotal = this._noteExpectedSpeakerCountOrNull(this.databaseManager.getNote(noteId));
+      } catch (_) {
+        expectedTotal = null;
+      }
+    }
+
+    // Diarizing the mic track (in-person session) means the user is one of the
+    // diarized voices, so the expected total applies without the -1 the
+    // system-audio branches use.
+    const micMode = diarizedSource === "mic";
+
+    if (expectedTotal) {
+      const total = Math.min(expectedTotal, MAX_SPEAKER_COUNT);
+      const numSpeakers = micMode ? total : Math.max(1, total - 1);
+      return { numSpeakers, cap: numSpeakers };
+    }
+
+    // Unknown remains unknown: sherpa chooses the count, and no result is folded.
+    return { numSpeakers: -1, cap: null };
   }
 }
 

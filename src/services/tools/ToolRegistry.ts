@@ -9,6 +9,10 @@ export interface ToolResult {
   displayText: string;
 }
 
+export interface HoldDeliveryOptions {
+  preserveClipboard?: boolean;
+}
+
 export interface CompletedActionOutcome {
   status: "sent" | "unknown" | "draft_opened";
   url?: string;
@@ -32,6 +36,13 @@ export interface ToolExecutionContext {
   /** Aborts when the turn is cancelled or its conversation ends. */
   signal: AbortSignal;
   onApprovalRequested: () => void;
+  onHoldDelivery: (options?: HoldDeliveryOptions) => void;
+  onInteraction?: (record: InteractionRecord) => void;
+  attachImage?: (image: ChatImageAttachment) => void;
+  claimAction?: (actionKey: string) => boolean;
+  releaseAction?: (actionKey: string) => void;
+  recordCompletedAction?: (actionKey: string, outcome?: CompletedActionOutcome) => void;
+  sentEarlier?: (actionKey: string) => boolean;
   /**
    * Counts one use of `key` in this turn and reports whether it stays within
    * `limit`, so a tool can cap what one turn does (drafts opened, clipboard

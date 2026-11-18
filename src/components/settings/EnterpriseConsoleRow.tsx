@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ExternalLink, Loader2, ShieldCheck } from "../icons";
 import { Button } from "../ui/button";
 import { openAdminConsole } from "../../lib/auth";
-import { isEnterpriseConsoleAvailable } from "../../lib/workspaceBilling";
+import { workspaceCan } from "../../lib/capabilities";
 import type { Workspace } from "../../types/electron";
 
 /**
@@ -14,7 +14,7 @@ export default function EnterpriseConsoleRow({ workspace }: { workspace: Workspa
   const { t } = useTranslation();
   const [opening, setOpening] = useState(false);
 
-  if (!isEnterpriseConsoleAvailable(workspace)) return null;
+  if (!workspaceCan(workspace, "manage_settings")) return null;
 
   async function handleOpen() {
     setOpening(true);

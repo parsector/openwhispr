@@ -20,7 +20,6 @@ import { CARD_SURFACE_CLASS } from "../ui/surfaces";
 import { GRADIENT_CIRCLE } from "../ui/gradientCircle";
 import { Toggle } from "../ui/toggle";
 import EmptyStateCard from "../ui/EmptyStateCard";
-import CreatorLinkField from "../CreatorLinkField";
 import { DropZone } from "../ui/DropZone";
 import { cn } from "../lib/utils";
 import {
@@ -1781,7 +1780,6 @@ function SelectedView({
 
       {(requiresUpgrade || (byokTooLarge && !requiresAccount && !isProUser)) && (
         <div className="w-full max-w-sm">
-          <CreatorLinkField />
         </div>
       )}
 

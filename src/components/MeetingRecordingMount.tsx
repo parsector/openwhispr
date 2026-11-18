@@ -118,6 +118,8 @@ export default function MeetingRecordingMount(): null {
         ? [{ label: t("common.signIn"), onClick: requestSignIn }]
         : canRetryPolicy
           ? [{ label: t("common.retry"), onClick: () => void retryMeetingRecording() }]
+          : isLocalChoiceRefusal(sentinel)
+            ? providerErrorActions({ settingsTarget: "noteRecording" }, t)
           : undefined,
       actionsAlign: needsSignIn || canRetryPolicy ? "end" : undefined,
     });

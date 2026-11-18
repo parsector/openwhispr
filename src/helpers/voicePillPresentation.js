@@ -96,6 +96,7 @@ export function resolveVoiceHorizontalDirection(panelStartPosition) {
 export function resolveVoicePillDock({
   liveTranscriptOpen,
   liveTranscriptEntrancePhase,
+  assistantOpen,
   panelStartPosition,
   horizontalDirection = resolveVoiceHorizontalDirection(panelStartPosition),
 }) {
@@ -217,6 +218,7 @@ export function shouldOfferLiveTranscriptReopen({
  * exposes a distinct discard action while recording or processing.
  */
 export function resolveVoicePillInteraction({
+  assistantMounted,
   liveTranscriptMounted,
   isRecording,
   isProcessing,
@@ -242,4 +244,132 @@ export function shouldActivateVoicePill({
 
 export function isVoicePillActivationKey(key) {
   return key === "Enter" || key === " ";
+}
+
+export const ASSISTANT_FOOTER_TRANSITION_TIMING = Object.freeze({
+  pillRetreatMs: 180,
+  actionsRetreatMs: 220,
+  pillEntranceMs: 180,
+  actionsEntranceMs: 220,
+});
+export function getAssistantFooterTransitionTimeline(
+  responseReady,
+  timing = ASSISTANT_FOOTER_TRANSITION_TIMING
+) {
+  if (responseReady) {
+    return {
+      initialPhase: "pill-exiting",
+      handoffPhase: "actions-entering",
+      settledPhase: "actions",
+      handoffAtMs: timing.pillRetreatMs,
+      settledAtMs: timing.pillRetreatMs + timing.actionsEntranceMs,
+    };
+  }
+
+  return {
+    initialPhase: "actions-exiting",
+    handoffPhase: "pill-entering",
+    settledPhase: "pill",
+    handoffAtMs: timing.actionsRetreatMs,
+    settledAtMs: timing.actionsRetreatMs + timing.pillEntranceMs,
+  };
+}
+export function resolveAssistantFooterPresentation(phase) {
+  return {
+    pillVisible: phase === "pill" || phase === "pill-entering" || phase === "pill-exiting",
+    actionsMounted:
+      phase === "actions" || phase === "actions-entering" || phase === "actions-exiting",
+    collapsePillToLogo: phase === "pill-exiting",
+  };
+}
+export function resolveAssistantResponseReady({
+  responseContent,
+  isBusy,
+  isStreaming,
+  voiceState,
+  requestPending,
+}) {
+  return Boolean(
+    responseContent && !isBusy && !isStreaming && voiceState === "idle" && !requestPending
+  );
+}
+export function resolveAgentModeActive({
+  isAssistantVoice,
+  isRecording,
+  isProcessing,
+  assistantPanelMounted,
+}) {
+  return Boolean((isAssistantVoice && (isRecording || isProcessing)) || assistantPanelMounted);
+}
+export function resolveVoicePanelCorePresentation({
+  assistantOpen,
+  assistantMounted,
+  liveTranscriptOpen,
+  liveTranscriptMounted,
+}) {
+  const mode = assistantOpen
+    ? "assistant"
+    : liveTranscriptOpen
+      ? "live-transcript"
+      : assistantMounted
+        ? "assistant"
+        : liveTranscriptMounted
+          ? "live-transcript"
+          : null;
+
+  return {
+    mode,
+    open:
+      mode === "assistant"
+        ? Boolean(assistantOpen)
+        : mode === "live-transcript"
+          ? Boolean(liveTranscriptOpen)
+          : false,
+  };
+}
+export function resolveCompanionPillInteractive({
+  mainProcessInteractive,
+  surfaceInteractive,
+  isProcessing,
+  canReopenLiveTranscript,
+}) {
+  if (!mainProcessInteractive || !surfaceInteractive) return false;
+  if (!isProcessing) return true;
+  return Boolean(canReopenLiveTranscript);
+}
+export function shouldSuppressPillForAssistantActions({
+  assistantOpen,
+  footerPillVisible,
+  assistantClosing,
+  hasLiveActivity,
+}) {
+  if (!assistantOpen || footerPillVisible) return false;
+  return !(assistantClosing && hasLiveActivity);
+}
+export function resolvePillVisualSuppression({
+  dictationErrorSuppressed,
+  assistantActionsSuppressed,
+  assistantClosing,
+  panelReturnResizeActive,
+  hasLiveActivity,
+}) {
+  if (dictationErrorSuppressed || assistantActionsSuppressed) return true;
+  if (panelReturnResizeActive) return true;
+  return Boolean(assistantClosing) && !hasLiveActivity;
+}
+export function resolveAssistantThinkingTransition(panelOpen) {
+  return {
+    panelOpen: Boolean(panelOpen),
+    panelMounted: true,
+    responseReady: false,
+    thinking: true,
+  };
+}
+export function shouldBeginAssistantFollowUpThinking({
+  isAssistantVoice,
+  isProcessing,
+  isCancelling,
+  panelOpen,
+}) {
+  return Boolean(isAssistantVoice && isProcessing && !isCancelling && panelOpen);
 }

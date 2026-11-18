@@ -1,3 +1,4 @@
+import AgentDictationPillOverlay from "./components/dictation/AgentDictationPillOverlay";
 import React, { Suspense, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import App from "./App.jsx";
@@ -52,8 +53,9 @@ export default function AppRouter() {
     )
       void window.electronAPI?.setOnboardingWindowMode?.("restore");
   }, [deviceReady, policyCode, localOnly, policyStatus]);
-  if (!deviceReady) return <LoadingFallback />;
-  if (policyCode === "DEVICE_POLICY_INVALID") {
+  // Local use is available while an unmanaged device policy is loading.
+  if (!deviceReady && usePolicyStore.getState().managed) return <LoadingFallback />;
+  if (usePolicyStore.getState().managed && policyCode === "DEVICE_POLICY_INVALID") {
     return <LoadingFallback message={t("common.devicePolicyInvalid")} error />;
   }
   if (localOnly && policyStatus === "error") {
@@ -79,6 +81,8 @@ export default function AppRouter() {
     return <MeetingNotificationOverlay />;
   }
 
+  if (new URLSearchParams(window.location.search).get("agentDictationPill") === "true") return <AgentDictationPillOverlay />;
+
   // Before MainApp: it reports the onboarding state, which only the dictation
   // window and the control panel may do.
   if (isAgentWindow()) {
@@ -97,8 +101,9 @@ function MainApp() {
   const policyStatus = usePolicyStore((state) => state.status);
   const localOnly = usePolicyStore((state) => state.localOnly);
   const requireSignIn = usePolicyStore((state) => state.requireSignIn);
+  const managed = usePolicyStore((state) => state.managed);
   const policyResolved =
-    !isSignedIn ||
+    !managed || !isSignedIn ||
     policyStatus === "managed" ||
     policyStatus === "unmanaged" ||
     policyStatus === "error";
@@ -272,12 +277,6 @@ function MainApp() {
     }
     setShowOnboarding(false);
     localStorage.setItem("onboardingCompleted", "true");
-    // The onboarding milestone: only this real completion records it, never the
-    // returning-user assignment above or a resumed session.
-    void window.electronAPI?.recordOnboardingCompleted?.({
-      setupMode: options?.setupMode ?? null,
-      flowVersion: `desktop-onboarding-${ONBOARDING_FLOW_VERSION}`,
-    });
   };
 
   // isLoading clears once the onboarding effect has run, which itself waits

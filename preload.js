@@ -193,8 +193,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
-  dictationLifecycleStateChanged: (state, attempt) =>
-    ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt),
+  dictationLifecycleStateChanged: (state, inputKind) =>
+    ipcRenderer.send("dictation-lifecycle-state-changed", state, inputKind),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>
@@ -404,12 +404,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   setActiveAccountScope: (accountId, expectedAuthGeneration) =>
     ipcRenderer.invoke("set-active-account-scope", accountId, expectedAuthGeneration),
   getActiveAccountScope: () => ipcRenderer.invoke("get-active-account-scope"),
-  recordProductEventAppSession: (context) =>
-    ipcRenderer.invoke("product-events-record-app-session", context),
-  recordOnboardingCompleted: (completion) =>
-    ipcRenderer.invoke("product-events-record-onboarding-completed", completion),
-  recordDictationCompleted: (dictation) =>
-    ipcRenderer.invoke("product-events-record-dictation", dictation),
   getNoteWriteGuard: () => ipcRenderer.invoke("get-note-write-guard"),
   getDatabaseAccountScope: () => ipcRenderer.invoke("get-database-account-scope"),
   onDatabaseAccountScopeChanged: registerListener(
@@ -1016,15 +1010,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("cloud-streaming-usage", text, audioDurationSeconds, opts),
   cloudUsage: () => ipcRenderer.invoke("cloud-usage"),
   cloudApiRequest: (opts) => ipcRenderer.invoke("cloud-api-request", opts),
-  getAffiliateCandidate: () => ipcRenderer.invoke("affiliate-get-candidate"),
-  saveAffiliateCandidate: (input) => ipcRenderer.invoke("affiliate-save-candidate", input),
-  resolveAffiliateLink: (link, generation) =>
-    ipcRenderer.invoke("affiliate-resolve-link", link, generation),
-  onAffiliateLink: (callback) => {
-    const handler = () => callback();
-    ipcRenderer.on("affiliate-link", handler);
-    return () => ipcRenderer.removeListener("affiliate-link", handler);
-  },
   getSttConfig: () => ipcRenderer.invoke("get-stt-config"),
   getEffectivePolicy: () => ipcRenderer.invoke("get-effective-policy"),
   onEffectivePolicyChanged: registerListener(
@@ -1809,4 +1794,84 @@ contextBridge.exposeInMainWorld("electronAPI", {
     "note-navigation-pending",
     (callback) => () => callback()
   ),
+
+closeActivationStream: () => ipcRenderer.invoke("activation-close"),
+beginActivationCapture: () => ipcRenderer.invoke("activation-begin"),
+stopActivationCapture: (id) => ipcRenderer.invoke("activation-stop", id),
+finishActivationCapture: (id, words) => ipcRenderer.invoke("activation-finish", id, words),
+cancelActivationCapture: (id) => ipcRenderer.invoke("activation-cancel", id),
+
+
+updateAgentMessage: (id, content, metadata) =>
+    ipcRenderer.invoke("db-update-agent-message", id, content, metadata),
+forkAgentConversation: (conversationId, throughMessageId, forkContext) =>
+    ipcRenderer.invoke("db-fork-agent-conversation", conversationId, throughMessageId, forkContext),
+getNoteForCloudRow: (clientNoteId, cloudId) =>
+    ipcRenderer.invoke("db-get-note-for-cloud-row", clientNoteId, cloudId),
+renewNoteCloudIdentity: (id, clientNoteId, cloudId, spaceId, authGeneration) =>
+    ipcRenderer.invoke(
+      "db-renew-note-cloud-identity",
+      id,
+      clientNoteId,
+      cloudId,
+      spaceId,
+      authGeneration
+    ),
+getPrivatePlacementBackupCandidates: (authGeneration) =>
+    ipcRenderer.invoke("db-get-private-placement-backup-candidates", authGeneration),
+getPrivatePlacementBackupRows: (authGeneration, candidates) =>
+    ipcRenderer.invoke("db-get-private-placement-backup-rows", authGeneration, candidates),
+queueUnlinkedPrivateFolders: (authGeneration) =>
+    ipcRenderer.invoke("db-queue-unlinked-private-folders", authGeneration),
+claimConversationFromCloud: (cloudConv, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-claim-conversation-from-cloud", cloudConv, expectedAuthGeneration),
+clearConversationCreateAttempted: (id) =>
+    ipcRenderer.invoke("db-clear-conversation-create-attempted", id),
+replaceConversationClientId: (id, expectedClientId, accountId, authGeneration) =>
+    ipcRenderer.invoke(
+      "db-replace-conversation-client-id",
+      id,
+      expectedClientId,
+      accountId,
+      authGeneration
+    ),
+searchInviteContacts: (query, exclude) =>
+    ipcRenderer.invoke("search-invite-contacts", query, exclude),
+
+onOpenAssistantPanel: registerListener("open-assistant-panel", (callback) => () => callback()),
+onCancelDictation: registerListener("cancel-dictation", (callback) => () => callback()),
+dictationAudioLevelChanged: (level) => ipcRenderer.send("dictation-audio-level-changed", level),
+toggleAgentPanelDictation: () => ipcRenderer.invoke("toggle-agent-panel-dictation"),
+cancelAgentPanelDictation: () => ipcRenderer.invoke("cancel-agent-panel-dictation"),
+getAgentDictationPillState: () => ipcRenderer.invoke("get-agent-dictation-pill-state"),
+resizeAgentDictationPillToContent: (surfaceHeight) =>
+    ipcRenderer.invoke("resize-agent-dictation-pill-to-content", surfaceHeight),
+setAgentDictationPillInteractivity: (interactive) =>
+    ipcRenderer.invoke("set-agent-dictation-pill-interactivity", interactive),
+onAgentDictationPillStateChanged: registerListener(
+    "agent-dictation-pill-state-changed",
+    (callback) => (_event, state) => callback(state)
+  ),
+onAgentDictationPillAudioLevelChanged: registerListener(
+    "agent-dictation-pill-audio-level-changed",
+    (callback) => (_event, level) => callback(level)
+  ),
+showAgentDictationFinalTranscript: (text) =>
+    ipcRenderer.send("show-agent-dictation-final-transcript", text),
+onAgentDictationPillFinalTranscript: registerListener(
+    "agent-dictation-pill-final-transcript",
+    (callback) => (_event, text) => callback(text)
+  ),
+setAssistantPanelOpen: (open) => ipcRenderer.invoke("set-assistant-panel-open", open),
+assistantPasteTarget: (action) => ipcRenderer.invoke("assistant-paste-target", action),
+setAssistantPanelBusy: (busy) => ipcRenderer.invoke("set-assistant-panel-busy", busy),
+getWorkspacePolicy: (accountId, expectedAuthGeneration) =>
+    ipcRenderer.invoke("get-workspace-policy", accountId, expectedAuthGeneration),
+onWorkspacePolicyChanged: (callback) => {
+    const listener = (_event, snapshot) => callback(snapshot);
+    ipcRenderer.on("workspace-policy-changed", listener);
+    return () => ipcRenderer.removeListener("workspace-policy-changed", listener);
+  },
+acquireRecordingLock: (pipeline) => ipcRenderer.invoke("acquire-recording-lock", pipeline),
+releaseRecordingLock: (pipeline) => ipcRenderer.invoke("release-recording-lock", pipeline),
 });

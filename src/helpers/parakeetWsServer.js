@@ -1,5 +1,10 @@
-const { textLength, byteLength } = require("./logRedaction");
-const { spawn } = require("child_process");
+const {
+  runLocalModelOperation,
+  assertLocalModelOperation,
+  localModelOperationSignal,
+  isLocalModelPolicyRefusal,
+} = require("./localModelPolicyGate");
+const { execFile, spawn } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const WebSocket = require("ws");
@@ -305,33 +310,27 @@ class ParakeetWsServer {
         : [`--num-threads=${INTRA_OP_THREADS}`, `--num-work-threads=${OFFLINE_WORK_THREADS}`]),
     ];
 
-    debugLogger.debug("Starting parakeet WS server", { port: this.port, modelName, runtime, args });
-
-    const child = spawn(wsBinary, args, {
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-      cwd: getSafeTempDir(),
-      detached: process.platform !== "win32",
-    });
-    this.process = child;
-    sidecarPidFile.write("parakeet", child.pid);
-
-    let stderrBuffer = "";
-    let exitCode = null;
-    let readyResolve = null;
-    const readyFromStderr = new Promise((resolve) => {
-      readyResolve = resolve;
-    });
-
-    child.stdout.on("data", (data) => {
-      debugLogger.debug("parakeet-ws stdout", { byteLength: byteLength(data) });
-    });
-
-    child.stderr.on("data", (data) => {
-      stderrBuffer += data.toString();
-      debugLogger.debug("parakeet-ws stderr", { byteLength: byteLength(data) });
-      if (data.toString().includes("Listening on:")) {
-        readyResolve(true);
+    let hotwordsDir = null;
+    try {
+      assertLocalModelOperation(this);
+      if (useHotwords) {
+        hotwordsDir = fs.mkdtempSync(path.join(getSafeTempDir(), "openwhispr-hotwords-"));
+        const hotwordsFile = path.join(hotwordsDir, "hotwords.txt");
+        const content = hotwords.words.map((word) => `${word}\n`).join("");
+        if (process.platform === "win32") {
+          await writeWindowsHotwordsFile(hotwordsFile, content);
+          stopSignal.throwIfAborted();
+          assertLocalModelOperation(this);
+        } else {
+          fs.writeFileSync(hotwordsFile, content, { flag: "wx", mode: 0o600 });
+        }
+        args.push(
+          "--decoding-method=modified_beam_search",
+          `--hotwords-file=${hotwordsFile}`,
+          `--hotwords-score=${hotwords.score}`,
+          "--modeling-unit=bpe",
+          `--bpe-vocab=${bpeVocab}`
+        );
       }
 
       debugLogger.debug("Starting parakeet WS server", {
@@ -448,9 +447,8 @@ class ParakeetWsServer {
 
     if (!ready) {
       const info = getProcessInfo ? getProcessInfo() : {};
-      const stderrLength = textLength(info.stderr);
-      const details =
-        info.exitCode !== null ? `exit code: ${info.exitCode}` : `stderr length: ${stderrLength}`;
+      const stderr = info.stderr ? info.stderr.trim().slice(0, 200) : "";
+      const details = stderr || (info.exitCode !== null ? `exit code: ${info.exitCode}` : "");
       throw new Error(`parakeet-ws process died during startup${details ? `: ${details}` : ""}`);
     }
 
@@ -600,7 +598,8 @@ class ParakeetWsServer {
         debugLogger.debug("parakeet-ws transcription completed", {
           elapsed,
           code,
-          resultLength: textLength(result),
+          resultLength: result.length,
+          resultPreview: result.slice(0, 200),
         });
 
         resolve({ text: parseOfflineMessage(result), elapsed });
@@ -660,7 +659,8 @@ class ParakeetWsServer {
       debugLogger.debug("parakeet-ws streaming transcription completed", {
         elapsed,
         truncated,
-        resultLength: textLength(text),
+        resultLength: text.length,
+        resultPreview: text.slice(0, 200),
       });
       return truncated ? { text, elapsed, truncated } : { text, elapsed };
     } finally {

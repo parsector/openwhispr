@@ -1,4 +1,11 @@
-import type { HoldDeliveryOptions, ToolExecutionContext } from "../../services/tools/ToolRegistry";
+import type {
+  CompletedActionOutcome,
+  HoldDeliveryOptions,
+  ToolExecutionContext,
+} from "../../services/tools/ToolRegistry";
+import type { InteractionRecord } from "../../types/agentInteractions";
+import type { ChatImageAttachment } from "./types";
+
 import { createMcpTurnResultLimiter } from "../../services/tools/mcpTools";
 
 export interface ToolContextRequest {
@@ -18,6 +25,7 @@ export interface ToolExecutionScope {
 
 interface ToolExecutionHandlers {
   origin?: { conversationId: string; surface: "chat" | "assistant" };
+  onHoldDelivery?: (options?: HoldDeliveryOptions) => void;
   onApprovalRequested?: () => void;
   /** A call now waits on the user's answer, or no longer does. */
   onInteraction?: (request: { toolCallId: string; record: InteractionRecord }) => void;
@@ -43,8 +51,11 @@ interface ToolExecutionHandlers {
  */
 export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): ToolExecutionScope {
   const controller = new AbortController();
-  const turnSlots = new Map<string, number>();
   let limitMcpResult: ((result: string) => string) | undefined;
+  const turnSlots = new Map<string, number>();
+  const earlierActions = new Set(handlers.completedActions);
+  // This request's sends: made, or running now.
+  const claimedActions = new Set<string>();
   const notify =
     <Args extends unknown[]>(handler?: (...args: Args) => void) =>
     (...args: Args): void => {
@@ -67,17 +78,31 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       messageId,
       toolCallId,
       ...(handlers.origin ? { origin: { ...handlers.origin, messageId, toolCallId } } : {}),
+      onHoldDelivery: notify(handlers.onHoldDelivery),
+      limitMcpResult: (result) => limitMcpResult?.(result) ?? result,
       // Either the turn ending or the SDK abandoning this one call releases
       // whatever the tool is waiting on.
       signal: signal ? AbortSignal.any([controller.signal, signal]) : controller.signal,
       onApprovalRequested: notify(handlers.onApprovalRequested),
       claimTurnSlot,
       releaseTurnSlot,
-      limitMcpResult: (result) => limitMcpResult?.(result) ?? result,
+      onInteraction: (record) => interaction({ toolCallId, record }),
+      attachImage: notify(handlers.onImageAttached),
+      claimAction: (actionKey) => {
+        if (claimedActions.has(actionKey)) return false;
+        claimedActions.add(actionKey);
+        return true;
+      },
+      releaseAction: (actionKey) => {
+        claimedActions.delete(actionKey);
+      },
+      recordCompletedAction: (actionKey, outcome) => {
+        claimedActions.add(actionKey);
+        handlers.onActionCompleted?.({ toolCallId, actionKey, ...(outcome ? { outcome } : {}) });
+      },
+      sentEarlier: (actionKey) => earlierActions.has(actionKey),
     }),
-    setMcpResultBudget: (budget) => {
-      limitMcpResult = createMcpTurnResultLimiter(budget);
-    },
+    setMcpResultBudget: (budget) => { limitMcpResult = createMcpTurnResultLimiter(budget); },
     abort: () => controller.abort(),
   };
 }

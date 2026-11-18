@@ -1,3 +1,4 @@
+import { Copy } from "../icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -993,7 +994,9 @@ function NoteLeaf({
   );
 
   const title = note.title || t("notes.list.untitled");
-  const hasActions = noteFilesEnabled || canMove || canDelete || !!note.transcript;
+  const workspaceMoves = canMove ? otherWorkspaces : [];
+  const hasTransfers = canMove || workspaceMoves.length > 0;
+  const hasActions = noteFilesEnabled || hasTransfers || canDelete || !!note.transcript;
 
   return (
     <div

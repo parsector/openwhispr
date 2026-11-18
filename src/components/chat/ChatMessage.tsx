@@ -1,3 +1,7 @@
+import { SkillApprovalCard } from "./SkillApprovalCard";
+import { SkillCardSummary } from "./SkillApprovalCard";
+import { readSkillCardRecord } from "./skillCardRecord";
+import { CodeBlockActions } from "./CodeBlockActions";
 import {
   memo,
   useLayoutEffect,
@@ -33,8 +37,10 @@ import { ApprovalCard } from "./ApprovalCard";
 import { InteractionCard, InteractionOutcomeRow } from "./InteractionCard";
 import { ApiKeySavedRow } from "./interactions/ApiKeyCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
-import { LocalApprovalCard } from "./LocalApprovalCard";
-import { useLocalApprovalStore } from "../../stores/localApprovalStore";
+import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
+
+
+
 import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 
 // Module-level, so the markdown keeps the same callback from render to render.
@@ -172,15 +178,124 @@ function useToolCallCard(
 ): ReactElement | null {
   const key = approvalKey(messageId, toolCall.id);
   const approval = useConnectorApprovalStore((state) => state.entries[key]);
-  const local = useLocalApprovalStore((state) => state.entries[key] ?? state.receipts[key]);
+  const interaction = useAgentInteractionStore((state) => state.entries[key]);
   const skillApproval = useSkillApprovalStore((state) => state.entries[key]);
-  if (local) return <LocalApprovalCard entry={local} />;
-  if (approval) return <ApprovalCard entry={approval} />;
-  if (skillApproval) return <SkillApprovalCard entry={skillApproval} />;
-  const skillRecord = readSkillCardRecord(toolCall);
-  if (skillRecord) return <SkillCardSummary record={skillRecord} />;
-  if (showsNothing(toolCall)) return null;
-  return <ToolCallStep toolCall={toolCall} />;
+  const receiptRef = useRef<HTMLDivElement>(null);
+  const ownedFocusRef = useRef(false);
+  useLayoutEffect(() => {
+    if (
+      interaction?.state === "settled" &&
+      ownedFocusRef.current &&
+      document.hasFocus() &&
+      (!document.activeElement || document.activeElement === document.body)
+    ) {
+      receiptRef.current?.focus({ preventScroll: true });
+    }
+  }, [interaction?.state]);
+  if (!interaction) {
+    if (approval) return <ApprovalCard entry={approval} />;
+    if (skillApproval) return <SkillApprovalCard entry={skillApproval} />;
+    const skillRecord = readSkillCardRecord(toolCall);
+    return skillRecord ? <SkillCardSummary record={skillRecord} /> : null;
+  }
+  let card: ReactElement;
+  // An open question goes first: after Retry, the Slack picker waits under the
+  // key of the answer card it settled.
+  if (interaction.state !== "settled") {
+    card = <InteractionCard entry={interaction} heightRef={cardHeightRef} />;
+  } else if (approval) {
+    card = <ApprovalCard entry={approval} />;
+  }
+  // A saved key stays visible as saved; every other settled card gives way to
+  // its step, or where steps don't show, to its outcome row.
+  else if (interaction.payload.kind === "apiKey" && interaction.result?.status === "saved") {
+    card = <ApiKeySavedRow payload={interaction.payload} />;
+  } else {
+    card = cardHeightRef ? (
+      <InteractionOutcomeRow entry={interaction} fromHeight={cardHeightRef.current} />
+    ) : (
+      <ToolCallStep toolCall={toolCall} />
+    );
+  }
+  return (
+    <div
+      ref={receiptRef}
+      tabIndex={-1}
+      className="outline-none"
+      onFocusCapture={() => {
+        ownedFocusRef.current = true;
+      }}
+      onBlurCapture={(event) => {
+        ownedFocusRef.current = event.currentTarget.contains(event.relatedTarget);
+      }}
+    >
+      {card}
+    </div>
+  );
+}
+
+/** The agent window's card for a call; its steps show in the progress row instead. */
+export function ToolCallCard(props: ToolCallProps): ReactElement | null {
+  const cardHeightRef = useRef(0);
+  return useToolCallCard(props, cardHeightRef);
+}
+
+function ToolCallItem(props: ToolCallProps) {
+  return useToolCallCard(props) ?? <ToolCallStep toolCall={props.toolCall} />;
+}
+
+// How the turn ended, when that needs saying, and the model's reasoning.
+export function TurnNotes({
+  turn,
+  failedHere,
+  onContinue,
+  showReasoning = true,
+}: {
+  turn: AssistantTurn;
+  /** The failure is already on screen (this session); a saved one shows only this note. */
+  failedHere: boolean;
+  onContinue?: () => void;
+  /** Off where the reasoning has a place of its own (the agent window's progress row). */
+  showReasoning?: boolean;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {showReasoning && turn.reasoning && (
+        <details className="mt-1.5 text-[11px] text-muted-foreground/80">
+          <summary className="cursor-pointer select-none">{t("agentMode.turn.reasoning")}</summary>
+          <p className="mt-1 whitespace-pre-wrap" dir="auto">
+            {turn.reasoning}
+          </p>
+        </details>
+      )}
+      {turn.status === "stopped" && (
+        <p className="mt-1.5 text-[11px] text-muted-foreground/80">{t("agentMode.turn.stopped")}</p>
+      )}
+      {turn.status === "error" && !failedHere && (
+        <p className="mt-1.5 text-[11px] text-destructive/80">{t("agentMode.turn.failed")}</p>
+      )}
+      {turn.unbackedClaim && (
+        <p className="mt-1.5 text-[11px] text-destructive/80">
+          {t("agentMode.turn.unbackedClaim")}
+        </p>
+      )}
+      {turn.status === "step_limit" && (
+        <p className="mt-1.5 flex items-center gap-2 text-[11px] text-muted-foreground/80">
+          {t("agentMode.turn.stepLimit")}
+          {onContinue && (
+            <button
+              type="button"
+              onClick={onContinue}
+              className="font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 rounded-sm"
+            >
+              {t("agentMode.turn.continue")}
+            </button>
+          )}
+        </p>
+      )}
+    </>
+  );
 }
 
 function NoteCard({

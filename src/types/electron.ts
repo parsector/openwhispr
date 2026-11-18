@@ -4,8 +4,7 @@ import type { PermissionGuideState, PermissionGuideAction } from "./permissionGu
 import type { TinfoilCatalogModel } from "../models/tinfoilModels";
 import type { UsageResponse } from "../lib/usageStore";
 import type { DictationTone, ToneAppCategory } from "../config/toneStyle";
-import type { EffectivePolicySnapshot } from "./policy";
-import type { SplitLiveSpeakers } from "../utils/transcriptSpeakerState";
+import type { OrgPolicy, EffectivePolicySnapshot } from "./policy";
 import type { EnterpriseAudioSetupContext, EnterpriseAudioTestLink } from "./enterpriseAudio";
 import type { TechnicalErrorDetailsData } from "../components/ui/useToast";
 import type { ProviderSettingsTarget } from "../utils/describeProviderError";
@@ -1666,6 +1665,12 @@ export interface ConversationPreview {
   message_count: number;
   last_message?: string | null;
   last_message_role?: "user" | "assistant" | "system" | null;
+
+parent_conversation_id?: number | null;
+note_id?: number | null;
+note_title?: string | null;
+note_deleted_at?: string | null;
+note_space_id?: number | null;
 }
 
 export interface ConversationCreateSnapshot {
@@ -2252,6 +2257,7 @@ declare global {
           allowClipboardFallback?: boolean;
           /** Paste exactly this text: no smart spacing, no AutoLearn. */
           raw?: boolean;
+          assistantTarget?: boolean;
         }
       ) => Promise<
         | {
@@ -2733,20 +2739,6 @@ declare global {
         expectedAuthGeneration?: number
       ) => Promise<{ success: boolean; code?: string; error?: string }>;
       getActiveAccountScope?: () => Promise<ActiveAccountScope | null>;
-      /** Dashboard funnel: binds a session the renderer just validated (app sign-in). */
-      recordProductEventAppSession?: (context: AnalyticsSyncContext) => Promise<void>;
-      /** Dashboard funnel: the final onboarding completion was persisted. */
-      recordOnboardingCompleted?: (completion: {
-        setupMode: string | null;
-        flowVersion: string;
-      }) => Promise<void>;
-      /** Dashboard funnel: an original dictation finished, as its word count only. */
-      recordDictationCompleted?: (dictation: {
-        captureId: string;
-        words: number;
-        mode: string;
-        startedAt?: string;
-      }) => Promise<void>;
       getNoteWriteGuard?: () => Promise<NoteWriteGuard>;
       getDatabaseAccountScope?: () => Promise<DatabaseAccountScope>;
       onDatabaseAccountScopeChanged?: (
@@ -3760,23 +3752,6 @@ declare global {
         }
       >;
       // Authenticated cloud API proxy (`public: true` skips the auth requirement)
-      getAffiliateCandidate?: () => Promise<{
-        config: { domain: string } | null;
-        candidate: { link: string; clickId: string | null; saved: boolean } | null;
-        generation: number;
-      }>;
-      saveAffiliateCandidate?: (input: {
-        link: string;
-        clickId?: string | null;
-        saved?: boolean;
-        generation: number;
-        expectedCandidate?: { link: string; clickId: string | null; saved: boolean };
-      }) => Promise<void>;
-      resolveAffiliateLink?: (
-        link: string,
-        generation: number
-      ) => Promise<{ link: string; clickId: string }>;
-      onAffiliateLink?: (callback: () => void) => () => void;
       cloudApiRequest?: (opts: {
         method?: string;
         path: string;
@@ -4003,21 +3978,17 @@ declare global {
       ) => Promise<{ success: boolean }>;
       getAgentConversation?: (id: number) => Promise<AgentConversationWithMessages | null>;
       deleteAgentConversation?: (id: number) => Promise<{ success: boolean }>;
-      markConversationCreateAttempted?: (id: number) => Promise<{ success: boolean }>;
+      markConversationCreateAttempted?: (
+        id: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; stale?: boolean }>;
       updateAgentConversationTitle?: (id: number, title: string) => Promise<{ success: boolean }>;
       addAgentMessage?: (
         conversationId: number,
         role: "user" | "assistant" | "system",
         content: string,
         metadata?: Record<string, unknown>
-      ) => Promise<{
-        id: number;
-        conversation_id: number;
-        role: string;
-        content: string;
-        metadata?: string;
-        created_at: string;
-      } | null>;
+      ) => Promise<AgentMessageRow | null>;
       onAgentJobMessageAdded?: (
         callback: (message: { conversationId: number; messageId: string; content: string }) => void
       ) => () => void;
@@ -4597,7 +4568,6 @@ declare global {
             spanCases?: Record<string, string>;
           };
           removedSegments?: RemovedTranscriptSegment[];
-          splitLiveSpeakers?: SplitLiveSpeakers;
         }) => void
       ) => () => void;
 
@@ -5076,7 +5046,10 @@ declare global {
         error?: string;
         note?: NoteItem;
       }>;
-      markNoteCreatesAttempted?: (clientNoteIds: string[]) => Promise<string[]>;
+      markNoteCreatesAttempted?: (
+        clientNoteIds: string[],
+        expectedAuthGeneration?: number
+      ) => Promise<string[]>;
       acknowledgeNoteCreate?: (
         id: number,
         snapshot: NoteCreateSnapshot,
@@ -5183,8 +5156,10 @@ declare global {
       ) => Promise<ConversationPreview | StaleSyncWrite | null>;
       upsertConversationFromCloud?: (
         cloudConv: Record<string, unknown>,
-        messages: Array<Record<string, unknown>>
-      ) => Promise<void>;
+        messages: Array<Record<string, unknown>>,
+        snapshot: ConversationPreview | null,
+        expectedAuthGeneration: number
+      ) => Promise<ConversationPreview | StaleSyncWrite | null>;
       acknowledgeConversationCreate?: (
         id: number,
         snapshot: ConversationCreateSnapshot,
@@ -5351,10 +5326,181 @@ declare global {
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
-    };
+
+onOpenAssistantPanel?: (callback: () => void) => () => void;
+onCancelDictation?: (callback: () => void) => () => void;
+dictationAudioLevelChanged?: (level: number) => void;
+toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
+cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
+getAgentDictationPillState?: () => Promise<{
+        lifecycle: "idle" | "preparing" | "recording" | "processing";
+        interactive: boolean;
+        horizontalDirection: "left" | "right";
+      }>;
+resizeAgentDictationPillToContent?: (surfaceHeight: number | null) => Promise<{
+        success: boolean;
+        changed?: boolean;
+        bounds?: { x: number; y: number; width: number; height: number };
+        message?: string;
+      }>;
+setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
+onAgentDictationPillStateChanged?: (
+        callback: (state: {
+          lifecycle: "idle" | "preparing" | "recording" | "processing";
+          interactive: boolean;
+          horizontalDirection: "left" | "right";
+        }) => void
+      ) => () => void;
+onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
+showAgentDictationFinalTranscript?: (text: string) => void;
+onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
+getWorkspacePolicy?: (
+        accountId?: string,
+        expectedAuthGeneration?: number
+      ) => Promise<{
+        success: boolean;
+        status?: "network" | "cached" | "current" | "unsupported" | "restricted" | "error";
+        revision?: number;
+        accountId?: string | null;
+        authGeneration?: number | null;
+        managed?: boolean;
+        policy?: OrgPolicy | null;
+        policyUpdatedAt?: string | null;
+        endpointSupported?: boolean;
+        code?: string;
+        error?: string;
+        enforcementRequired?: boolean;
+      }>;
+onWorkspacePolicyChanged?: (
+        callback: (
+          snapshot:
+            | {
+                success: true;
+                status: "network" | "cached" | "current" | "unsupported";
+                revision: number;
+                accountId: string | null;
+                authGeneration: number;
+                managed: boolean;
+                policy: OrgPolicy | null;
+                policyUpdatedAt: string | null;
+                endpointSupported: boolean;
+              }
+            | {
+                success: false;
+                status: "error";
+                revision: number;
+                accountId: string | null;
+                authGeneration: number;
+                code: "POLICY_UNRESOLVABLE";
+                error: string;
+              }
+        ) => void
+      ) => () => void;
+setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
+assistantPasteTarget?: (action: "adopt" | "forget") => Promise<boolean>;
+setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
+
+updateAgentMessage?: (
+        id: number,
+        content: string,
+        metadata?: Record<string, unknown>
+      ) => Promise<AgentMessageRow | null>;
+forkAgentConversation?: (
+        conversationId: number,
+        throughMessageId: number,
+        forkContext?: string | null
+      ) => Promise<AgentConversationWithMessages | null>;
+searchInviteContacts: (
+        query: string,
+        exclude: string[]
+      ) => Promise<{
+        success: boolean;
+        contacts: Array<{ email: string; name: string | null }>;
+      }>;
+
+
+upsertNoteFromCloud?: {
+        (
+          cloudNote: Record<string, unknown>,
+          localFolderId: number | null,
+          localSpaceId?: number | null
+        ): Promise<NoteItem | null>;
+        // A pull pinned to a sign-in: refused once that sign-in is replaced.
+        // newKeyIfTaken stores a cloud row whose key is taken under a key of
+        // its own without taking over another account's local row.
+        (
+          cloudNote: Record<string, unknown>,
+          localFolderId: number | null,
+          localSpaceId: number | null | undefined,
+          expectedAuthGeneration: number | undefined,
+          options?: CloudRowWriteOptions
+        ): Promise<NoteItem | StaleSyncWrite | null>;
+      };
+renewNoteCloudIdentity?: (
+        id: number,
+        expectedClientNoteId: string,
+        expectedCloudId: string | null,
+        expectedSpaceId: number,
+        expectedAuthGeneration: number
+      ) => Promise<{ success: boolean; note?: NoteItem }>;
+getPrivatePlacementBackupCandidates?: (
+        expectedAuthGeneration: number
+      ) => Promise<PrivatePlacementBackupCandidates | StaleSyncWrite>;
+getPrivatePlacementBackupRows?: (
+        expectedAuthGeneration: number,
+        candidates: PrivatePlacementBackupCandidates
+      ) => Promise<{
+        success: boolean;
+        notes?: PrivatePlacementBackupRow[];
+        folders?: PrivatePlacementBackupRow[];
+      }>;
+queueUnlinkedPrivateFolders?: (
+        expectedAuthGeneration: number
+      ) => Promise<number | StaleSyncWrite>;
+clearConversationCreateAttempted?: (id: number) => Promise<void>;
+};
 
     api?: {
       sendDebugLog: (message: string) => void;
     };
-  }
+
+commitHeldSpaceDeletes?: () => Promise<void>;
+}
+}
+
+export interface AgentMessageRow {
+  id: number;
+  conversation_id: number;
+  role: "user" | "assistant" | "system";
+  content: string;
+  metadata?: string;
+  created_at: string;
+}
+export interface AgentConversationWithMessages {
+  device_only?: number;
+  space_id?: number | null;
+  folder_id?: number | null;
+  note_space_id?: number | null;
+  note_deleted_at?: string | null;
+  id: number;
+  title: string;
+  note_id?: number | null;
+  /** Main's live ownership claim; never stored or uploaded. */
+  has_active_turn?: boolean;
+  archived_at?: string;
+  cloud_id?: string | null;
+  client_conversation_id?: string | null;
+  cloud_create_attempted?: number;
+  created_at: string;
+  updated_at: string;
+  parent_conversation_id?: number | null;
+  /** The parent's client id, which every device shares. */
+  parent_client_conversation_id?: string | null;
+  /** Text the fork was made from, sent as context with its next request. */
+  fork_context?: string | null;
+  /** The parent's title, while the parent still exists. */
+  parent_title?: string | null;
+  /** How many of a fork's first messages it copied from its parent. */
+  fork_message_count?: number | null;
+  messages: AgentMessageRow[];
 }

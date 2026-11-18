@@ -149,6 +149,23 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     conversationIdRef.current = conversationId;
   }, [conversationId]);
 
+  const setDbId = useCallback((messageId: string, dbId: number) => {
+    setMessages((prev) =>
+      prev.map((message) => (message.id === messageId ? { ...message, dbId } : message))
+    );
+  }, []);
+
+  const showConversation = useCallback(
+    (conversation: StoredChatConversation, messages: Message[]) => {
+      conversationIdRef.current = conversation.id;
+      setConversationId(conversation.id);
+      setNoteId(conversation.note_id ?? null);
+      setForkOrigin(forkOriginOf(conversation));
+      setMessages(messages);
+    },
+    []
+  );
+
   useEffect(() => {
     return window.electronAPI?.onAgentJobMessageAdded?.(
       ({ conversationId: id, messageId, content }) => {
@@ -187,39 +204,89 @@ export function useChatPersistence(options: UseChatPersistenceOptions = {}): Cha
     [options]
   );
 
-  const loadConversation = useCallback(async (id: number) => {
-    const version = ++sessionVersionRef.current;
-    // Unknown up front, so the last conversation's note never grounds a send made while this loads.
-    setNoteId(undefined);
-    const conv = await window.electronAPI?.getAgentConversation?.(id);
-    if (version !== sessionVersionRef.current) return false;
-    if (!conv) {
-      // The conversation was deleted elsewhere (e.g. ControlPanel history).
-      // Clear the id, or every subsequent save silently no-ops against the
-      // tombstoned row and the session is never persisted.
-      conversationIdRef.current = null;
-      setConversationId(null);
-      setNoteId(null);
-      setMessages([]);
-      return null;
-    }
-    conversationIdRef.current = id;
-    setConversationId(id);
-    setNoteId(conv.note_id ?? null);
-    const loaded: Message[] = conv.messages.map((m) => {
-      const parsed = m.metadata ? tryParseMetadata(m.metadata) : undefined;
-      const toolCalls = parsed?.toolCalls as ToolCallInfo[] | undefined;
-      return {
-        id: typeof parsed?.messageId === "string" ? parsed.messageId : crypto.randomUUID(),
-        role: m.role as Message["role"],
-        content: m.content,
-        isStreaming: false,
-        ...(toolCalls ? { toolCalls } : {}),
-      };
-    });
-    setMessages(loaded);
-    return true;
-  }, []);
+  const loadConversation = useCallback(
+    async (
+      id: number,
+      beforeOpen?: () => void,
+      canOpen?: (conversation: StoredChatConversation) => Promise<boolean>
+    ): Promise<boolean | null> => {
+      const navigationVersion = ++navigationVersionRef.current;
+      if (beforeOpen || canOpen) {
+        const version = sessionVersionRef.current;
+        const target = await window.electronAPI?.getAgentConversation?.(id);
+        if (
+          version !== sessionVersionRef.current ||
+          navigationVersion !== navigationVersionRef.current
+        )
+          return false;
+        if (!target) return null;
+        if (canOpen && !(await canOpen(target))) return false;
+        if (
+          version !== sessionVersionRef.current ||
+          navigationVersion !== navigationVersionRef.current
+        )
+          return false;
+        beforeOpen?.();
+      }
+      const version = ++sessionVersionRef.current;
+      // Unknown up front, so the last conversation's note never grounds a send made while this loads.
+      setNoteId(undefined);
+      if (ownedConversationRef.current != null)
+        await releaseConversation(ownedConversationRef.current);
+      await releasingRef.current;
+      if (
+        version !== sessionVersionRef.current ||
+        navigationVersion !== navigationVersionRef.current
+      )
+        return false;
+      const ownerId = crypto.randomUUID();
+      ownerIdRef.current = ownerId;
+      blockedConversationRef.current = null;
+      const claim = await window.electronAPI?.claimAgentConversation?.(id, ownerId);
+      const conv = claim
+        ? claim.conversation
+        : await window.electronAPI?.getAgentConversation?.(id);
+      if (claim?.owned) {
+        if (
+          version !== sessionVersionRef.current ||
+          navigationVersion !== navigationVersionRef.current
+        ) {
+          void window.electronAPI?.releaseAgentConversation?.(id, ownerId);
+          return false;
+        }
+        ownedConversationRef.current = id;
+      }
+      if (
+        version !== sessionVersionRef.current ||
+        navigationVersion !== navigationVersionRef.current
+      )
+        return false;
+      if (!conv) {
+        // The conversation was deleted elsewhere (e.g. ControlPanel history).
+        // Clear the id, or every subsequent save silently no-ops against the
+        // tombstoned row and the session is never persisted.
+        conversationIdRef.current = null;
+        setConversationId(null);
+        setForkOrigin(null);
+        setNoteId(null);
+        setMessages([]);
+        return null;
+      }
+      const recover = !claim || claim.owned;
+      if (!recover) blockedConversationRef.current = id;
+      const messages = decodeChatMessages(conv, recover);
+      showConversation(conv, messages);
+      const hasRecovery = messages
+        .at(-1)
+        ?.toolCalls?.some(
+          (call) =>
+            call.interaction?.state === "pending" || call.interaction?.state === "interrupted"
+        );
+      if (recover && !hasRecovery) void releaseConversation(id);
+      return true;
+    },
+    [releaseConversation, showConversation]
+  );
 
   useEffect(
     () =>

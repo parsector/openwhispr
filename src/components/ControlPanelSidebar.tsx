@@ -104,6 +104,14 @@ export default function ControlPanelSidebar({
               >
                 {item.label}
               </span>
+              {item.id === "chat" && chatNeedsAttention && (
+                <span
+                  role="status"
+                  aria-label={t("agentWindow.waitingForAnswer")}
+                  title={t("agentWindow.waitingForAnswer")}
+                  className="ms-auto size-1.5 shrink-0 rounded-full bg-primary"
+                />
+              )}
               {item.id === "routines" && routineUnread > 0 && (
                 <span className="ms-auto rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
                   {routineUnread}

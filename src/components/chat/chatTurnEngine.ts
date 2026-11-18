@@ -1,3 +1,5 @@
+import { loadMcpTools } from "../../services/tools/mcpTools";
+import { resolveMcpResultBudget } from "../../services/tools/mcpResultBudget";
 import type { NoteItem, NoteWriteGuard } from "../../types/electron";
 import i18n from "../../i18n";
 import ReasoningService, { type AgentStreamChunk } from "../../services/ReasoningService";
@@ -19,6 +21,7 @@ import {
 } from "../../helpers/providerHttpErrors.js";
 import { productHelpMetadata } from "../../services/help/productHelp";
 import logger from "../../utils/logger";
+import { endpointSupportsToolCalls } from "../../utils/modelCapability";
 import {
   isAgentAllowed,
   isConnectorsAllowed,
@@ -31,9 +34,6 @@ import {
 } from "../../stores/policyRules";
 import { usePolicyStore } from "../../stores/policyStore";
 import { readSkillCardRecord, SKILL_CARD_TOOLS } from "./skillCardRecord";
-import { getUsageState } from "../../lib/usageStore";
-import { readIsSubscribed } from "../../lib/subscriptionFlag";
-import { hasConnectorPlan } from "../../utils/connectorEligibility";
 import { gmailSendStatus, resolveEmailDraftTarget } from "../../utils/emailDraftTarget";
 import {
   ensureConnectorStatus,
@@ -118,8 +118,6 @@ const RAG_NOTE_SNIPPET_LENGTH = 500;
 const STREAM_FLUSH_INTERVAL_MS = 32;
 const MAX_SAVED_REASONING_CHARS = 20_000;
 
-const LOCAL_TOOL_MIN_PARAMS_B = 4;
-
 // The tool reads the DB mirror over IPC (not the control panel's store), so it
 // also works from the dictation window, for the workspace every window uses now.
 async function readAppliedSharedWords(): Promise<SharedDictionaryWord[]> {
@@ -144,11 +142,6 @@ async function hideAppliedSharedWords(ids: string[]): Promise<void> {
   const workspaceId = readActiveWorkspaceId();
   if (!workspaceId) throw new Error("No active workspace");
   await setSharedWordsHidden(workspaceId, ids, true);
-}
-
-function estimateModelSizeB(modelId: string): number {
-  const match = modelId.match(/-([\d.]+)[bB]/);
-  return match ? parseFloat(match[1]) : 0;
 }
 
 const CONNECTOR_CONNECTION_TARGETS = ["gmail", "slack", "linear", "github"] as const;
@@ -305,6 +298,7 @@ export interface ChatTurnOptions {
    * only in a send that offers connector tools, so recipients come from them.
    */
   noteMeeting?: NoteAttendeesRequest;
+  onResponseContent?: () => void;
   onStreamComplete?: TurnHandler;
   /**
    * Takes the conversation for this window while a turn runs in it, so another
@@ -338,6 +332,11 @@ export type TurnHandler = (
 ) => void | Promise<void>;
 
 export interface SendToAIOptions {
+  suppressResponseContent?: boolean;
+  onApprovalRequested?: () => void;
+  onHoldDelivery?: (options?: import("../../services/tools/ToolRegistry").HoldDeliveryOptions) => void;
+  destinationAppCategory?: import("../../config/toneStyle").ToneAppCategory;
+  selectionContext?: import("../../utils/agentSelectionContext").AgentSelectionContext;
   /** The conversation this turn is saved into. */
   conversationId?: number;
   /** Saves this send after its originating view changes. */
@@ -486,6 +485,9 @@ export function createChatTurnEngine(
     } = {};
     const stepImages: ChatImageAttachment[] = [];
     const toolScope = createToolExecutionScope({
+      origin: options?.conversationId != null ? { conversationId: String(options.conversationId), surface: turnOptions.inferenceScope === "dictationAgent" ? "assistant" : "chat" } : undefined,
+      onApprovalRequested: options?.onApprovalRequested,
+      onHoldDelivery: options?.onHoldDelivery,
       onInteraction: ({ toolCallId, record }) =>
         turnHooks.annotate?.(toolCallId, { interaction: record }),
       onImageAttached: (image) => stepImages.push(image),
@@ -681,11 +683,10 @@ export function createChatTurnEngine(
           "corti",
         ].includes(llmConfig.provider);
       // The catalog's supportsTools decides; the size guess covers models without it.
-      const localModelCanUseTool =
-        isLocalProvider &&
-        (getLocalModel(llmConfig.model)?.supportsTools ??
-          estimateModelSizeB(llmConfig.model) >= LOCAL_TOOL_MIN_PARAMS_B);
-      const supportsTools = isCloudAgent || !isLocalProvider || localModelCanUseTool;
+      const supportsTools = isCloudAgent ||
+        (llmMode === "local"
+          ? getLocalModel(llmConfig.model)?.supportsTools ?? endpointSupportsToolCalls(llmConfig)
+          : endpointSupportsToolCalls(llmConfig));
       // A local or LAN model may have a 16k context; hosted models have room to spare.
       const contextTier =
         !isCloudAgent && (isLocalProvider || isLanAgent) ? "selfHosted" : "hosted";
@@ -730,7 +731,7 @@ export function createChatTurnEngine(
       const policy = usePolicyStore.getState();
       const calendarConnected = selectCalendarConnected(settings);
       const webSearchEnabled = isWebSearchAllowed(policy);
-      const connectorPlan = hasConnectorPlan(getUsageState(), readIsSubscribed());
+      const connectorPlan = true;
       const connectorsAvailable =
         allowConnectors && settings.isSignedIn && connectorPlan && isConnectorsAllowed(policy);
       let registry: ToolRegistry | null = null;
@@ -782,7 +783,21 @@ export function createChatTurnEngine(
         connectorsOffered = connectors !== undefined;
         const creatorAttached = Boolean(options?.attachedSkill?.builtin);
         const keepNotesUnchanged = !!options?.keepNotesUnchanged;
+        const agentAllowed = isAgentAllowed(policy);
+        const agentProjects = agentAllowed ? (await window.agentJobs?.projectsList().then((value) => value.projects).catch(() => [])) ?? [] : [];
+        const agentPresets = agentAllowed && agentProjects.length ? (await window.agentJobs?.presetsList?.().then((value) => value.presets).catch(() => [])) ?? [] : [];
+        const mcpBudget = window.mcpClient || agentProjects.length > 0
+          ? await resolveMcpResultBudget(llmConfig.provider, llmConfig.model, isLocalProvider && !isCloudAgent, (modelId) => window.electronAPI.getLocalContextBudget(modelId), (message) => logger.warn(message))
+          : 0;
+        if (cancelled()) return;
+        if (mcpBudget > 0) toolScope.setMcpResultBudget(mcpBudget);
+        const mcp = window.mcpClient ? await loadMcpTools(window.mcpClient, mcpBudget).catch(() => ({ key: "unavailable", tools: [] })) : { key: "unavailable", tools: [] };
+        if (cancelled()) return;
         registry = createToolRegistry({
+          mcpTools: mcp.tools,
+          agentProjects,
+          agentPresets,
+          agentAllowed,
           isSignedIn: settings.isSignedIn,
           cloudBackupEnabled: settings.cloudBackupEnabled,
           calendarConnected,
@@ -839,7 +854,6 @@ export function createChatTurnEngine(
           : undefined,
         locations: {
           account: `${t("sidebar.settings")} → ${t("settingsModal.sections.account.label")}`,
-          plans: `${t("sidebar.settings")} → ${t("settingsModal.sections.plansBilling.label")}`,
           calendars: `${t("sidebar.integrations")} → ${t("integrations.nav.sections.calendars")}`,
           connectors: `${t("sidebar.integrations")} → ${t("integrations.nav.sections.connectors")}`,
           models: `${t("sidebar.settings")} → ${t("settingsModal.sections.llms.label")}`,
@@ -1143,7 +1157,12 @@ export function createChatTurnEngine(
         clearTimeout(contentFlushTimer);
         contentFlushTimer = null;
       };
+      let responsePresented = false;
       const flushContentNow = (): void => {
+        if (fullContent && !responsePresented && !options?.suppressResponseContent) {
+          responsePresented = true;
+          turnOptions.onResponseContent?.();
+        }
         cancelContentFlush();
         setMessages((prev) =>
           prev.map((m) =>

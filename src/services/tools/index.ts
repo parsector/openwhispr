@@ -1,14 +1,19 @@
-import { productHelpTools } from "./productHelpTools";
-import { ToolRegistry } from "./ToolRegistry";
-import { createSearchNotesTool } from "./searchNotesTool";
-import { getNoteTool } from "./getNoteTool";
 import { listTodosTool } from "./listTodosTool";
 import { getTodoTool } from "./getTodoTool";
 import { createTodoTool } from "./createTodoTool";
 import { updateTodoTool } from "./updateTodoTool";
-import { createNoteTool } from "./createNoteTool";
-import { updateNoteTool } from "./updateNoteTool";
-import { listFoldersTool } from "./listFoldersTool";
+import { createDelegateTaskTool, type AgentProject } from "./delegateTaskTool";
+import { createRunPresetTool, type AgentPreset } from "./runPresetTool";
+import { agentJobTool } from "./agentJobTool";
+import { resumeAgentJobTool } from "./resumeAgentJobTool";
+import { productHelpTools } from "./productHelpTools";
+import { ToolRegistry } from "./ToolRegistry";
+import { createSearchNotesTool } from "./searchNotesTool";
+import { createGetNoteTool } from "./getNoteTool";
+import { createCreateNoteTool } from "./createNoteTool";
+import { createUpdateNoteTool } from "./updateNoteTool";
+import { createListFoldersTool } from "./listFoldersTool";
+import type { NoteScope } from "./noteScope";
 import { clipboardTool } from "./clipboardTool";
 import { webSearchTool } from "./webSearchTool";
 import { calendarTool } from "./calendarTool";
@@ -33,16 +38,17 @@ import {
 
 import { getSettings, selectCalendarConnected } from "../../stores/settingsStore";
 import type { ContainerScope } from "../../types/chat";
-import { createDelegateTaskTool, type AgentProject } from "./delegateTaskTool";
-import { createRunPresetTool, type AgentPreset } from "./runPresetTool";
-import { agentJobTool } from "./agentJobTool";
-import { resumeAgentJobTool } from "./resumeAgentJobTool";
 
 export { ToolRegistry } from "./ToolRegistry";
 export type { ToolDefinition, ToolResult } from "./ToolRegistry";
 
 interface ToolRegistrySettings {
   isSignedIn: boolean;
+  mcpTools?: import("./ToolRegistry").ToolDefinition[];
+  agentProjects?: AgentProject[];
+  agentPresets?: AgentPreset[];
+  agentAllowed?: boolean;
+  executionOverrides?: Partial<Record<string, import("./ToolRegistry").ToolDefinition["execute"]>>;
   cloudBackupEnabled: boolean;
   /** Disabled for onboarding demos; supported normal chat surfaces default to enabled. */
   productHelpEnabled?: boolean;
@@ -67,12 +73,8 @@ interface ToolRegistrySettings {
   connectors?: ConnectorToolSettings;
   /** Leaves out update_note, for a turn that must not change any note. */
   keepNotesUnchanged?: boolean;
-  mcpTools?: import("./ToolRegistry").ToolDefinition[];
-  agentProjects?: AgentProject[];
-  agentPresets?: AgentPreset[];
-  agentAllowed?: boolean;
-  /** Main-process callers replace renderer-backed execution without changing assembly. */
-  executionOverrides?: Partial<Record<string, import("./ToolRegistry").ToolDefinition["execute"]>>;
+  /** Present only on surfaces that can show interactions (questions, connect cards). */
+  interactions?: InteractionToolOptions;
   /** The user's skills; load_skill is offered once one is usable. */
   skills?: SkillToolDeps;
 }
@@ -83,16 +85,32 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
     for (const tool of productHelpTools) registry.register(tool);
 
   const useCloudSearch = settings.isSignedIn && settings.cloudBackupEnabled;
-  registry.register(createSearchNotesTool({ useCloudSearch, fixedScope: settings.searchScope }));
-  registry.register(getNoteTool);
+  const noteScope: NoteScope = {
+    spaceIds: settings.scopeSpaceIds,
+    protectNotes: settings.protectNotes,
+    getWriteGuard: settings.getWriteGuard,
+    privateWorkspaceId: settings.privateWorkspaceId,
+    privateCreationAllowed: settings.privateCreationAllowed,
+    openNoteId: settings.openNoteId,
+  };
+  registry.register(
+    createSearchNotesTool({
+      useCloudSearch,
+      fixedScope: settings.searchScope,
+      scopeSpaceIds: noteScope.spaceIds,
+      privateWorkspaceId: settings.privateWorkspaceId,
+      protectNotes: settings.protectNotes,
+    })
+  );
+  registry.register(createGetNoteTool(noteScope));
+  registry.register(createCreateNoteTool(noteScope));
+  if (!settings.keepNotesUnchanged) registry.register(createUpdateNoteTool(noteScope));
+  registry.register(createListFoldersTool(noteScope));
+  registry.register(clipboardTool);
   registry.register(listTodosTool);
   registry.register(getTodoTool);
   registry.register(createTodoTool);
   registry.register(updateTodoTool);
-  registry.register(createNoteTool);
-  if (!settings.keepNotesUnchanged) registry.register(updateNoteTool);
-  registry.register(listFoldersTool);
-  registry.register(clipboardTool);
 
   if (settings.vocabulary) {
     const snippets = settings.vocabulary.getSnippets();
@@ -117,23 +135,21 @@ export function createToolRegistry(settings: ToolRegistrySettings): ToolRegistry
   }
 
   if (settings.connectors) registerConnectorTools(registry, settings.connectors);
+
   if (settings.agentAllowed && settings.agentProjects?.length) {
     registry.register(createDelegateTaskTool(settings.agentProjects));
     registry.register(agentJobTool);
     registry.register(resumeAgentJobTool);
-    if (settings.agentPresets?.length)
-      registry.register(createRunPresetTool(settings.agentPresets));
+    if (settings.agentPresets?.length) registry.register(createRunPresetTool(settings.agentPresets));
   }
   for (const tool of settings.mcpTools || []) {
     if (registry.get(tool.name)) throw new Error(`MCP tool name collision: ${tool.name}`);
     registry.register(tool);
   }
-
   for (const [name, execute] of Object.entries(settings.executionOverrides || {})) {
     const tool = registry.get(name);
     if (tool && execute) registry.register({ ...tool, execute });
   }
-
   if (settings.interactions) {
     for (const tool of createInteractionTools(settings.interactions)) registry.register(tool);
   }

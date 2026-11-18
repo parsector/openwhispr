@@ -1,3 +1,9 @@
+import { useMeetingAutoTranscriptionCheck } from "../hooks/usePolicy";
+import { handleMeetingRecordingRequest } from "../helpers/meetingRecordingRequest";
+import { useMeetingNoteSession } from "../hooks/useMeetingNoteSession";
+import { navigateAndLoadMeetingNote } from "./meetingNotificationNavigation";
+import { getActiveNoteIdValue } from "../stores/noteStore";
+import { getNoteFromStore } from "../stores/noteStore";
 import React, { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
@@ -472,17 +478,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     };
   }, [toast, t]);
 
-  useEffect(() => {
-    if (!usage?.isPastDue) return;
-    if (sessionStorage.getItem("pastDueNotified")) return;
-    sessionStorage.setItem("pastDueNotified", "true");
-    toast({
-      title: t("controlPanel.billing.pastDueTitle"),
-      description: t("controlPanel.billing.pastDueDescription"),
-      variant: "destructive",
-      duration: 8000,
-    });
-  }, [usage?.isPastDue, toast, t]);
 
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
@@ -1289,6 +1284,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
         >
           <ControlPanelSidebar
             activeView={activeView}
+            chatNeedsAttention={chatNeedsAttention}
             workspaceIntroAllowed={!showSettings && !isSidePanelLayout}
             onViewChange={setActiveView}
             onOpenSettings={() => {
@@ -1381,27 +1377,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
                 </div>
               )}
               <RequiredModelsBanner />
-              {usage?.isPastDue && activeView === "home" && (
-                <div className={cn(PAGE_CONTENT_WIDTH_CLASS, "px-6 mb-3")}>
-                  <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/50 p-3">
-                    <div className="flex items-start gap-3">
-                      <div className="shrink-0 w-8 h-8 rounded-md bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                        <AlertTriangle size={16} className="text-amber-600 dark:text-amber-400" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-amber-900 dark:text-amber-200 mb-0.5">
-                          {t("controlPanel.billing.pastDueTitle")}
-                        </p>
-                        <p className="text-xs text-amber-700 dark:text-amber-300/80 mb-2">
-                          {t("controlPanel.billing.bannerDescription", {
-                            limit: usage.limit.toLocaleString(),
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+
               {(gpuAccelAvailable.transcription || gpuAccelAvailable.intelligence) &&
                 activeView === "home" &&
                 !gpuBannerDismissed && (
@@ -1575,7 +1551,7 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
               {activeView === "integrations" && (
                 <Suspense fallback={null}>
                   <IntegrationsView
-                    isPaid={usage?.hasPaidAccessOptimistic ?? false}
+                    isPaid={true}
                     section={integrationsSection}
                     onSectionChange={setIntegrationsSection}
                     onStartSkillChat={agentAllowedByPolicy ? startSkillChat : undefined}
