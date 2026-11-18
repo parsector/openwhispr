@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -17,7 +18,7 @@ const targets = [
 ];
 
 async function runDownloader(t, { platformArch = "linux-x64", version, all = false } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "qdrant-download-"));
+  const root = createTempDir(path.join(os.tmpdir(), "qdrant-download-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const processState = { env: version ? { QDRANT_VERSION: version } : {} };
   const lookups = [];

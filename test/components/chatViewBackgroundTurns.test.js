@@ -71,7 +71,7 @@ test("main Chat keeps per-conversation drafts and restores rejected text", async
   await React.act(async () => fixture.list().onSelectConversation(2));
   assert.equal(fixture.input().draftText, "draft A");
   await React.act(async () => {
-    fixture.policy.setState({ status: "loading" });
+    fixture.policy.setState({ status: "loading", managed: true });
     fixture.input().onDraftChange("");
     fixture.input().onTextSubmit("rejected question");
     await flush();
@@ -115,7 +115,7 @@ test("a refused starter card adds to the typed text instead of replacing it", as
   const fixture = await renderView(t);
   await React.act(async () => fixture.input().onDraftChange("half a thought"));
   await React.act(async () => {
-    fixture.policy.setState({ status: "loading" });
+    fixture.policy.setState({ status: "loading", managed: true });
     globalThis.__backgroundMessages.emptyState.props.onPrompt("Starter prompt");
     await flush();
   });

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -25,7 +26,7 @@ test(
       return;
     }
 
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-portal-cancel-"));
+    const directory = createTempDir(path.join(os.tmpdir(), "openwhispr-portal-cancel-"));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     const binary = path.join(directory, "linux-portal-cancellation");
     const compiled = spawnSync(

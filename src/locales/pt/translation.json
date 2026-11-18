@@ -1744,7 +1744,6 @@
       "planDescriptions": {
         "freeUsage": "{{used}} / {{limit}} palavras do OpenWhispr Cloud esta semana",
         "byokUnlimited": "Suas próprias chaves de API e os modelos locais continuam sem limite.",
-        "nextBilling": "Próxima cobrança: {{date}}",
         "pastDue": "{{used}} / {{limit}} palavras do OpenWhispr Cloud esta semana — atualize o pagamento para restaurar o Pro",
         "trial": "{{days}} dias restantes — transcrições ilimitadas",
         "unlimited": "Ilimitado",
@@ -3743,9 +3742,6 @@
       "streamingOnlyProvider": "Este provedor só suporta transcrição ao vivo. Escolha outro provedor para uploads de arquivos e novas tentativas.",
       "cloudLimitUnavailable": "O OpenWhispr Cloud aceita arquivos de até 25 MB para esta conta. Upgrades da nuvem não estão disponíveis nesta versão.",
       "cloudUpgradeUnavailable": "Upgrades da nuvem não estão disponíveis nesta versão.",
-      "paidPlanRequired": "A transcrição na nuvem para arquivos acima de 25 MB requer um plano pago. Arquivos grandes são processados com o OpenWhispr Cloud para resultados confiáveis e de alta qualidade.",
-      "byokTooLargeNeedsUpgrade": "Mude para um plano pago para transcrever arquivos maiores com o OpenWhispr Cloud.",
-      "upgrade": "Fazer upgrade",
       "disabledByOrg": "O envio de áudio foi desativado pela sua organização."
     },
     "meeting": {
@@ -3979,8 +3975,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "Este recurso não está disponível nesta versão.",
-      "upgrade": "Fazer upgrade"
+      "message": "Este recurso não está disponível nesta versão."
     },
     "enhance": {
       "title": "Erro de aprimoramento"
@@ -4261,7 +4256,6 @@
       "errors": {
         "generic": "Não foi possível atualizar {{list}}. Tente novamente.",
         "listFull": "{{list}} está cheia",
-        "planRequired": "Os dicionários compartilhados exigem o Business, então {{list}} não foi alterada",
         "ssoRequired": "Entre com o SSO da sua empresa para alterar {{list}}",
         "notMember": "Você não tem mais acesso a {{list}}",
         "invalid": "{{list}} só aceita termos curtos: até 64 caracteres e 6 palavras, sem vírgulas, pontuação de frase ou símbolos como < > { } [ ] ` |",
@@ -4307,8 +4301,6 @@
       },
       "locked": {
         "noWorkspace": "Os dicionários compartilhados estão incluídos no Business. Compartilhe com todos o jargão, os nomes de produtos e as siglas da sua equipe.",
-        "upgradeAdmin": "Os dicionários compartilhados estão incluídos no Business. Faça o upgrade de {{workspace}} para que todos tenham as mesmas palavras.",
-        "upgradeMember": "Os dicionários compartilhados estão incluídos no Business. Peça a um administrador para fazer o upgrade de {{workspace}}.",
         "paused_one": "A {{count}} palavra compartilhada de {{workspace}} está pausada. Faça o upgrade para o Business para usá-la novamente no ditado.",
         "paused_many": "As {{count}} de palavras compartilhadas de {{workspace}} estão pausadas. Faça o upgrade para o Business para usá-las novamente no ditado.",
         "paused_other": "As {{count}} palavras compartilhadas de {{workspace}} estão pausadas. Faça o upgrade para o Business para usá-las novamente no ditado.",
@@ -4541,11 +4533,6 @@
     "collapse": "Recolher barra lateral",
     "expand": "Expandir barra lateral",
     "viewPlans": "Ver planos",
-    "upgradeTitle": "Fazer upgrade para Pro",
-    "upgradeDescription": "Transcrição ilimitada, mais precisa e mais rápida.",
-    "upgradeInstantSetup": "Configuração instantânea",
-    "upgradeZeroRetention": "Zero retenção de dados",
-    "upgradeEnterpriseSecurity": "Segurança empresarial SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "Saiba mais"
   },
   "chat": {
@@ -5040,8 +5027,7 @@
       "essential": "Essential",
       "essentialLimit": "20 reuniões / mês",
       "pro": "Pro",
-      "proLimit": "Ilimitado",
-      "upgrade": "Atualizar"
+      "proLimit": "Ilimitado"
     }
   },
   "connectors": {

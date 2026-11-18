@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -16,7 +17,7 @@ function registryStub(data) {
 }
 
 test("a cancellation during archive verification never installs or completes the model", async (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "registry-cancel-"));
+  const root = createTempDir(path.join(os.tmpdir(), "registry-cancel-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const data = structuredClone(require("../../src/models/modelRegistryData.json"));
   const model = Object.keys(data.parakeetModels)[0];
@@ -124,7 +125,7 @@ function loadManager(root, data, stubs = {}) {
 }
 
 test("an archive with no catalog hash still gets the structural check, with its progress", async (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "registry-unhashed-"));
+  const root = createTempDir(path.join(os.tmpdir(), "registry-unhashed-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const data = structuredClone(require("../../src/models/modelRegistryData.json"));
   const model = "parakeet-tdt-110m-en";
@@ -177,7 +178,7 @@ test("an archive with no catalog hash still gets the structural check, with its 
 });
 
 test("launch never pre-warms a model the catalog does not know", async (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "registry-prewarm-"));
+  const root = createTempDir(path.join(os.tmpdir(), "registry-prewarm-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const data = structuredClone(require("../../src/models/modelRegistryData.json"));
   const offered = "parakeet-tdt-110m-en";
@@ -251,7 +252,7 @@ function archiveManager(root, data, { checkDiskSpace, validateModelArchive, poli
 }
 
 test("an archive refused for disk space, not for itself, is kept for the next attempt", async (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "registry-disk-"));
+  const root = createTempDir(path.join(os.tmpdir(), "registry-disk-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const data = structuredClone(require("../../src/models/modelRegistryData.json"));
   const model = "parakeet-tdt-110m-en";
@@ -266,7 +267,7 @@ test("an archive refused for disk space, not for itself, is kept for the next at
 });
 
 test("a revocation during the archive check keeps the finished archive", async (t) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "registry-revoke-verify-"));
+  const root = createTempDir(path.join(os.tmpdir(), "registry-revoke-verify-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const data = structuredClone(require("../../src/models/modelRegistryData.json"));
   const model = "parakeet-tdt-110m-en";

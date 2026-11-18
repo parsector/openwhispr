@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -21,7 +22,7 @@ function runNativePasteTest(t, run = spawnSync) {
     t.skip("AT-SPI/X11 development libraries unavailable");
     return;
   }
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-atspi-paste-"));
+  const directory = createTempDir(path.join(os.tmpdir(), "openwhispr-atspi-paste-"));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const binary = path.join(directory, "linux-atspi-paste");
   const compiled = run(

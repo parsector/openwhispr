@@ -30,7 +30,7 @@ test("policy revocation cancels turns without a ChatView and preserves the unsen
   await until(() => streams.length === 1);
   store.startNewChat();
   store.setChatDraft(state().selection, "keep me");
-  policy.setState({ status: "error" });
+  policy.setState({ status: "error", managed: true });
   assert.equal(streams[0].signal.aborted, true);
   assert.equal(state().newChatDraft, "keep me");
   assert.equal(send(), false);

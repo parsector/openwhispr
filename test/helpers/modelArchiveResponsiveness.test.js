@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -9,7 +10,7 @@ const { performance } = require("node:perf_hooks");
 const { validateModelArchive } = require("../../src/helpers/modelArchiveIntegrity");
 
 function fixture(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "archive-responsive-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "archive-responsive-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const archivePath = path.join(dir, "model.tar.bz2");
   fs.writeFileSync(

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -29,7 +30,7 @@ test("only retired files go, and never one an offered model still uses", async (
     deleteRetiredLocalModels,
   } = require("../../src/helpers/retiredLocalModels");
 
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "retired-models-"));
+  const root = createTempDir(path.join(os.tmpdir(), "retired-models-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const dirs = {
     whisperDir: path.join(root, "whisper"),

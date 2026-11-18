@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("fs");
@@ -26,7 +27,7 @@ function fakeTools(
   t,
   { symbols = CLEAN_SYMBOLS, disassembly = CLEAN_DISASSEMBLY, qemu = "exit 0" } = {}
 ) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "verify-linux-sqlite-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "verify-linux-sqlite-"));
   const log = path.join(dir, "qemu.log");
   const write = (name, body) =>
     fs.writeFileSync(path.join(dir, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });

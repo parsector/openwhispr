@@ -2503,7 +2503,6 @@
       "planDescriptions": {
         "freeUsage": "{{used}} / {{limit}} Wörter in OpenWhispr Cloud diese Woche",
         "byokUnlimited": "Eigene API-Schlüssel und lokale Modelle bleiben unbegrenzt nutzbar.",
-        "nextBilling": "Nächste Abrechnung: {{date}}",
         "pastDue": "{{used}} / {{limit}} Wörter in OpenWhispr Cloud diese Woche – Zahlung aktualisieren, um Pro wiederherzustellen",
         "trial": "Noch {{days}} Tage – unbegrenzte Transkriptionen",
         "unlimited": "Unbegrenzt",
@@ -3468,11 +3467,6 @@
     "collapse": "Seitenleiste einklappen",
     "expand": "Seitenleiste ausklappen",
     "viewPlans": "Tarife ansehen",
-    "upgradeTitle": "Auf Pro upgraden",
-    "upgradeDescription": "Unbegrenzte, genauere und schnellere Transkription.",
-    "upgradeInstantSetup": "Sofort einsatzbereit",
-    "upgradeZeroRetention": "Keine Datenaufbewahrung",
-    "upgradeEnterpriseSecurity": "Enterprise-Sicherheit SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "Mehr erfahren"
   },
   "workspaces": {
@@ -4294,9 +4288,6 @@
       "streamingOnlyProvider": "Dieser Anbieter unterstützt nur Live-Transkription. Wähle für Datei-Uploads und Wiederholungen einen anderen Anbieter.",
       "cloudLimitUnavailable": "OpenWhispr Cloud akzeptiert für dieses Konto Dateien bis 25 MB. Cloud-Upgrades sind in diesem Build nicht verfügbar.",
       "cloudUpgradeUnavailable": "Cloud-Upgrades sind in diesem Build nicht verfügbar.",
-      "paidPlanRequired": "Cloud-Transkription für Dateien über 25 MB erfordert einen kostenpflichtigen Plan. Große Dateien werden mit OpenWhispr Cloud für zuverlässige, hochwertige Ergebnisse verarbeitet.",
-      "byokTooLargeNeedsUpgrade": "Wechsle zu einem kostenpflichtigen Plan, um größere Dateien mit OpenWhispr Cloud zu transkribieren.",
-      "upgrade": "Upgraden",
       "disabledByOrg": "Das Hochladen von Audiodateien wurde von Ihrer Organisation deaktiviert."
     },
     "meeting": {
@@ -4530,8 +4521,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "Diese Funktion ist in diesem Build nicht verfügbar.",
-      "upgrade": "Upgraden"
+      "message": "Diese Funktion ist in diesem Build nicht verfügbar."
     },
     "enhance": {
       "title": "Verbesserungsfehler"
@@ -4809,7 +4799,6 @@
       "errors": {
         "generic": "{{list}} konnte nicht aktualisiert werden. Versuche es erneut.",
         "listFull": "{{list}} ist voll",
-        "planRequired": "Geteilte Wörterbücher brauchen Business, daher wurde {{list}} nicht geändert",
         "ssoRequired": "Melde dich mit dem SSO deines Unternehmens an, um {{list}} zu ändern",
         "notMember": "Du hast keinen Zugriff mehr auf {{list}}",
         "invalid": "{{list}} nimmt nur kurze Begriffe auf: höchstens 64 Zeichen und 6 Wörter, ohne Kommas, Satzzeichen oder Zeichen wie < > { } [ ] ` |",
@@ -4849,8 +4838,6 @@
       },
       "locked": {
         "noWorkspace": "Geteilte Wörterbücher sind in Business enthalten. Teile Fachbegriffe, Produktnamen und Abkürzungen deines Teams mit allen.",
-        "upgradeAdmin": "Geteilte Wörterbücher sind in Business enthalten. Upgrade {{workspace}}, damit alle dieselben Wörter bekommen.",
-        "upgradeMember": "Geteilte Wörterbücher sind in Business enthalten. Bitte einen Admin, {{workspace}} upzugraden.",
         "paused_one": "Das {{count}} geteilte Wort von {{workspace}} ist pausiert. Upgrade auf Business, um es wieder beim Diktieren zu nutzen.",
         "paused_other": "Die {{count}} geteilten Wörter von {{workspace}} sind pausiert. Upgrade auf Business, um sie wieder beim Diktieren zu nutzen.",
         "workspaceTitle": "Alle in deinem Workspace",
@@ -5370,8 +5357,7 @@
       "essential": "Essential",
       "essentialLimit": "20 Meetings / Monat",
       "pro": "Pro",
-      "proLimit": "Unbegrenzt",
-      "upgrade": "Upgrade"
+      "proLimit": "Unbegrenzt"
     }
   },
   "connectors": {

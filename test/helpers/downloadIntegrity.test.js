@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -9,7 +10,7 @@ const { PassThrough } = require("node:stream");
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 function setup(t, body, offset = 0) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "model-integrity-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "model-integrity-"));
   const dest = path.join(dir, "model.bin");
   const electron = require.resolve("electron");
   const modulePath = require.resolve("../../src/helpers/downloadUtils");

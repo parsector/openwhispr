@@ -1750,7 +1750,6 @@
       "planDescriptions": {
         "freeUsage": "本週 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 字",
         "byokUnlimited": "使用自己的 API 金鑰和本機模型仍不受此限制。",
-        "nextBilling": "下次扣款日：{{date}}",
         "pastDue": "本週 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 字——更新付款方式以恢復 Pro",
         "trial": "剩餘 {{days}} 天——無限轉錄",
         "unlimited": "無限",
@@ -3737,9 +3736,6 @@
       "streamingOnlyProvider": "此服務商僅支援即時轉錄。請為檔案上傳與重試選擇其他服務商。",
       "cloudLimitUnavailable": "此帳戶在 OpenWhispr Cloud 中最多可上傳 25 MB 的檔案。此版本不提供雲端升級。",
       "cloudUpgradeUnavailable": "此版本不提供雲端升級。",
-      "paidPlanRequired": "超過 25 MB 的檔案需要付費方案才能使用雲端轉錄。大型檔案透過 OpenWhispr Cloud 處理，確保可靠、高品質的結果。",
-      "byokTooLargeNeedsUpgrade": "升級至付費方案，即可使用 OpenWhispr Cloud 轉錄更大的檔案。",
-      "upgrade": "升級",
       "disabledByOrg": "您的組織已停用音訊上傳。"
     },
     "meeting": {
@@ -3973,8 +3969,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "此版本不提供此功能。",
-      "upgrade": "升級"
+      "message": "此版本不提供此功能。"
     },
     "enhance": {
       "title": "增強錯誤"
@@ -4252,7 +4247,6 @@
       "errors": {
         "generic": "無法更新 {{list}}，請再試一次。",
         "listFull": "{{list}} 已滿",
-        "planRequired": "共享字典需要 Business 方案，{{list}} 未變更",
         "ssoRequired": "請使用公司 SSO 登入後再變更 {{list}}",
         "notMember": "你已無法存取 {{list}}",
         "invalid": "{{list}} 只接受簡短詞語：不超過 64 個字元和 6 個詞，且不含逗號、句末標點或 < > { } [ ] ` | 等符號",
@@ -4292,8 +4286,6 @@
       },
       "locked": {
         "noWorkspace": "共享字典包含在 Business 方案中。與所有人共享團隊的術語、產品名稱和縮寫。",
-        "upgradeAdmin": "共享字典包含在 Business 方案中。升級 {{workspace}}，讓每個人都使用相同的詞語。",
-        "upgradeMember": "共享字典包含在 Business 方案中。請管理員升級 {{workspace}}。",
         "paused_one": "{{workspace}} 的 {{count}} 個共享詞語已暫停。升級到 Business 即可在聽寫中再次使用。",
         "paused_other": "{{workspace}} 的 {{count}} 個共享詞語已暫停。升級到 Business 即可在聽寫中再次使用。",
         "workspaceTitle": "工作區中的所有人",
@@ -4514,11 +4506,6 @@
     "collapse": "收合側邊欄",
     "expand": "展開側邊欄",
     "viewPlans": "查看方案",
-    "upgradeTitle": "升級至 Pro",
-    "upgradeDescription": "無限量、更準確、更快速的轉錄。",
-    "upgradeInstantSetup": "即時設定",
-    "upgradeZeroRetention": "零資料保留",
-    "upgradeEnterpriseSecurity": "企業級安全 SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "瞭解更多"
   },
   "chat": {
@@ -5013,8 +5000,7 @@
       "essential": "Essential",
       "essentialLimit": "每月20次會議",
       "pro": "Pro",
-      "proLimit": "無限",
-      "upgrade": "升級"
+      "proLimit": "無限"
     }
   },
   "connectors": {

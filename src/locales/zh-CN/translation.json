@@ -1750,7 +1750,6 @@
       "planDescriptions": {
         "freeUsage": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词",
         "byokUnlimited": "使用自己的 API 密钥和本地模型仍不受此限制。",
-        "nextBilling": "下次扣费：{{date}}",
         "pastDue": "本周 OpenWhispr Cloud 已使用 {{used}} / {{limit}} 个词——更新支付方式以恢复 Pro",
         "trial": "剩余 {{days}} 天——无限转录",
         "unlimited": "无限制",
@@ -3737,9 +3736,6 @@
       "streamingOnlyProvider": "该服务商仅支持实时转录。请为文件上传和重试选择其他服务商。",
       "cloudLimitUnavailable": "此账户在 OpenWhispr Cloud 中最多可上传 25 MB 的文件。此版本不提供云端升级。",
       "cloudUpgradeUnavailable": "此版本不提供云端升级。",
-      "paidPlanRequired": "超过 25 MB 的文件需要付费计划才能使用云端转录。大文件通过 OpenWhispr Cloud 处理，确保可靠、高质量的结果。",
-      "byokTooLargeNeedsUpgrade": "升级到付费计划，即可使用 OpenWhispr Cloud 转录更大的文件。",
-      "upgrade": "升级",
       "disabledByOrg": "您的组织已禁用音频上传。"
     },
     "meeting": {
@@ -3973,8 +3969,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "此版本不提供该功能。",
-      "upgrade": "升级"
+      "message": "此版本不提供该功能。"
     },
     "enhance": {
       "title": "增强错误"
@@ -4252,7 +4247,6 @@
       "errors": {
         "generic": "无法更新 {{list}}，请重试。",
         "listFull": "{{list}} 已满",
-        "planRequired": "共享词典需要 Business 方案，{{list}} 未更改",
         "ssoRequired": "请使用公司 SSO 登录后再更改 {{list}}",
         "notMember": "你已无法访问 {{list}}",
         "invalid": "{{list}} 只接受简短词语：不超过 64 个字符和 6 个词，且不含逗号、句末标点或 < > { } [ ] ` | 等符号",
@@ -4292,8 +4286,6 @@
       },
       "locked": {
         "noWorkspace": "共享词典包含在 Business 方案中。与所有人共享团队的行话、产品名称和缩写。",
-        "upgradeAdmin": "共享词典包含在 Business 方案中。升级 {{workspace}}，让每个人都使用相同的词语。",
-        "upgradeMember": "共享词典包含在 Business 方案中。请让管理员升级 {{workspace}}。",
         "paused_one": "{{workspace}} 的 {{count}} 个共享词语已暂停。升级到 Business 即可在听写中再次使用。",
         "paused_other": "{{workspace}} 的 {{count}} 个共享词语已暂停。升级到 Business 即可在听写中再次使用。",
         "workspaceTitle": "工作区中的所有人",
@@ -4514,11 +4506,6 @@
     "collapse": "折叠侧边栏",
     "expand": "展开侧边栏",
     "viewPlans": "查看套餐",
-    "upgradeTitle": "升级到 Pro",
-    "upgradeDescription": "无限量、更准确、更快速的转录。",
-    "upgradeInstantSetup": "即时设置",
-    "upgradeZeroRetention": "零数据保留",
-    "upgradeEnterpriseSecurity": "企业级安全 SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "了解更多"
   },
   "chat": {
@@ -5013,8 +5000,7 @@
       "essential": "Essential",
       "essentialLimit": "每月20次会议",
       "pro": "Pro",
-      "proLimit": "无限",
-      "upgrade": "升级"
+      "proLimit": "无限"
     }
   },
   "connectors": {

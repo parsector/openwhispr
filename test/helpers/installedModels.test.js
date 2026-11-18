@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -8,7 +9,7 @@ const seed = require("../../src/models/modelRegistryData.json");
 test("installed local models survive a catalog that lacks them, but retired ones stay out", (t) => {
   const store = require("../../src/models/registryData.js");
   const installed = require("../../src/helpers/installedModels");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "installed-models-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "installed-models-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   installed.configureInstalledModels(path.join(dir, "installed-models.json"));
   t.after(() => installed.configureInstalledModels(null));
@@ -57,7 +58,7 @@ test("a damaged record can't stop catalog updates or reach the prototype", (t) =
     configureInstalledModels,
     withInstalledModels,
   } = require("../../src/helpers/installedModels");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "installed-damaged-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "installed-damaged-"));
   t.after(() => {
     fs.rmSync(dir, { recursive: true, force: true });
     configureInstalledModels(null);

@@ -1,3 +1,4 @@
+const { EMBEDDING_DIM } = require("../../src/constants/speakerDetection.json");
 const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -84,7 +85,7 @@ function fixture(t, options = {}) {
   database.updateNote(noteId, { transcript: JSON.stringify(document) });
   const extractor = {
     extractEmbeddingFromSamples: async () =>
-      Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? 1 : 0)),
+      Float32Array.from({ length: EMBEDDING_DIM }, (_, i) => (i === 0 ? 1 : 0)),
   };
   t.after(() => {
     store.cancelRecovery?.();
@@ -288,6 +289,10 @@ test("seventh run: historical overlapping decode, pin, encryption failure, exact
   f.encryption.encryptBytes = () => {
     throw Error("temporary encryption failure");
   };
+  // The frozen historical worker predates CAM++ v3 and only reads its 512-dimensional fixture.
+  const historicalVector = new Float32Array(512);
+  historicalVector[0] = 1;
+  f.database.db.prepare("UPDATE voice_exemplars SET embedding=? WHERE id=?").run(Buffer.from(historicalVector.buffer), candidate.id);
   f.store.legacyRecovery = historical("voiceEnrollmentRecovery").start(f.database, f.store, {
     retryBaseMs: 1000,
     yieldMs: 1,
@@ -1327,7 +1332,7 @@ test("third run: legacy-only unrecognised evidence cannot return a recognition p
   const f = fixture(t);
   const db = f.database.db;
   const embedding = Buffer.from(
-    Float32Array.from({ length: 512 }, (_, i) => Number(i === 0)).buffer
+    Float32Array.from({ length: EMBEDDING_DIM }, (_, i) => Number(i === 0)).buffer
   );
   db.prepare(
     `INSERT INTO voice_exemplars
@@ -1890,7 +1895,7 @@ test("mixed legacy and durable spans from one recording cannot graduate or split
   // Startup recovery restores an existing approval without another owner review.
   assert.equal((await enrollment.recoverLegacy(f.database, f.store).done).recovered, 1);
   f.extractor.extractEmbeddingFromSamples = async () =>
-    Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? 0.8 : i === 1 ? 0.6 : 0));
+    Float32Array.from({ length: EMBEDDING_DIM }, (_, i) => (i === 0 ? 0.8 : i === 1 ? 0.6 : 0));
   await f.approve();
   await f.approve();
   assert.deepEqual(
@@ -1906,11 +1911,11 @@ test("mixed legacy and durable spans from one recording cannot graduate or split
   );
   f.addMeeting();
   f.extractor.extractEmbeddingFromSamples = async () =>
-    Float32Array.from({ length: 512 }, (_, i) => (i === 0 ? 1 : 0));
+    Float32Array.from({ length: EMBEDDING_DIM }, (_, i) => (i === 0 ? 1 : 0));
   await f.approve();
   assert.equal(enrollment.progress(f.database, f.person.id).usable, true);
   const embedding = enrollment.resolveProfile(f.database.db, f.person.id).embedding;
-  const actual = new Float32Array(embedding.buffer, embedding.byteOffset, 512);
+  const actual = new Float32Array(embedding.buffer, embedding.byteOffset, EMBEDDING_DIM);
   const norm = Math.hypot(2.6, 1.2);
   const x = 2.6 / norm + 1,
     y = 1.2 / norm;

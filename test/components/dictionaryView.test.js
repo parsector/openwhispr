@@ -1399,7 +1399,7 @@ test("a failure that retrying can't fix names its cause instead of asking to try
   const list = 'dictionary.shared.everyoneAt{\\"workspace\\":\\"Acme\\"}';
   assert.equal(
     globalThis.__toasts.at(-1).title,
-    `dictionary.shared.errors.planRequired{"list":"${list}"}`
+    `dictionary.shared.errors.generic{"list":"${list}"}`
   );
 
   globalThis.__results.setSharedWordsHidden = "throw:ssoRequired";

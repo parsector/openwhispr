@@ -97,7 +97,7 @@ test("connectors name the org, then build availability, then a loading policy, a
   assert.deepEqual(reasonFor({ hasPlan: false, allowed: false, blockedByOrg: true }), [
     "policyOff",
   ]);
-  assert.deepEqual(reasonFor({ hasPlan: false }), ["unavailableInBuild"]);
+  assert.deepEqual(reasonFor({ hasPlan: false }), []);
   assert.deepEqual(reasonFor({ allowed: false, blockedByOrg: true }), ["policyOff"]);
   assert.deepEqual(reasonFor({ allowed: false }), ["policyLoading"]);
 });
@@ -275,7 +275,7 @@ test("a loading connector policy asks a paid user to retry instead of connecting
     text,
     /^- Integrations .*: not available right now; the user can try again in a moment\.$/m
   );
-  assert.match(text, /on a free plan, for example:/);
+  assert.doesNotMatch(text, /needs a paid plan|on a free plan|upgrade/i);
   assert.doesNotMatch(text, /Connect Slack and I can post this/);
 });
 

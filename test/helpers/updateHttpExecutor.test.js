@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const http = require("node:http");
@@ -125,7 +126,7 @@ for (const redirect of [false, true]) {
         server.closeAllConnections();
         server.close();
       });
-      const directory = await fs.mkdtemp(path.join(os.tmpdir(), "update-request-test-"));
+      const directory = await createTempDir(path.join(os.tmpdir(), "update-request-test-"));
       t.after(() => fs.rm(directory, { recursive: true, force: true }));
       const token = new CancellationToken();
       const download = executor.download(

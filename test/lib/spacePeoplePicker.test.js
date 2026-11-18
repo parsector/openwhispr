@@ -301,7 +301,7 @@ test("pickedSummary splits the three kinds, keeps roles and flags invalid ones",
 test("adding recipients keeps each one once and skips those who can't be staged", () => {
   const ethan = { kind: "member", userId: "ethan", label: "Ethan", email: "ethan@openronnie.com" };
   const sales = { kind: "team", teamId: "sales", label: "Sales", memberCount: 5 };
-  const alex = { kind: "email", email: "alex@x.io", role: "admin", valid: true };
+  const _alex = { kind: "email", email: "alex@x.io", role: "admin", valid: true };
 
   assert.deepEqual(addRecipients([ethan], [ethan, sales, sales]), [ethan, sales]);
   // Someone who already has access, or is hidden, can't be added by typing their address.

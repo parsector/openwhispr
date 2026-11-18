@@ -344,13 +344,14 @@ test("start sets the mic alignment strategy from the plan, then from the start r
 
 // Runs the real local chunk decode over a stubbed engine whose result the
 // test releases, to see what reaches the meeting window afterwards.
-function chunkHarness() {
+function chunkHarness(withWindow = false) {
   const decode = deferred();
   const finals = [];
   const context = {
     _audioFeaturePolicy: { activeFailure: () => null },
     parakeetManager: { transcribeLocalParakeet: () => decode.promise },
     finals,
+    meetingChunkWindow: withWindow ? { isDestroyed: () => false, webContents: { send: (channel, payload) => finals.push({ channel, payload }) } } : null,
     debugLogger: { debug() {}, error() {} },
     Buffer,
     isLocalModelPolicyRefusal: (error) => error?.code?.startsWith("POLICY_"),
@@ -363,7 +364,7 @@ function chunkHarness() {
     const meetingConnectionOptions = { language: "en" };
     const meetingLocalBuffers = { mic: [], system: [Buffer.alloc(4)] };
     const meetingLocalCapture = { mic: { start: null, end: null }, system: { start: null, end: null } };
-    const meetingLocalWin = null;
+    const meetingLocalWin = globalThis.meetingChunkWindow ?? null;
     const meetingLocalProvider = "nvidia";
     const meetingLocalModel = "parakeet";
     const meetingLocalLanguage = "en";
@@ -419,7 +420,7 @@ test("local meeting admission authorizes its selected model before capturing or 
 });
 
 test("a typed local chunk refusal stops the meeting and sends its code", async () => {
-  const { context, decode, finals } = chunkHarness();
+  const { context, decode, finals } = chunkHarness(true);
   const stopped = [];
   context.isLocalModelPolicyRefusal = (error) => error?.code === "POLICY_MODEL_BLOCKED";
   context._stopMeetingForPolicy = (code) => stopped.push(code);

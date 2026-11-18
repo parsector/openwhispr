@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 // The account-scoped sync handlers as main registers them, over a real
 // database: the sign-in fence on push acks and pulled rows, chat acks recorded
 // for the account that sent them, the scoped audio deletes, the seed IPCs, and
@@ -19,7 +20,7 @@ const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
 const broadcasts = [];
-const userDataDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "account-scoped-sync-ipc-"));
+const userDataDirectory = createTempDir(path.join(os.tmpdir(), "account-scoped-sync-ipc-"));
 let tokenState = { token: "token-a", generation: 3 };
 
 const electronStub = {

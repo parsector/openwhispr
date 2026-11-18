@@ -2503,7 +2503,6 @@
       "planDescriptions": {
         "freeUsage": "{{used}} / {{limit}} OpenWhispr Cloud words this week",
         "byokUnlimited": "Your own API keys and local models remain unlimited.",
-        "nextBilling": "Next billing: {{date}}",
         "pastDue": "{{used}} / {{limit}} OpenWhispr Cloud words this week - update payment to restore Pro",
         "trial": "{{days}} days remaining - unlimited transcriptions",
         "unlimited": "Unlimited",
@@ -3342,11 +3341,6 @@
     "collapse": "Collapse sidebar",
     "expand": "Expand sidebar",
     "viewPlans": "View Plans",
-    "upgradeTitle": "Upgrade to Pro",
-    "upgradeDescription": "Unlimited, more accurate, faster transcription.",
-    "upgradeInstantSetup": "Instant setup",
-    "upgradeZeroRetention": "Zero data retention",
-    "upgradeEnterpriseSecurity": "Enterprise security SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "Learn More"
   },
   "routines": {
@@ -4446,9 +4440,6 @@
       "streamingOnlyProvider": "This provider only supports live transcription. Choose another provider for file uploads and retries.",
       "cloudLimitUnavailable": "OpenWhispr Cloud accepts files up to 25 MB for this account. Cloud upgrades are unavailable in this build.",
       "cloudUpgradeUnavailable": "Cloud upgrades are unavailable in this build.",
-      "paidPlanRequired": "Cloud transcription for files over 25 MB requires a paid plan. Large files are processed with OpenWhispr Cloud for reliable, high-quality results.",
-      "byokTooLargeNeedsUpgrade": "Upgrade to a paid plan to transcribe larger files with OpenWhispr Cloud.",
-      "upgrade": "Upgrade",
       "disabledByOrg": "Audio upload is disabled by your organization."
     },
     "meeting": {
@@ -4682,8 +4673,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "This feature is unavailable in this build.",
-      "upgrade": "Upgrade"
+      "message": "This feature is unavailable in this build."
     },
     "enhance": {
       "title": "Enhancement error"
@@ -4961,7 +4951,6 @@
       "errors": {
         "generic": "Couldn't update {{list}}. Try again.",
         "listFull": "{{list}} is full",
-        "planRequired": "Shared dictionaries need Business, so {{list}} wasn't changed",
         "ssoRequired": "Sign in with company SSO to change {{list}}",
         "notMember": "You no longer have access to {{list}}",
         "invalid": "{{list}} only takes short terms: up to 64 characters and 6 words, with no commas, sentence punctuation or symbols like < > { } [ ] ` |",
@@ -5001,8 +4990,6 @@
       },
       "locked": {
         "noWorkspace": "Shared dictionaries are included with Business. Share your team's jargon, product names and acronyms with everyone.",
-        "upgradeAdmin": "Shared dictionaries are included with Business. Upgrade {{workspace}} so everyone gets the same words.",
-        "upgradeMember": "Shared dictionaries are included with Business. Ask an admin to upgrade {{workspace}}.",
         "paused_one": "{{workspace}}'s {{count}} shared word is paused. Upgrade to Business to use it in dictation again.",
         "paused_other": "{{workspace}}'s {{count}} shared words are paused. Upgrade to Business to use them in dictation again.",
         "workspaceTitle": "Everyone in your workspace",
@@ -5522,8 +5509,7 @@
       "essential": "Essential",
       "essentialLimit": "20 meetings / month",
       "pro": "Pro",
-      "proLimit": "Unlimited",
-      "upgrade": "Upgrade"
+      "proLimit": "Unlimited"
     }
   },
   "connectors": {

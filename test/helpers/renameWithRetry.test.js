@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -25,7 +26,7 @@ function refusedOnce(t) {
 }
 
 function caseInsensitiveFileSystem() {
-  const probe = fs.mkdtempSync(path.join(os.tmpdir(), "OpenWhisprCaseProbe-"));
+  const probe = createTempDir(path.join(os.tmpdir(), "OpenWhisprCaseProbe-"));
   try {
     return fs.existsSync(probe.toLowerCase()) && fs.existsSync(probe.toUpperCase());
   } finally {
@@ -37,7 +38,7 @@ test(
   "on Windows, a rename that only changes case is tried again when refused",
   { skip: !caseInsensitiveFileSystem() && "needs a case-insensitive file system" },
   (t) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-rename-"));
+    const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-rename-"));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     fs.mkdirSync(path.join(dir, "work"));
     onWindows(t);
@@ -51,7 +52,7 @@ test(
 );
 
 test("on Windows, a refused rename onto another existing file isn't tried again", (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-rename-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "openwhispr-rename-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   fs.writeFileSync(path.join(dir, "a.md"), "a");
   fs.writeFileSync(path.join(dir, "b.md"), "b");

@@ -280,8 +280,8 @@ for (const [label, unresolved] of [
     await start();
     const before = toasts.length;
 
-  await setPolicy({ status: "error", managed: true, policy: null });
-  await settle(store);
+    await setPolicy({ ...unresolved, managed: true });
+    await settle(store);
 
     assert.equal(store.useMeetingRecordingStore.getState().isRecording, true);
     assert.equal(toasts.length, before);
@@ -371,7 +371,7 @@ test("a policy flip that cancels a start still in progress says why", async (t) 
     "the start is under way"
   );
 
-  await setPolicy({ status: "error", managed: true, policy: null });
+  await setPolicy(managedPolicy({ meetingRecordingEnabled: false }));
   reply.resolve();
   await React.act(() => starting);
   await settle(store);

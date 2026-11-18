@@ -59,9 +59,11 @@ test.before(async (t) => {
     },
   });
   ({ CloudApiError } = await vite.ssrLoadModule("/services/cloudApi.ts"));
-  ({ PeopleAddMenu, useAddPeopleToTeam, teamCoverage } = await vite.ssrLoadModule(
+  ({ PeopleAddMenu } = await vite.ssrLoadModule(
     "/components/workspace/PeopleAddMenu.tsx"
   ));
+  ({ useAddPeopleToTeam } = await vite.ssrLoadModule("/components/workspace/useAddPeopleToTeam.tsx"));
+  ({ teamCoverage } = await vite.ssrLoadModule("/components/workspace/teamListHelpers.ts"));
   ({ useAddToTeamspace } = await vite.ssrLoadModule(
     "/components/workspace/AddToTeamspaceMenu.tsx"
   ));

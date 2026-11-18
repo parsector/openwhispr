@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
@@ -91,7 +92,7 @@ test(
   "audio-only splitting keeps video frames and file tags out of every piece",
   { skip: !ffmpegPath && "no ffmpeg binary available" },
   async (t) => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "ow-split-audio-only-"));
+    const dir = createTempDir(path.join(os.tmpdir(), "ow-split-audio-only-"));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const source = path.join(dir, "screen.mp4");
     execFileSync(ffmpegPath, [

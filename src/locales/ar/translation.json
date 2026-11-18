@@ -883,8 +883,7 @@
       "essential": "أساسية (Essential)",
       "essentialLimit": "20 اجتماعًا / شهر",
       "pro": "Pro",
-      "proLimit": "غير محدود",
-      "upgrade": "ترقية"
+      "proLimit": "غير محدود"
     }
   },
   "connectors": {
@@ -1934,7 +1933,6 @@
       "errors": {
         "generic": "تعذّر تحديث {{list}}. حاول مرة أخرى.",
         "listFull": "{{list}} ممتلئة",
-        "planRequired": "تتطلب القواميس المشتركة خطة Business، لذا لم يتم تغيير {{list}}",
         "ssoRequired": "سجّل الدخول باستخدام SSO الخاص بشركتك لتغيير {{list}}",
         "notMember": "لم يعد بإمكانك الوصول إلى {{list}}",
         "invalid": "لا تقبل {{list}} إلا مصطلحات قصيرة: حتى 64 حرفًا و6 كلمات، من دون فواصل أو علامات ترقيم الجمل أو رموز مثل < > { } [ ] ` |",
@@ -1998,8 +1996,6 @@
       },
       "locked": {
         "noWorkspace": "القواميس المشتركة متاحة ضمن خطة Business. شارك مصطلحات فريقك وأسماء المنتجات والاختصارات مع الجميع.",
-        "upgradeAdmin": "القواميس المشتركة متاحة ضمن خطة Business. قم بترقية {{workspace}} ليحصل الجميع على الكلمات نفسها.",
-        "upgradeMember": "القواميس المشتركة متاحة ضمن خطة Business. اطلب من أحد المسؤولين ترقية {{workspace}}.",
         "paused_zero": "تم إيقاف {{count}} كلمة مشتركة في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
         "paused_one": "تم إيقاف كلمة مشتركة واحدة ({{count}}) في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامها في الإملاء مجددًا.",
         "paused_two": "تم إيقاف كلمتين مشتركتين ({{count}}) في {{workspace}} مؤقتًا. قم بالترقية إلى Business لاستخدامهما في الإملاء مجددًا.",
@@ -3159,9 +3155,6 @@
       "diarizationWarning": "تعذر تطبيق تحديد المتحدثين. حُفظ النص المفرَّغ دون تسميات المتحدثين.",
       "cloudLimitUnavailable": "تقبل سحابة OpenWhispr ملفات حتى 25 ميغابايت لهذا الحساب. ترقية السحابة غير متاحة في هذا الإصدار.",
       "cloudUpgradeUnavailable": "ترقية السحابة غير متاحة في هذا الإصدار.",
-      "paidPlanRequired": "التفريغ السحابي للملفات التي يزيد حجمها عن 25 ميغابايت يتطلب خطة مدفوعة. تتم معالجة الملفات الكبيرة باستخدام OpenWhispr Cloud للحصول على نتائج موثوقة وعالية الجودة.",
-      "byokTooLargeNeedsUpgrade": "قم بالترقية إلى خطة مدفوعة لتفريغ الملفات الأكبر حجمًا باستخدام OpenWhispr Cloud.",
-      "upgrade": "ترقية",
       "disabledByOrg": "تم تعطيل رفع الملفات الصوتية بواسطة مؤسستك."
     },
     "meeting": {
@@ -3405,8 +3398,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "هذه الميزة غير متاحة في هذا الإصدار.",
-      "upgrade": "ترقية"
+      "message": "هذه الميزة غير متاحة في هذا الإصدار."
     },
     "enhance": {
       "title": "خطأ في التحسين"
@@ -4942,7 +4934,6 @@
       "planDescriptions": {
         "freeUsage": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع",
         "byokUnlimited": "يبقى استخدام مفاتيح API الخاصة بك والنماذج المحلية غير محدود.",
-        "nextBilling": "الفوترة القادمة: {{date}}",
         "pastDue": "{{used}} من {{limit}} كلمة في OpenWhispr Cloud هذا الأسبوع - قم بتحديث الدفع لاستعادة Pro",
         "trial": "عدد الأيام المتبقية: {{days}} - تفريغ غير محدود",
         "unlimited": "غير محدود",
@@ -6100,11 +6091,6 @@
     "expand": "توسيع الشريط الجانبي",
     "insights": "الإحصاءات",
     "viewPlans": "عرض الخطط",
-    "upgradeTitle": "الترقية إلى Pro",
-    "upgradeDescription": "تفريغ صوتي غير محدود، أكثر دقة، وأسرع.",
-    "upgradeInstantSetup": "إعداد فوري",
-    "upgradeZeroRetention": "عدم الاحتفاظ بالبيانات",
-    "upgradeEnterpriseSecurity": "أمان على مستوى المؤسسات SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "معرفة المزيد"
   },
   "insights": {

@@ -162,13 +162,13 @@ test("a signed-out chat never offers them", async (t) => {
   assert.equal(offersConnectors(offeredTools[0]), false);
 });
 
-test("a free plan never offers them", async (t) => {
+test("connectors remain available without a paid plan", async (t) => {
   const { captured, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
   await captured.sendToAI("Email Josh", []);
   assert.ok(offeredTools[0].length > 0);
-  assert.equal(offersConnectors(offeredTools[0]), false);
+  assert.equal(offersConnectors(offeredTools[0]), true);
 });
 
 test("an org that turns connectors off mid-session removes them from the next send", async (t) => {
@@ -682,14 +682,14 @@ test("a chat that offers no connector tools never looks up or lists attendees", 
   assert.match(prompts[0], /Title: Kickoff/, "the note itself is still there");
 });
 
-test("a free plan's note chat never looks up or lists attendees", async (t) => {
+test("a note chat can list attendees without a paid plan", async (t) => {
   const { captured, lookups, prompts } = await renderNoteChat(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
   await captured.sendToAI("Draft a follow-up to everyone", []);
 
-  assert.deepEqual(lookups, []);
-  assert.doesNotMatch(prompts[0], /Meeting attendees/);
+  assert.deepEqual(lookups, [NOTE_MEETING]);
+  assert.match(prompts[0], /Meeting attendees/);
 });
 
 test("a chat that isn't about a note never looks up attendees", async (t) => {
@@ -996,16 +996,13 @@ test("signed out, the model is told to point the user at signing in", async (t) 
   );
 });
 
-test("on a free plan, the model still writes the email and says sending is unavailable", async (t) => {
+test("connectors have no paid-plan refusal in their system prompt", async (t) => {
   const { captured, sentMessages } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     subscribed: false,
   });
   await captured.sendToAI("Email Josh", []);
   const prompt = systemPromptOf(sentMessages[0]);
-  assert.match(
-    prompt,
-    /still write it in full in your reply, then end with one short sentence on how they can have you send it for them[^\n]*\n- Integrations \(Email, Slack, Linear, GitHub\): unavailable in this build\./
-  );
+  assert.doesNotMatch(prompt, /Integrations[^\n]*unavailable in this build/);
   assert.doesNotMatch(prompt, /Connect Slack and I can post this/);
   assert.doesNotMatch(prompt, /- Web search: (needs|turned|not)/);
 });
@@ -1062,12 +1059,12 @@ test("a surface without connectors (container chat) never names them", async (t)
   );
 });
 
-test("a local model too small for tools is told so, with no tool notes in its history", async (t) => {
+test("an unknown local model keeps tools and its tool history", async (t) => {
   const { captured, sentMessages, offeredTools } = await renderChatStreaming(t, CONNECTOR_SURFACE, {
     settings: {
       chatAgentMode: "local",
       chatAgentProvider: "qwen",
-      chatAgentModel: "qwen3-1.7b-q4_k_m",
+      chatAgentModel: "personal-local-model",
     },
   });
   const earlier = [
@@ -1090,14 +1087,11 @@ test("a local model too small for tools is told so, with no tool notes in its hi
 
   await captured.sendToAI("And tomorrow?", earlier);
 
-  assert.deepEqual(offeredTools[0], []);
+  assert.ok(offeredTools[0].length > 0);
   const [system, ...history] = sentMessages[0];
-  assert.match(
-    system.content,
-    /- Tools \(web search, calendar, searching or changing notes, integrations\): This local model cannot use tools because its size is below 4B or unknown\./
-  );
-  assert.doesNotMatch(system.content, /Tools used/);
-  assert.equal(history[1].content, "Sunny.");
+  assert.doesNotMatch(system.content, /This local model cannot use tools/);
+  assert.match(system.content, /Tools used/);
+  assert.equal(history[1].content, '[Tools used: web_search ("Lisbon weather")]\n\nSunny.');
 });
 
 test("a reply that imitates the tool notes is shown, saved and delivered without one", async (t) => {
@@ -2005,7 +1999,7 @@ test("an answer typed at another app's caret names nothing to connect", async (t
   const { captured, reasoningService } = await renderChatStreaming(
     t,
     { inferenceScope: "dictationAgent", allowInteractions: true, allowConnectors: true },
-    { subscribed: false }
+    { settings: { ...BYOK_SETTINGS, isSignedIn: false } }
   );
   const configs = [];
   reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) => {

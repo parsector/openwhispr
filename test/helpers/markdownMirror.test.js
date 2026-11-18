@@ -228,7 +228,7 @@ function uploadNote(overrides = {}) {
 }
 
 function mirrorUpload(t) {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
   markdownMirror.init(basePath);
   return {
@@ -441,7 +441,7 @@ test("a note file re-saved with a BOM or CRLF is still recognised as its note", 
 const placement = (...segments) => ({ segments, space: segments[1] });
 
 function tempMirror(t) {
-  const basePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
+  const basePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-mirror-"));
   t.after(() => fs.rmSync(basePath, { recursive: true, force: true }));
   markdownMirror.init(basePath);
   return basePath;
@@ -560,7 +560,7 @@ test("a name too long for one path segment still gets a directory", (t) => {
 
 test("a nested level that is a link out of the mirror isn't written through", (t) => {
   const basePath = tempMirror(t);
-  const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
+  const outsidePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
   t.after(() => fs.rmSync(outsidePath, { recursive: true, force: true }));
   fs.mkdirSync(path.join(basePath, "Workspaces"));
   fs.symlinkSync(outsidePath, path.join(basePath, "Workspaces", "Acme"), "dir");
@@ -965,7 +965,7 @@ test(
 );
 
 function caseInsensitiveFileSystem() {
-  const probe = fs.mkdtempSync(path.join(os.tmpdir(), "OpenWhisprCaseProbe-"));
+  const probe = createTempDir(path.join(os.tmpdir(), "OpenWhisprCaseProbe-"));
   try {
     return fs.existsSync(probe.toLowerCase()) && fs.existsSync(probe.toUpperCase());
   } finally {
@@ -1030,7 +1030,7 @@ test("a typed name that looks made safe, in any case, doesn't share a directory"
 
 test("recorded cleanup never follows a replaced ancestor directory", (t) => {
   const basePath = tempMirror(t);
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-cleanup-outside-"));
+  const outside = createTempDir(path.join(os.tmpdir(), "openwhispr-cleanup-outside-"));
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
   for (const edited of [false, true]) {
     const note = { id: edited ? 902 : 901, title: "Plan", content: "Body" };
@@ -1059,7 +1059,7 @@ test("a cached old-layout path is not cleaned through a replaced ancestor", (t) 
   const before = "---\nid: 903\ntitle: Plan\ntype: personal\nfolder: General\n---\n\nBody";
   fs.writeFileSync(path.join(oldDir, "903-plan.md"), before);
   markdownMirror.legacyNoteIds();
-  const outside = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-old-outside-"));
+  const outside = createTempDir(path.join(os.tmpdir(), "openwhispr-old-outside-"));
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
   const moved = path.join(outside, "General");
   fs.renameSync(oldDir, moved);
@@ -1454,7 +1454,7 @@ test("a save whose close fails gets the file's previous content back", (t) => {
 
 test("a dangling link at a note's path is refused even where links can be followed", (t) => {
   const basePath = tempMirror(t);
-  const outsidePath = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
+  const outsidePath = createTempDir(path.join(os.tmpdir(), "openwhispr-markdown-outside-"));
   t.after(() => fs.rmSync(outsidePath, { recursive: true, force: true }));
   const dir = path.join(basePath, "Private notes");
   fs.mkdirSync(dir);

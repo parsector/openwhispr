@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
@@ -147,10 +148,10 @@ function hotwordsServer({
   platform = process.platform,
   testContext,
 } = {}) {
-  const modelRoot = fs.mkdtempSync(path.join(os.tmpdir(), "parakeet-model-"));
+  const modelRoot = createTempDir(path.join(os.tmpdir(), "parakeet-model-"));
   const modelDir = path.join(modelRoot, "orukeet-v0.1.0");
   fs.mkdirSync(modelDir);
-  const tempDir = fs.mkdtempSync(path.join(getSafeTempDir(), "parakeet-temp-"));
+  const tempDir = createTempDir(path.join(getSafeTempDir(), "parakeet-temp-"));
   testContext.after(() => {
     fs.rmSync(modelRoot, { recursive: true, force: true });
     fs.rmSync(tempDir, { recursive: true, force: true });

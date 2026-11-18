@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -42,7 +43,7 @@ test("a Cohere model without English falls back to a language it supports", () =
 test("the installed record keeps out a model the running app is too old for", (t) => {
   const store = require("../../src/models/registryData.js");
   const installed = require("../../src/helpers/installedModels");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "installed-gate-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "installed-gate-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   installed.configureInstalledModels(path.join(dir, "installed-models.json"));
   t.after(() => installed.configureInstalledModels(null));

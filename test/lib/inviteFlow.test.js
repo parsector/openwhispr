@@ -564,12 +564,12 @@ test("with nothing to send there's no shortfall, even with seats already over", 
   assert.equal(inviteSummary(sending).overSeats, null);
 });
 
-test("addresses over the ceiling block sending", () => {
+test("paid-seat ceilings do not block sending", () => {
   const state = commitText(run(fresh(), seats(null, 4)), addresses(6).join(" "));
   const summary = inviteSummary(state);
   assert.equal(summary.overCeiling, null);
-  assert.equal(summary.canSend, false);
-  assert.equal(run(state, { type: "send" }).phase, "editing");
+  assert.equal(summary.canSend, true);
+  assert.equal(run(state, { type: "send" }).phase, "sending");
 });
 
 test("unknown seats never warn or block", () => {
@@ -603,7 +603,7 @@ test("a seat failure from the server updates the seats left", () => {
   assert.deepEqual(statuses(state), ["draft", "draft"]);
 });
 
-test("after a ceiling refusal, removing the excess lets the rest send", () => {
+test("a server seat refusal does not install a client paid-seat gate", () => {
   let state = run(commitText(run(fresh(), seats(null, 3)), "a@x.com b@y.io c@z.org"), {
     type: "send",
   });
@@ -618,7 +618,7 @@ test("after a ceiling refusal, removing the excess lets the rest send", () => {
   );
   assert.equal(state.phase, "editing");
   assert.equal(inviteSummary(state).overCeiling, null);
-  assert.equal(inviteSummary(state).canSend, false);
+  assert.equal(inviteSummary(state).canSend, true);
 
   state = run(state, { type: "remove", email: "c@z.org" });
   assert.equal(inviteSummary(state).overCeiling, null);

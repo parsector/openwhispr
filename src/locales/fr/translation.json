@@ -2509,7 +2509,6 @@
       "planDescriptions": {
         "freeUsage": "{{used}} / {{limit}} mots sur OpenWhispr Cloud cette semaine",
         "byokUnlimited": "Vos propres clés API et les modèles locaux restent utilisables sans limite.",
-        "nextBilling": "Prochaine facturation : {{date}}",
         "pastDue": "{{used}} / {{limit}} mots sur OpenWhispr Cloud cette semaine - mettez à jour le paiement pour restaurer Pro",
         "trial": "{{days}} jours restants - transcriptions illimitées",
         "unlimited": "Illimité",
@@ -3474,11 +3473,6 @@
     "collapse": "Réduire la barre latérale",
     "expand": "Développer la barre latérale",
     "viewPlans": "Voir les forfaits",
-    "upgradeTitle": "Passer à Pro",
-    "upgradeDescription": "Transcription illimitée, plus précise et plus rapide.",
-    "upgradeInstantSetup": "Configuration instantanée",
-    "upgradeZeroRetention": "Zéro conservation des données",
-    "upgradeEnterpriseSecurity": "Sécurité entreprise SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "En savoir plus"
   },
   "workspaces": {
@@ -4300,9 +4294,6 @@
       "streamingOnlyProvider": "Ce fournisseur ne prend en charge que la transcription en direct. Choisissez un autre fournisseur pour les imports de fichiers et les nouvelles tentatives.",
       "cloudLimitUnavailable": "OpenWhispr Cloud accepte des fichiers de 25 Mo maximum pour ce compte. Les mises à niveau Cloud sont indisponibles dans cette version.",
       "cloudUpgradeUnavailable": "Les mises à niveau Cloud sont indisponibles dans cette version.",
-      "paidPlanRequired": "La transcription cloud pour les fichiers de plus de 25 Mo nécessite un abonnement payant. Les fichiers volumineux sont traités avec OpenWhispr Cloud pour des résultats fiables et de haute qualité.",
-      "byokTooLargeNeedsUpgrade": "Passez à un abonnement payant pour transcrire des fichiers plus volumineux avec OpenWhispr Cloud.",
-      "upgrade": "Mettre à niveau",
       "disabledByOrg": "L’importation de fichiers audio est désactivée par votre organisation."
     },
     "meeting": {
@@ -4536,8 +4527,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "Cette fonctionnalité est indisponible dans cette version.",
-      "upgrade": "Passer à Pro"
+      "message": "Cette fonctionnalité est indisponible dans cette version."
     },
     "enhance": {
       "title": "Erreur d'amélioration"
@@ -4818,7 +4808,6 @@
       "errors": {
         "generic": "Impossible de mettre à jour {{list}}. Réessayez.",
         "listFull": "{{list}} est pleine",
-        "planRequired": "Les dictionnaires partagés nécessitent Business : {{list}} n'a pas été modifiée",
         "ssoRequired": "Connectez-vous avec le SSO de votre entreprise pour modifier {{list}}",
         "notMember": "Vous n'avez plus accès à {{list}}",
         "invalid": "{{list}} n'accepte que des termes courts : 64 caractères et 6 mots au plus, sans virgule, ponctuation de phrase ni symboles comme < > { } [ ] ` |",
@@ -4864,8 +4853,6 @@
       },
       "locked": {
         "noWorkspace": "Les dictionnaires partagés sont inclus dans Business. Partagez avec tout le monde le jargon, les noms de produits et les acronymes de votre équipe.",
-        "upgradeAdmin": "Les dictionnaires partagés sont inclus dans Business. Passez {{workspace}} à un forfait supérieur pour que tout le monde ait les mêmes mots.",
-        "upgradeMember": "Les dictionnaires partagés sont inclus dans Business. Demandez à un administrateur de faire passer {{workspace}} à un forfait supérieur.",
         "paused_one": "Le {{count}} mot partagé de {{workspace}} est en pause. Passez à Business pour l'utiliser à nouveau en dictée.",
         "paused_many": "Les {{count}} de mots partagés de {{workspace}} sont en pause. Passez à Business pour les utiliser à nouveau en dictée.",
         "paused_other": "Les {{count}} mots partagés de {{workspace}} sont en pause. Passez à Business pour les utiliser à nouveau en dictée.",
@@ -5397,8 +5384,7 @@
       "essential": "Essential",
       "essentialLimit": "20 réunions / mois",
       "pro": "Pro",
-      "proLimit": "Illimité",
-      "upgrade": "Passer au supérieur"
+      "proLimit": "Illimité"
     }
   },
   "connectors": {

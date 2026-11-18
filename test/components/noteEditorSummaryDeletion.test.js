@@ -314,7 +314,7 @@ function baseProps(enhancement) {
   };
 }
 
-async function loadNoteEditor(t, permission) {
+async function loadNoteEditor(t, permission, options = {}) {
   installBrowserGlobals(t, {
     window: {
       electronAPI: {

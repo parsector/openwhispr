@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -12,7 +13,7 @@ const WhisperServerManager = require("../../src/helpers/whisperServer");
 // already started this session is reported as proven: a GPU still waking from
 // sleep, not one that can never work. #2265
 function startupManager(t, outcomes) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "whisper-startup-"));
+  const dir = createTempDir(path.join(os.tmpdir(), "whisper-startup-"));
   const model = (name) => {
     const modelPath = path.join(dir, `ggml-${name}.bin`);
     fs.writeFileSync(modelPath, "");

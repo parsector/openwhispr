@@ -1750,7 +1750,6 @@
       "planDescriptions": {
         "freeUsage": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード",
         "byokUnlimited": "独自の API キーとローカルモデルは引き続き無制限で利用できます。",
-        "nextBilling": "次の請求日: {{date}}",
         "pastDue": "今週の OpenWhispr Cloud 使用量：{{used}} / {{limit}} ワード - お支払い方法を更新して Pro を復元",
         "trial": "残り {{days}} 日 - 無制限の文字起こし",
         "unlimited": "無制限",
@@ -3838,9 +3837,6 @@
       "streamingOnlyProvider": "このプロバイダーはライブ文字起こしのみに対応しています。ファイルのアップロードや再実行には別のプロバイダーを選択してください。",
       "cloudLimitUnavailable": "このアカウントでは OpenWhispr Cloud に 25 MB 以下のファイルをアップロードできます。このビルドではクラウドのアップグレードを利用できません。",
       "cloudUpgradeUnavailable": "このビルドではクラウドのアップグレードを利用できません。",
-      "paidPlanRequired": "25 MB を超えるファイルのクラウド文字起こしには有料プランが必要です。大容量ファイルは OpenWhispr Cloud で信頼性の高い高品質な結果を得られます。",
-      "byokTooLargeNeedsUpgrade": "有料プランにアップグレードすると、OpenWhispr Cloud でより大きなファイルを文字起こしできます。",
-      "upgrade": "アップグレード",
       "disabledByOrg": "組織によって音声のアップロードが無効にされています。"
     },
     "meeting": {
@@ -3901,8 +3897,7 @@
       }
     },
     "realtimeBanner": {
-      "message": "このビルドではこの機能を利用できません。",
-      "upgrade": "アップグレード"
+      "message": "このビルドではこの機能を利用できません。"
     },
     "enhance": {
       "title": "強化エラー"
@@ -4180,7 +4175,6 @@
       "errors": {
         "generic": "{{list}} を更新できませんでした。もう一度お試しください。",
         "listFull": "{{list}} がいっぱいです",
-        "planRequired": "共有辞書には Business プランが必要なため、{{list}} は変更されませんでした",
         "ssoRequired": "{{list}} を変更するには、会社の SSO でサインインしてください",
         "notMember": "{{list}} にアクセスできなくなりました",
         "invalid": "{{list}} に追加できるのは短い用語だけです（64 文字・6 語まで。カンマ、文末の句読点、< > { } [ ] ` | などの記号は使えません）",
@@ -4220,8 +4214,6 @@
       },
       "locked": {
         "noWorkspace": "共有辞書は Business プランに含まれています。チームの専門用語、製品名、略語を全員と共有できます。",
-        "upgradeAdmin": "共有辞書は Business プランに含まれています。{{workspace}} をアップグレードすると、全員が同じ単語を使えます。",
-        "upgradeMember": "共有辞書は Business プランに含まれています。{{workspace}} のアップグレードを管理者に依頼してください。",
         "paused_one": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。Business にアップグレードすると、再び音声入力で使えます。",
         "paused_other": "{{workspace}} の共有単語 {{count}} 個は一時停止中です。Business にアップグレードすると、再び音声入力で使えます。",
         "workspaceTitle": "ワークスペースの全員",
@@ -4514,11 +4506,6 @@
     "collapse": "サイドバーを折りたたむ",
     "expand": "サイドバーを展開",
     "viewPlans": "プランを見る",
-    "upgradeTitle": "Pro にアップグレード",
-    "upgradeDescription": "無制限・高精度・高速の文字起こし。",
-    "upgradeInstantSetup": "すぐに使える",
-    "upgradeZeroRetention": "データ保持ゼロ",
-    "upgradeEnterpriseSecurity": "エンタープライズセキュリティ SOC 2 Type II, HIPAA, ISO27001",
     "learnMore": "詳しく見る"
   },
   "chat": {
@@ -5013,8 +5000,7 @@
       "essential": "Essential",
       "essentialLimit": "月20回の会議",
       "pro": "Pro",
-      "proLimit": "無制限",
-      "upgrade": "アップグレード"
+      "proLimit": "無制限"
     }
   },
   "connectors": {

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -265,7 +266,7 @@ test(
   async (t) => {
     const { normalizeDeviceValues } = require("../../src/helpers/managedDevicePolicy");
     const Ctor = require(handlersModulePath);
-    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "managed-upload-tls-"));
+    const directory = createTempDir(path.join(os.tmpdir(), "managed-upload-tls-"));
     t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
     const key = path.join(directory, "key.pem");
     const certificate = path.join(directory, "certificate.pem");

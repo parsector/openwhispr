@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -17,7 +18,7 @@ const { createRendererServer, installBrowserGlobals } = require("../lib/renderer
 const handlersModulePath = require.resolve("../../src/helpers/ipcHandlers");
 const originalLoad = Module._load;
 const handlers = new Map();
-const userData = fs.mkdtempSync(path.join(os.tmpdir(), "openwhispr-dictionary-hints-"));
+const userData = createTempDir(path.join(os.tmpdir(), "openwhispr-dictionary-hints-"));
 let tokenState = { token: null, generation: 0 };
 
 const electronStub = {

@@ -1,3 +1,4 @@
+const createTempDir = require("../lib/tempDir");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -15,7 +16,7 @@ const VENDORED = [
 
 // A copy beside the repo's node_modules, so the vendored reader's `zod` import resolves.
 function vendoredCopy(t) {
-  const dir = fs.mkdtempSync(path.join(__dirname, "../../node_modules/.cache-sync-check-"));
+  const dir = createTempDir(path.join(__dirname, "../../node_modules/.cache-sync-check-"));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   for (const name of VENDORED) {
     // registryBundle.json exists only once the app pins a signed publication.
