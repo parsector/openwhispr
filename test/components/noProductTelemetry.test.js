@@ -19,6 +19,7 @@ test("removed event and creator subsystems have no queue, IPC or completion call
     "src/helpers/metaActivation.js",
     "src/helpers/affiliateLinks.js",
     "src/stores/affiliateStore.ts",
+    "docs/affiliate-integration.md",
     "openwhispr-mobile/src/lib/productEvents.ts",
     "openwhispr-mobile/src/lib/affiliateLink.ts",
     "openwhispr-mobile/src/lib/appsflyer.ts",

@@ -465,20 +465,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
   }, [updateStatus.updateDownloaded, isDownloading, toast, t]);
 
   useEffect(() => {
-    const dispose = window.electronAPI?.onLimitReached?.(() => {
-      toast({
-        title: t("controlPanel.limit.weeklyTitle"),
-        description: t("controlPanel.limit.weeklyDescription"),
-        duration: 5000,
-      });
-    });
-
-    return () => {
-      dispose?.();
-    };
-  }, [toast, t]);
-
-  useEffect(() => {
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
       setInvitationToken(token);
       // Consume the main-process stash so a handled push isn't re-pulled on a

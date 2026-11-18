@@ -2,7 +2,7 @@
 
 Product questions use the selected model and the existing conversation flow. When tools are available, the model can retrieve official documentation with `search_openwhispr_help` and `read_openwhispr_help`, and inspect a bounded set of current settings with `get_openwhispr_context`. Tool instructions request an answer in the user's language, fresh settings when needed, sources, and honest uncertainty. There is no keyword classifier or app-written answer that intercepts an ordinary conversation.
 
-Help requires a working inference model. If a model is unavailable or does not support tools, the user can open the public documentation directly. Bundled English guidance is reference material for the model when current documentation cannot be fetched; it does not bypass inference, subscription, or model-policy gates. Product help adds no separate Help Center or Support menu entry.
+Help requires a working inference model. If a model is unavailable or does not support tools, the user can open the public documentation directly. Bundled English guidance is reference material for the model when current documentation cannot be fetched; inference and actual managed-device policy still apply. Product help adds no separate Help Center or Support menu entry.
 
 Chat and Voice Assistant render validated official source links and lookup status. Tool names, source labels and privacy/failure explanations are translated in all app locales. Explicit Copy includes readable answer text and source links. Evidence sits outside the Voice Assistant's selectable answer area. Historical settings cards start collapsed and format shortcuts and known settings values for the user.
 

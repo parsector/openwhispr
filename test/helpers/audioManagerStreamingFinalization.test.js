@@ -1426,7 +1426,7 @@ test("signing out during a failed-over recording reports it and keeps the audio"
   assert.deepEqual(completions, []);
 });
 
-test("a failed-over upload that reaches the word limit carries it to the upgrade prompt", async (t) => {
+test("a failed-over upload preserves the returned text and quota metadata", async (t) => {
   const AudioManager = await loadManagerClass(t);
   useManagedOrukeetSettings();
   installCapture(t);
@@ -1795,7 +1795,7 @@ test("Cloud finding no speech ends the dictation empty and keeps the recording",
   }
 });
 
-test("a re-transcription that reaches the word limit opens the upgrade prompt", async (t) => {
+test("a re-transcription preserves the returned text and quota metadata", async (t) => {
   const AudioManager = await loadManagerClass(t);
   const { published } = await stopManagedDictation(AudioManager, {
     final: JA_FINAL,

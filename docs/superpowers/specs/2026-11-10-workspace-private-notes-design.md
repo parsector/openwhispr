@@ -16,7 +16,7 @@ The note-store yield guard preserves user-opened notes and containers, pending o
 
 ## Backup and sync
 
-Private notes and folders use ordinary Cloud Backup: signed-in validation, subscription, the Backup toggle and organization policy control personal uploads and pulls as on main. Teamspaces and existing shared personal notes continue syncing independently of personal Backup. There is no one-time cloud import, account-wide device-only switch, automatic cloud deletion or separate archive recovery flow. Existing cloud notes participate in normal sync, including on a new device.
+Private notes and folders use ordinary Cloud Backup: signed-in validation, the Backup toggle and organization policy control personal uploads and pulls in this fork. Teamspaces and existing shared personal notes continue syncing independently of personal Backup. There is no one-time cloud import, account-wide device-only switch, automatic cloud deletion or separate archive recovery flow. Existing cloud notes participate in normal sync, including on a new device.
 
 Preview builds could advance personal cursors while skipping personal rows. A consent-gated cursor reset lets normal sync recover those rows; it does not import anything while Backup is off. Normal account-generation, dirty-edit, tombstone and cloud-identity guards remain in force. Private-to-team moves preserve the cloud identity so the existing row changes scope without leaving a second personal copy.
 

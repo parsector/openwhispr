@@ -2206,13 +2206,6 @@ ipcMain.on("mac-accessibility-features-ready", (_event, expectedAccountScope) =>
   startMacAccessibilityFeatures?.();
 });
 
-// Listen for usage limit reached from dictation overlay, forward to control panel
-ipcMain.on("limit-reached", (_event, data) => {
-  if (isLiveWindow(windowManager?.controlPanelWindow)) {
-    windowManager.controlPanelWindow.webContents.send("limit-reached", data);
-  }
-});
-
 // App event handlers
 if (gotSingleInstanceLock) {
   app.on("second-instance", async (_event, commandLine) => {

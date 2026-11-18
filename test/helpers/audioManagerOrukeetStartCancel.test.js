@@ -178,14 +178,14 @@ test("a limit answer that lands after the cancel opens no upgrade prompt", async
   assert.equal(calls.errors, 0);
 });
 
-test("a limit answer with no cancel still opens the upgrade prompt", async (t) => {
+test("a limit answer with no cancel remains an ordinary error without an upgrade prompt", async (t) => {
   const { manager, connect, calls } = await load(t);
   const starting = manager.startStreamingRecording();
   await tick();
 
   connect.resolve(LIMIT_REACHED);
   assert.equal(await starting, false);
-  assert.equal(calls.limitPrompts, 1);
+  assert.equal(calls.limitPrompts, 0);
   assert.equal(calls.errors, 1);
 });
 

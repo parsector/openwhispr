@@ -5268,13 +5268,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
       return { needsFallback: true };
     }
-    if (res.code === "LIMIT_REACHED" && Number.isFinite(res.details?.wordsUsed)) {
-      // Same upgrade prompt a batch upload opens when it crosses the quota.
-      window.electronAPI?.notifyLimitReached?.({
-        wordsUsed: res.details.wordsUsed,
-        limit: Number.isFinite(res.details.limit) ? res.details.limit : 2000,
-      });
-    }
     const err = new Error(res.error || "Failed to start streaming session");
     err.code = res.code;
     err.messageKey = res.messageKey;

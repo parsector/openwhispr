@@ -29,6 +29,7 @@ test("renderer and main contain no checkout, portal, or plan-switch call site", 
     ...filesUnder("src/hooks"),
     ...filesUnder("src/services"),
     "src/helpers/ipcHandlers.js",
+    "src/helpers/audioManager.js",
     "preload.js",
     "main.js",
   ];
@@ -36,6 +37,7 @@ test("renderer and main contain no checkout, portal, or plan-switch call site", 
     const text = source(file);
     assert.doesNotMatch(text, /\b(?:cloudCheckout|cloudBillingPortal|cloudSwitchPlan|cloudPreviewSwitch|billingCheckout|billingPortal|upgradeToEnterprise|openCheckout|openBillingPortal|UpsellBar)\b/, file);
     assert.doesNotMatch(text, /\/api\/stripe\/(?:checkout|portal|switch-plan|preview-switch)/, file);
+    assert.doesNotMatch(text, /notifyLimitReached|onLimitReached|UpgradePrompt|limit-reached/, file);
   }
   assert.doesNotMatch(source("src/services/WorkspacesService.ts"), /\/billing\//);
 });

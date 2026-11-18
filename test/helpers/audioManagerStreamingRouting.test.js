@@ -313,7 +313,7 @@ test("a refused managed Orukeet session starts a batch recording instead of fail
   assert.equal(errors.length, 0);
 });
 
-test("the weekly word quota on a managed Orukeet start opens the upgrade prompt", async (t) => {
+test("a service quota error on Orukeet start remains an ordinary error without an upgrade prompt", async (t) => {
   const { createManager, window } = await loadAudioManager(t, {
     cachePrefix: "openwhispr-streaming-routing-test-",
     settingsKey: "__streamingRoutingSettings",
@@ -338,7 +338,7 @@ test("the weekly word quota on a managed Orukeet start opens the upgrade prompt"
       ),
     { code: "LIMIT_REACHED", message: "Weekly word limit reached" }
   );
-  assert.deepEqual(prompts, [{ wordsUsed: 2000, limit: 2000 }]);
+  assert.deepEqual(prompts, [], "service quota errors never open a fork upsell");
   // A quota denial is not a fallback: batch would be refused the same way.
   assert.ok(!manager.streamingFallbackReason);
 });
