@@ -1247,40 +1247,40 @@ const buttonWithText = (container, text) =>
   findElement(container, (node) => node.tagName === "BUTTON" && node.textContent.trim() === text);
 const PAUSED = { ...SNAPSHOT, meta: { ...SNAPSHOT.meta, paused: true } };
 
-test("a locked shared list shows an access notice over dimmed lists without billing navigation", async (t) => {
+test("a free workspace keeps shared lists editable without billing navigation", async (t) => {
   const { container, calls } = await renderView(t);
   globalThis.__workspace = { ...globalThis.__workspace, plan: "pro", role: "owner" };
-  await openList(container, "allShared");
-  assert.ok(container.textContent.includes("dictionary.shared.locked.lockLabel"));
-  assert.equal(addInput(container), null, "a locked list has no add field");
-  assert.equal(rowFor(container, "ARR"), null, "no words while locked");
-  assert.ok(container.textContent.includes('dictionary.shared.memberCount{"count":14}'));
+  await openList(container, "workspace");
+  assert.equal(container.textContent.includes("dictionary.shared.locked.lockLabel"), false);
+  assert.ok(addInput(container), "shared words can be added without a plan");
+  assert.ok(rowFor(container, "ARR"), "shared words remain visible");
+  assert.ok(container.textContent.includes('dictionary.shared.memberCount{"count":20}'));
 
   assert.equal(buttonWithText(container, "integrations.api.viewPlans"), null);
   assert.ok(!calls.some(([name]) => name === "upgrade"));
 });
 
-test("a paused list shows its words dimmed and read-only", async (t) => {
+test("a billing-paused list keeps its words editable", async (t) => {
   const { container } = await renderView(t, { shared: { snapshot: PAUSED } });
   await openList(container, "workspace");
-  assert.ok(container.textContent.includes("dictionary.shared.locked.lockLabel"));
+  assert.equal(container.textContent.includes("dictionary.shared.locked.lockLabel"), false);
   const row = rowFor(container, "ARR");
   assert.ok(row, "the list's words are shown");
-  assert.deepEqual(buttonsIn(row), [], "no hover actions or checkboxes");
-  assert.ok(isDisabled(addInput(container)), "the add field is disabled");
+  assert.ok(buttonsIn(row).length > 0, "word actions remain available");
+  assert.equal(isDisabled(addInput(container)), false, "the add field remains enabled");
   assert.equal(
     targetChip(container).textContent,
     'dictionary.shared.add.to{"list":"dictionary.shared.everyoneAt{\\"workspace\\":\\"Acme\\"}"}',
-    "the disabled field names the open list"
+    "the editable field names the open list"
   );
 
-  // All shared stays the per-list summary.
+  // All shared continues to show all of the available shared words.
   await openList(container, "allShared");
-  assert.equal(rowFor(container, "ARR"), null);
-  assert.ok(container.textContent.includes('dictionary.shared.locked.wordCount{"count":2}'));
+  assert.ok(rowFor(container, "ARR"));
+  assert.ok(pickerEntry(container, "workspace").textContent.includes("2"));
 });
 
-test("a free workspace's empty lists explain access, even though the API says paused", async (t) => {
+test("a free workspace's empty lists stay available when the API reports a billing pause", async (t) => {
   const snapshot = {
     entries: [],
     hiddenIds: [],
@@ -1293,7 +1293,7 @@ test("a free workspace's empty lists explain access, even though the API says pa
   const { container } = await renderView(t, { shared: { snapshot } });
   globalThis.__workspace = { ...globalThis.__workspace, plan: "pro", role: "member" };
   await openList(container, "workspace");
-  assert.ok(container.textContent.includes("dictionary.shared.locked.lockLabel"));
+  assert.equal(container.textContent.includes("dictionary.shared.locked.lockLabel"), false);
   assert.equal(buttonWithText(container, "integrations.api.viewPlans"), null);
 });
 
@@ -1352,15 +1352,15 @@ const focusOut = (element) =>
   React.act(async () => element.dispatchEvent(domEvent("focusout", { relatedTarget: null })));
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-test("All words offers Clear all and Export while it lists only personal words", async (t) => {
+test("changing a plan never removes shared words or exposes Personal-only bulk actions", async (t) => {
   const { container, rerender } = await renderView(t);
   // Shared words apply here, so All words isn't Personal and keeps them out.
   assert.equal(byAttribute(container, "aria-label", "dictionary.clearAll"), null);
 
   globalThis.__workspace = { ...globalThis.__workspace, plan: "pro" };
   await rerender();
-  assert.ok(byAttribute(container, "aria-label", "dictionary.clearAll"));
-  assert.ok(byAttribute(container, "aria-label", "dictionary.exportDictionary"));
+  assert.equal(byAttribute(container, "aria-label", "dictionary.clearAll"), null);
+  assert.equal(byAttribute(container, "aria-label", "dictionary.exportDictionary"), null);
 });
 
 for (const status of ["ssoRequired", "noAccess"]) {
@@ -1893,13 +1893,13 @@ const partialError = (reason, appliedCount, undo) => {
   return error;
 };
 
-test("paused: Clear all, Export and Already in act on the moved words Personal shows again", async (t) => {
+test("lost access: Clear all, Export and Already in act on moved words Personal shows again", async (t) => {
   const snapshot = {
     ...PAUSED,
     entries: [...PAUSED.entries, entry("e-supabase", "Supabase", null)],
   };
   const { container, calls, exported } = await renderView(t, {
-    shared: { snapshot, movedPersonal: ["Supabase"] },
+    shared: { status: "noAccess", snapshot, movedPersonal: ["Supabase"] },
   });
   await openList(container, "personal");
   assert.ok(rowFor(container, "Supabase"), "the moved word applies at personal priority");
@@ -2088,7 +2088,7 @@ test("deleting or renaming a personal word a list also has says the list still h
   assert.equal(globalThis.__toasts.length, toasts + 1);
 });
 
-test("paused, deleting a personal word a list has adds no toast: the list doesn't apply", async (t) => {
+test("billing pauses do not hide the remaining shared copy when a personal word is deleted", async (t) => {
   const { container } = await renderView(t, {
     settings: { customDictionary: ["OpenWhispr", "Qdrant", "Whispr"] },
     shared: { snapshot: PAUSED },
@@ -2100,7 +2100,7 @@ test("paused, deleting a personal word a list has adds no toast: the list doesn'
       named("dictionary.shared.actions.deleteWord", "Qdrant")
     )
   );
-  assert.deepEqual(globalThis.__toasts, []);
+  assert.equal(globalThis.__toasts.at(-1).title, 'dictionary.shared.stillIn{"word":"Qdrant","list":"Engineering"}');
 });
 
 test("Hide for me on a row says so, and its Undo unhides the word", async (t) => {

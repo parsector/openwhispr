@@ -275,8 +275,8 @@ function dictationAgentPrompt(settings, agentName) {
 }
 
 function dictationAgentReachable(settings) {
-  return resolveDictationAgentInference(settings, { isCloudAgent: isCloudDictationAgentMode() })
-    .reachable;
+  return isAgentScopeBlocked(settings) ||
+    resolveDictationAgentInference(settings, { isCloudAgent: isCloudDictationAgentMode() }).reachable;
 }
 
 function translationChainReachable(settings) {
@@ -313,7 +313,7 @@ function resolveReasoningRoute(
 
   const kind = resolveDictationRouteKind({
     cleanupReachable,
-    agentReachable: agent.reachable,
+    agentReachable: agent.reachable || isAgentScopeBlocked(settings),
     // A translation recording ignores the wake word, so skip the scan.
     agentInvoked:
       !translationRequested &&
@@ -774,7 +774,8 @@ class AudioManager {
         try {
           const constraints = await this.getAudioConstraints(
             false,
-            reason === "devicechange" || reason === "devicechange-ended"
+            reason === "devicechange" || reason === "devicechange-ended",
+            true
           );
           return await navigator.mediaDevices.getUserMedia(constraints);
         } catch (error) {
@@ -783,7 +784,7 @@ class AudioManager {
             { error: error.message },
             "audio"
           );
-          const fallback = await this.getAudioConstraints(true);
+          const fallback = await this.getAudioConstraints(true, false, true);
           return navigator.mediaDevices.getUserMedia(fallback);
         }
       },

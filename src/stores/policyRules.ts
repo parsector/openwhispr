@@ -648,7 +648,7 @@ export function isAudioFeatureDenied(
   state: PolicyDecisionSnapshot,
   context: TranscriptionPolicyContext
 ): boolean {
-  return (state.managed === true || state.status === "managed") && !isAudioFeatureAllowed(state, context);
+  return state.status === "managed" && !!state.policy && !isAudioFeatureAllowed(state, context);
 }
 
 export function isAudioFeatureAllowed(

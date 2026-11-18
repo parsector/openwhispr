@@ -412,7 +412,7 @@ test("a roster held for another workspace is not passed into the invite dialog",
   globalThis.__rosterWorkspaceId = "w-previous";
   render(Section, ADMIN);
 
-  assert.deepEqual(globalThis.__dialogProps.knownEmails, { members: ["olivia@example.com", "mia@example.com"], invited: ["pending@example.com"] });
+  assert.equal(globalThis.__dialogProps.knownEmails, undefined);
 });
 
 async function openAdd(container) {
