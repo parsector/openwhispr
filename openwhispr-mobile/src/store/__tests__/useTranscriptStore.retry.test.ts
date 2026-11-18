@@ -193,10 +193,7 @@ describe('useTranscriptStore retry support', () => {
       }),
     );
     expect(useTranscriptStore.getState().transcripts).toHaveLength(1);
-    expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({
-      source: 'keyboard',
-      provider: 'cloud',
-    });
+    expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
   });
 
   it('releases the retained audio when a retry succeeds', async () => {
@@ -311,20 +308,17 @@ describe('useTranscriptStore retry support', () => {
       }),
     );
     expect(mockAudioToolsCleanup).toHaveBeenCalledWith(['file://tmp/retry.wav']);
-    expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({
-      source: 'file',
-      provider: 'local',
-    });
+    expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
   });
 });
 
-describe('useTranscriptStore first-pass AppsFlyer events', () => {
+describe('useTranscriptStore first-pass transcription never emits product events', () => {
   it.each([
     { source: 'keyboard' as const, provider: 'cloud' as const },
     { source: 'recording' as const, provider: 'local' as const },
     { source: 'file' as const, provider: 'cloud' as const },
   ])(
-    'logs a persisted $source transcription completed by $provider',
+    'persists without reporting a $source transcription completed by $provider',
     async ({ source, provider }) => {
       await useTranscriptStore.getState().addTranscript({
         id: `${source}-${provider}`,
@@ -334,7 +328,7 @@ describe('useTranscriptStore first-pass AppsFlyer events', () => {
       });
 
       expect(mockSaveTranscripts).toHaveBeenCalledTimes(1);
-      expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({ source, provider });
+      expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
     },
   );
 

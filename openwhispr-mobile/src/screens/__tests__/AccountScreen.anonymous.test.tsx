@@ -32,7 +32,7 @@ const mockAuthState: {
 };
 const mockPrepareAffiliate = jest.fn().mockResolvedValue(true);
 
-jest.mock('@/components/AccountCreatorLink', () => ({ AccountCreatorLink: () => null }));
+
 const mockRegisterSuperwallGate = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockCreateStripeBillingPortalSession = jest.fn();

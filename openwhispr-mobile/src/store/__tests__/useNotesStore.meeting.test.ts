@@ -438,10 +438,7 @@ describe('finalizeCloudMeeting', () => {
     );
     expect(request.text).not.toContain('Unknown speaker');
     expect(request.systemPrompt).toContain('Never output "Unknown speaker"');
-    expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({
-      source: 'meeting',
-      provider: 'cloud',
-    });
+    expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
   });
 
   it('does not log an empty cloud meeting transcription', async () => {
@@ -475,15 +472,12 @@ describe('finalizeCloudMeeting', () => {
 });
 
 describe('runMeetingPipeline', () => {
-  it('logs a persisted local meeting transcription', async () => {
+  it('persists without reporting a local meeting transcription', async () => {
     (notesRepository.getSegments as jest.Mock).mockReturnValue([segment('Transcript')]);
 
     await useNotesStore.getState().runMeetingPipeline(7, 'file://meeting.wav', 2);
 
-    expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({
-      source: 'meeting',
-      provider: 'local',
-    });
+    expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
   });
 
   it('does not log when local meeting transcription fails', async () => {
@@ -566,10 +560,7 @@ describe('runMeetingPipeline', () => {
       },
       expect.objectContaining({ repo: notesRepository }),
     );
-    expect(mockLogTranscriptionCompleted).toHaveBeenCalledWith({
-      source: 'meeting',
-      provider: 'local',
-    });
+    expect(mockLogTranscriptionCompleted).not.toHaveBeenCalled();
   });
 
   it('does not replace a selected calendar title with transcript auto-title', async () => {

@@ -1,3 +1,4 @@
+import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import '../global.css';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, useColorScheme } from 'react-native';
@@ -45,7 +46,11 @@ runMigrations();
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayout() {
-  useKeyboardHandoff();
+  const [keyboardStartup, setKeyboardStartup] = useState<{
+    ready: boolean;
+    session: CachedSession | null;
+  }>({ ready: false, session: null });
+  useKeyboardHandoff(keyboardStartup.ready, keyboardStartup.session);
   useAnonymousOnboardingSession();
   useGuestPrivateMode();
 
@@ -83,12 +88,24 @@ function RootLayout() {
   };
 
   useEffect(() => {
+    let mounted = true;
+    const cachedSession = getCachedSession();
     initialize();
-    loadConfig();
-    hydrateOnboarding();
+    // Restore local capture state before starting, independently of auth's network request.
+    Promise.allSettled([loadConfig(), hydrateOnboarding(), cachedSession]).then((results) => {
+      if (!mounted) return;
+      const session = results[2];
+      setKeyboardStartup({
+        ready: true,
+        session: session.status === 'fulfilled' ? session.value : null,
+      });
+    });
     startRetiredPromptSweep();
     // A failure leaves the install unmarked, so the next key access retries the erase.
     eraseProviderCredentialsFromPreviousInstall().catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
   }, [initialize, loadConfig, hydrateOnboarding]);
 
   useEffect(() => {

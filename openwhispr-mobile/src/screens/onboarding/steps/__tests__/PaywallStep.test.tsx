@@ -390,33 +390,18 @@ it('closing the shared paywall continues once with no second paywall or stock al
 
 
 
-describe.each(['claim', 'offer'])('eligibility while waiting for %s', (phase) => {
+describe.each(['claim', 'offer'])('removed creator %s preparation', () => {
   it.each([
     ['subscribed', { usage: SUBSCRIBED, ownerKey: OWNER }],
     ['owned by another session', { usage: FREE, ownerKey: 'old-session' }],
     ['unknown', { usage: null, ownerKey: null }],
-  ])('skips when usage becomes %s', async (_label, nextUsage) => {
-    mockAffiliateEnabled = true;
-    mockInboundPending = true;
-    let finishPreparation!: () => void;
-    if (phase === 'claim') {
-      mockConsumeInbound.mockReturnValue(
-        new Promise<boolean>((resolve) => {
-          finishPreparation = () => resolve(false);
-        }),
-      );
-    } else {
-      mockConsumeInbound.mockResolvedValue(true);
-
-    }
+  ])('does not stall setup before usage becomes %s', async (_label, nextUsage) => {
     const screen = render(<PaywallStep />);
-    const consent = await screen.findByText('Existing tracking choice');
-    await act(async () => fireEvent.press(consent));
+    await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
     mockUsageState = nextUsage;
     screen.rerender(<PaywallStep />);
-    await act(async () => finishPreparation());
-    expect(mockRegister).not.toHaveBeenCalled();
-    expect(mockGoNext).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(PRO_TITLE)).toBeNull();
+    expect(() => require('@/lib/affiliateOffer')).toThrow();
+    await waitFor(() => expect(mockGoNext).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Existing tracking choice')).toBeNull();
   });
 });

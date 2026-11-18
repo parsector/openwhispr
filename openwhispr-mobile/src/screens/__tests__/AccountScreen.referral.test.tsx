@@ -69,7 +69,7 @@ jest.mock('@/hooks/useSuperwallGate', () => ({
 }));
 
 
-jest.mock('@/components/AccountCreatorLink', () => ({ AccountCreatorLink: () => null }));
+
 jest.mock('@/data/remote/billingApi', () => ({ createStripeBillingPortalSession: jest.fn() }));
 jest.mock('@/lib/apiClient', () => ({
   ApiError: class BillingApiError extends Error {

@@ -131,7 +131,6 @@ function GateConsumer({
   onPresent,
   label = 'register',
   signal,
-  creatorOffer,
   requiresAccount,
 }: {
   placement: SuperwallPlacement;
@@ -141,7 +140,6 @@ function GateConsumer({
   onPresent?: () => void;
   label?: string;
   signal?: AbortSignal;
-  creatorOffer?: RegisterSuperwallGateOptions['creatorOffer'];
   requiresAccount?: boolean;
 }): React.JSX.Element {
   const { register } = useSuperwallGate();
@@ -158,8 +156,7 @@ function GateConsumer({
             onPurchaseComplete,
             onPresent,
             signal,
-            creatorOffer,
-            requiresAccount,
+                      requiresAccount,
           };
           register(options).then((granted) => setResult(String(granted)));
         }}
@@ -298,7 +295,7 @@ describe('SuperwallGateProvider', () => {
     expect(screen.getAllByTestId('result')[1].props.children).toBe('true');
   });
 
-  it('logs a paywall view only when Superwall presents one', () => {
+  it('does not emit product telemetry when a store view is presented', () => {
     const screen = render(
       <EnabledSuperwallGateProvider>
         <GateConsumer placement={SUPERWALL_PLACEMENTS.accountBillingOpen} />
@@ -307,8 +304,8 @@ describe('SuperwallGateProvider', () => {
 
     fireEvent.press(screen.getByText('register'));
 
-    expect(mockLogPaywallViewed).toHaveBeenCalledWith(SUPERWALL_PLACEMENTS.accountBillingOpen);
-    expect(mockLogPaywallViewed).toHaveBeenCalledTimes(1);
+    expect(mockLogPaywallViewed).not.toHaveBeenCalled();
+    expect(mockLogPaywallViewed).not.toHaveBeenCalled();
   });
 
   it.each(['skip', 'error'] as const)(
@@ -372,7 +369,7 @@ describe('SuperwallGateProvider', () => {
     expect(feature).toHaveBeenCalledTimes(1);
   });
 
-  it('holds the gate and reconciliation until the purchase is recorded', async () => {
+  it('completes and reconciles purchases without observer attribution', async () => {
     const feature = jest.fn();
     const record = deferred<boolean>();
     mockRecordRevenueCatPurchase.mockReturnValue(record.promise);
@@ -388,10 +385,10 @@ describe('SuperwallGateProvider', () => {
     );
     await act(async () => {});
 
-    expect(mockRecordRevenueCatPurchase).toHaveBeenCalledWith('pro.monthly');
-    expect(screen.getByTestId('result').props.children).toBe('pending');
-    expect(feature).not.toHaveBeenCalled();
-    expect(mockReconcileStoreBilling).not.toHaveBeenCalled();
+    expect(mockRecordRevenueCatPurchase).not.toHaveBeenCalled();
+    expect(screen.getByTestId('result').props.children).toBe('true');
+    expect(feature).toHaveBeenCalledTimes(1);
+    expect(mockReconcileStoreBilling).toHaveBeenCalledTimes(1);
 
     await act(async () => record.resolve(true));
 
@@ -400,7 +397,7 @@ describe('SuperwallGateProvider', () => {
     expect(mockReconcileStoreBilling).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps holding the gate when the native placement completes mid-recording', async () => {
+  it('native placement completion does not duplicate a completed purchase', async () => {
     const feature = jest.fn();
     const record = deferred<boolean>();
     mockRecordRevenueCatPurchase.mockReturnValue(record.promise);
@@ -420,8 +417,8 @@ describe('SuperwallGateProvider', () => {
     });
     await act(async () => {});
 
-    expect(screen.getByTestId('result').props.children).toBe('pending');
-    expect(feature).not.toHaveBeenCalled();
+    expect(screen.getByTestId('result').props.children).toBe('true');
+    expect(feature).toHaveBeenCalledTimes(1);
 
     await act(async () => record.resolve(true));
 
@@ -429,7 +426,7 @@ describe('SuperwallGateProvider', () => {
     expect(feature).toHaveBeenCalledTimes(1);
   });
 
-  it('processes a purchased dismissal once when it repeats during recording', async () => {
+  it('processes a purchased dismissal once without emitting attribution events', async () => {
     const record = deferred<boolean>();
     mockRecordRevenueCatPurchase.mockReturnValue(record.promise);
     const screen = render(
@@ -445,11 +442,11 @@ describe('SuperwallGateProvider', () => {
     });
     await act(async () => {});
 
-    expect(mockLogSubscription).toHaveBeenCalledTimes(1);
-    expect(mockIdentifyRevenueCatUser).toHaveBeenCalledTimes(1);
-    expect(mockRecordRevenueCatPurchase).toHaveBeenCalledTimes(1);
-    expect(mockReconcileStoreBilling).not.toHaveBeenCalled();
-    expect(screen.getByTestId('result').props.children).toBe('pending');
+    expect(mockLogSubscription).not.toHaveBeenCalled();
+    expect(mockIdentifyRevenueCatUser).not.toHaveBeenCalled();
+    expect(mockRecordRevenueCatPurchase).not.toHaveBeenCalled();
+    expect(mockReconcileStoreBilling).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('result').props.children).toBe('true');
 
     await act(async () => record.resolve(true));
 
@@ -457,7 +454,7 @@ describe('SuperwallGateProvider', () => {
     expect(mockReconcileStoreBilling).toHaveBeenCalledTimes(1);
   });
 
-  it('identifies RevenueCat with the billing user before recording the purchase', async () => {
+  it('reconciles without identifying an observer billing user', async () => {
     const identify = deferred<boolean>();
     mockIdentifyRevenueCatUser.mockReturnValue(identify.promise);
     const screen = render(
@@ -472,16 +469,17 @@ describe('SuperwallGateProvider', () => {
     );
     await act(async () => {});
 
-    expect(mockIdentifyRevenueCatUser).toHaveBeenCalledWith(usage.billingUserId);
+    expect(mockIdentifyRevenueCatUser).not.toHaveBeenCalled();
     expect(mockRecordRevenueCatPurchase).not.toHaveBeenCalled();
 
     await act(async () => identify.resolve(true));
 
-    await waitFor(() => expect(mockRecordRevenueCatPurchase).toHaveBeenCalledWith('pro.monthly'));
+    await waitFor(() => expect(mockReconcileStoreBilling).toHaveBeenCalled());
+    expect(mockRecordRevenueCatPurchase).not.toHaveBeenCalled();
     await waitFor(() => expect(mockReconcileStoreBilling).toHaveBeenCalled());
   });
 
-  it('records the purchase without identifying when billing usage is unavailable', async () => {
+  it('reconciles purchases without observer attribution when usage is unavailable', async () => {
     useUsageStore.setState({ usage: null });
     const screen = render(
       <EnabledSuperwallGateProvider>
@@ -494,11 +492,12 @@ describe('SuperwallGateProvider', () => {
       mockPlacementCallbacks.onDismiss?.({}, { type: 'purchased', productId: 'pro.monthly' }),
     );
 
-    await waitFor(() => expect(mockRecordRevenueCatPurchase).toHaveBeenCalledWith('pro.monthly'));
+    await waitFor(() => expect(mockReconcileStoreBilling).toHaveBeenCalled());
+    expect(mockRecordRevenueCatPurchase).not.toHaveBeenCalled();
     expect(mockIdentifyRevenueCatUser).not.toHaveBeenCalled();
   });
 
-  it('releases the gate when recording does not settle in time', async () => {
+  it('an unavailable observer cannot delay purchase completion', async () => {
     jest.useFakeTimers();
     try {
       mockRecordRevenueCatPurchase.mockReturnValue(new Promise<boolean>(() => {}));
@@ -513,7 +512,7 @@ describe('SuperwallGateProvider', () => {
         mockPlacementCallbacks.onDismiss?.({}, { type: 'purchased', productId: 'pro.monthly' }),
       );
       await act(async () => {});
-      expect(screen.getByTestId('result').props.children).toBe('pending');
+      expect(screen.getByTestId('result').props.children).toBe('true');
 
       await act(async () => {
         jest.advanceTimersByTime(10_000);
@@ -562,11 +561,8 @@ describe('SuperwallGateProvider', () => {
       mockResolveNativePlacement?.();
     });
     expect(onPurchaseComplete).toHaveBeenCalledTimes(1);
-    expect(mockLogSubscription).toHaveBeenCalledWith(
-      'pro.monthly',
-      SUPERWALL_PLACEMENTS.accountBillingOpen,
-    );
-    expect(mockLogSubscription).toHaveBeenCalledTimes(1);
+    expect(mockLogSubscription).not.toHaveBeenCalled();
+    expect(mockLogSubscription).not.toHaveBeenCalled();
   });
 
 
@@ -1113,27 +1109,23 @@ describe('SuperwallGateProvider', () => {
     expect(mockRegisterPlacement).toHaveBeenCalledTimes(2);
   });
   it.each(['loading', 'error'])(
-    'does not grant seeded anonymous offer access when SDK is %s',
+    'local account access stays available when the billing SDK is %s',
     async (state) => {
       mockIsConfigured = false;
       mockConfigurationError = state === 'error' ? 'failed' : null;
       const granted = jest.fn();
-      const creatorOffer = { productId: 'monthly' } as NonNullable<
-        RegisterSuperwallGateOptions['creatorOffer']
-      >;
       const screen = render(
         <EnabledSuperwallGateProvider>
           <GateConsumer
             placement={SUPERWALL_PLACEMENTS.accountBillingOpen}
             requiresAccount={false}
-            creatorOffer={creatorOffer}
             onAccessGrantedWithoutPurchase={granted}
           />
         </EnabledSuperwallGateProvider>,
       );
       await act(async () => fireEvent.press(screen.getByText('register')));
-      expect(screen.getByTestId('result').props.children).toBe('false');
-      expect(granted).not.toHaveBeenCalled();
+      expect(screen.getByTestId('result').props.children).toBe('true');
+      expect(granted).toHaveBeenCalledTimes(1);
       expect(mockRegisterPlacement).not.toHaveBeenCalled();
     },
   );

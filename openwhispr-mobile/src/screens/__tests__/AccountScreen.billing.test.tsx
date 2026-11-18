@@ -34,29 +34,7 @@ const mockAuthState: {
 };
 const mockPrepareAffiliate = jest.fn().mockResolvedValue(true);
 
-jest.mock('@/components/AccountCreatorLink', () => ({
-  AccountCreatorLink: ({
-    onCheckOffer,
-    onViewPlans,
-  }: {
-    onCheckOffer: () => Promise<string>;
-    onViewPlans: () => void;
-  }) => {
-    const { Pressable, Text, View } = require('react-native');
-    const [result, setResult] = require('react').useState('');
-    return (
-      <View>
-        <Pressable onPress={() => onCheckOffer().then(setResult)}>
-          <Text>Submit creator link</Text>
-        </Pressable>
-        <Text testID="creator-result">{result}</Text>
-        <Pressable onPress={onViewPlans}>
-          <Text>View plans</Text>
-        </Pressable>
-      </View>
-    );
-  },
-}));
+
 const mockRegisterSuperwallGate = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockCreateStripeBillingPortalSession = jest.fn();

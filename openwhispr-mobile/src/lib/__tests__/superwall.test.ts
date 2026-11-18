@@ -1,7 +1,6 @@
 import type { UsageInfo } from '@/data/remote/usageApi';
 
 import {
-  CREATOR_CODE_PAYWALL_PLACEMENT,
   SUPERWALL_APP_ENTITLEMENT_ID,
   SUPERWALL_PLACEMENTS,
   SUPERWALL_WORDS_REMAINING_SENTINEL,
