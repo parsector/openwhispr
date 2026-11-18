@@ -851,9 +851,9 @@ test("a stale first-upgrade profile respects an explicit newer move to the defau
 });
 
 test("a lost workspace restores into default without merging distinct cloud folders", async (t) => {
-  // Placement-aware APIs derive a note's workspace from its folder. Freeze the
-  // clock so a stale-write refusal cannot accidentally hide a missing rule.
-  t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-11-18T12:00:00.000Z") });
+  // Match SQLite's second precision so a stale-write refusal cannot mask an
+  // omitted folder-placement rule, regardless of the machine's calendar date.
+  t.mock.timers.enable({ apis: ["Date"], now: Math.floor(Date.now() / 1000) * 1000 });
   const ctx = await setup(t, {
     privateWorkspacePlacement: true,
     folderPlacement: true,
