@@ -11173,7 +11173,7 @@ class DatabaseManager {
              WHERE n.sync_status IN ('pending', 'error') AND n.deleted_at IS NULL
                AND ${accountScope.sql} AND (s.kind = ?${leftTeam}${shared})`
           )
-          .all(...accountScope.params, spaceKind)
+          .all(...accountScope.params, syncScope ? "team" : spaceKind)
           .map((note) => this._withSpeakerDisplayNames(note));
       }
       // 'error' rows retry too: a transient failure (e.g. one offline pass)

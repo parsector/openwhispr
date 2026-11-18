@@ -150,7 +150,7 @@ const invoke = (channel, ...args) => handlers.get(channel)({}, ...args);
 for (const stage of ["before headers", "response body"]) {
   for (const boundary of ["account switch", "sign-out"]) {
     for (const row of ["unattributed", "reassigned", "deleted"]) {
-      test(`chat create receipt survives ${boundary} during ${stage}: ${row}`, async (t) => {
+      test(`chat create receipt survives ${boundary} during ${stage}: ${row}`, { timeout: 30000 }, async (t) => {
         const db = setup(t);
         if (!db) return;
         const { deferred } = require("./harness/deferred");
@@ -203,7 +203,10 @@ for (const stage of ["before headers", "response body"]) {
           expectedAuthGeneration: 3,
           body: { client_conversation_id: chat.client_conversation_id, messages: [] },
         });
-        await entered.promise;
+        await Promise.race([
+          entered.promise,
+          pending.then((result) => assert.fail(`request returned before the receipt fence: ${JSON.stringify(result)}`)),
+        ]);
         tokenState = { token: boundary === "sign-out" ? null : "token-b", generation: 4 };
         handleAuthTokenChange(tokenState);
         if (boundary === "account switch") await invoke("set-active-account-scope", "account-b", 4);

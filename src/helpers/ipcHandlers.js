@@ -4118,6 +4118,8 @@ class IPCHandlers {
     });
 
     ipcMain.handle("db-update-note", async (event, id, updates, options) => {
+      if (isStaleNoteWrite(options?.writeGuard))
+        return { success: false, error: "Account changed" };
       const write = () => this.databaseManager.updateNote(id, updates, options);
       const result =
         options?.reconcileTranscript ||
@@ -5276,7 +5278,9 @@ class IPCHandlers {
     ipcMain.handle("db-restore-note-after-denied-delete", (_, id) =>
       this.databaseManager.restoreNoteAfterDeniedDelete(id)
     );
-    ipcMain.handle("db-hard-delete-note", (_, id) => {
+    ipcMain.handle("db-hard-delete-note", (_, id, expectedAuthGeneration) => {
+      if (expectedAuthGeneration !== undefined && isStaleSyncAck(expectedAuthGeneration))
+        return STALE_SYNC_ACK;
       const snapshots = this._captureMirrorDeletionNotes({ id });
       this.meetingAudioStore.purge(id);
       const result = this.databaseManager.hardDeleteNote(id);
@@ -14277,7 +14281,34 @@ class IPCHandlers {
       }
     });
 
-    ipcMain.handle("cloud-api-request", (_event, opts) => handleCloudApiRequest(opts));
+    handleRemoteProduct("cloud-api-request", async (_event, opts) => {
+      const operation = this._productRequestContext.getStore();
+      if (operation.args[1]?.resolvingShareVisibility) {
+        const path = new URL(opts.path, "https://api.example.test").pathname.replace(
+          /\/rotate-token\/?$/,
+          ""
+        );
+        const current = await handleCloudApiRequest({
+          ...opts,
+          path,
+          method: "GET",
+          body: undefined,
+        });
+        if (!current.success) return current;
+        const data = current.data?.data ?? current.data;
+        operation.args = [opts, { shareVisibility: data?.share?.visibility }];
+        if (
+          !productOperationAllowed(
+            this.effectivePolicyManager.getCurrent(),
+            app.getVersion(),
+            operation.channel,
+            operation.args
+          )
+        )
+          return policyBlockedFailure(this.effectivePolicyManager.getCurrent());
+      }
+      return handleCloudApiRequest(opts);
+    });
 
     ipcMain.handle("get-stt-config", handleSttConfigRequest);
 
