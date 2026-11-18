@@ -199,7 +199,7 @@ test("main final analysis finds the prior row by its ingestion id", async () => 
   // This fixture injects an automatic name without an owning note or acoustic
   // evaluation. The final commit correctly refuses it; ingestion-id matching
   // must still update the same row, and the renderer must preserve the refusal.
-  assert.equal(payload.segments[0].speakerName, undefined);
+  assert.equal(payload.segments[0].speakerName, null);
   assert.equal(payload.segments[0].speakerDecision.scopeFailure, "note_missing");
   assert.equal(payload.segments[0].speakerDecision.acceptedProfileId, null);
   const merged = runRendererCompletion([

@@ -191,8 +191,8 @@ function setupOrukeet(t, accountId = "first-account") {
   });
 
   // Keep provider binding and IPC registration real without booting policy,
-  // retention, or GPU detection.
-  for (const method of ["_initLocalModelPolicy", "_setupRetentionCleanup", "_logDetectedGpus"]) {
+  // retention, routines, or GPU detection.
+  for (const method of ["_initLocalModelPolicy", "_setupRetentionCleanup", "_logDetectedGpus", "setupRoutines"]) {
     t.mock.method(Ctor.prototype, method, () => {});
   }
   const ipc = new Ctor(
@@ -273,7 +273,7 @@ test("Orukeet keeps eligible shared words after the Whisper prompt fills", async
 
   snapshot.meta.paused = true;
   store.getState().setSharedDictionaryHints(selectSharedHintWords(snapshot), WORKSPACE);
-  assert.deepEqual(hotwords(), personal);
+  assert.deepEqual(hotwords(), [...personal, "AsterSpace", "AmberWorkspace"]);
 });
 
 test("Orukeet removes a hidden moved fallback even when prompt hints are unchanged", async (t) => {

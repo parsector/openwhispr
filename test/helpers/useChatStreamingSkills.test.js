@@ -828,7 +828,7 @@ test("allowSkillPick false picks nothing", async (t) => {
   assert.deepEqual([calls.reads, picked], [[], []]);
 });
 
-test("an unparsed model id counts as no tools and picks", async (t) => {
+test("an unparsed model id retains tools and lets the model load a skill", async (t) => {
   const settings = {
     chatAgentMode: "local",
     chatAgentProvider: "gemma",
@@ -837,9 +837,9 @@ test("an unparsed model id counts as no tools and picks", async (t) => {
 
   const { sentMessages, offeredTools, picked } = await sendPicking(t, { settings });
 
-  assert.deepEqual(offeredTools[0], []);
-  assert.equal(latestUserText(sentMessages[0]), withRequest(MEETING_PREP_BLOCK, PREP_REQUEST));
-  assert.deepEqual(picked, [{ name: "meeting-prep", displayName: "Meeting prep" }]);
+  assert.ok(offeredTools[0].includes("load_skill"));
+  assert.equal(latestUserText(sentMessages[0]), PREP_REQUEST);
+  assert.deepEqual(picked, []);
 });
 
 for (const [ending, mode] of [

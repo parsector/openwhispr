@@ -775,7 +775,7 @@ async function rosterFinal(t, f, { enabled = true, fail = false, beforeCentroids
 test("roster owner regression: final global winner C is Unknown without promoting A", async t => {
   const f = rosterHandlers();
   const result = await rosterFinal(t, f);
-  assert.equal(result.segments[0].speakerName, undefined);
+  assert.equal(result.segments[0].speakerName, null);
   assert.equal(result.segments[0].suggestedName, undefined);
   assert.equal(result.segments[0].speakerDecision.rejectionReason, "outside_roster");
 });
@@ -798,7 +798,7 @@ test("final acoustic rejection clears the candidate's accepted identity", async 
   assert.equal(row.speakerDecision.rejectionReason, "not_sure");
   assert.equal(row.speakerDecision.acceptedProfileId, null);
   assert.equal(row.speakerDecision.acceptedIdentity, null);
-  assert.equal(row.speakerName, undefined);
+  assert.equal(row.speakerName, null);
   assert.equal(row.suggestedName, undefined);
 });
 test("roster reconciliation cannot inherit C from a live cluster", () => {
@@ -811,7 +811,7 @@ test("roster skipped and failed final paths veto cached C", async t => {
   for (const options of [{enabled:false},{fail:true}]) {
     const f = rosterHandlers();
     const result = await rosterFinal(t, f, options);
-    assert.equal(result.segments[0].speakerName, undefined);
+    assert.equal(result.segments[0].speakerName, null);
     assert.equal(result.segments[0].speakerIsPlaceholder, true);
   }
 });
@@ -830,7 +830,7 @@ test("roster final arriving after participant removal cannot retain a previously
   f.profiles[0].embedding = Buffer.from(new Float32Array([1,0,0]).buffer);
   f.profiles[2].embedding = Buffer.from(new Float32Array([0,0,1]).buffer);
   const result = await rosterFinal(t, f, {beforeCentroids:()=>{f.note.participants=JSON.stringify([{email:"b@example.com"}]);}});
-  assert.equal(result.segments[0].speakerName, undefined);
+  assert.equal(result.segments[0].speakerName, null);
 });
 
 for (const [label, participants, event, expected] of [
@@ -852,7 +852,7 @@ for (const [label, participants, event, expected] of [
   f.note.participants = participants;
   if (event !== null) { f.note.calendar_event_id = "linked"; f.handlers.databaseManager.getCalendarEventById = () => event; }
   const result = await rosterFinal(t,f);
-  assert.equal(result.segments[0].speakerName, expected);
+  assert.equal(result.segments[0].speakerName, expected ?? null);
   assert.equal(result.segments[0].speakerDecision.candidateSetStatus,"recorded");
 });
 
@@ -860,13 +860,13 @@ test("roster identity: duplicate names never resolve a different email or ambigu
   const f = rosterHandlers();
   f.profiles[0].display_name = "C";
   f.note.participants = JSON.stringify([{email:"a@example.com",displayName:"C",profileId:3}]);
-  assert.equal((await rosterFinal(t,f)).segments[0].speakerName, undefined);
+  assert.equal((await rosterFinal(t,f)).segments[0].speakerName, null);
 });
 test("roster identity: duplicate profile emails fail closed", async t => {
   const f = rosterHandlers();
   f.profiles[0].email = "c@example.com";
   f.note.participants = JSON.stringify([{email:"c@example.com"}]);
-  assert.equal((await rosterFinal(t,f)).segments[0].speakerName, undefined);
+  assert.equal((await rosterFinal(t,f)).segments[0].speakerName, null);
 });
 test("roster outsider remains a distinct unknown cluster beyond the participant count", async t => {
   const f = rosterHandlers();
@@ -875,14 +875,14 @@ test("roster outsider remains a distinct unknown cluster beyond the participant 
   f.profiles[1].embedding = Buffer.from(new Float32Array([0,1,0]).buffer);
   const result = await rosterFinal(t,f,{extra:[["speaker_01",new Float32Array([0,0,1])]]});
   assert.equal(result.segments.length,2);
-  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[0].speakerName,null);
   assert.equal(result.segments[1].speakerName,"A");
   assert.notEqual(result.segments[0].speaker,result.segments[1].speaker);
 });
 test("roster added during final recognition needs a new acoustic run", async t => {
   const f=rosterHandlers();
   const result=await rosterFinal(t,f,{beforeCentroids:()=>{f.note.participants=JSON.stringify([{email:"c@example.com"}]);}});
-  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[0].speakerName,null);
   assert.equal(result.segments[0].speakerDecision.rejectionReason,"roster_changed");
 });
 for (const lock of [{speakerLocked:true},{speakerLockSource:"user"},{speakerStatus:"locked"},{speakerStatus:"user_locked"}]) {
@@ -901,7 +901,7 @@ test("roster cohort suggestion cannot name outsider C when raw winner A is invit
   f.profiles[1].embedding=Buffer.from(new Float32Array([.2,0,Math.sqrt(.96)]).buffer);
   f.profiles[2].embedding=Buffer.from(new Float32Array([.8,-.6,0]).buffer);
   const result=await rosterFinal(t,f,{extra:[["speaker_01",new Float32Array([0,1,0])]]});
-  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[0].speakerName,null);
   assert.equal(result.segments[0].suggestedName,undefined);
   assert.equal(result.segments[0].speakerDecision.path,"final_cohort");
   const d = result.segments[0].speakerDecision;
@@ -984,7 +984,7 @@ test("roster participant without approved voice stays Unknown without an outside
   f.note.participants=JSON.stringify([{email:'c@example.com'}]);
   f.profiles[2].voice_usable=0;
   const result=await rosterFinal(t,f);
-  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[0].speakerName,null);
   assert.equal(result.segments[0].suggestedName,undefined);
   assert.equal(result.segments[0].speakerDecision.rejectionReason,'voice_not_approved');
 });
@@ -1086,7 +1086,7 @@ for (const cause of ["skipped", "failed"]) {
         NOTE_ID
       )
     );
-    assert.equal(result.segments[0].speakerName, undefined);
+    assert.equal(result.segments[0].speakerName, null);
     assert.deepEqual(result.segments[0].speakerDecision, veto);
   });
 }
@@ -1099,7 +1099,7 @@ test('run6: final acoustic recognition cannot erase the input row veto before va
   const veto=policy.decision(policy.readScope(f.handlers.databaseManager,NOTE_ID),{path:'prior',rejectionReason:'not_sure'});
   const rows=[{id:'row',text:'hello',source:'system',timestamp:1,speaker:'speaker_0',speakerIsPlaceholder:true,speakerDecision:veto}];
   const result=await rosterFinal(t,f,{rows});
-  assert.equal(result.segments[0].speakerName,undefined);
+  assert.equal(result.segments[0].speakerName,null);
   assert.equal(result.segments[0].speakerDecision.decisionId,veto.decisionId);
 });
 
