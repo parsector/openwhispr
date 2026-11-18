@@ -117,7 +117,10 @@ class UpdateManager {
     autoUpdater.autoDownload = false;
     this._syncInstallOnQuit();
     autoUpdater.logger = this.updaterLog?.logger ?? console;
-    this.updaterLog?.write("INFO", "Feed: https://github.com/parsector/openwhispr/releases; provider=github");
+    this.updaterLog?.write(
+      "INFO",
+      "Feed: https://github.com/parsector/openwhispr/releases; provider=github"
+    );
 
     this.setupEventHandlers();
   }
@@ -153,12 +156,19 @@ class UpdateManager {
       },
       error: (err) => {
         this.updaterLog?.write("ERROR", err?.stack || err?.message || String(err));
-        const handoffFailed = this.updateDownloaded && process.platform === "darwin" && autoUpdater.squirrelDownloadedUpdate !== true;
+        const handoffFailed =
+          this.updateDownloaded &&
+          process.platform === "darwin" &&
+          autoUpdater.squirrelDownloadedUpdate !== true;
         if (this.isDownloading || handoffFailed) this.updateDownloaded = false;
         if (this.backgroundCheck) return;
         console.error("❌ Auto-updater error:", err);
         this.isDownloading = false;
-        if (this._eventsAllowed()) this.notifyRenderers("update-error", { message: err?.message || String(err), updateDownloaded: this.updateDownloaded });
+        if (this._eventsAllowed())
+          this.notifyRenderers("update-error", {
+            message: err?.message || String(err),
+            updateDownloaded: this.updateDownloaded,
+          });
       },
       "download-progress": (progressObj) => {
         if (!this._eventsAllowed()) return;

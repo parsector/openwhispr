@@ -189,12 +189,13 @@ function createWorkspacePolicyManager({
       success: false,
       // Only an explicit server refusal (or its persisted marker) proves this
       // identity is managed. A failed network request cannot establish that.
-      status: code === "POLICY_UNRESOLVABLE" &&
-        !requiresManagedPolicy(identity) ? "loading" : "error",
+      status:
+        code === "POLICY_UNRESOLVABLE" && !requiresManagedPolicy(identity) ? "loading" : "error",
       revision,
       accountId: identity.accountId,
       authGeneration: identity.authGeneration,
-      managed: accountWasManaged(identity.accountId) ||
+      managed:
+        accountWasManaged(identity.accountId) ||
         managedPolicyRequired.has(identityKey(identity)) ||
         snapshots.get(identityKey(identity))?.data.managed === true ||
         rawCachedData(identity)?.managed === true,
@@ -209,8 +210,13 @@ function createWorkspacePolicyManager({
     const current = snapshots.get(key);
     const cached = rawCachedData(identity);
     // A refusal code cannot establish management for an unmanaged install.
-    if (!provenManaged && !current?.data.managed && !cached?.managed &&
-        !requiresManagedPolicy(identity)) return;
+    if (
+      !provenManaged &&
+      !current?.data.managed &&
+      !cached?.managed &&
+      !requiresManagedPolicy(identity)
+    )
+      return;
 
     const wasRequired = requiresManagedPolicy(identity);
     managedPolicyRequired.add(key);

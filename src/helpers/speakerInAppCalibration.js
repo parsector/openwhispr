@@ -11,7 +11,11 @@ const {
   validRowEvidence,
 } = require("./speakerCalibrationPolicy");
 const { completionDiagnostic } = require("./speakerCompletionDiagnostic");
-const { windowExclusion, measurementInterval, pcm16Samples } = require("./calibrationEvidenceWindow");
+const {
+  windowExclusion,
+  measurementInterval,
+  pcm16Samples,
+} = require("./calibrationEvidenceWindow");
 
 const rowExclusion = (row, reason, extra = {}) => ({
   noteId: row.noteId,
@@ -785,10 +789,12 @@ async function reportStillCurrentLocal(
   let savedMembership, membershipRows;
   try {
     savedMembership = JSON.parse(report.evidence.reviewedClusterMembership);
-    membershipRows = Object.entries(savedMembership).flatMap(([cluster, members]) => {
-      const [noteId] = JSON.parse(cluster);
-      return members.map(([rowId]) => JSON.stringify([noteId, rowId]));
-    }).sort();
+    membershipRows = Object.entries(savedMembership)
+      .flatMap(([cluster, members]) => {
+        const [noteId] = JSON.parse(cluster);
+        return members.map(([rowId]) => JSON.stringify([noteId, rowId]));
+      })
+      .sort();
   } catch {
     return false;
   }
@@ -833,7 +839,8 @@ async function reportStillCurrentLocal(
     // A new conflicting label cannot equal the saved uniform membership; the
     // same pre-conflict eligibility filter is used by buildReport above.
     if (
-      JSON.stringify(reviewedClusterMembership(members)) !== report.evidence.reviewedClusterMembership
+      JSON.stringify(reviewedClusterMembership(members)) !==
+      report.evidence.reviewedClusterMembership
     )
       return false;
   }

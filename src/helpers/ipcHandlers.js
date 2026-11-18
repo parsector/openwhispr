@@ -1,5 +1,9 @@
 const { parseSelfHostedSttHeaders, selfHostedSttRequest } = require("./selfHostedSttHeaders.js");
-const { registryData: modelRegistryData, getRunnableSpeechModel, listRunnableLocalModels } = require("../models/registryData.js");
+const {
+  registryData: modelRegistryData,
+  getRunnableSpeechModel,
+  listRunnableLocalModels,
+} = require("../models/registryData.js");
 const { isLocalModelPolicyRefusal } = require("./localModelPolicyGate");
 const speakerScope = require("./noteSpeakerScope");
 const rosterPolicy = require("./speakerRosterPolicy");
@@ -268,7 +272,11 @@ const { downsample24kTo16k, pcm16ToWav } = require("../utils/audioUtils");
 const postMigrationDetector = require("./postMigrationDetector");
 const screenContextCapture = require("./screenContextCapture");
 const { classifyToneAppCategory } = require("./toneAppCategories");
-const { DEFAULT_EXPECTED_SPEAKER_COUNT, EMBEDDING_VERSION, MAX_SPEAKER_COUNT } = require("../constants/speakerDetection.json");
+const {
+  DEFAULT_EXPECTED_SPEAKER_COUNT,
+  EMBEDDING_VERSION,
+  MAX_SPEAKER_COUNT,
+} = require("../constants/speakerDetection.json");
 const { UPLOAD_AUDIO_EXTENSIONS } = require("../constants/uploadAudioFormats.json");
 const { providerContentType, prepareProviderUpload } = require("./providerUploadAudio");
 const {
@@ -3681,7 +3689,6 @@ class IPCHandlers {
       this.windowManager.setDictationAudioLevel(level);
     });
 
-
     // Dictionary handlers
     ipcMain.on("auto-learn-changed", (_event, enabled) => {
       // Both renderer windows re-sync this on mount — ignore same-value updates (#1080).
@@ -4347,17 +4354,19 @@ class IPCHandlers {
       );
     });
 
-    ipcMain.handle("db-semantic-search-notes", (_event, query, limit = 5, spaceId, folderId, spaceIds) =>
-      searchNotes({
-        database: this.databaseManager,
-        getSemanticSearch: this.getSemanticSearch,
-        query,
-        limit,
-        spaceId,
-        folderId,
-        spaceIds: spaceIdsArgument(spaceIds),
-        logger: debugLogger,
-      })
+    ipcMain.handle(
+      "db-semantic-search-notes",
+      (_event, query, limit = 5, spaceId, folderId, spaceIds) =>
+        searchNotes({
+          database: this.databaseManager,
+          getSemanticSearch: this.getSemanticSearch,
+          query,
+          limit,
+          spaceId,
+          folderId,
+          spaceIds: spaceIdsArgument(spaceIds),
+          logger: debugLogger,
+        })
     );
 
     ipcMain.handle("db-update-note-cloud-id", async (event, id, cloudId) => {
@@ -9041,7 +9050,6 @@ class IPCHandlers {
       this.windowManager.setAgentDictationPillInteractivity(Boolean(interactive));
       return { success: true };
     });
-
 
     ipcMain.handle("open-calendar-privacy-settings", () => openSystemSettings("calendars"));
 

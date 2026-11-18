@@ -30,7 +30,6 @@ import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
 import { RAISED_PILL, SPLIT_PILL, SPLIT_PILL_CHEVRON, SPLIT_PILL_LABEL } from "./dialogButtons";
 import { cn } from "../lib/utils";
 
-
 const COPY = "settingsPage.workspace.teams";
 // Names fit in a sentence up to here; a longer list reads as a count.
 const MAX_NAMED = 2;

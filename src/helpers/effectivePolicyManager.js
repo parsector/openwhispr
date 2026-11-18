@@ -195,8 +195,13 @@ function createEffectivePolicyManager({
     // A rotated credential does not erase established management evidence.
     // Keep it unresolved until the new credential's workspace verdict arrives.
     return workspace.managed === true
-      ? { ...workspace, success: false, status: "loading", policy: null,
-          authGeneration: scope.authGeneration }
+      ? {
+          ...workspace,
+          success: false,
+          status: "loading",
+          policy: null,
+          authGeneration: scope.authGeneration,
+        }
       : null;
   };
   function getCurrent() {
@@ -254,10 +259,16 @@ function createEffectivePolicyManager({
     updateWorkspace,
     invalidate() {
       const scope = getScope();
-      workspace = workspace?.accountId === scope.accountId && workspace.managed === true
-        ? { ...workspace, success: false, status: "loading", policy: null,
-            authGeneration: scope.authGeneration }
-        : null;
+      workspace =
+        workspace?.accountId === scope.accountId && workspace.managed === true
+          ? {
+              ...workspace,
+              success: false,
+              status: "loading",
+              policy: null,
+              authGeneration: scope.authGeneration,
+            }
+          : null;
       return getCurrent();
     },
     // `held` reads only what is already held for the identity. So does a

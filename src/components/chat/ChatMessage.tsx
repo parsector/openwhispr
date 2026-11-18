@@ -39,8 +39,6 @@ import { ApiKeySavedRow } from "./interactions/ApiKeyCard";
 import { approvalKey, useConnectorApprovalStore } from "../../stores/connectorApprovalStore";
 import { useAgentInteractionStore } from "../../stores/agentInteractionStore";
 
-
-
 import { useSkillApprovalStore } from "../../stores/skillApprovalStore";
 
 // Module-level, so the markdown keeps the same callback from render to render.

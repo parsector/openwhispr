@@ -1,7 +1,11 @@
 import { selfHostedSttRequest } from "./selfHostedSttHeaders.js";
 import i18n from "../i18n";
 import { TRANSCRIPTION_AUDIO_CONSTRAINTS } from "./microphoneSelection";
-import { isLocalChoiceRefusal, isLocalModelAllowedByPolicy, localModelRefusal } from "../stores/policyRules";
+import {
+  isLocalChoiceRefusal,
+  isLocalModelAllowedByPolicy,
+  localModelRefusal,
+} from "../stores/policyRules";
 import { runningPolicyCheck } from "../services/reasoningPolicy";
 import { batchTranscriptionHttpError } from "./transcriptionRoute.ts";
 import { isTranscriptionPolicyRefusal } from "./transcriptionFallback";
@@ -275,8 +279,11 @@ function dictationAgentPrompt(settings, agentName) {
 }
 
 function dictationAgentReachable(settings) {
-  return isAgentScopeBlocked(settings) ||
-    resolveDictationAgentInference(settings, { isCloudAgent: isCloudDictationAgentMode() }).reachable;
+  return (
+    isAgentScopeBlocked(settings) ||
+    resolveDictationAgentInference(settings, { isCloudAgent: isCloudDictationAgentMode() })
+      .reachable
+  );
 }
 
 function translationChainReachable(settings) {
@@ -1743,7 +1750,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       return true;
     } catch (error) {
-
       // A prepared value the recording never adopted still owns a live stream
       // (and possibly a pre-roll recorder); release it before any retry.
       freshTap?.close();
@@ -5771,7 +5777,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   async cancelStreamingRecording() {
-
     if (this._streamingStopPromise) {
       if (this._streamingStopMode === "finalize") {
         this._requestStreamingCancellation();

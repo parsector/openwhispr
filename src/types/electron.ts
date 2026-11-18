@@ -1666,11 +1666,11 @@ export interface ConversationPreview {
   last_message?: string | null;
   last_message_role?: "user" | "assistant" | "system" | null;
 
-parent_conversation_id?: number | null;
-note_id?: number | null;
-note_title?: string | null;
-note_deleted_at?: string | null;
-note_space_id?: number | null;
+  parent_conversation_id?: number | null;
+  note_id?: number | null;
+  note_title?: string | null;
+  note_deleted_at?: string | null;
+  note_space_id?: number | null;
 }
 
 export interface ConversationCreateSnapshot {
@@ -5328,34 +5328,34 @@ declare global {
       ) => Promise<{ success: boolean } | StaleSyncWrite>;
       broadcastSnippetsUpdated?: () => Promise<{ success: boolean }>;
 
-onOpenAssistantPanel?: (callback: () => void) => () => void;
-onCancelDictation?: (callback: () => void) => () => void;
-dictationAudioLevelChanged?: (level: number) => void;
-toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
-cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
-getAgentDictationPillState?: () => Promise<{
+      onOpenAssistantPanel?: (callback: () => void) => () => void;
+      onCancelDictation?: (callback: () => void) => () => void;
+      dictationAudioLevelChanged?: (level: number) => void;
+      toggleAgentPanelDictation?: () => Promise<{ success: boolean }>;
+      cancelAgentPanelDictation?: () => Promise<{ success: boolean }>;
+      getAgentDictationPillState?: () => Promise<{
         lifecycle: "idle" | "preparing" | "recording" | "processing";
         interactive: boolean;
         horizontalDirection: "left" | "right";
       }>;
-resizeAgentDictationPillToContent?: (surfaceHeight: number | null) => Promise<{
+      resizeAgentDictationPillToContent?: (surfaceHeight: number | null) => Promise<{
         success: boolean;
         changed?: boolean;
         bounds?: { x: number; y: number; width: number; height: number };
         message?: string;
       }>;
-setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
-onAgentDictationPillStateChanged?: (
+      setAgentDictationPillInteractivity?: (interactive: boolean) => Promise<{ success: boolean }>;
+      onAgentDictationPillStateChanged?: (
         callback: (state: {
           lifecycle: "idle" | "preparing" | "recording" | "processing";
           interactive: boolean;
           horizontalDirection: "left" | "right";
         }) => void
       ) => () => void;
-onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
-showAgentDictationFinalTranscript?: (text: string) => void;
-onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
-getWorkspacePolicy?: (
+      onAgentDictationPillAudioLevelChanged?: (callback: (level: number) => void) => () => void;
+      showAgentDictationFinalTranscript?: (text: string) => void;
+      onAgentDictationPillFinalTranscript?: (callback: (text: string) => void) => () => void;
+      getWorkspacePolicy?: (
         accountId?: string,
         expectedAuthGeneration?: number
       ) => Promise<{
@@ -5372,7 +5372,7 @@ getWorkspacePolicy?: (
         error?: string;
         enforcementRequired?: boolean;
       }>;
-onWorkspacePolicyChanged?: (
+      onWorkspacePolicyChanged?: (
         callback: (
           snapshot:
             | {
@@ -5397,21 +5397,21 @@ onWorkspacePolicyChanged?: (
               }
         ) => void
       ) => () => void;
-setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
-assistantPasteTarget?: (action: "adopt" | "forget") => Promise<boolean>;
-setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
+      setAssistantPanelOpen: (open: boolean) => Promise<{ success: boolean }>;
+      assistantPasteTarget?: (action: "adopt" | "forget") => Promise<boolean>;
+      setAssistantPanelBusy: (busy: boolean) => Promise<{ success: boolean }>;
 
-updateAgentMessage?: (
+      updateAgentMessage?: (
         id: number,
         content: string,
         metadata?: Record<string, unknown>
       ) => Promise<AgentMessageRow | null>;
-forkAgentConversation?: (
+      forkAgentConversation?: (
         conversationId: number,
         throughMessageId: number,
         forkContext?: string | null
       ) => Promise<AgentConversationWithMessages | null>;
-searchInviteContacts: (
+      searchInviteContacts: (
         query: string,
         exclude: string[]
       ) => Promise<{
@@ -5419,8 +5419,7 @@ searchInviteContacts: (
         contacts: Array<{ email: string; name: string | null }>;
       }>;
 
-
-upsertNoteFromCloud?: {
+      upsertNoteFromCloud?: {
         (
           cloudNote: Record<string, unknown>,
           localFolderId: number | null,
@@ -5437,17 +5436,17 @@ upsertNoteFromCloud?: {
           options?: CloudRowWriteOptions
         ): Promise<NoteItem | StaleSyncWrite | null>;
       };
-renewNoteCloudIdentity?: (
+      renewNoteCloudIdentity?: (
         id: number,
         expectedClientNoteId: string,
         expectedCloudId: string | null,
         expectedSpaceId: number,
         expectedAuthGeneration: number
       ) => Promise<{ success: boolean; note?: NoteItem }>;
-getPrivatePlacementBackupCandidates?: (
+      getPrivatePlacementBackupCandidates?: (
         expectedAuthGeneration: number
       ) => Promise<PrivatePlacementBackupCandidates | StaleSyncWrite>;
-getPrivatePlacementBackupRows?: (
+      getPrivatePlacementBackupRows?: (
         expectedAuthGeneration: number,
         candidates: PrivatePlacementBackupCandidates
       ) => Promise<{
@@ -5455,18 +5454,18 @@ getPrivatePlacementBackupRows?: (
         notes?: PrivatePlacementBackupRow[];
         folders?: PrivatePlacementBackupRow[];
       }>;
-queueUnlinkedPrivateFolders?: (
+      queueUnlinkedPrivateFolders?: (
         expectedAuthGeneration: number
       ) => Promise<number | StaleSyncWrite>;
-clearConversationCreateAttempted?: (id: number) => Promise<void>;
-};
+      clearConversationCreateAttempted?: (id: number) => Promise<void>;
+    };
 
     api?: {
       sendDebugLog: (message: string) => void;
     };
 
-commitHeldSpaceDeletes?: () => Promise<void>;
-}
+    commitHeldSpaceDeletes?: () => Promise<void>;
+  }
 }
 
 export interface AgentMessageRow {

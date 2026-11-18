@@ -124,12 +124,6 @@ async function removeMembers(
   return res.data;
 }
 
-
-
-
-
-
-
 /** Invitations the caller can accept and company-domain workspaces they can ask to join. */
 async function listJoinable(): Promise<JoinableWorkspace[]> {
   const res = await cloudGet<DataWrap<JoinableWorkspace[]>>("/api/me/joinable");

@@ -141,10 +141,10 @@ class WindowManager {
       this.hotkeyManager.unregisterAll();
     });
 
-this.agentWindow = null;
-this._nativeKeyListenersReady = false;
-this._dictationAttempt = null;
-}
+    this.agentWindow = null;
+    this._nativeKeyListenersReady = false;
+    this._dictationAttempt = null;
+  }
 
   async createMainWindow() {
     // The agent window anchors above a center-docked dictation pill, so it
@@ -1183,8 +1183,12 @@ this._dictationAttempt = null;
       if (this._dictationAttempt !== attempt) return false;
     }
     if (nextState === DICTATION_LIFECYCLE.IDLE) this._dictationAttempt = null;
-    if (nextState === this._dictationLifecycleState && nextInputKind === this._dictationInputKind) return true;
-    if (this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE && nextState !== DICTATION_LIFECYCLE.IDLE) {
+    if (nextState === this._dictationLifecycleState && nextInputKind === this._dictationInputKind)
+      return true;
+    if (
+      this._dictationLifecycleState === DICTATION_LIFECYCLE.IDLE &&
+      nextState !== DICTATION_LIFECYCLE.IDLE
+    ) {
       this.assistantPasteTarget?.noteRecordingStart();
     }
 
@@ -2796,36 +2800,36 @@ this._dictationAttempt = null;
     });
   }
 
-_win32MainWindowShape() {
+  _win32MainWindowShape() {
     const win = this.mainWindow;
     if (this._win32WindowShape?.window !== win) {
       this._win32WindowShape = { window: win, ...createWin32WindowShape(win) };
     }
     return this._win32WindowShape;
   }
-_setResizedMainWindowBounds(bounds) {
+  _setResizedMainWindowBounds(bounds) {
     // A Windows shape measured at the old size would cover the wrong part of
     // the resized window, or none of it, until the resize event clears it.
     if (process.platform === "win32") this._win32MainWindowShape().prepareResize(bounds);
     this.mainWindow.setBounds(bounds);
   }
-isDictationActive() {
+  isDictationActive() {
     return this._dictationLifecycleState !== DICTATION_LIFECYCLE.IDLE;
   }
-syncUserRecording() {
+  syncUserRecording() {
     this.meetingDetectionEngine?.setUserRecording(
       this._isDictatingToggle || Boolean(this.agentWindow?.isRecording())
     );
   }
-openAgentWindow() {
+  openAgentWindow() {
     this.agentWindow?.open({ layout: "typing" });
   }
-async initializeNativeKeyListeners() {
+  async initializeNativeKeyListeners() {
     await this.hotkeyManager.registrationReady;
     this._nativeKeyListenersReady = true;
     this.reconcileNativeKeyListeners();
   }
-_restoreWin32MainWindowClicks() {
+  _restoreWin32MainWindowClicks() {
     const win = this.mainWindow;
     if (!win || win.isDestroyed()) return;
     const bounds = win.getBounds();
@@ -2837,10 +2841,10 @@ _restoreWin32MainWindowClicks() {
     win.setBounds({ ...bounds, width: bounds.width + 1 });
     win.setBounds({ ...bounds, width, height });
   }
-isOnboardingActive() {
+  isOnboardingActive() {
     return this._onboardingActive;
   }
-isMeetingNoteNavigationPending(noteSessionId) {
+  isMeetingNoteNavigationPending(noteSessionId) {
     if (noteSessionId == null) return false;
     return (
       this._pendingMeetingNoteNavigation?.noteSessionId === noteSessionId ||

@@ -2662,7 +2662,8 @@ class DatabaseManager {
       );
       // The fork already used user_version 6 for its FTS repair. The missing
       // space-owner column distinguishes those databases from upstream's split.
-      const needsPrivateSpaceSplit = !this.db.pragma("table_info(spaces)")
+      const needsPrivateSpaceSplit = !this.db
+        .pragma("table_info(spaces)")
         .some((column) => column.name === "account_id");
       try {
         this.db.exec("ALTER TABLE spaces ADD COLUMN account_id TEXT");
@@ -6162,8 +6163,10 @@ class DatabaseManager {
         if (current && current.space_id !== updates.space_id) {
           updates.folder_sync_operation = "set";
           const targetSpace = this.getSpace(updates.space_id);
-          if (targetSpace.kind === "team" &&
-              !this._sameWorkspaceForTeamMove(current.space_id, targetSpace)) {
+          if (
+            targetSpace.kind === "team" &&
+            !this._sameWorkspaceForTeamMove(current.space_id, targetSpace)
+          ) {
             return { success: false, error: "Cannot move between workspaces" };
           }
           const newKind = this.db
@@ -10634,7 +10637,10 @@ class DatabaseManager {
           embeddingBuffer.byteOffset,
           embeddingBuffer.byteLength / 4
         );
-        const sameSpace = existing.embedding_version === EMBEDDING_VERSION && stored.length === incoming.length && incoming.length === EMBEDDING_DIM;
+        const sameSpace =
+          existing.embedding_version === EMBEDDING_VERSION &&
+          stored.length === incoming.length &&
+          incoming.length === EMBEDDING_DIM;
         const sampleCountExpr = sameSpace ? "sample_count + 1" : "1";
         const updated = sameSpace ? new Float32Array(stored.length) : incoming;
         if (sameSpace)
@@ -10714,8 +10720,12 @@ class DatabaseManager {
     const lSamples = loser.sample_count || 1;
     const total = wSamples + lSamples;
 
-    const winnerCurrent = winner.embedding_version === EMBEDDING_VERSION && winner.embedding?.length === EMBEDDING_DIM * 4;
-    const loserCurrent = loser.embedding_version === EMBEDDING_VERSION && loser.embedding?.length === EMBEDDING_DIM * 4;
+    const winnerCurrent =
+      winner.embedding_version === EMBEDDING_VERSION &&
+      winner.embedding?.length === EMBEDDING_DIM * 4;
+    const loserCurrent =
+      loser.embedding_version === EMBEDDING_VERSION &&
+      loser.embedding?.length === EMBEDDING_DIM * 4;
 
     // Identity (name/email/mappings) always merges; the embedding must never be
     // blended across feature-extraction versions, so only combine same-space
@@ -11466,9 +11476,12 @@ class DatabaseManager {
   ) {
     if (!this.db) throw new Error("Database not initialized");
     if (!insideTransaction)
-      return this.db.transaction(() => this.upsertNoteFromCloud(
-        cloudNote, localFolderId, localSpaceId, { newKeyIfTaken, insideTransaction: true }
-      ))();
+      return this.db.transaction(() =>
+        this.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId, {
+          newKeyIfTaken,
+          insideTransaction: true,
+        })
+      )();
     try {
       if (!this.db) throw new Error("Database not initialized");
       const requestedFolderId = localFolderId;
@@ -11646,13 +11659,21 @@ class DatabaseManager {
           )
         : null;
       const receiptIsCurrent = versioned
-        ? !hasNoteRevision(existing?.cloud_revision) || cloudNote.revision >= existing.cloud_revision
+        ? !hasNoteRevision(existing?.cloud_revision) ||
+          cloudNote.revision >= existing.cloud_revision
         : normalizeTimestamp(cloudNote.updated_at) >= normalizeTimestamp(existing?.updated_at);
-      const keepsPendingFolder = Boolean(existing?.folder_sync_operation &&
-        !(receiptIsCurrent && existing.folder_id === localFolderId && existing.space_id === spaceId));
-      const keepsPendingParticipants = Boolean(existing?.participants_sync_operation &&
-        !(receiptIsCurrent && Object.hasOwn(cloudNote, "participants") &&
-          existing.participants === cloudNote.participants));
+      const keepsPendingFolder = Boolean(
+        existing?.folder_sync_operation &&
+        !(receiptIsCurrent && existing.folder_id === localFolderId && existing.space_id === spaceId)
+      );
+      const keepsPendingParticipants = Boolean(
+        existing?.participants_sync_operation &&
+        !(
+          receiptIsCurrent &&
+          Object.hasOwn(cloudNote, "participants") &&
+          existing.participants === cloudNote.participants
+        )
+      );
       const stmt = this.db.prepare(`
         INSERT INTO notes (client_note_id, cloud_id, title, content, enhanced_content,
           enhancement_prompt, enhancement_template_id, enhanced_at_content_hash, note_type, source_file,

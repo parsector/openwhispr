@@ -30,7 +30,13 @@ async function searchNotes({
     if (spaceIds != null) must.push({ key: "space_id", match: { any: spaceIds } });
     const vectorFilter = must.length ? { must } : undefined;
     const [ftsResults, vectorResults] = await Promise.all([
-      database.searchNotes(query, overFetch, spaceId, folderId, ...(spaceIds == null ? [] : [spaceIds])),
+      database.searchNotes(
+        query,
+        overFetch,
+        spaceId,
+        folderId,
+        ...(spaceIds == null ? [] : [spaceIds])
+      ),
       getSemanticSearch?.()?.search(query, overFetch, vectorFilter),
     ]);
     if (vectorResults == null) return ftsResults.slice(0, limit);
@@ -64,7 +70,13 @@ async function searchNotes({
     return rankedIds.map((id) => noteMap.get(id)).filter(Boolean);
   } catch (error) {
     logger?.error("Semantic search failed, falling back to FTS5", { error: error.message });
-    return database.searchNotes(query, limit, spaceId, folderId, ...(spaceIds == null ? [] : [spaceIds]));
+    return database.searchNotes(
+      query,
+      limit,
+      spaceId,
+      folderId,
+      ...(spaceIds == null ? [] : [spaceIds])
+    );
   }
 }
 

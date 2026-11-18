@@ -85,7 +85,12 @@ function createCloudApiRequestHandler({
       }
       const targetUrl = new URL(opts.path, apiUrl);
       if (/^\/api\/(?:product-events|activation)(?:\/|$)/.test(targetUrl.pathname)) {
-        return { success: false, code: "FEATURE_REMOVED", error: "Product telemetry is disabled", requestSent: false };
+        return {
+          success: false,
+          code: "FEATURE_REMOVED",
+          error: "Product telemetry is disabled",
+          requestSent: false,
+        };
       }
       if (targetUrl.origin !== new URL(apiUrl).origin) {
         return { success: false, error: "Invalid API path" };

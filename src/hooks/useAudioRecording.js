@@ -150,7 +150,9 @@ export const useAudioRecording = (toast, options = {}) => {
     if (reportedLifecycleRef.current === state) return attempt.admission;
     reportedLifecycleRef.current = state;
     const reply = Promise.resolve()
-      .then(() => window.electronAPI?.dictationLifecycleStateChanged?.(state, attempt.id, attempt.inputKind))
+      .then(() =>
+        window.electronAPI?.dictationLifecycleStateChanged?.(state, attempt.id, attempt.inputKind)
+      )
       .then((accepted) => accepted === true)
       .catch((error) => {
         logger.warn("Dictation lifecycle request failed", { error: error?.message });
@@ -160,20 +162,23 @@ export const useAudioRecording = (toast, options = {}) => {
     return reply;
   }, []);
 
-  const reserveRecording = useCallback((inputKind = "dictation") => {
-    if (recordingAttemptRef.current) {
-      // Main keeps a cancelled attempt until its mic open settles and refuses
-      // any other id, so a new press takes it over. The cancelled flow stays
-      // stale through its preparation generation.
-      recordingAttemptRef.current.abandoned = false;
-      return recordingAttemptRef.current;
-    }
-    const attempt = { id: crypto.randomUUID(), inputKind, abandoned: false, admission: null };
-    recordingAttemptRef.current = attempt;
-    reportedLifecycleRef.current = null;
-    attempt.admission = reportLifecycle("preparing", attempt);
-    return attempt;
-  }, [reportLifecycle]);
+  const reserveRecording = useCallback(
+    (inputKind = "dictation") => {
+      if (recordingAttemptRef.current) {
+        // Main keeps a cancelled attempt until its mic open settles and refuses
+        // any other id, so a new press takes it over. The cancelled flow stays
+        // stale through its preparation generation.
+        recordingAttemptRef.current.abandoned = false;
+        return recordingAttemptRef.current;
+      }
+      const attempt = { id: crypto.randomUUID(), inputKind, abandoned: false, admission: null };
+      recordingAttemptRef.current = attempt;
+      reportedLifecycleRef.current = null;
+      attempt.admission = reportLifecycle("preparing", attempt);
+      return attempt;
+    },
+    [reportLifecycle]
+  );
 
   const reportManagerLifecycle = useCallback(
     (manager, attempt = recordingAttemptRef.current) => {

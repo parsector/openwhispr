@@ -334,7 +334,9 @@ export type TurnHandler = (
 export interface SendToAIOptions {
   suppressResponseContent?: boolean;
   onApprovalRequested?: () => void;
-  onHoldDelivery?: (options?: import("../../services/tools/ToolRegistry").HoldDeliveryOptions) => void;
+  onHoldDelivery?: (
+    options?: import("../../services/tools/ToolRegistry").HoldDeliveryOptions
+  ) => void;
   destinationAppCategory?: import("../../config/toneStyle").ToneAppCategory;
   selectionContext?: import("../../utils/agentSelectionContext").AgentSelectionContext;
   /** The conversation this turn is saved into. */
@@ -485,7 +487,13 @@ export function createChatTurnEngine(
     } = {};
     const stepImages: ChatImageAttachment[] = [];
     const toolScope = createToolExecutionScope({
-      origin: options?.conversationId != null ? { conversationId: String(options.conversationId), surface: turnOptions.inferenceScope === "dictationAgent" ? "assistant" : "chat" } : undefined,
+      origin:
+        options?.conversationId != null
+          ? {
+              conversationId: String(options.conversationId),
+              surface: turnOptions.inferenceScope === "dictationAgent" ? "assistant" : "chat",
+            }
+          : undefined,
       onApprovalRequested: options?.onApprovalRequested,
       onHoldDelivery: options?.onHoldDelivery,
       onInteraction: ({ toolCallId, record }) =>
@@ -683,9 +691,10 @@ export function createChatTurnEngine(
           "corti",
         ].includes(llmConfig.provider);
       // The catalog's supportsTools decides; the size guess covers models without it.
-      const supportsTools = isCloudAgent ||
+      const supportsTools =
+        isCloudAgent ||
         (llmMode === "local"
-          ? getLocalModel(llmConfig.model)?.supportsTools ?? endpointSupportsToolCalls(llmConfig)
+          ? (getLocalModel(llmConfig.model)?.supportsTools ?? endpointSupportsToolCalls(llmConfig))
           : endpointSupportsToolCalls(llmConfig));
       // A local or LAN model may have a 16k context; hosted models have room to spare.
       const contextTier =
@@ -784,14 +793,37 @@ export function createChatTurnEngine(
         const creatorAttached = Boolean(options?.attachedSkill?.builtin);
         const keepNotesUnchanged = !!options?.keepNotesUnchanged;
         const agentAllowed = isAgentAllowed(policy);
-        const agentProjects = agentAllowed ? (await window.agentJobs?.projectsList().then((value) => value.projects).catch(() => [])) ?? [] : [];
-        const agentPresets = agentAllowed && agentProjects.length ? (await window.agentJobs?.presetsList?.().then((value) => value.presets).catch(() => [])) ?? [] : [];
-        const mcpBudget = window.mcpClient || agentProjects.length > 0
-          ? await resolveMcpResultBudget(llmConfig.provider, llmConfig.model, isLocalProvider && !isCloudAgent, (modelId) => window.electronAPI.getLocalContextBudget(modelId), (message) => logger.warn(message))
-          : 0;
+        const agentProjects = agentAllowed
+          ? ((await window.agentJobs
+              ?.projectsList()
+              .then((value) => value.projects)
+              .catch(() => [])) ?? [])
+          : [];
+        const agentPresets =
+          agentAllowed && agentProjects.length
+            ? ((await window.agentJobs
+                ?.presetsList?.()
+                .then((value) => value.presets)
+                .catch(() => [])) ?? [])
+            : [];
+        const mcpBudget =
+          window.mcpClient || agentProjects.length > 0
+            ? await resolveMcpResultBudget(
+                llmConfig.provider,
+                llmConfig.model,
+                isLocalProvider && !isCloudAgent,
+                (modelId) => window.electronAPI.getLocalContextBudget(modelId),
+                (message) => logger.warn(message)
+              )
+            : 0;
         if (cancelled()) return;
         if (mcpBudget > 0) toolScope.setMcpResultBudget(mcpBudget);
-        const mcp = window.mcpClient ? await loadMcpTools(window.mcpClient, mcpBudget).catch(() => ({ key: "unavailable", tools: [] })) : { key: "unavailable", tools: [] };
+        const mcp = window.mcpClient
+          ? await loadMcpTools(window.mcpClient, mcpBudget).catch(() => ({
+              key: "unavailable",
+              tools: [],
+            }))
+          : { key: "unavailable", tools: [] };
         if (cancelled()) return;
         registry = createToolRegistry({
           mcpTools: mcp.tools,

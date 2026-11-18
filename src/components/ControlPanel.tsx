@@ -478,7 +478,6 @@ export default function ControlPanel({ initialSettingsSection }: ControlPanelPro
     };
   }, [toast, t]);
 
-
   useEffect(() => {
     const unsubscribe = window.electronAPI?.onWorkspaceInvitationToken?.((token) => {
       setInvitationToken(token);

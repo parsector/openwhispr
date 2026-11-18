@@ -27,7 +27,10 @@ function policyError(code) {
 // A verdict that says what is allowed: a failed lookup or an unreadable policy
 // doesn't, so it can refuse new work but never revokes running work.
 function isResolvedVerdict(verdict) {
-  return verdict != null && (verdict.managed !== true || (verdict.success === true && isValidPolicyShape(verdict.policy)));
+  return (
+    verdict != null &&
+    (verdict.managed !== true || (verdict.success === true && isValidPolicyShape(verdict.policy)))
+  );
 }
 
 /** Main owns identity and policy lookup; renderer arguments never establish unmanaged status. */
@@ -79,8 +82,15 @@ function createLocalModelPolicyGate({
 
   // New work needs the current credential's verdict.
   const failure = (scope, modelId) =>
-    verdictFailure(snapshotIdentity === getIdentity() ? snapshot :
-      retained?.managed ? { managed: true, success: false } : null, scope, modelId);
+    verdictFailure(
+      snapshotIdentity === getIdentity()
+        ? snapshot
+        : retained?.managed
+          ? { managed: true, success: false }
+          : null,
+      scope,
+      modelId
+    );
 
   // Work already running keeps the verdict it started under until a newer one lands.
   const activeVerdict = () => (isResolvedVerdict(snapshot) ? snapshot : retained);
@@ -108,8 +118,12 @@ function createLocalModelPolicyGate({
 
   function update(next) {
     const identity = getIdentity();
-    if (next && !next.success && next.managed === undefined &&
-        (snapshot?.managed === true || retained?.managed === true)) {
+    if (
+      next &&
+      !next.success &&
+      next.managed === undefined &&
+      (snapshot?.managed === true || retained?.managed === true)
+    ) {
       next = { ...next, managed: true };
     }
     if (!isSnapshotCurrent(next)) return;

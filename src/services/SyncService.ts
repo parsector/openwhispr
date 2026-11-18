@@ -496,7 +496,9 @@ export type DictionarySyncResult = "synced" | "skipped" | "failed";
 
 type SharedEntriesPull = "snapshot" | "delta" | "scopesReturned";
 
-function isKnownWithoutSharedDictionaryPlan(_workspaceId: string): boolean { return false; }
+function isKnownWithoutSharedDictionaryPlan(_workspaceId: string): boolean {
+  return false;
+}
 
 // batch-create takes shared_at as an ISO timestamp with an offset.
 function toCloudSharedAt(value: string | null | undefined): string | null {

@@ -482,7 +482,7 @@ export function resolveEffectivePolicySelection(
   selection: LlmSelection,
   catalog: PolicySelectionCatalog
 ): LlmSelection | null {
-  if ((state.managed !== true && state.status !== "managed")) return selection;
+  if (state.managed !== true && state.status !== "managed") return selection;
   if (!isPolicyActionAllowed(state)) return null;
   const policy = managedPolicy(state);
   if (!policy) return null;
@@ -793,7 +793,7 @@ export function filterModeOptionsByPolicy<T extends { id: InferenceMode }>(
   state: PolicyDecisionSnapshot,
   providerCatalog?: Pick<PolicySelectionCatalog, "byokProviders" | "enterpriseProviders">
 ): T[] {
-  if ((state.managed !== true && state.status !== "managed")) return options;
+  if (state.managed !== true && state.status !== "managed") return options;
   if (state.status !== "managed" || !state.policy) return [];
   return options.filter(
     (option) =>
@@ -821,7 +821,7 @@ export function filterByokProviderOptionsByPolicy<T extends { id: string }>(
   scope: PolicyScope,
   state: PolicyDecisionSnapshot
 ): T[] {
-  if ((state.managed !== true && state.status !== "managed")) return options;
+  if (state.managed !== true && state.status !== "managed") return options;
   if (state.status !== "managed" || !state.policy) return [];
   return options.filter((option) => isProviderAllowedByPolicy(state, scope, option.id));
 }
@@ -830,7 +830,7 @@ export function filterEnterpriseProviderOptionsByPolicy<T extends { id: string }
   options: T[],
   state: PolicyDecisionSnapshot
 ): T[] {
-  if ((state.managed !== true && state.status !== "managed")) return options;
+  if (state.managed !== true && state.status !== "managed") return options;
   if (state.status !== "managed" || !state.policy) return [];
   return options.filter((option) => isEnterpriseProviderAllowed(state, option.id));
 }

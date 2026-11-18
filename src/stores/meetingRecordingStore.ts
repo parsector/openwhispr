@@ -2773,7 +2773,7 @@ if (typeof window !== "undefined") {
           fallbackTranscript: seed.fallbackTranscript,
           segments: recordedSegments,
           removedSegments: data.removedSegments,
-          });
+        });
         sessionSeedLength -= merged.removedCount;
         const currentById = new Map(current.segments.map((row) => [row.id, row]));
         const installed = merged.segments.map((row) => {

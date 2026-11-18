@@ -1779,8 +1779,7 @@ function SelectedView({
       )}
 
       {(requiresUpgrade || (byokTooLarge && !requiresAccount && !isProUser)) && (
-        <div className="w-full max-w-sm">
-        </div>
+        <div className="w-full max-w-sm"></div>
       )}
 
       <div className="flex flex-wrap items-center justify-center gap-2 pt-1">

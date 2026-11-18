@@ -32,7 +32,10 @@ export function usePolicySnapshot(): PolicyDecisionSnapshot {
   const managed = usePolicyStore((state) => state.managed);
   const policy = usePolicyStore((state) => state.policy);
   const appVersion = usePolicyStore((state) => state.appVersion);
-  return useMemo(() => ({ status, managed, policy, appVersion }), [status, managed, policy, appVersion]);
+  return useMemo(
+    () => ({ status, managed, policy, appVersion }),
+    [status, managed, policy, appVersion]
+  );
 }
 
 interface MeetingAutoTranscriptionAuth {

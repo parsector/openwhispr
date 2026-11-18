@@ -81,7 +81,8 @@ export default function AppRouter() {
     return <MeetingNotificationOverlay />;
   }
 
-  if (new URLSearchParams(window.location.search).get("agentDictationPill") === "true") return <AgentDictationPillOverlay />;
+  if (new URLSearchParams(window.location.search).get("agentDictationPill") === "true")
+    return <AgentDictationPillOverlay />;
 
   // Before MainApp: it reports the onboarding state, which only the dictation
   // window and the control panel may do.
@@ -103,7 +104,8 @@ function MainApp() {
   const requireSignIn = usePolicyStore((state) => state.requireSignIn);
   const managed = usePolicyStore((state) => state.managed);
   const policyResolved =
-    !managed || !isSignedIn ||
+    !managed ||
+    !isSignedIn ||
     policyStatus === "managed" ||
     policyStatus === "unmanaged" ||
     policyStatus === "error";

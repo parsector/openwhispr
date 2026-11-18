@@ -35,7 +35,10 @@ const ECHO_DUPLICATE_MERGE_LIMIT = 3;
 
 const SEGMENTATION_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2";
-const { EMBEDDING_MODEL_URL, EMBEDDING_MODEL_FILE: EMBEDDING_ONNX } = require("../constants/speakerDetection.json");
+const {
+  EMBEDDING_MODEL_URL,
+  EMBEDDING_MODEL_FILE: EMBEDDING_ONNX,
+} = require("../constants/speakerDetection.json");
 const SILERO_VAD_MODEL_URL =
   "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx";
 

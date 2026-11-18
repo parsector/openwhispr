@@ -112,7 +112,6 @@ const DRAGON_ERROR_KEYS: Record<string, string> = {
   FILE_TOO_LARGE: "dictionary.dragonImport.error.fileTooLarge",
 };
 
-
 const SORT_STORAGE_KEY = "dictionarySort";
 const ADD_TARGET_STORAGE_KEY = "dictionaryAddTarget";
 // A burst of changes (a sync pass, a bulk action in the other window) rereads the mirror once.
@@ -177,7 +176,11 @@ export default function DictionaryView(): ReactElement {
 
 function DictionaryPage({ listsOwner }: { listsOwner: number }): ReactElement {
   const { t, i18n } = useTranslation();
-  const { customDictionary, updateCustomDictionary: updateStoredDictionary, snippets } = useSettings();
+  const {
+    customDictionary,
+    updateCustomDictionary: updateStoredDictionary,
+    snippets,
+  } = useSettings();
   const updateCustomDictionary = useCallback(
     (changes: { add?: string[]; remove?: string[] }): void =>
       updateStoredDictionary(changes, listsOwner),

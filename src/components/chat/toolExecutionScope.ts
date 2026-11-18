@@ -102,7 +102,9 @@ export function createToolExecutionScope(handlers: ToolExecutionHandlers = {}): 
       },
       sentEarlier: (actionKey) => earlierActions.has(actionKey),
     }),
-    setMcpResultBudget: (budget) => { limitMcpResult = createMcpTurnResultLimiter(budget); },
+    setMcpResultBudget: (budget) => {
+      limitMcpResult = createMcpTurnResultLimiter(budget);
+    },
     abort: () => controller.abort(),
   };
 }

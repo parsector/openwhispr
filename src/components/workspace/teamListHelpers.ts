@@ -29,4 +29,3 @@ export function accessOf(covered: number, total: number): boolean | "indetermina
   if (total > 0 && covered >= total) return true;
   return covered > 0 ? "indeterminate" : false;
 }
-

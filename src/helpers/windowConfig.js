@@ -429,8 +429,6 @@ module.exports = {
   resolveOverlayWindowType,
 };
 
-
-
 Object.assign(module.exports, {
   fitMeetingNotificationWindow,
   MAIN_WINDOW_CONFIG,

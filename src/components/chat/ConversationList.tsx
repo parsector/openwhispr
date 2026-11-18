@@ -13,7 +13,6 @@ import EmptyConversationList from "./EmptyConversationList";
 import type { ConversationPreview as ConversationRow } from "../../types/electron";
 import { isConversationInScope } from "../../lib/assistantNoteScope";
 
-
 type FlatItem =
   { type: "header"; label: string } | { type: "conversation"; data: ConversationPreview };
 

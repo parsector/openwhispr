@@ -31,7 +31,6 @@ import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
 import { RAISED_PILL, SPLIT_PILL, SPLIT_PILL_CHEVRON, SPLIT_PILL_LABEL } from "./dialogButtons";
 import { cn } from "../lib/utils";
 
-
 import type { PeopleAddMenuProps } from "./useAddPeopleToTeam";
 export function PeopleAddMenu({
   workspace,

@@ -169,7 +169,9 @@ function state(db, profileId) {
   const resolved = all.filter(
     (sample) => sample.durable_audio && classifyEvidence(db, sample).state === "resolved"
   );
-  const good = resolved.filter((sample) => sample.embedding?.length === (EMBEDDING_DIM * 4) && clean(db, sample));
+  const good = resolved.filter(
+    (sample) => sample.embedding?.length === EMBEDDING_DIM * 4 && clean(db, sample)
+  );
   const invalid = good.length !== resolved.length;
   const vectors = good.map((sample) => unit(vector(sample.embedding)));
   const conflict = vectors.some(
@@ -249,7 +251,7 @@ function listSamples(database, profileId) {
   const db = database.db;
   const all = samples(db, profileId);
   const vectors = all.map((sample) =>
-    sample.embedding?.length === (EMBEDDING_DIM * 4) ? unit(vector(sample.embedding)) : null
+    sample.embedding?.length === EMBEDDING_DIM * 4 ? unit(vector(sample.embedding)) : null
   );
   const averages = vectors.map((value, i) =>
     value && vectors.length > 1

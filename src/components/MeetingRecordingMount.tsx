@@ -120,7 +120,7 @@ export default function MeetingRecordingMount(): null {
           ? [{ label: t("common.retry"), onClick: () => void retryMeetingRecording() }]
           : isLocalChoiceRefusal(sentinel)
             ? providerErrorActions({ settingsTarget: "noteRecording" }, t)
-          : undefined,
+            : undefined,
       actionsAlign: needsSignIn || canRetryPolicy ? "end" : undefined,
     });
     // errorNonce re-fires this toast when the same error repeats back-to-back.
