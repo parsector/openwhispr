@@ -1,6 +1,4 @@
 const { EMBEDDING_DIM, EMBEDDING_VERSION } = require("../constants/speakerDetection.json");
-// TODO(run-b): migrate approved 512-dimension / 2048-byte samples from their encrypted clips.
-// Dimension checks exclude legacy evidence without erasing approvals or mixing vector spaces.
 // Voice evidence is local and opt-in. Only this module promotes approved audio
 // to a usable profile; naming a row never calls it.
 const { randomUUID, createHash } = require("node:crypto");
@@ -82,6 +80,7 @@ function forgetPlayback(id) {
 const vector = (bytes) => new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
 const packed = (values) => Buffer.from(values.buffer, values.byteOffset, values.byteLength);
 function unit(values) {
+  if ([...values].some((value) => !Number.isFinite(value))) return null;
   const norm = Math.hypot(...values);
   return norm ? Float32Array.from(values, (value) => value / norm) : null;
 }
@@ -153,9 +152,23 @@ function samples(db, profileId = null) {
       .filter((sample) => !durableIds.has(sample.id)),
   ];
 }
+function activeSamples(db, profileId) {
+  return samples(db, profileId).filter(
+    (sample) =>
+      sample.durable_audio &&
+      sample.embedding?.length === EMBEDDING_DIM * 4 &&
+      clean(db, sample) &&
+      unit(vector(sample.embedding)) &&
+      classifyEvidence(db, sample).state === "resolved"
+  );
+}
 function reviewedRow(db, profileId, note, row, store) {
-  return exemplarAudio.list(db, profileId).some((sample) => {
-    const sameNote = sample.note_id === note.id && sample.note_identity === note.client_note_id;
+  return activeSamples(db, profileId).some((sample) => {
+    const sameNote =
+      sample.note_id === note.id &&
+      sample.note_identity ===
+        (note.client_note_id ??
+          db.prepare("SELECT client_note_id FROM notes WHERE id=?").get(note.id)?.client_note_id);
     if (sameNote && JSON.parse(sample.row_ids).includes(row.id)) return true;
     const span = row.audioSpan;
     return (
@@ -172,7 +185,10 @@ function state(db, profileId) {
   const good = resolved.filter(
     (sample) => sample.embedding?.length === EMBEDDING_DIM * 4 && clean(db, sample)
   );
-  const invalid = good.length !== resolved.length;
+  const legacy = all.some((sample) => sample.embedding?.length !== EMBEDDING_DIM * 4);
+  const invalid = resolved.some(
+    (sample) => sample.embedding?.length === EMBEDDING_DIM * 4 && !clean(db, sample)
+  );
   const vectors = good.map((sample) => unit(vector(sample.embedding)));
   const conflict = vectors.some(
     (left, i) =>
@@ -192,6 +208,7 @@ function state(db, profileId) {
     !invalid &&
     !requiresReview;
   return {
+    legacy,
     cleanSpans: good.length,
     meetings,
     approvedSpans: all.length,
@@ -280,7 +297,10 @@ function listSamples(database, profileId) {
 function resolveProfile(db, profileId) {
   const result = state(db, profileId);
   let embedding = Buffer.alloc(0);
-  if (result.vectors.length) {
+  if (
+    result.usable ||
+    (!result.legacy && !result.invalid && !result.requiresReview && result.vectors.length)
+  ) {
     // One vote per meeting, then equal weight for each meeting. Duration has
     // no weight; an eight second span cannot drown out a short one.
     const grouped = new Map();
@@ -329,6 +349,7 @@ function candidateId(profileId, noteId, rowId, span, noteIdentity = null) {
   return createHash("sha256")
     .update(
       JSON.stringify([
+        EMBEDDING_VERSION,
         profileId,
         noteId,
         noteIdentity,
@@ -405,7 +426,7 @@ function createEligibilityContext(database, store) {
       return { reason: "reviewed" };
     if (!factsOnly && profileId != null) {
       if (!approvedByProfile.has(profileId))
-        approvedByProfile.set(profileId, samples(db, profileId).length);
+        approvedByProfile.set(profileId, activeSamples(db, profileId).length);
       if (approvedByProfile.get(profileId) >= MAX_SAMPLES) return { reason: "limit" };
     }
     if (!changedByNote.has(note.id)) changedByNote.set(note.id, changedRows(note));
@@ -476,7 +497,7 @@ function createEligibilityContext(database, store) {
     }
     const spanKey = [profileId, note.id, resolved.track, startSample, endSample];
     if (!factsOnly && profileId != null) {
-      const overlapsApproved = samples(db, profileId).some((sample) =>
+      const overlapsApproved = activeSamples(db, profileId).some((sample) =>
         overlapsRecording(db, sample, note, store, resolved.track, startSample, endSample)
       );
       if (
@@ -539,14 +560,7 @@ function createEligibilityContext(database, store) {
 function noteFacts(database, store, note, rows, eligibility, rulesVersion, profileId, status) {
   const db = database.db;
   const fingerprint = factFingerprint(note, status, rulesVersion);
-  const cached = db
-    .prepare(
-      `SELECT fingerprint, facts_json FROM voice_enrollment_fact_cache
-    WHERE note_id = ?`
-    )
-    .get(note.id);
-  const facts = new Map(cached?.fingerprint === fingerprint ? JSON.parse(cached.facts_json) : []);
-  let changed = cached?.fingerprint !== fingerprint;
+  const facts = new Map();
   for (const row of rows) {
     if (row.deleted || !attributed(db, note.id, row, profileId) || facts.has(row.id)) continue;
     const result = eligibility.check(note, rows, row, null, false, true);
@@ -563,14 +577,12 @@ function noteFacts(database, store, note, rows, eligibility, rulesVersion, profi
         everCorrected,
       });
     }
-    changed = true;
   }
-  if (changed)
-    db.prepare(
-      `INSERT INTO voice_enrollment_fact_cache (note_id, fingerprint, facts_json)
+  db.prepare(
+    `INSERT INTO voice_enrollment_fact_cache (note_id, fingerprint, facts_json)
       VALUES (?, ?, ?) ON CONFLICT(note_id) DO UPDATE SET fingerprint = excluded.fingerprint,
       facts_json = excluded.facts_json, computed_at = CURRENT_TIMESTAMP`
-    ).run(note.id, fingerprint, JSON.stringify([...facts]));
+  ).run(note.id, fingerprint, JSON.stringify([...facts]));
   return facts;
 }
 function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLMENT_RULES_VERSION) {
@@ -587,7 +599,7 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
   };
   if (!db.prepare("SELECT 1 FROM speaker_profiles WHERE id = ?").get(profileId))
     return { candidates: [], reasons };
-  const approvedSamples = samples(db, profileId);
+  const approvedSamples = activeSamples(db, profileId);
   const approved = approvedSamples.length;
   if (approved >= MAX_SAMPLES) {
     reasons.limit = approved;
@@ -630,6 +642,17 @@ function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLME
           continue;
         }
         const reviewed =
+          db
+            .prepare("SELECT 1 FROM voice_exemplars WHERE id=? AND approved_at IS NOT NULL")
+            .get(
+              candidateId(
+                profileId,
+                note.id,
+                row.id,
+                { trackId: fact.track, startSample: fact.startSample, endSample: fact.endSample },
+                note.client_note_id
+              )
+            ) ||
           approvedSamples.some((sample) =>
             overlapsRecording(db, sample, note, store, fact.track, fact.startSample, fact.endSample)
           ) ||
@@ -687,7 +710,12 @@ function listCandidates(database, store, profileId) {
 function focusedOffer(database, store, id) {
   const db = database.db;
   const existing = db.prepare("SELECT * FROM voice_enrollment_candidates WHERE id = ?").get(id);
-  if (existing) return null;
+  if (
+    existing ||
+    db.prepare("SELECT 1 FROM voice_exemplars WHERE id=? AND approved_at IS NOT NULL").get(id) ||
+    db.prepare("SELECT 1 FROM voice_exemplar_audio WHERE id=?").get(id)
+  )
+    return null;
   const saved = offers(database).get(id);
   if (saved) {
     const candidate = saved.candidate;
@@ -707,8 +735,8 @@ function focusedOffer(database, store, id) {
       const row = readTranscriptDocument(note.transcript).rows.find(
         (item) => item.id === candidate.rowIds[0]
       );
-      const approved = samples(db, candidate.profileId).length;
-      const reviewed = samples(db, candidate.profileId).some((sample) =>
+      const approved = activeSamples(db, candidate.profileId).length;
+      const reviewed = activeSamples(db, candidate.profileId).some((sample) =>
         overlapsRecording(
           db,
           sample,
@@ -746,8 +774,16 @@ function focusedOffer(database, store, id) {
             candidate.startSample,
             candidate.endSample
           ))
-      )
-        return candidate;
+      ) {
+        const rows = readTranscriptDocument(note.transcript).rows;
+        const checked = createEligibilityContext(database, store).check(
+          note,
+          rows,
+          row,
+          candidate.profileId
+        );
+        if (!checked.reason && checked.candidate?.revision === candidate.revision) return candidate;
+      }
     }
     offers(database).delete(id);
   }
@@ -760,7 +796,11 @@ function locate(database, store, id) {
     return found;
   }
   const db = database.db;
-  if (db.prepare("SELECT 1 FROM voice_enrollment_candidates WHERE id = ?").get(id)) return null;
+  if (
+    db.prepare("SELECT 1 FROM voice_enrollment_candidates WHERE id = ?").get(id) ||
+    db.prepare("SELECT 1 FROM voice_exemplars WHERE id=? AND approved_at IS NOT NULL").get(id)
+  )
+    return null;
   // A fresh scan rechecks attribution, correction and retention at action time.
   for (const { id: profileId } of db.prepare("SELECT id FROM speaker_profiles").all()) {
     const found = listCandidates(database, store, profileId).find(
@@ -883,7 +923,11 @@ function playbackContext(id) {
   return { noteId: session?.noteId ?? null, personId: session?.profileId ?? null };
 }
 async function embed(wav, extractor) {
-  if (wav.subarray(0, 4).toString() !== "RIFF") return null;
+  try {
+    require("./voiceRecordingIdentity").pcmIdentity(wav);
+  } catch {
+    return null;
+  }
   const samples = (wav.length - 44) / 2;
   if (samples < RATE * 3) return null;
   let power = 0,
@@ -1582,6 +1626,8 @@ function removeNoteEvidence(db, noteId) {
 }
 module.exports = {
   samples,
+  activeSamples,
+  embed,
   recoverLegacy,
   MAX_SAMPLES,
   ENROLLMENT_RULES_VERSION,

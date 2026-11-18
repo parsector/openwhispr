@@ -1,4 +1,5 @@
 const fs = require("node:fs");
+const { EMBEDDING_VERSION } = require("../constants/speakerDetection.json");
 const { randomUUID } = require("node:crypto");
 const {
   hasSupportedAdmission,
@@ -21,6 +22,7 @@ const LIMITS = {
 };
 let file = null;
 let state = {
+  embeddingVersion: EMBEDDING_VERSION,
   values: { ...DEFAULTS },
   status: "uncalibrated",
   statuses: Object.fromEntries(Object.keys(DEFAULTS).map((key) => [key, "uncalibrated"])),
@@ -68,6 +70,7 @@ function validStoredEvidence(evidence) {
 function configure(destination) {
   file = destination;
   state = {
+    embeddingVersion: EMBEDDING_VERSION,
     values: { ...DEFAULTS },
     status: "uncalibrated",
     statuses: Object.fromEntries(Object.keys(DEFAULTS).map((key) => [key, "uncalibrated"])),
@@ -77,6 +80,7 @@ function configure(destination) {
   try {
     const saved = JSON.parse(fs.readFileSync(file, "utf8"));
     validate(saved.values);
+    if (saved.embeddingVersion !== EMBEDDING_VERSION) return current();
     const evidenceValid = validStoredEvidence(saved.evidence);
     const statuses = Object.fromEntries(
       Object.keys(DEFAULTS).map((key) => [
@@ -89,6 +93,7 @@ function configure(destination) {
       ])
     );
     state = {
+      embeddingVersion: EMBEDDING_VERSION,
       values: saved.values,
       status: Object.values(statuses).some((status) => status === "calibrated")
         ? "calibrated"
@@ -153,6 +158,7 @@ function apply(values, report = null) {
     ])
   );
   const next = {
+    embeddingVersion: EMBEDDING_VERSION,
     values: Object.fromEntries(Object.keys(LIMITS).map((key) => [key, values[key]])),
     status: Object.values(statuses).some((status) => status === "calibrated")
       ? "calibrated"
@@ -189,7 +195,16 @@ function apply(values, report = null) {
 }
 function restore(previous) {
   validate(previous.values);
-  const next = structuredClone(previous);
+  const next =
+    previous.embeddingVersion === EMBEDDING_VERSION
+      ? structuredClone(previous)
+      : {
+          embeddingVersion: EMBEDDING_VERSION,
+          values: { ...DEFAULTS },
+          status: "uncalibrated",
+          statuses: Object.fromEntries(Object.keys(DEFAULTS).map((key) => [key, "uncalibrated"])),
+          evidence: null,
+        };
   if (file) {
     const temp = `${file}.${randomUUID()}.pending`;
     try {

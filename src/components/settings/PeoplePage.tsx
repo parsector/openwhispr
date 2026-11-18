@@ -1730,7 +1730,7 @@ export default function PeoplePage({
                             variant={
                               p.voiceProgress.usable
                                 ? "success"
-                                : p.hasVoice || p.voiceProgress.cleanSpans > 0
+                                : p.hasVoice
                                   ? "warning"
                                   : "outline"
                             }
@@ -1741,16 +1741,9 @@ export default function PeoplePage({
                                   spans: p.voiceProgress.cleanSpans,
                                   meetings: p.voiceProgress.meetings,
                                 })
-                              : !p.hasVoice &&
-                                  (p.legacyVoice ||
-                                    p.voiceProgress.approvedSpans > 0 ||
-                                    p.voiceProgress.unrecoverable ||
-                                    p.voiceProgress.recoveryFailed ||
-                                    p.voiceProgress.pendingRecovery)
-                                ? t("people.voiceUnavailable")
-                                : p.hasVoice || p.voiceProgress.cleanSpans > 0
-                                  ? t("people.voiceProvisional")
-                                  : t("people.noVoice")}
+                              : p.hasVoice
+                                ? t("people.voiceProvisional")
+                                : t("people.noVoice")}
                           </Badge>
                           {p.duplicates.map((d) => (
                             <Badge key={d.id} variant="warning" className="text-[11px]">
@@ -1809,9 +1802,7 @@ export default function PeoplePage({
                             disabled={working || renameWorking}
                             onClick={() => void openEnrollment(p.id)}
                           >
-                            {p.hasVoice || p.voiceProgress.cleanSpans > 0
-                              ? t("people.reviewSpans")
-                              : t("people.enrollVoice")}
+                            {p.hasVoice ? t("people.reviewSpans") : t("people.enrollVoice")}
                           </Button>
                         )}
                         <DropdownMenu>
@@ -1901,7 +1892,7 @@ export default function PeoplePage({
                           className="col-span-full rounded-lg bg-surface-2/50 p-3 text-xs text-muted-foreground"
                         >
                           <p>
-                            {p.hasVoice || p.voiceProgress.cleanSpans > 0 ? (
+                            {p.hasVoice ? (
                               <>
                                 {t("people.enrollmentProgress", {
                                   spans: p.voiceProgress.cleanSpans,

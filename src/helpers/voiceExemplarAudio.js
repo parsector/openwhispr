@@ -5,6 +5,7 @@ const { durationMatches, integrityError } = require("./voiceAudioIntegrity");
 // This store belongs to a person, never a note or a recording. Ciphertext lives
 // in the same SQLite transaction as consent; there are no external blob files.
 function open(db) {
+  require("./voiceEmbeddingMigration").open(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS voice_exemplar_audio (
       id TEXT PRIMARY KEY,

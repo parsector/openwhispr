@@ -142,3 +142,23 @@ test("legacy applied settings retain their production values and status on reloa
     config.configure(null);
   }
 });
+
+test("threshold evidence from an old or unknown embedding space resets to uncalibrated defaults", () => {
+  const config = require("../../src/helpers/speakerDecisionThresholds");
+  const dir = createTempDir(path.join(os.tmpdir(), "speaker-space-threshold-"));
+  const file = path.join(dir, "thresholds.json");
+  try {
+    config.configure(file);
+    config.apply({ ...config.DEFAULTS, similarityFloor: 0.75 }, buildReport(recommendationFixture()));
+    const saved = JSON.parse(fs.readFileSync(file));
+    assert.equal(saved.embeddingVersion, 3);
+    for (const version of [undefined, 2]) {
+      fs.writeFileSync(file, JSON.stringify({ ...saved, embeddingVersion: version }));
+      assert.deepEqual(config.configure(file).values, config.DEFAULTS);
+      assert.equal(config.current().status, "uncalibrated");
+    }
+  } finally {
+    config.configure(null);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

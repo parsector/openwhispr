@@ -120,10 +120,7 @@ test('review and enrolment use the whole shared span, echo guard, and sample cap
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
 
   f.audio.status = () => ({ state: 'complete', recordingId: f.recordingId(noteId) });
-  const insert = f.db.db.prepare(`INSERT INTO voice_exemplars
-    (id, profile_id, note_id, track, start_sample, end_sample, approved_at)
-    VALUES (?, ?, ?, 'mic', ?, ?, CURRENT_TIMESTAMP)`);
-  for (let i = 0; i < 20; i++) insert.run(`cap-${i}`, f.person.id, noteId, 24000 * (100 + i), 24000 * (101 + i));
+  f.seedCap(noteId);
   assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio).map(row => row.eligibilityReason), ['limit', 'limit']);
   assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 0);
 });
@@ -246,10 +243,21 @@ function fixture(t) {
     store.now = audio.now;
     assert.equal(enrollment.complete(db, store, candidateId, token).success, true);
   };
-  return { db, person, audio, extractor, vector, note, completeReview, recordingId: id => recordingIds.get(id) };
+  const seedCap = noteId => {
+    const clips = require('../../src/helpers/voiceExemplarAudio');
+    for (let i = 0; i < 20; i++) {
+      const id = `cap-${i}`;
+      clips.save(db.db, { id, profileId: person.id, noteId, recordingId: recordingIds.get(noteId),
+        rowIds: [id], revision: 'approved', track: 'mic', startSample: 24000 * (100 + i * 5),
+        endSample: 24000 * (104 + i * 5), durationSeconds: 4 }, wav, clips.seal(audio, wav), Buffer.from(vector(1).buffer));
+      db.db.prepare("INSERT INTO voice_evidence_provenance (sample_id, profile_id, state, recording_id) VALUES (?, ?, 'resolved', ?)")
+        .run(id, person.id, recordingIds.get(noteId));
+    }
+  };
+  return { db, person, audio, extractor, vector, note, completeReview, seedCap, recordingId: id => recordingIds.get(id) };
 }
 
-test('focused candidate agrees with the scan and falls back after a revision change', t => {
+test('focused candidate rechecks current evidence and falls back after a revision change', t => {
   const f = fixture(t);
   const { noteId } = f.note('focused');
   const original = require('../../src/helpers/meetingAudioSpan.mjs').resolveMeetingAudioSpan;
@@ -259,7 +267,7 @@ test('focused candidate agrees with the scan and falls back after a revision cha
   assert.ok(resolved > 0);
   resolved = 0;
   assert.deepEqual(enrollment.play(f.db, f.audio, candidate.id).candidate, candidate);
-  assert.equal(resolved, 0);
+  assert.ok(resolved > 0, 'eligibility must be recomputed from current evidence');
   const doc = JSON.parse(f.db.getNote(noteId).transcript);
   doc.rows[0].text = 'revised';
   f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
@@ -267,7 +275,7 @@ test('focused candidate agrees with the scan and falls back after a revision cha
   assert.ok(resolved > 0, 'revision mismatch must use the authoritative scan');
 });
 
-test('enrolment facts cache invalidates for edits, audio loss, expiry and rules changes', t => {
+test('enrolment facts are recomputed for every listing, edits, audio loss, expiry and rules changes', t => {
   const f = fixture(t);
   const { noteId } = f.note('cached');
   const original = require('../../src/helpers/meetingAudioSpan.mjs').resolveMeetingAudioSpan;
@@ -277,7 +285,7 @@ test('enrolment facts cache invalidates for edits, audio loss, expiry and rules 
   assert.ok(resolved > 0);
   resolved = 0;
   assert.deepEqual(enrollment.candidateReport(f.db, f.audio, f.person.id), cold);
-  assert.equal(resolved, 0);
+  assert.ok(resolved > 0, 'eligibility must be recomputed from current evidence');
   const doc = JSON.parse(f.db.getNote(noteId).transcript);
   doc.rows[0].text = 'edited';
   f.db.updateNote(noteId, { transcript: JSON.stringify(doc) });
@@ -299,7 +307,40 @@ test('enrolment facts cache invalidates for edits, audio loss, expiry and rules 
   assert.ok(resolved > 0);
 });
 
-test('listing, repeated play, complete and approve resolve a span only during the listing', async t => {
+test('changed echo evidence with unchanged recording status invalidates an earlier eligible answer', t => {
+  const f = fixture(t);
+  const { noteId } = f.note('echo-change');
+  const span = f.audio.span;
+  let echo = false;
+  f.audio.status = () => ({ state: 'complete', recordingId: f.recordingId(noteId), tracks: {
+    mic: { chunks: [{ startSample: 0, sampleCount: 24000 * 5 }] },
+    system: { chunks: [{ startSample: 0, sampleCount: 24000 * 5 }] },
+  } });
+  f.audio.span = (id, track, from, to) => {
+    const result = span(id, track, from, to);
+    if (track === 'system' && !echo) result.wav.fill(0, 44);
+    return result;
+  };
+  assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 1);
+  echo = true;
+  const report = enrollment.candidateReport(f.db, f.audio, f.person.id);
+  assert.equal(report.candidates.length, 0);
+  assert.equal(report.reasons.overlap, 1);
+});
+
+test('unusable legacy approvals do not consume the current enrollment cap or hide fresh review offers', t => {
+  const f = fixture(t);
+  const { noteId } = f.note('reenroll');
+  const insert = f.db.db.prepare(`INSERT INTO voice_exemplars
+    (id, profile_id, note_id, track, start_sample, end_sample, embedding, approved_at)
+    VALUES (?, ?, ?, 'mic', 0, 96000, ?, CURRENT_TIMESTAMP)`);
+  for (let i = 0; i < 20; i++) insert.run(`legacy-${i}`, f.person.id, noteId, Buffer.alloc(2048, 1));
+  assert.equal(enrollment.listCandidates(f.db, f.audio, f.person.id).length, 1);
+  assert.equal(enrollment.progress(f.db, f.person.id).cleanSpans, 0);
+  assert.equal(f.db.getSpeakerProfiles(true).length, 0);
+});
+
+test('listing, repeated play, complete and approve recheck current spans', async t => {
   const f = fixture(t);
   f.note('single-scan');
   const original = require('../../src/helpers/meetingAudioSpan.mjs').resolveMeetingAudioSpan;
@@ -315,7 +356,7 @@ test('listing, repeated play, complete and approve resolve a span only during th
   f.completeReview(candidate.id, second.token);
   assert.equal((await enrollment.decide(f.db, f.audio, f.extractor,
     candidate.id, 'approve', second.token)).success, true);
-  assert.equal(resolved, listingResolutions);
+  assert.ok(resolved > listingResolutions);
 });
 
 test('voice query indexes exist on a fresh database and return after a version 3 upgrade', t => {
@@ -361,7 +402,7 @@ test('review cache recomputes only edited notes and keeps the person cap live', 
   assert.ok(resolved >= 4);
   resolved = 0;
   assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio), cold);
-  assert.equal(resolved, 0, 'second open must perform zero span resolution');
+  assert.ok(resolved > 0, 'second open rechecks current evidence');
   const doc = JSON.parse(f.db.getNote(one).transcript);
   doc.rows[0].text = 'edited';
   f.db.updateNote(one, { transcript: JSON.stringify(doc) });
@@ -369,15 +410,11 @@ test('review cache recomputes only edited notes and keeps the person cap live', 
   listReviewRows(f.db, f.person.id, f.audio);
   assert.ok(resolved > 0);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM review_row_cache').get().n, 2);
-  const insert = f.db.db.prepare(`INSERT INTO voice_exemplars
-    (id, profile_id, note_id, track, start_sample, end_sample, approved_at)
-    VALUES (?, ?, ?, 'mic', ?, ?, CURRENT_TIMESTAMP)`);
-  for (let index = 0; index < 20; index++)
-    insert.run(`limit-${index}`, f.person.id, two, 24000 * (100 + index), 24000 * (101 + index));
+  f.seedCap(two);
   resolved = 0;
   assert.deepEqual(listReviewRows(f.db, f.person.id, f.audio).map(row => row.eligibilityReason),
     ['limit', 'limit', 'limit', 'limit']);
-  assert.equal(resolved, 0, 'the live sample cap must not invalidate acoustic facts');
+  assert.ok(resolved > 0, 'review facts are checked even while the sample cap is live');
   assert.equal(f.db.deleteNote(one).success, true);
   assert.equal(f.db.db.prepare('SELECT COUNT(*) n FROM review_row_cache WHERE note_id = ?').get(one).n, 0);
 });
@@ -423,7 +460,7 @@ test('twenty-recording review benchmark preserves ordering and grouped reasons o
     new Set(['close_match', 'overlapping_speech']));
   assert.deepEqual(cold.map(row => row.noteId), [...cold.map(row => row.noteId)].sort((a, b) => b - a));
   assert.ok(coldResolutions >= 20);
-  assert.equal(resolved, 0);
+  assert.ok(resolved > 0, 'eligibility must be recomputed from current evidence');
   console.log(`review cache benchmark: cold ${coldResolutions} span resolutions / ${coldMs.toFixed(1)} ms; warm ${resolved} / ${warmMs.toFixed(1)} ms`);
 });
 

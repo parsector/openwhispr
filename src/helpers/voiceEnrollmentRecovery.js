@@ -1,4 +1,3 @@
-const { EMBEDDING_DIM } = require("../constants/speakerDetection.json");
 const exemplarAudio = require("./voiceExemplarAudio");
 const {
   classifyEvidence,
@@ -22,7 +21,13 @@ const EVIDENCE_HOLD_MS = 7 * 86400000;
 function start(
   database,
   store,
-  { passLimit = 25, yieldMs = 10, maxAttempts = 3, retryBaseMs = 1000 } = {}
+  {
+    passLimit = 25,
+    yieldMs = 10,
+    maxAttempts = 3,
+    retryBaseMs = 1000,
+    extractor: argumentsExtractor,
+  } = {}
 ) {
   // Clamp injected settings as well as defaults: no unbounded pass or retry loop.
   passLimit = Math.max(1, Math.min(100, Math.floor(passLimit) || 25));
@@ -30,6 +35,18 @@ function start(
   yieldMs = Math.max(1, Math.min(1000, yieldMs || 10));
   retryBaseMs = Math.max(1, Math.min(60000, retryBaseMs || 1000));
   const db = database.db;
+  // A previous legacy-space recovery failure is not a permanent enrollment
+  // verdict. Retry retained sources on launch; pinned PCM/ownership checks and
+  // the original retention deadline remain authoritative.
+  db.prepare(
+    `UPDATE voice_evidence_provenance SET
+    state=CASE WHEN state='resolved' THEN state ELSE 'pending_recovery' END,
+    recovery_state='pending_recovery', recovery_attempts=0, recovery_next_at=0
+    WHERE (state IN ('recovery_failed', 'unrecoverable') OR recovery_state IN ('recovery_failed', 'unrecoverable'))
+    AND sample_id IN (SELECT e.id FROM voice_exemplars e WHERE e.approved_at IS NOT NULL
+      AND length(e.embedding)!=${require("../constants/speakerDetection.json").EMBEDDING_DIM * 4} AND NOT EXISTS (SELECT 1 FROM voice_exemplar_audio a WHERE a.id=e.id))
+    AND (recovery_expires_at IS NULL OR recovery_expires_at>?)`
+  ).run(store.now());
   // One-time correction for legacy pins made from invalid-length decodes.
   // Keep the rejected hash/duration as an audit trail; never touch durable clips
   // or renew the evidence hold. A prior content refusal from this pin can retry.
@@ -172,7 +189,13 @@ function start(
   function schedule(delay = yieldMs) {
     timer = setTimeout(step, delay);
   }
-  function complete() {
+  async function complete() {
+    if (!cancelled)
+      report.migration = await require("./voiceEmbeddingMigration").migrate(database, store, {
+        extractor: argumentsExtractor,
+        cancelled: () => cancelled,
+      });
+    if (cancelled) return;
     finished = true;
     try {
       store.enforce();
@@ -263,12 +286,8 @@ function start(
       terminal(sample, "legacy_audio_unavailable");
       return;
     }
-    // TODO(run-b): recovery still preserves legacy 512-dimension / 2048-byte vectors.
-    // Retain the approved clip for migration; recognition excludes these vectors.
-    if (![2048, EMBEDDING_DIM * 4].includes(sample.embedding?.length)) {
-      terminal(sample, "legacy_embedding_unavailable", true);
-      return;
-    }
+    // Consent and exact retained audio authorize re-embedding even if the old
+    // derived vector is missing. Migration runs after independent clips are secured.
     if (!validSource(source, sample) || (recordedId && source.recordingId !== recordedId)) {
       terminal(sample, "recording_identity_mismatch", true);
       return;
@@ -434,7 +453,7 @@ function start(
             )
             .get();
           if (next.due == null) {
-            complete();
+            await complete();
             return;
           }
           schedule(Math.max(yieldMs, Math.min(60000, next.due - now())));

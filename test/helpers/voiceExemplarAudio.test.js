@@ -634,7 +634,7 @@ test("sixth run: changed approval bounds refuse recovery without erasing evidenc
   assert.ok(f.store._manifest(f.noteId).tracks.mic.chunks.length);
 });
 
-test("sixth run: a missing legacy vector does not release audio evidence", async (t) => {
+test("legacy approval with a missing vector recovers retained audio for re-embedding", async (t) => {
   const { f, candidate } = await sixthFixture(t);
   f.database.db.prepare("UPDATE voice_exemplars SET embedding=x'' WHERE id=?").run(candidate.id);
   f.restart();
@@ -642,11 +642,12 @@ test("sixth run: a missing legacy vector does not release audio evidence", async
   const saved = f.database.db
     .prepare("SELECT * FROM voice_evidence_provenance WHERE sample_id=?")
     .get(candidate.id);
-  assert.equal(saved.state, "recovery_failed");
-  assert.equal(saved.recovery_reason, "legacy_embedding_unavailable");
+  assert.equal(saved.state, "resolved");
+  assert.equal(saved.recovery_state, "recovered");
+  assert.ok(f.database.db.prepare("SELECT 1 FROM voice_exemplar_audio WHERE id=?").get(candidate.id));
   assert.equal(f.store.enforce().removed.length, 0);
-  assert.ok(f.database.db.prepare("SELECT 1 FROM voice_exemplars WHERE id=?").get(candidate.id));
-  assert.ok(f.store._manifest(f.noteId).tracks.mic.chunks.length);
+  assert.equal(f.database.db.prepare("SELECT approved_at FROM voice_exemplar_audio WHERE id=?").get(candidate.id).approved_at != null, true);
+  assert.equal(enrollment.play(f.database, f.store, candidate.id).state, "available");
 });
 
 test("sixth run: healthy resolved evidence is unchanged", async (t) => {
@@ -2503,4 +2504,21 @@ test("missing encryption key fails approval closed with exemplar_key_unavailable
     state: "key_unavailable",
     error: "exemplar_key_unavailable",
   });
+});
+
+test("startup re-embeds retained legacy-space approval after a previous failed recovery", async t => {
+  const extractor = { extractEmbeddingFromSamples: async () => Float32Array.from({ length: EMBEDDING_DIM }, (_, i) => i === 0 ? 1 : 0) };
+  const { f, candidate } = await legacyFixture(t, { recovery: { extractor, yieldMs: 1 } });
+  f.database.db.prepare("UPDATE voice_exemplars SET embedding=? WHERE id=?").run(Buffer.alloc(2048, 1), candidate.id);
+  f.database.db.prepare("INSERT INTO voice_evidence_provenance (sample_id, profile_id, state, recovery_state, recovery_reason, recovery_attempts) VALUES (?, ?, 'recovery_failed', 'recovery_failed', 'legacy_embedding_unavailable', 3)").run(candidate.id, f.person.id);
+  f.restart();
+  await f.store.legacyRecovery.done;
+  const clip = f.database.db.prepare("SELECT * FROM voice_exemplar_audio WHERE id=?").get(candidate.id);
+  assert.equal(clip.embedding.length, EMBEDDING_DIM * 4);
+  assert.equal(enrollment.play(f.database, f.store, candidate.id).state, "available");
+  assert.equal(f.database.db.prepare("SELECT state FROM voice_embedding_migrations WHERE sample_id=?").get(candidate.id).state, "migrated");
+  const auditCount = f.database.db.prepare("SELECT count(*) n FROM voice_embedding_migrations").get().n;
+  f.restart();
+  await f.store.legacyRecovery.done;
+  assert.equal(f.database.db.prepare("SELECT count(*) n FROM voice_embedding_migrations").get().n, auditCount);
 });

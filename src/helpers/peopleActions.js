@@ -455,7 +455,8 @@ function listPeople(database) {
       lastHeard: hit.lastHeard,
       lastSeen: later(hit.lastSeen, hit.lastHeard),
       sampleCount: voice.result.cleanSpans,
-      hasVoice: voice.embedding.length === 2048,
+      hasVoice:
+        voice.embedding.length === require("../constants/speakerDetection.json").EMBEDDING_DIM * 4,
       needsReapproval: p.voice_needs_reapproval === 1,
       legacyVoice: !!p.embedding?.length && p.sample_count > 0 && !voiceSamples.length,
       voiceProgress: require("./voiceEnrollment").progress(database, p.id),
@@ -1502,7 +1503,15 @@ function cachedReviewFacts(database, store, rulesVersion) {
       continue;
     }
     try {
-      facts.set(note.id, JSON.parse(entry.facts_json));
+      computeReviewNote(database, store, note.id, rulesVersion);
+      facts.set(
+        note.id,
+        JSON.parse(
+          database.db
+            .prepare("SELECT facts_json FROM review_row_cache WHERE note_id=?")
+            .get(note.id).facts_json
+        )
+      );
     } catch {
       pending.push(note.id);
     }
@@ -1559,32 +1568,13 @@ function reviewPersonReason(db, profileId, note, row, fact, counts, store) {
   const noteId = note.id;
   if (profileId == null) return null;
   if (!counts.has(profileId))
-    counts.set(
-      profileId,
-      db
-        .prepare(
-          `SELECT COUNT(*) AS count FROM (
-            SELECT id FROM voice_exemplars WHERE profile_id = ? AND approved_at IS NOT NULL
-            UNION SELECT id FROM voice_exemplar_audio WHERE profile_id = ?)`
-        )
-        .get(profileId, profileId).count
-    );
+    counts.set(profileId, require("./voiceEnrollment").activeSamples(db, profileId).length);
   if (counts.get(profileId) >= require("./voiceEnrollment").MAX_SAMPLES) return "limit";
   if (require("./voiceEnrollment").reviewedRow(db, profileId, note, row)) return "reviewed";
-  if (
-    db
-      .prepare(
-        `SELECT row_ids FROM voice_exemplar_audio WHERE profile_id = ? AND note_id = ?
-    AND note_identity = (SELECT client_note_id FROM notes WHERE id = ?)`
-      )
-      .all(profileId, noteId, noteId)
-      .some((sample) => JSON.parse(sample.row_ids).includes(fact?.rowId))
-  )
-    return "reviewed";
   if (fact?.reason || !fact?.track) return null;
   if (
-    require("./voiceExemplarAudio")
-      .list(db, profileId)
+    require("./voiceEnrollment")
+      .activeSamples(db, profileId)
       .some((sample) =>
         require("./voiceRecordingIdentity").overlapsRecording(
           db,
@@ -1596,15 +1586,6 @@ function reviewPersonReason(db, profileId, note, row, fact, counts, store) {
           fact.endSample
         )
       )
-  )
-    return "reviewed";
-  if (
-    db
-      .prepare(
-        `SELECT 1 FROM voice_exemplars WHERE profile_id = ? AND note_id = ?
-    AND track = ? AND start_sample < ? AND end_sample > ?`
-      )
-      .get(profileId, noteId, fact.track, fact.endSample, fact.startSample)
   )
     return "reviewed";
   if (
