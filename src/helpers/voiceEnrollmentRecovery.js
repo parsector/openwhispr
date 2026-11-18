@@ -1,4 +1,5 @@
 const exemplarAudio = require("./voiceExemplarAudio");
+const { EMBEDDING_DIM } = require("../constants/speakerDetection.json");
 const {
   classifyEvidence,
   validSource,
@@ -44,9 +45,8 @@ function start(
     recovery_state='pending_recovery', recovery_attempts=0, recovery_next_at=0
     WHERE (state IN ('recovery_failed', 'unrecoverable') OR recovery_state IN ('recovery_failed', 'unrecoverable'))
     AND sample_id IN (SELECT e.id FROM voice_exemplars e WHERE e.approved_at IS NOT NULL
-      AND length(e.embedding)!=${require("../constants/speakerDetection.json").EMBEDDING_DIM * 4} AND NOT EXISTS (SELECT 1 FROM voice_exemplar_audio a WHERE a.id=e.id))
-    AND (recovery_expires_at IS NULL OR recovery_expires_at>?)`
-  ).run(store.now());
+      AND length(e.embedding)!=${EMBEDDING_DIM * 4} AND NOT EXISTS (SELECT 1 FROM voice_exemplar_audio a WHERE a.id=e.id))`
+  ).run();
   // One-time correction for legacy pins made from invalid-length decodes.
   // Keep the rejected hash/duration as an audit trail; never touch durable clips
   // or renew the evidence hold. A prior content refusal from this pin can retry.
@@ -132,8 +132,14 @@ function start(
     },
     protects: {
       value: (noteId) => {
+        const manifest = store._manifest?.(noteId);
+        const retainedNormally =
+          manifest &&
+          ["complete", "incomplete"].includes(manifest.status) &&
+          (manifest.keep || store.now() < manifest.startedAt + manifest.retentionDays * 86400000);
         // Protection is persisted evidence policy, independent of queue lifetime.
-        // Record loss before permitting retention to remove any source bytes.
+        // An expired recovery hold does not make otherwise retained legacy audio
+        // unusable. Retry it without extending that hold or preventing eviction.
         db.prepare(
           `UPDATE voice_evidence_provenance SET
           state=CASE WHEN state='resolved' THEN state ELSE 'unrecoverable' END,
@@ -141,9 +147,10 @@ function start(
           recovery_state='unrecoverable', recovery_reason='evidence_retention_expired'
           WHERE recovery_expires_at <= ? AND sample_id IN
             (SELECT s.id FROM (${sources}) s WHERE s.note_id=? AND s.durable_audio=0)
+          AND (?=0 OR sample_id NOT IN (SELECT id FROM voice_exemplars WHERE length(embedding)!=${EMBEDDING_DIM * 4}))
           AND (state IN ('pending_recovery', 'recovery_failed') OR
             (state='resolved' AND COALESCE(recovery_state, 'pending_recovery') IN ('pending_recovery', 'recovery_failed')))`
-        ).run(store.now(), noteId);
+        ).run(store.now(), noteId, Number(Boolean(retainedNormally)));
         // A repaired source remains available for owner inspection through the
         // same fixed deadline, even after a verified clip has been secured.
         if (
@@ -163,9 +170,10 @@ function start(
             `SELECT s.id
       FROM (${sources}) s LEFT JOIN voice_evidence_provenance p ON p.sample_id = s.id
       WHERE s.note_id = ? AND s.durable_audio=0 AND (${pending} OR
-        p.state='recovery_failed' OR p.recovery_state='recovery_failed')`
+        p.state='recovery_failed' OR p.recovery_state='recovery_failed')
+        AND (p.recovery_expires_at IS NULL OR p.recovery_expires_at>?)`
           )
-          .iterate(noteId)) {
+          .iterate(noteId, store.now())) {
           if (!released.has(sample.id)) return true;
         }
         return false;

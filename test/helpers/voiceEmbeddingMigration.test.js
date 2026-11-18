@@ -124,3 +124,14 @@ test("migration audit follows explicit exemplar ownership changes and survives m
   assert.equal(audit.profile_id, survivor.id);
   assert.equal(audit.state, "migrated");
 });
+
+test("a converted legacy person stays not enrolled until current evidence satisfies graduation", async t => {
+  const f = fixture(t);
+  f.clip("only-retained-clip");
+  await migration.migrate(f.database, f.store, { extractor: f.extractor });
+  const person = listPeople(f.database, f.store).find(p => p.id === f.person.id);
+  assert.equal(person.hasVoice, false);
+  assert.equal(person.voiceProgress.usable, false);
+  assert.equal(person.voiceProgress.cleanSpans, 1);
+  assert.equal(f.database.getSpeakerProfiles(true, { includeProvisional: true }).length, 0);
+});

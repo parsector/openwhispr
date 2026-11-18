@@ -2506,16 +2506,19 @@ test("missing encryption key fails approval closed with exemplar_key_unavailable
   });
 });
 
-test("startup re-embeds retained legacy-space approval after a previous failed recovery", async t => {
+for (const expiredHold of [false, true]) test(`startup re-embeds retained legacy-space approval after a previous failed recovery (expired hold: ${expiredHold})`, async t => {
   const extractor = { extractEmbeddingFromSamples: async () => Float32Array.from({ length: EMBEDDING_DIM }, (_, i) => i === 0 ? 1 : 0) };
   const { f, candidate } = await legacyFixture(t, { recovery: { extractor, yieldMs: 1 } });
   f.database.db.prepare("UPDATE voice_exemplars SET embedding=? WHERE id=?").run(Buffer.alloc(2048, 1), candidate.id);
   f.database.db.prepare("INSERT INTO voice_evidence_provenance (sample_id, profile_id, state, recovery_state, recovery_reason, recovery_attempts) VALUES (?, ?, 'recovery_failed', 'recovery_failed', 'legacy_embedding_unavailable', 3)").run(candidate.id, f.person.id);
+  const deadline = f.store.now() + (expiredHold ? -1000 : 86400000);
+  f.database.db.prepare("UPDATE voice_evidence_provenance SET recovery_expires_at=? WHERE sample_id=?").run(deadline, candidate.id);
   f.restart();
   await f.store.legacyRecovery.done;
   const clip = f.database.db.prepare("SELECT * FROM voice_exemplar_audio WHERE id=?").get(candidate.id);
   assert.equal(clip.embedding.length, EMBEDDING_DIM * 4);
   assert.equal(enrollment.play(f.database, f.store, candidate.id).state, "available");
+  assert.equal(f.database.db.prepare("SELECT recovery_expires_at FROM voice_evidence_provenance WHERE sample_id=?").get(candidate.id).recovery_expires_at, deadline);
   assert.equal(f.database.db.prepare("SELECT state FROM voice_embedding_migrations WHERE sample_id=?").get(candidate.id).state, "migrated");
   const auditCount = f.database.db.prepare("SELECT count(*) n FROM voice_embedding_migrations").get().n;
   f.restart();

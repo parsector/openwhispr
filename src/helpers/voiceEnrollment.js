@@ -185,7 +185,13 @@ function state(db, profileId) {
   const good = resolved.filter(
     (sample) => sample.embedding?.length === EMBEDDING_DIM * 4 && clean(db, sample)
   );
-  const legacy = all.some((sample) => sample.embedding?.length !== EMBEDDING_DIM * 4);
+  const legacy =
+    all.some((sample) => sample.embedding?.length !== EMBEDDING_DIM * 4) ||
+    !!db
+      .prepare(
+        "SELECT 1 FROM voice_embedding_migrations WHERE profile_id=? AND target_version=? LIMIT 1"
+      )
+      .get(profileId, EMBEDDING_VERSION);
   const invalid = resolved.some(
     (sample) => sample.embedding?.length === EMBEDDING_DIM * 4 && !clean(db, sample)
   );

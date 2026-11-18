@@ -18,6 +18,8 @@ function open(db) {
     started_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     completed_at TEXT
   );
+  CREATE INDEX IF NOT EXISTS idx_voice_migration_sample ON voice_embedding_migrations(sample_id, id);
+  CREATE INDEX IF NOT EXISTS idx_voice_migration_profile ON voice_embedding_migrations(profile_id, target_version);
   CREATE TRIGGER IF NOT EXISTS transfer_voice_migration_audit
     AFTER UPDATE OF profile_id ON voice_exemplar_audio BEGIN
       UPDATE voice_embedding_migrations SET profile_id=NEW.profile_id WHERE sample_id=NEW.id;
