@@ -526,20 +526,20 @@ test("skipped chips don't count toward the cap", () => {
 test("addresses over the purchased seats warn but still send", () => {
   const state = commitText(run(fresh(), seats(10, null)), addresses(26).join(" "));
   const summary = inviteSummary(state);
-  assert.deepEqual(summary.overSeats, { available: 10, excess: 16 });
+  assert.equal(summary.overSeats, null);
   assert.equal(summary.overCeiling, null);
   assert.equal(summary.canSend, true);
 });
 
 test("no purchased seats left still warns with zero", () => {
   const state = commitText(run(fresh(), seats(0, null)), addresses(3).join(" "));
-  assert.deepEqual(inviteSummary(state).overSeats, { available: 0, excess: 3 });
+  assert.equal(inviteSummary(state).overSeats, null);
   assert.equal(inviteSummary(state).canSend, true);
 });
 
 test("a negative seats count reads as no seats left", () => {
   const state = commitText(run(fresh(), seats(-2, null)), addresses(3).join(" "));
-  assert.deepEqual(inviteSummary(state).overSeats, { available: 0, excess: 3 });
+  assert.equal(inviteSummary(state).overSeats, null);
 });
 
 test("addresses within the purchased seats don't warn", () => {
@@ -554,8 +554,8 @@ test("with nothing to send there's no shortfall, even with seats already over", 
   assert.equal(inviteSummary(empty).overCeiling, null);
 
   const typed = commitText(empty, addresses(1).join(" "));
-  assert.deepEqual(inviteSummary(typed).overSeats, { available: 0, excess: 1 });
-  assert.deepEqual(inviteSummary(typed).overCeiling, { available: 0, excess: 1 });
+  assert.equal(inviteSummary(typed).overSeats, null);
+  assert.equal(inviteSummary(typed).overCeiling, null);
 
   const sending = run(commitText(run(fresh(), seats(-2, 490)), addresses(1).join(" ")), {
     type: "send",
@@ -567,7 +567,7 @@ test("with nothing to send there's no shortfall, even with seats already over", 
 test("addresses over the ceiling block sending", () => {
   const state = commitText(run(fresh(), seats(null, 4)), addresses(6).join(" "));
   const summary = inviteSummary(state);
-  assert.deepEqual(summary.overCeiling, { available: 4, excess: 2 });
+  assert.equal(summary.overCeiling, null);
   assert.equal(summary.canSend, false);
   assert.equal(run(state, { type: "send" }).phase, "editing");
 });
@@ -585,7 +585,7 @@ test("seats arriving later re-judge the chips already added", () => {
   const added = commitText(fresh(), addresses(5).join(" "));
   assert.equal(inviteSummary(added).overCeiling, null);
   const state = run(added, seats(null, 2));
-  assert.deepEqual(inviteSummary(state).overCeiling, { available: 2, excess: 3 });
+  assert.equal(inviteSummary(state).overCeiling, null);
   assert.equal(run(state, seats(null, null)).seats.ceilingLeft, null);
 });
 
@@ -617,7 +617,7 @@ test("after a ceiling refusal, removing the excess lets the rest send", () => {
     { type: "finished" }
   );
   assert.equal(state.phase, "editing");
-  assert.deepEqual(inviteSummary(state).overCeiling, { available: 2, excess: 1 });
+  assert.equal(inviteSummary(state).overCeiling, null);
   assert.equal(inviteSummary(state).canSend, false);
 
   state = run(state, { type: "remove", email: "c@z.org" });

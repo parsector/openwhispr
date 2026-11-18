@@ -26,7 +26,7 @@ import {
 import type { Workspace, WorkspaceMember } from "../../types/electron";
 import { AddToTeamList } from "../workspace/AddToTeamList";
 import { MENU_ICON, MENU_PANEL, MENU_SUBMENU_TRIGGER } from "../workspace/menuTokens";
-import type { PeopleTeamAdd } from "../workspace/PeopleAddMenu";
+import type { PeopleTeamAdd } from "../workspace/useAddPeopleToTeam";
 
 const ASSIGNABLE_ROLES = ["member", "admin"] as const;
 type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];

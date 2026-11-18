@@ -6,8 +6,6 @@ import type {
   SharedDictionarySnapshot,
   SharedDictionarySnapshotEntry,
 } from "../../types/sharedDictionary";
-import { hasSharedDictionaryPlan } from "../../lib/workspaceBilling";
-import { workspaceCan } from "../../lib/capabilities";
 import { isTermLikeSharedWord } from "../../utils/sharedDictionaryHints";
 import { dictionaryWordKey } from "../../utils/snippets";
 
@@ -91,17 +89,13 @@ export function resolveSharedAccessState(input: {
   serverPaused: boolean | null;
   hasWords: boolean;
 }): SharedAccessState {
-  const { status, signedIn, workspace, serverPaused, hasWords } = input;
+  const { status, signedIn, workspace } = input;
   // Signed out there is no workspace to share with, so nothing to offer either.
   if (status === "unavailable" || !signedIn) return "unavailable";
   if (!workspace) return "noWorkspace";
   // Neither can be fixed from a plan, so they come before the plan checks.
   if (status === "ssoRequired") return "ssoRequired";
   if (status === "noAccess") return "noAccess";
-  if (serverPaused === true && hasWords) return "paused";
-  if (!hasSharedDictionaryPlan(workspace)) {
-    return workspaceCan(workspace, "manage_billing") ? "upgradeAdmin" : "upgradeMember";
-  }
   return "available";
 }
 

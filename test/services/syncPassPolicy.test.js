@@ -26,20 +26,21 @@ test("consent: a free account still syncs shared notes and team spaces", async (
     backupEnabled: false,
   });
   assert.equal(consent.shared, true);
-  // The paid boundary holds: private content is still not backed up.
+  // The user has not enabled backup.
   assert.equal(consent.backup, false);
 });
 
 test("consent: sharing survives the cloud-backup toggle being off", async () => {
   const { resolveSyncConsent } = await load();
   const consent = resolveSyncConsent({ ...SIGNED_IN, backupEnabled: false });
-  assert.deepEqual(consent, { shared: true, backup: false, analytics: true });
+  assert.deepEqual(consent, { shared: true, backup: false, analytics: false });
 });
 
-test("consent: backup needs the plan, the toggle, and org policy together", async () => {
+test("consent: backup needs consent and org policy, independently of a plan", async () => {
   const { resolveSyncConsent } = await load();
   assert.equal(resolveSyncConsent(SIGNED_IN).backup, true);
-  for (const off of ["backupEnabled", "subscribed", "backupAllowedByPolicy"]) {
+  assert.equal(resolveSyncConsent({ ...SIGNED_IN, subscribed: false }).backup, true);
+  for (const off of ["backupEnabled", "backupAllowedByPolicy"]) {
     assert.equal(
       resolveSyncConsent({ ...SIGNED_IN, [off]: false }).backup,
       false,
@@ -59,11 +60,11 @@ test("consent: nothing syncs without a validated signed-in session", async () =>
   }
 });
 
-test("consent: Insights counters answer to their own opt-in, not the plan", async () => {
+test("consent: product counters never upload, including when opted in", async () => {
   const { resolveSyncConsent } = await load();
   assert.equal(
     resolveSyncConsent({ ...SIGNED_IN, backupEnabled: false, subscribed: false }).analytics,
-    true
+    false
   );
   for (const off of ["insightsSyncEnabled", "backupAllowedByPolicy"]) {
     assert.equal(
@@ -164,7 +165,7 @@ test("ambient streak: a counter upload counts as work without borrowing the team
   const { nextAmbientEmptyStreak } = await load();
   // The bug: an analytics push was not pass work at all, so a backup-off
   // account with Insights on backed off to hourly while counters queued up.
-  assert.equal(nextAmbientEmptyStreak(3, { team: false, analytics: true }), 0);
+  assert.equal(nextAmbientEmptyStreak(3, { team: false, analytics: false }), 0);
   // The over-correction: setting the team flag on any analytics consent pinned
   // every such account to the 5-minute cadence. Work, not consent, resets it.
   assert.equal(nextAmbientEmptyStreak(3, { team: false, analytics: false }), 4);

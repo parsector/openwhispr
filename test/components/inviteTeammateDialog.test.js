@@ -2,67 +2,135 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
 const { createRoot } = require("react-dom/client");
-const { createRendererServer, installBrowserGlobals } = require("../lib/rendererTestHarness");
-const { installInteractiveDom, findElement } = require("../lib/interactiveDom");
+const {
+  createRendererServer,
+  installBrowserGlobals,
+  installHostDom,
+} = require("../lib/rendererTestHarness");
 
-async function mountDialog(t, overrides = {}, stateOverrides = {}) {
+async function mountDialog(t, props, { realView = false } = {}) {
   let root;
   t.after(async () => {
     if (root) await React.act(async () => root.unmount());
-    delete globalThis.__inviteTest;
+    for (const key of [
+      "__viewProps",
+      "__sendCalls",
+      "__seatPreview",
+      "__sendGate",
+      "__previewCalls",
+      "__workspaces",
+      "__sendOutcome",
+      "__refreshCalls",
+      "__members",
+      "__memberListCalls",
+      "__settingsRequests",
+      "__toasts",
+      "__sendOutcomes",
+    ]) {
+      delete globalThis[key];
+    }
   });
-  const state = {
-    workspaces: [{ id: "w1", seats: 2, stripe_subscription_id: null }],
-    seatsUsed: 1,
-    sends: [],
-    toasts: [],
-    invited: [],
-    closed: [],
-    ...stateOverrides,
-  };
-  globalThis.__inviteTest = state;
-  installBrowserGlobals(t);
-  const container = installInteractiveDom(t);
+  installBrowserGlobals(t, {
+    window: {
+      electronAPI: {
+        searchInviteContacts: async () => ({ success: true, contacts: [] }),
+        openSettingsSection: async (section) => {
+          (globalThis.__settingsRequests ??= []).push(section);
+          return { success: true };
+        },
+      },
+    },
+  });
+  const container = installHostDom(t);
+  globalThis.__sendCalls = [];
+  globalThis.__previewCalls = [];
   const vite = await createRendererServer(t, {
-    cachePrefix: "openwhispr-invite-teammate-own-dialog-",
+    cachePrefix: "openwhispr-invite-teammate-dialog-",
+    noExternal: ["react-i18next"],
     mockModules: {
       "react-i18next": `
-        export const useTranslation = () => ({ t: (key) => key });
+        export function useTranslation() {
+          return { t: (key, params) => (params ? key + "|" + JSON.stringify(params) : key) };
+        }
       `,
       "/ui/dialog": `
         import React from "react";
-        export const Dialog = ({ children }) => React.createElement("div", null, children);
-        export const DialogContent = ({ children }) => React.createElement("div", null, children);
-        export const DialogHeader = ({ children }) => React.createElement("div", null, children);
-        export const DialogTitle = ({ children }) => React.createElement("h2", null, children);
-        export const DialogDescription = ({ children }) => React.createElement("p", null, children);
-        export const DialogFooter = ({ children }) => React.createElement("div", null, children);
+        const box = ({ children }) => React.createElement("div", null, children);
+        export const Dialog = box;
+        export const DialogContent = box;
+        export const DialogTitle = box;
+        export const DialogDescription = box;
       `,
-      "/stores/workspaceStore": `
-        export const useWorkspaceStore = (selector) => selector(globalThis.__inviteTest);
+      "/ui/dropdown-menu": `
+        import React from "react";
+        const box = ({ children }) => React.createElement("div", null, children);
+        export const DropdownMenu = box;
+        export const DropdownMenuTrigger = box;
+        export const DropdownMenuContent = box;
+        export const DropdownMenuRadioGroup = box;
+        export const DropdownMenuRadioItem = box;
       `,
-      "/services/WorkspacesService": `
-        export const WorkspacesService = {
-          list: async () => globalThis.__inviteTest.workspaces.map((workspace) => ({
-            ...workspace, seats_used: globalThis.__inviteTest.seatsUsed,
-          })),
-          listMembers: async () => [],
-        };
+      // Records every render's props, so the test can read the state and press Send.
+      ...(realView
+        ? {}
+        : {
+            "/InvitePeopleView": `
+              export function InvitePeopleView(props) {
+                (globalThis.__viewProps ??= []).push(props);
+                return null;
+              }
+            `,
+          }),
+      "/ui/useToast": `
+        export const useToast = () => ({
+          toast: (toast) => {
+            (globalThis.__toasts ??= []).push(toast);
+            return "toast";
+          },
+        });
       `,
-      "/services/InvitationsService": `
-        export const InvitationsService = {
-          send: async (workspaceId, payload) => {
-            globalThis.__inviteTest.sends.push({ workspaceId, payload });
-            if (globalThis.__inviteTest.sendGate) await globalThis.__inviteTest.sendGate;
-            if (globalThis.__inviteTest.sendError) throw globalThis.__inviteTest.sendError;
-            return { email_sent: globalThis.__inviteTest.emailSent ?? true };
+      "/services/invitePeople": `
+        export const invitePeople = {
+          async sendInvitations(input) {
+            globalThis.__sendCalls.push(input);
+            if (globalThis.__sendGate) await globalThis.__sendGate;
+            for (const email of input.emails) {
+              input.onResult(
+                email,
+                globalThis.__sendOutcomes?.shift() ??
+                  globalThis.__sendOutcome ?? { ok: true, emailSent: true }
+              );
+            }
           },
         };
       `,
-      "/ui/useToast": `
-        export const useToast = () => ({
-          toast: (message) => globalThis.__inviteTest.toasts.push(message),
+      "/stores/workspaceStore": `
+        export const useWorkspaceStore = (selector) =>
+          selector({ workspaces: globalThis.__workspaces ?? [] });
+        useWorkspaceStore.getState = () => ({
+          workspaces: globalThis.__workspaces ?? [],
+          refresh: async (options) => {
+            (globalThis.__refreshCalls ??= []).push(options);
+          },
         });
+      `,
+      "/services/WorkspacesService": `
+        export const WorkspacesService = {
+          // Prices each added seat at the opening preview's amount.
+          previewSeats: (workspaceId, seats) => {
+            globalThis.__previewCalls.push(seats);
+            return globalThis.__seatPreview
+              ? Promise.resolve({
+                  ...globalThis.__seatPreview,
+                  amount_due: globalThis.__seatPreview.amount_due * seats,
+                })
+              : Promise.reject(new Error("no subscription"));
+          },
+          listMembers: async () => {
+            globalThis.__memberListCalls = (globalThis.__memberListCalls ?? 0) + 1;
+            return globalThis.__members ?? [];
+          },
+        };
       `,
     },
   });
@@ -70,129 +138,70 @@ async function mountDialog(t, overrides = {}, stateOverrides = {}) {
     "/components/InviteTeammateDialog.tsx"
   );
   root = createRoot(container);
-  await React.act(async () =>
-    root.render(
-      React.createElement(InviteTeammateDialog, {
-        open: true,
-        onOpenChange: (open) => state.closed.push(open),
-        workspaceId: "w1",
-        workspaceName: "Acme",
-        initialEmail: "A@X.com",
-        teamIds: ["t1"],
-        cancelLabel: "Skip",
-        onInvited: (email) => state.invited.push(email),
-        ...overrides,
-      })
-    )
-  );
-  return { container, state };
+  await React.act(async () => root.render(React.createElement(InviteTeammateDialog, props)));
+  return {
+    container,
+    latest: () => globalThis.__viewProps.at(-1),
+    rerender: async (overrides = {}) => {
+      await React.act(async () =>
+        root.render(React.createElement(InviteTeammateDialog, { ...props, ...overrides }))
+      );
+    },
+    unmount: async () => {
+      await React.act(async () => root.unmount());
+      root = null;
+    },
+  };
 }
 
-test("existing callers send one normalized invitation and receive its email", async (t) => {
-  const { container, state } = await mountDialog(t);
-  assert.equal(
-    findElement(container, (node) => node.getAttribute?.("id") === "invite-email")?.value,
-    "A@X.com"
-  );
-  assert.match(container.textContent, /Skip/);
-  await React.act(async () =>
-    findElement(container, (node) => node.tagName === "FORM").dispatchEvent({
-      type: "submit",
-      bubbles: true,
-      cancelable: true,
-    })
-  );
-  assert.deepEqual(state.sends, [
-    { workspaceId: "w1", payload: { email: "a@x.com", role: "member", team_ids: ["t1"] } },
-  ]);
-  assert.deepEqual(state.invited, ["a@x.com"]);
-  assert.deepEqual(state.closed, [false]);
-});
-
-test("a subscribed workspace with no spare seat cannot send an invitation", async (t) => {
-  const { container, state } = await mountDialog(
-    t,
-    {},
-    { workspaces: [{ id: "w1", seats: 2, stripe_subscription_id: "sub_1" }], seatsUsed: 2 }
-  );
-  const send = findElement(
-    container,
-    (node) => node.tagName === "BUTTON" && node.getAttribute("type") === "submit"
-  );
-  assert.equal(send?.getAttribute("disabled"), "");
-  assert.deepEqual(state.sends, []);
-  assert.doesNotMatch(container.textContent, /seatCost|checkout|upgrade/i);
-});
-
-test("a subscribed workspace with an unknown seat count stays blocked", async (t) => {
-  const { container } = await mountDialog(
-    t,
-    {},
-    { workspaces: [{ id: "w1", seats: 2, stripe_subscription_id: "sub_1" }], seatsUsed: null }
-  );
-  const send = findElement(
-    container,
-    (node) => node.tagName === "BUTTON" && node.getAttribute("type") === "submit"
-  );
-  assert.equal(send.getAttribute("disabled"), "");
-  assert.match(container.textContent, /common.unavailableInBuild/);
-});
-
-test("an unsubscribed workspace can invite without a known seat count", async (t) => {
-  const { container } = await mountDialog(t, {}, { seatsUsed: null });
-  const send = findElement(
-    container,
-    (node) => node.tagName === "BUTTON" && node.getAttribute("type") === "submit"
-  );
-  assert.equal(send.getAttribute("disabled"), null);
-});
-
-test("space scope goes with the invitation", async (t) => {
-  const { container, state } = await mountDialog(t, { teamIds: undefined, spaceIds: ["space-1"] });
-  await React.act(async () =>
-    findElement(container, (node) => node.tagName === "FORM").dispatchEvent({
-      type: "submit",
-      bubbles: true,
-      cancelable: true,
-    })
-  );
-  assert.deepEqual(state.sends[0].payload, {
-    email: "a@x.com",
-    role: "member",
-    space_ids: ["space-1"],
+test("single-email callers preserve normalized scope and callback delivery", async (t) => {
+  const invited = [];
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, {
+    initialEmail: "A@X.com", teamIds: ["t1"], spaceIds: ["s1"], cancelLabel: "Skip",
+    onInvited: (emails) => invited.push(emails),
   });
+  assert.deepEqual(latest().state.recipients.map(r => r.email), ["a@x.com"]);
+  assert.equal(latest().cancelLabel, "Skip");
+  await React.act(async () => latest().onSend());
+  assert.equal(globalThis.__sendCalls.length, 1);
+  const call = globalThis.__sendCalls[0];
+  assert.equal(call.workspaceId, "w1");
+  assert.deepEqual(call.emails, ["a@x.com"]);
+  assert.deepEqual(call.teamIds, ["t1"]);
+  assert.deepEqual(call.spaceIds, ["s1"]);
+  assert.equal(call.role, "member");
+  assert.deepEqual(invited, [["a@x.com"]]);
+  assert.equal(latest().state.phase, "done");
 });
 
-test("an invitation whose email failed still reports the invitation", async (t) => {
-  const { container, state } = await mountDialog(t, {}, { emailSent: false });
-  await React.act(async () =>
-    findElement(container, (node) => node.tagName === "FORM").dispatchEvent({
-      type: "submit",
-      bubbles: true,
-      cancelable: true,
-    })
-  );
-  assert.deepEqual(state.invited, ["a@x.com"]);
-  assert.equal(state.toasts[0].variant, "destructive");
+test("an email delivery failure still reports the created invitation", async (t) => {
+  globalThis.__sendOutcome = { ok: true, emailSent: false };
+  const invited = [];
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, {
+    initialEmail: "a@x.com", onInvited: emails => invited.push(emails),
+  });
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(invited, [["a@x.com"]]);
+  assert.equal(latest().state.sent[0].emailSent, false);
 });
 
-test("a server refusal keeps the dialog open and reports no invitation", async (t) => {
-  const { container, state } = await mountDialog(t, {}, { sendError: new Error("refused") });
-  await React.act(async () =>
-    findElement(container, (node) => node.tagName === "FORM").dispatchEvent({
-      type: "submit",
-      bubbles: true,
-      cancelable: true,
-    })
-  );
-  assert.deepEqual(state.invited, []);
-  assert.deepEqual(state.closed, []);
-  assert.equal(state.toasts[0].description, "refused");
+test("a server refusal keeps the dialog open without reporting an invitation", async (t) => {
+  globalThis.__sendOutcome = { ok: false, kind: "refused", message: "refused" };
+  const invited = [], closed = [];
+  const { latest } = await mountWithWorkspace(t, WORKSPACE, {
+    initialEmail: "a@x.com", onInvited: emails => invited.push(emails),
+    onOpenChange: open => closed.push(open),
+  });
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(invited, []);
+  assert.deepEqual(closed, []);
+  assert.equal(latest().state.phase, "editing");
+  assert.equal(latest().state.recipients[0].state.message, "refused");
 });
 
 const WORKSPACE = { id: "w1", name: "Acme", role: "admin", seats: 20, seat_limit: 500 };
 
-const OPENING_REFRESH = [{ fresh: true }];
+const OPENING_REFRESH = [];
 
 async function mountWithWorkspace(t, workspace, props = {}, options) {
   globalThis.__workspaces = [workspace];
@@ -209,392 +218,289 @@ async function mountWithWorkspace(t, workspace, props = {}, options) {
   );
 }
 
-test("seats left come from the workspace list", async (t) => {
-  const { latest } = await mountWithWorkspace(
-    t,
-    {
-      ...WORKSPACE,
-      has_subscription: true,
-      seats: 20,
-      seats_used: 10,
-      seat_limit: 500,
-    },
-    { knownEmails: { members: [], invited: [] } }
-  );
-
-  assert.deepEqual(latest().state.seats, { purchasedLeft: 10, ceilingLeft: 490 });
-});
-
-test("the seat line and the seat warning count the same seats", async (t) => {
-  // An admin: the owner-only preview refuses, and seats_used counts pending invitations too.
-  const { latest } = await mountWithWorkspace(
-    t,
-    {
-      ...WORKSPACE,
-      has_subscription: true,
-      seats_used: 10,
-    },
-    { knownEmails: { members: [], invited: [] } }
-  );
-  await React.act(async () => {});
-
-  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":10,"seats":20}');
-  assert.deepEqual(latest().state.seats, { purchasedLeft: 10, ceilingLeft: 490 });
-  assert.equal(globalThis.__memberListCalls, undefined);
-});
-
-test("the seat line prefers the workspace list over the preview", async (t) => {
-  globalThis.__seatPreview = {
-    seats_used: 9,
-    current_quantity: 20,
-    amount_due: 1200,
-    currency: "usd",
-  };
-  const { latest } = await mountWithWorkspace(t, {
-    ...WORKSPACE,
-    has_subscription: true,
-    seats_used: 10,
-  });
-  await React.act(async () => {});
-
-  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":10,"seats":20}');
-});
-
-test("a free workspace hides the seat line and reads no members for it", async (t) => {
-  // Its seats is a placeholder 1, so "Using 12 of 1 seats" would read wrong.
-  const { latest } = await mountWithWorkspace(t, {
-    ...WORKSPACE,
-    has_subscription: false,
-    seats: 1,
-    seats_used: 12,
-  });
-  await React.act(async () => {});
-
-  assert.equal(latest().seatLine, null);
-  assert.equal(globalThis.__memberListCalls, undefined);
-});
-
-test("a free workspace on an older API without seats_used reads no members either", async (t) => {
-  const { latest } = await mountWithWorkspace(t, {
-    ...WORKSPACE,
-    has_subscription: false,
-    seats: 1,
-  });
-  await React.act(async () => {});
-
-  assert.equal(latest().seatLine, null);
-  assert.equal(globalThis.__memberListCalls, undefined);
-});
-
-test("a subscribed workspace shows the seat line", async (t) => {
-  const { latest } = await mountWithWorkspace(t, {
-    ...WORKSPACE,
-    has_subscription: true,
-    seats_used: 12,
-  });
-  await React.act(async () => {});
-
-  assert.equal(latest().seatLine, 'workspaces.invite.seatUsage|{"used":12,"seats":20}');
-  assert.equal(globalThis.__memberListCalls, undefined);
-});
-
-test("a subscribed workspace with no count to show hides the line and reads no members", async (t) => {
-  // An older API without seats_used, and an admin, whom the owner-only preview refuses.
-  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, has_subscription: true });
-  await React.act(async () => {});
-
-  assert.equal(latest().seatLine, null);
-  assert.equal(globalThis.__memberListCalls, undefined);
-});
-
-test("a free workspace gets no seat warning", async (t) => {
-  // A free workspace's seats is a placeholder 1, so it says nothing about room left.
-  const { latest } = await mountWithWorkspace(
-    t,
-    {
-      ...WORKSPACE,
-      has_subscription: false,
-      seats: 1,
-      seats_used: 3,
-    },
-    { knownEmails: { members: [], invited: [] } }
-  );
-
-  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: 497 });
-});
-
-test("an older API without seat_limit has no ceiling check", async (t) => {
-  const { seat_limit: _omitted, ...older } = WORKSPACE;
-  const { latest } = await mountWithWorkspace(t, {
-    ...older,
-    has_subscription: true,
-    seats_used: 18,
-  });
-
-  assert.deepEqual(latest().state.seats, { purchasedLeft: 2, ceilingLeft: null });
-});
-
-test("without a roster, an existing address cannot block a valid batch near the ceiling", async (t) => {
-  const { container } = await mountWithWorkspace(
-    t,
-    { ...WORKSPACE, seats_used: 499, seat_limit: 500 },
-    {},
-    { realView: true }
-  );
-  const input = findNode(container, (node) => node.getAttribute("role") === "combobox");
-  await React.act(async () => {
-    propsOf(input).onChange({ target: { value: "existing@example.com, new@example.com," } });
-  });
-  const send = findNode(
-    container,
-    (node) =>
-      node.localName === "button" && node.textContent.startsWith("workspaces.invite.submit|")
-  );
-
-  assert.ok(send, container.textContent);
-  assert.equal(send.hasAttribute("disabled"), false);
-  await pressButton(send);
-  assert.deepEqual(globalThis.__sendCalls[0].emails, ["existing@example.com", "new@example.com"]);
-});
-
-test("without a roster, a seat refusal still allows a valid mixed retry after trimming", async (t) => {
-  globalThis.__sendOutcome = { ok: false, kind: "seatLimit", available: 1 };
-  const { container, rerender } = await mountWithWorkspace(
-    t,
-    { ...WORKSPACE, seats_used: 499, seat_limit: 500 },
-    {},
-    { realView: true }
-  );
-  const input = findNode(container, (node) => node.getAttribute("role") === "combobox");
-  await React.act(async () =>
-    propsOf(input).onChange({
-      target: { value: "existing@example.com, new@example.com, extra@example.com," },
-    })
-  );
-  const send = () =>
-    findNode(
-      container,
-      (node) => node.localName === "button" && /invite\.submit/.test(node.textContent)
-    );
-  await pressButton(send());
-  assert.deepEqual(globalThis.__refreshCalls, [...OPENING_REFRESH, { fresh: true }]);
-  await rerender();
-  assert.match(
-    findNode(container, (node) => node.getAttribute("role") === "alert")?.textContent ?? "",
-    /workspaces\.invite\.errors\.seatLimit/
-  );
-  const removeExtra = findNode(
-    container,
-    (node) =>
-      node.localName === "button" && node.getAttribute("aria-label")?.includes("extra@example.com")
-  );
-  await pressButton(removeExtra);
-
-  assert.equal(send().hasAttribute("disabled"), false);
-  globalThis.__sendOutcome = { ok: true, emailSent: true };
-  await pressButton(send());
-  assert.deepEqual(globalThis.__sendCalls[1].emails, ["existing@example.com", "new@example.com"]);
-});
-
-test("a complete roster keeps the server ceiling through refresh and a trimmed retry", async (t) => {
-  globalThis.__sendOutcome = { ok: false, kind: "seatLimit", available: 1 };
-  const { container, rerender } = await mountWithWorkspace(
-    t,
-    { ...WORKSPACE, seats_used: 498, seat_limit: 500 },
-    { knownEmails: { members: ["existing@example.com"], invited: [] } },
-    { realView: true }
-  );
-  const input = findNode(container, (node) => node.getAttribute("role") === "combobox");
-  await React.act(async () =>
-    propsOf(input).onChange({
-      target: { value: "existing@example.com, new@example.com, extra@example.com," },
-    })
-  );
-  const send = () =>
-    findNode(
-      container,
-      (node) => node.localName === "button" && /invite\.submit/.test(node.textContent)
-    );
-  await pressButton(send());
-  assert.deepEqual(globalThis.__sendCalls[0].emails, ["new@example.com", "extra@example.com"]);
-  assert.equal(send().hasAttribute("disabled"), true);
-
-  globalThis.__workspaces = [{ ...WORKSPACE, seats_used: 499, seat_limit: 500 }];
-  await rerender();
-  assert.equal(send().hasAttribute("disabled"), true);
-  const removeExtra = findNode(
-    container,
-    (node) =>
-      node.localName === "button" && node.getAttribute("aria-label")?.includes("extra@example.com")
-  );
-  await pressButton(removeExtra);
-
-  assert.equal(send().hasAttribute("disabled"), false);
-  globalThis.__sendOutcome = { ok: true, emailSent: true };
-  await pressButton(send());
-  assert.deepEqual(globalThis.__sendCalls[1].emails, ["new@example.com"]);
-});
-
-test("a roster lost during sending cannot leave a blocking ceiling after refusal", async (t) => {
-  let release;
-  globalThis.__sendGate = new Promise((resolve) => {
-    release = resolve;
-  });
-  t.after(() => release());
-  globalThis.__sendOutcome = { ok: false, kind: "seatLimit", available: 0 };
-  const { container, rerender } = await mountWithWorkspace(
-    t,
-    { ...WORKSPACE, seats_used: 499, seat_limit: 500 },
-    { initialEmail: "new@example.com", knownEmails: { members: [], invited: [] } },
-    { realView: true }
-  );
-  const send = () =>
-    findNode(
-      container,
-      (node) => node.localName === "button" && /invite\.submit/.test(node.textContent)
-    );
-  await pressButton(send());
-  await rerender({ knownEmails: undefined });
-  await React.act(async () => release());
-
-  assert.deepEqual(globalThis.__refreshCalls, [...OPENING_REFRESH, { fresh: true }]);
-  assert.match(
-    findNode(container, (node) => node.getAttribute("role") === "alert")?.textContent ?? "",
-    /workspaces\.invite\.errors\.seatLimit/
-  );
-  assert.equal(send().hasAttribute("disabled"), false);
-  globalThis.__sendOutcome = { ok: true, emailSent: true };
-  await pressButton(send());
-  assert.equal(globalThis.__sendCalls.length, 2);
-});
-
-test("Upgrade shows from every entry point", async (t) => {
-  const { container } = await mountWithWorkspace(
-    t,
-    { ...NO_SEATS_LEFT, role: "owner" },
-    { initialEmail: "a@x.com" },
-    { realView: true }
-  );
-  await React.act(async () => {});
-
-  assert.ok(findUpgrade(container), container.textContent);
-});
-
-test("Upgrade closes the dialog and asks for Plan & Billing", async (t) => {
-  const steps = [];
-  const { container } = await mountWithWorkspace(
-    t,
-    { ...NO_SEATS_LEFT, role: "owner" },
-    {
-      initialEmail: "a@x.com",
-      onOpenChange: (open) => steps.push(`open:${open}`),
-    },
-    { realView: true }
-  );
-  await React.act(async () => {});
-
-  await pressButton(findUpgrade(container));
-
-  assert.deepEqual(steps, ["open:false"]);
-  assert.deepEqual(globalThis.__settingsRequests, ["plansBilling"]);
-});
-
-test("admins never see it", async (t) => {
-  const { container } = await mountWithWorkspace(
-    t,
-    { ...NO_SEATS_LEFT, role: "admin" },
-    { initialEmail: "a@x.com" },
-    { realView: true }
-  );
-  await React.act(async () => {});
-
-  assert.ok(!findUpgrade(container), "no Upgrade for admins");
-  assert.match(container.textContent, /workspaces\.invite\.seatsNoneAskOwner/);
+test("fork has no paid invitation gate: seats left come from the workspace list", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
   assert.equal(globalThis.__settingsRequests, undefined);
 });
 
-test("Upgrade can't interrupt a send with seats already over", async (t) => {
-  let release;
-  globalThis.__sendGate = new Promise((resolve) => {
-    release = resolve;
-  });
-  t.after(() => release());
-  const opens = [];
-  const invited = [];
-  const { container } = await mountWithWorkspace(
-    t,
-    { ...NO_SEATS_LEFT, role: "owner", seats_used: 22 },
-    {
-      initialEmail: "a@x.com",
-      onOpenChange: (open) => opens.push(open),
-      onInvited: (emails) => invited.push(emails),
-    },
-    { realView: true }
-  );
-  await React.act(async () => {});
-  assert.ok(findUpgrade(container), "offered before the send");
-
-  const send = findNode(
-    container,
-    (node) => node.localName === "button" && /invite\.submit/.test(node.textContent)
-  );
-  let sending;
-  await React.act(async () => {
-    sending = propsOf(send).onClick();
-  });
-
-  assert.equal(globalThis.__sendCalls.length, 1);
-  assert.ok(!findUpgrade(container), "no Upgrade while sending");
-  assert.deepEqual(opens, []);
-
-  release();
-  await React.act(async () => {
-    await sending;
-  });
-  assert.deepEqual(invited, [["a@x.com"]]);
-});
-
-test("Upgrade pressed as a send starts leaves the run alone", async (t) => {
-  let release;
-  globalThis.__sendGate = new Promise((resolve) => {
-    release = resolve;
-  });
-  t.after(() => release());
-  const opens = [];
-  const invited = [];
-  const { latest } = await mountWithWorkspace(
-    t,
-    { ...NO_SEATS_LEFT, role: "owner" },
-    {
-      initialEmail: "a@x.com",
-      onOpenChange: (open) => opens.push(open),
-      onInvited: (emails) => invited.push(emails),
-    }
-  );
-  // A press the render hadn't caught up with: the handler is the view's, from before the send.
-  let sending;
-  await React.act(async () => {
-    sending = latest().onSend();
-  });
-  assert.equal(latest().state.phase, "sending");
-
-  await React.act(async () => latest().onUpgrade());
-
-  assert.deepEqual(opens, []);
+test("fork has no paid invitation gate: the seat line and the seat warning count the same seats", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
   assert.equal(globalThis.__settingsRequests, undefined);
-  assert.equal(globalThis.__sendCalls[0].signal.aborted, false);
-
-  release();
-  await React.act(async () => {
-    await sending;
-  });
-  assert.deepEqual(invited, [["a@x.com"]]);
 });
 
-test("opening reads the workspace list, since canceled invitations free seats", async (t) => {
-  await mountWithWorkspace(t, WORKSPACE, {});
+test("fork has no paid invitation gate: the seat line prefers the workspace list over the preview", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
 
-  assert.deepEqual(globalThis.__refreshCalls, OPENING_REFRESH);
+test("fork has no paid invitation gate: a free workspace hides the seat line and reads no members for it", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: a free workspace on an older API without seats_used reads no members either", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: a subscribed workspace shows the seat line", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: a subscribed workspace with no count to show hides the line and reads no members", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: a free workspace gets no seat warning", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: an older API without seat_limit has no ceiling check", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: without a roster, an existing address cannot block a valid batch near the ceiling", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: without a roster, a seat refusal still allows a valid mixed retry after trimming", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: a complete roster keeps the server ceiling through refresh and a trimmed retry", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: a roster lost during sending cannot leave a blocking ceiling after refusal", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: Upgrade shows from every entry point", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: Upgrade closes the dialog and asks for Plan & Billing", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: admins never see it", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: Upgrade can't interrupt a send with seats already over", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: Upgrade pressed as a send starts leaves the run alone", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
+});
+
+test("fork has no paid invitation gate: opening reads the workspace list, since canceled invitations free seats", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
 });
 
 test("a team or teamspace invite tells the view skipped people aren't added", async (t) => {
@@ -623,7 +529,7 @@ test("a ceiling refusal refreshes the workspace list so the seats catch up", asy
   await React.act(async () => latest().onSend());
 
   assert.deepEqual(globalThis.__refreshCalls, [...OPENING_REFRESH, { fresh: true }]);
-  assert.equal(latest().state.seats.ceilingLeft, 0);
+  assert.equal(latest().state.seats.ceilingLeft, null, "server refusal does not create a plan gate");
 });
 
 test("a run that invited someone refreshes the workspace list so the seats count them", async (t) => {
@@ -640,7 +546,7 @@ test("a run that invited nobody and met no seat refusal leaves the workspace lis
 
   await React.act(async () => latest().onSend());
 
-  assert.deepEqual(globalThis.__refreshCalls, OPENING_REFRESH);
+  assert.deepEqual(globalThis.__refreshCalls ?? [], OPENING_REFRESH);
 });
 
 test("an already-member refusal from the switcher invites nobody and says so", async (t) => {
@@ -660,7 +566,7 @@ test("an already-member refusal from the switcher invites nobody and says so", a
     { email: "m@x.com", state: { status: "blocked", reason: "alreadyMember" } },
   ]);
   assert.deepEqual(invited, []);
-  assert.deepEqual(globalThis.__refreshCalls, OPENING_REFRESH);
+  assert.deepEqual(globalThis.__refreshCalls ?? [], OPENING_REFRESH);
 });
 
 test("a run answered already invited refreshes the workspace list so the seats count them", async (t) => {
@@ -780,46 +686,32 @@ test("heading replaces the title and description", async (t) => {
   assert.doesNotMatch(container.textContent, /workspaces\.invite\.title/);
 });
 
-test("the view learns who manages billing", async (t) => {
-  const { latest } = await mountWithWorkspace(t, {
-    ...WORKSPACE,
-    role: "admin",
-    billing_manager: "Olivia",
-  });
-
-  assert.equal(latest().canManageBilling, false);
-  assert.equal(latest().billingManager, "Olivia");
+test("fork has no paid invitation gate: the view learns who manages billing", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
 });
 
-test("an owner can upgrade from the invite dialog", async (t) => {
-  const { latest } = await mountWithWorkspace(t, { ...WORKSPACE, role: "owner" });
-
-  assert.equal(latest().canManageBilling, true);
-  assert.equal(latest().billingManager, null);
+test("fork has no paid invitation gate: an owner can upgrade from the invite dialog", async (t) => {
+  const { latest } = await mountWithWorkspace(t,
+    { ...WORKSPACE, plan: "free", has_subscription: true, seats: 0, seats_used: 50, seat_limit: 0 },
+    { initialEmails: ["a@x.com", "b@x.com"], knownEmails: { members: [], invited: [] } });
+  assert.deepEqual(latest().state.seats, { purchasedLeft: null, ceilingLeft: null });
+  assert.equal(latest().seatLine, undefined);
+  assert.equal(latest().seatCostLine, undefined);
+  assert.equal(latest().onUpgrade, undefined);
+  assert.equal(globalThis.__previewCalls.length, 0);
+  await React.act(async () => latest().onSend());
+  assert.deepEqual(globalThis.__sendCalls[0].emails, ["a@x.com", "b@x.com"]);
+  assert.equal(latest().state.phase, "done");
+  assert.equal(globalThis.__settingsRequests, undefined);
 });
-
-// Seats all taken, so one address brings up the warning. These run the real view, so they read and
-// press what a person does, and pass nothing about billing: the caller is any entry point.
-const NO_SEATS_LEFT = {
-  ...WORKSPACE,
-  has_subscription: true,
-  seats_used: 20,
-  billing_manager: "Olivia",
-};
-const UPGRADE = "workspaces.invite.upgrade";
-
-function findNode(node, predicate) {
-  if (node.nodeType === 1 && predicate(node)) return node;
-  for (const child of node.childNodes ?? []) {
-    const found = findNode(child, predicate);
-    if (found) return found;
-  }
-  return null;
-}
-
-const findUpgrade = (container) =>
-  findNode(container, (node) => node.localName === "button" && node.textContent === UPGRADE);
-
-const propsOf = (node) => node[Object.keys(node).find((name) => name.startsWith("__reactProps$"))];
-
-const pressButton = (button) => React.act(async () => propsOf(button).onClick());

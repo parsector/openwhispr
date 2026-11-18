@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { cn } from "../lib/utils";
-import { UserPlus } from "../icons";
-import { workspaceCan } from "../../lib/capabilities";
+import { ChevronDown, Plus, Search, User, UserCircle, UserPlus, Users, X } from "../icons";
+import type { IconComponent } from "../icons";
+import { teamCreationFor, workspaceCan } from "../../lib/capabilities";
+import { invitationStatus, rosterFor } from "../../lib/peopleRoster";
 import { useWorkspaceStore } from "../../stores/workspaceStore";
 import type { Workspace } from "../../types/electron";
 import InviteTeammateDialog from "../InviteTeammateDialog";
@@ -86,8 +88,9 @@ function PeopleBody({
   const { t } = useTranslation();
   const canManage = workspaceCan(workspace, "manage_members");
   const invitations = useWorkspaceInvitations(workspace.id, canManage);
-  const { rosterIsOurs, refreshMembers } = useWorkspaceStore(
+  const { roster, rosterIsOurs, refreshMembers } = useWorkspaceStore(
     useShallow((state) => ({
+      roster: rosterFor(state, workspace.id),
       rosterIsOurs: state.membersWorkspaceId === workspace.id,
       refreshMembers: state.refreshMembers,
     }))
@@ -124,6 +127,33 @@ function PeopleBody({
     (canManage || canCreateTeam) && tab !== "guests" && !(tab === "teams" && teamsEmpty);
   const visibleTabs = PEOPLE_TABS.filter((id) => id !== "invitations" || canManage);
 
+  // Cmd or Ctrl+F goes to the search field instead of the browser's find, which this window lacks.
+  const searchable = tab === "members";
+  useEffect(() => {
+    if (!searchable) return undefined;
+    const focusSearch = (event: KeyboardEvent): void => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+      if (event.key.toLowerCase() !== "f") return;
+      const field = searchInputRef.current;
+      if (!field) return;
+      event.preventDefault();
+      field.focus();
+      field.select();
+    };
+    document.addEventListener("keydown", focusSearch);
+    return () => document.removeEventListener("keydown", focusSearch);
+  }, [searchable]);
+
+  const knownEmails = useMemo(
+    () => ({
+      members: roster.map((member) => member.email.toLowerCase()),
+      invited: invitations.invitations
+        .filter((invitation) => invitationStatus(invitation, Date.now()) === "pending")
+        .map((invitation) => invitation.email.toLowerCase()),
+    }),
+    [roster, invitations.invitations]
+  );
+
   const openInvite = useCallback((): void => {
     invitedCountRef.current = 0;
     setInviteOpen(true);
@@ -148,13 +178,9 @@ function PeopleBody({
   );
 
   const { reload } = invitations;
-  const handleInvited = useCallback(
-    (_email: string): void => {
-      invitedCountRef.current += 1;
-      void reload();
-    },
-    [reload]
-  );
+  const handleInvited = useCallback((emails: string[]): void => {
+    invitedCountRef.current += emails.length;
+  }, []);
 
   return (
     <>
@@ -308,6 +334,12 @@ function PeopleBody({
           workspaceId={workspace.id}
           workspaceName={workspace.name}
           onInvited={handleInvited}
+          onInvitationsChanged={reload}
+          knownEmails={
+            rosterIsOurs && invitations.status === "ready" && !invitations.stale
+              ? knownEmails
+              : undefined
+          }
         />
       )}
     </>

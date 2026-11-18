@@ -233,3 +233,9 @@ export function cleanupUnconfiguredNotice(shownKey, { skipped, cleanupReachable,
     notice: { message, messageKey, surface: "llm", settingsTarget: "llms", setupKey },
   };
 }
+
+export function resolveLifecycleInputKind({ voiceAgentRequested, translationRequested }) {
+  if (voiceAgentRequested) return "assistant";
+  if (translationRequested) return "translation";
+  return "dictation";
+}

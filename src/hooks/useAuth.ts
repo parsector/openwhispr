@@ -1,4 +1,3 @@
-import { startAffiliateAttribution } from "../stores/affiliateStore";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { authClient, getGracePeriodRemainingMs, isWithinGracePeriod } from "../lib/auth";
 import {
@@ -88,7 +87,6 @@ async function refreshManagedEnterpriseIdentity(accountId: string, authGeneratio
 }
 
 export function useAuth() {
-  useEffect(startAffiliateAttribution, []);
   const localOnly = useSyncExternalStore(
     (listener) => usePolicyStore.subscribe?.(listener) ?? (() => {}),
     () => usePolicyStore.getState().localOnly === true,
@@ -266,11 +264,6 @@ export function useAuth() {
         }
         if (!cancelled) {
           logger.debug("Auth state sync", { isSignedIn: true, userId: resolvedUserId }, "auth");
-          // The app sign-in milestone, anchored by the server to this validation.
-          void window.electronAPI?.recordProductEventAppSession?.({
-            accountId: resolvedUserId,
-            authGeneration: boundGeneration,
-          });
           useSettingsStore.getState().setIsSignedIn(true);
           void refreshEffectivePolicy();
           void refreshManagedEnterpriseIdentity(resolvedUserId, boundGeneration);

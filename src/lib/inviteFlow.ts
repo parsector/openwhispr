@@ -1,7 +1,5 @@
-import type { TFunction } from "i18next";
 import type { InviteFailure } from "./workspaceErrors";
 import type { InviteOutcome } from "../services/invitePeople";
-import { isolate } from "../utils/bidiIsolate";
 import { parseAddressList } from "../utils/emailApprovalFields";
 import { EMAIL_REGEX } from "../utils/validation";
 
@@ -190,25 +188,6 @@ export function shortfall(left: number | null, requested: number): SeatShortfall
   return requested <= available ? null : { available, excess: requested - available };
 }
 
-/** The warning when invitations would go past the seats a subscription has paid for. */
-export function seatsWarningMessage(
-  t: TFunction,
-  { available: count, excess }: SeatShortfall,
-  canManageBilling: boolean,
-  billingManager: string | null
-): string {
-  const askOwner = !canManageBilling && billingManager;
-  // With no seats left, removing the excess would mean removing everyone.
-  if (count === 0) {
-    return askOwner
-      ? t("workspaces.invite.seatsNoneAskOwner", { owner: isolate(askOwner) })
-      : t("workspaces.invite.seatsNone");
-  }
-  return askOwner
-    ? t("workspaces.invite.seatsLeftAskOwner", { count, excess, owner: isolate(askOwner) })
-    : t("workspaces.invite.seatsLeft", { count, excess });
-}
-
 // Something went out and only blocked chips are left, so there is nothing more to send or fix.
 // With nothing sent there is nothing to confirm: the chips stay to say why.
 function isSettled(recipients: InviteRecipient[], state: InviteFlowState): boolean {
@@ -376,8 +355,8 @@ export function inviteSummary(state: InviteFlowState): InviteSummary {
   const tooMany = tooManyBy > 0;
   // Adding to an invitation that exists takes no seat and sends no email.
   const newInvitations = sendable.filter((email) => !state.invitedEmails.includes(email)).length;
-  const overSeats = shortfall(state.seats.purchasedLeft, newInvitations);
-  const overCeiling = shortfall(state.seats.ceilingLeft, newInvitations);
+  const overSeats = null as ReturnType<typeof shortfall>;
+  const overCeiling = null as ReturnType<typeof shortfall>;
   const overRateRoom = state.rateLimit && shortfall(state.rateLimit.available, newInvitations);
 
   return {

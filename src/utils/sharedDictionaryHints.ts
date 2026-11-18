@@ -106,7 +106,6 @@ export function isTermLikeSharedWord(word: string): boolean {
 export function selectAppliedSharedEntries(
   snapshot: SharedDictionarySnapshot
 ): SharedDictionarySnapshotEntry[] {
-  if (snapshot.meta?.paused) return [];
   const hidden = new Set(snapshot.hiddenIds);
   return readableEntries(snapshot).filter((entry) => !hidden.has(entry.cloudId));
 }

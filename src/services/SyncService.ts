@@ -43,7 +43,6 @@ import { readIsSubscribed, subscribeIsSubscribed } from "../lib/subscriptionFlag
 import { readNoteConflictIds, readNoteConflicts } from "../lib/noteConflictRegistry";
 import { serverClockOffsetMs, serverTimeIso } from "../lib/serverClock";
 import { pendingLeaderboardLeaveDeservesPriority } from "../lib/pendingLeaderboardLeave";
-import { hasSharedDictionaryPlan } from "../lib/workspaceBilling";
 import {
   cloudBackupResumed,
   effectiveLocalHistoryEnabled,
@@ -497,13 +496,7 @@ export type DictionarySyncResult = "synced" | "skipped" | "failed";
 
 type SharedEntriesPull = "snapshot" | "delta" | "scopesReturned";
 
-// Cached billing can lag behind an upgrade, including after a failed refresh.
-function isKnownWithoutSharedDictionaryPlan(workspaceId: string): boolean {
-  const { loaded, workspaces } = useWorkspaceStore.getState();
-  if (!loaded) return false;
-  const workspace = workspaces.find((candidate) => candidate.id === workspaceId);
-  return workspace !== undefined && !hasSharedDictionaryPlan(workspace);
-}
+function isKnownWithoutSharedDictionaryPlan(_workspaceId: string): boolean { return false; }
 
 // batch-create takes shared_at as an ISO timestamp with an offset.
 function toCloudSharedAt(value: string | null | undefined): string | null {
@@ -1307,6 +1300,7 @@ export class SyncService {
         }
         // Outside the branch above: Insights uploads ride their own opt-in,
         // while queued erasures run for every authenticated account.
+        await this.syncAnalytics();
         // Stamped after the push, so a pass that moved counters is recorded as
         // work rather than as another empty one. A pass that loses auth before
         // reaching here now leaves the streak unstamped where it used to stamp
@@ -1358,7 +1352,16 @@ export class SyncService {
       reason === "start" &&
       this.canSyncTeamSpaces() &&
       localStorage.getItem("teamSpacesCapability.probedAt") == null;
-    const bypassThrottle = waitForLock || firstTeamSpacesProbe;
+    // A leaderboard opt-out is a user-requested account mutation, not ambient
+    // sync work. Retry it on the next trigger even when an otherwise idle
+    // collaboration-only pass has backed off. That priority is spent after a
+    // few undelivered attempts: an opt-out that can never land keeps being
+    // retried, but stops disabling the throttle, the in-flight guard and the
+    // ambient backoff for the life of the install.
+    const sessionUserId = getAuthRequestContextSnapshot().sessionUserId;
+    const pendingLeaderboardLeave =
+      sessionUserId != null && pendingLeaderboardLeaveDeservesPriority(sessionUserId);
+    const bypassThrottle = waitForLock || firstTeamSpacesProbe || pendingLeaderboardLeave;
     if (
       !bypassThrottle &&
       (this.syncing || Date.now() - this.lastCompletedSyncAt() < AUTO_SYNC_THROTTLE_MS)
@@ -3549,8 +3552,16 @@ export class SyncService {
   }
 
   private async pushPendingNotes(teamOnly = false): Promise<void> {
-    let pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
-    let conflicted = readNoteConflictIds();
+    const authGeneration = getValidatedAuthGeneration();
+    if (authGeneration == null) return;
+    await this.ensurePrivatePlacementCapability();
+    // Without Backup, shared Private notes still sync, so their failed pushes retry too.
+    const queue = teamOnly ? "syncable" : undefined;
+    let pending = (await window.electronAPI.getPendingNotes?.(queue)) ?? [];
+    // A conflict this device's own write left behind is no conflict: settle it
+    // first, so the note pushes in this pass (see isStaleNoteConflict).
+    for (const note of pending) await this.settleOwnNoteConflict(note);
+    const conflicted = readNoteConflictIds();
     // A surfaced conflict already holds its cloud copy; only rows still
     // awaiting one need the snapshot pull, as an unchanged cloud row may be
     // absent from the delta feed. A rejected create pulls until its conflict
@@ -3568,8 +3579,7 @@ export class SyncService {
     ) {
       const pulled = await this.pullNotes(teamOnly, true);
       if (pullsForUnrevisionedClear && pulled) this.unrevisionedClearPullDone = true;
-      pending = (await window.electronAPI.getPendingNotes?.(teamOnly ? "team" : undefined)) ?? [];
-      conflicted = readNoteConflictIds();
+      pending = (await window.electronAPI.getPendingNotes?.(queue)) ?? [];
     }
     if (pending.length === 0) return;
     this.teamPassMovedWork = true;
@@ -4131,115 +4141,7 @@ export class SyncService {
             // Parked like a row waiting on its folder: the cursor holds so the
             // next pass retries it, and the rest of the delta still applies.
             parkedRows++;
-            console.warn(`Parking note ${cloudNote.id}: unknown space ${cloudNote.space_id}`);
-            continue;
-          }
-
-          if (local?.deleted_at) continue;
-          if (local?.cloud_create_pending) {
-            if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
-              parkedRows++;
-              continue;
-            }
-            const result = await window.electronAPI.acknowledgeNoteCreate?.(
-              local.id,
-              local,
-              cloudNote.id,
-              cloudNote.updated_at,
-              cloudNote.user_id ?? null,
-              {
-                reconcilePending: true,
-                cloudNote,
-                cloudRevision: cloudNote.revision ?? null,
-                localFolderId: resolvePulledNoteFolderId(
-                  cloudNote,
-                  space.id,
-                  cloudToLocal,
-                  defaultFolderId
-                ),
-                localSpaceId: space.id,
-              }
-            );
-            if (result?.outcome === "conflict") {
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-            } else if (result?.outcome === "synced" || result?.outcome === "pending") {
-              await this.settleNoteConflict(local.client_note_id);
-            } else {
-              parkedRows++;
-            }
-            continue;
-          }
-          const preRevision =
-            local &&
-            !hasNoteRevision(local.cloud_revision) &&
-            hasNoteRevision(cloudNote.revision) &&
-            local.cloud_id === cloudNote.id;
-          if (preRevision && local.sync_status !== "synced") {
-            // Adopt the revision when this device's base is the server's
-            // current row. An unpushed edit on a row acked before timestamp
-            // bases existed pushed last-write-wins until now; it still does.
-            const sameBase =
-              normalizeTimestamp(local.cloud_updated_at) ===
-              normalizeTimestamp(cloudNote.updated_at);
-            if (!sameBase && local.cloud_updated_at) {
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-              continue;
-            }
-            await window.electronAPI.setNoteCloudBase?.(
-              local.id,
-              cloudNote.updated_at,
-              cloudNote.revision
-            );
-            local.cloud_revision = cloudNote.revision;
-          }
-          // A clean row synced before revisions takes the cloud copy whole:
-          // adopting only the revision would mark the copies equal from now
-          // on, so a clear made elsewhere while this device ran a release that
-          // kept the text would never arrive.
-          const cleanPreRevision = preRevision && local.sync_status === "synced";
-          if (!local || cleanPreRevision || isCloudNoteNewer(cloudNote, local)) {
-            const transcriptOnlyPending =
-              !!local &&
-              local.sync_status === "pending" &&
-              !!local.cloud_id &&
-              !!local.transcript &&
-              !!cloudNote.transcript &&
-              local.title === cloudNote.title &&
-              local.content === cloudNote.content &&
-              local.enhanced_content === cloudNote.enhanced_content &&
-              !local.content_sync_operation &&
-              !local.enhanced_content_sync_operation &&
-              !local.folder_sync_operation &&
-              !local.participants_sync_operation &&
-              local.folder_id ===
-                resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId) &&
-              local.space_id === space.id &&
-              local.participants === cloudNote.participants;
-            if (local && local.sync_status !== "synced" && !transcriptOnlyPending) {
-              // A newer cloud copy over unpushed local edits ('pending' or
-              // 'error'): surface the conflict to the editor banner instead
-              // of silently dropping the local edit (plan §7.3).
-              await this.surfaceNoteConflict(local.client_note_id, cloudNote);
-              continue;
-            }
-            if (cloudNote.folder_id && !cloudToLocal.has(cloudNote.folder_id)) {
-              // The note's folder isn't known locally yet (created moments
-              // ago, or its pull failed). Filing it to the fallback would
-              // stick — the advanced cursor never re-pulls the row — so park
-              // it like an unknown space until the folder arrives.
-              parkedRows++;
-              console.warn(`Parking note ${cloudNote.id}: unknown folder ${cloudNote.folder_id}`);
-              continue;
-            }
-            await window.electronAPI.upsertNoteFromCloud?.(
-              cloudNote as unknown as Record<string, unknown>,
-              resolvePulledNoteFolderId(cloudNote, space.id, cloudToLocal, defaultFolderId),
-              space.id
-            );
-            if (local) {
-              // Applying cloud over a clean row settles any stale conflict.
-              await this.settleNoteConflict(local.client_note_id);
-            }
+            console.error(`Note pull failed for cloud note ${cloudNote.id}:`, err);
           }
         }
 
@@ -4431,6 +4333,16 @@ export class SyncService {
 
   // The Insights view uses this same guarded path before reading the account
   // summary, so queued uploads and foreground refreshes use one consent gate.
+  async syncAnalyticsNow(): Promise<boolean> {
+    return this.syncAnalytics();
+  }
+
+  // Push-only: the account summary is read live by the Insights view, so there
+  // is nothing to pull back into the device's own counters.
+  private async syncAnalytics(): Promise<boolean> {
+    return false;
+  }
+
   private async syncTranscriptions(): Promise<void> {
     await this.pushPendingTranscriptions();
     if (!this.passIsCurrent()) return;

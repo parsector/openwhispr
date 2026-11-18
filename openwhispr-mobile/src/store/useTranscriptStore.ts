@@ -20,7 +20,7 @@ import {
 } from '@/lib/transcriptAudio';
 import { useProcessingModeStore } from '@/store/useProcessingModeStore';
 import { snapshotTextInference, snapshotTranscriptionJob } from '@/lib/inferenceRouting';
-import { logTranscriptionCompleted } from '@/lib/appsflyer';
+
 import type { KeyboardTone, Transcript, TranscriptionProvider } from '../types';
 import { StorageService } from '../services/storage/StorageService';
 
@@ -260,10 +260,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
         });
         if (newTranscript.jobId) clearKeyboardProviderRecovery(newTranscript.jobId);
         if (newTranscript.text.trim()) {
-          logTranscriptionCompleted({
-            source: newTranscript.requestContext ?? 'recording',
-            provider: newTranscript.provider,
-          });
+
         }
         // Release any retained copy (e.g. a previously-failed row with the same id
         // whose retry just succeeded) once the completed state is persisted.
@@ -435,10 +432,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => {
           set({ transcripts, isLoading: false });
         });
         if (updated.text.trim()) {
-          logTranscriptionCompleted({
-            source: updated.requestContext ?? 'recording',
-            provider: updated.provider,
-          });
+
         }
         // Release the retained audio once the completed state is persisted, the
         // same way a first-pass success does.

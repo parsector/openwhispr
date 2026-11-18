@@ -69,7 +69,7 @@ export function spaceCan(
   return capabilities[capability] === true;
 }
 
-export type TeamCreation = "allowed" | "paywall" | "unavailable";
+export type TeamCreation = "allowed" | "unavailable";
 
 /**
  * Whether the caller may create a team here, and if not, whether a plan or a permission is what
@@ -81,7 +81,7 @@ export function teamCreationFor(
   workspace: Pick<Workspace, "role" | "capabilities"> | null | undefined
 ): TeamCreation {
   if (!workspaceCan(workspace, "manage_teams")) return "unavailable";
-  return workspace?.capabilities?.create_teams === false ? "paywall" : "allowed";
+  return "allowed";
 }
 
 /**

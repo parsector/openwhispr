@@ -16,7 +16,6 @@ import {
   SECONDARY_BUTTON,
 } from "./workspace/dialogButtons";
 import { SpacePeopleField } from "./notes/SpacePeopleField";
-import { SpaceInviteSeatNotice } from "./notes/SpaceInviteSeatNotice";
 import { createTeam } from "../services/spaceActions";
 import { inviteAfterCreate, inviteFollowUpToast } from "../lib/inviteAfterCreate";
 import { useWorkspaceStore } from "../stores/workspaceStore";
@@ -53,7 +52,6 @@ export interface CreateTeamDialogProps {
   /** Fires once the team exists, before the form closes. */
   onCreated?: (team: Team, outcome: { memberCount: number }) => void | Promise<void>;
   /** The server refused on plan: the host closes this and opens the paywall. */
-  onPlanRequired: () => void;
 }
 
 /** One-step team creation: name it, pick or invite its people, and nothing sends before Create. */
@@ -63,7 +61,6 @@ export default function CreateTeamDialog({
   onOpenChange,
   initialPeople,
   onCreated,
-  onPlanRequired,
 }: CreateTeamDialogProps): ReactElement {
   // A create under way can't be taken back, so Esc and an overlay click wait for its answer.
   const creatingRef = useRef(false);
@@ -88,7 +85,6 @@ export default function CreateTeamDialog({
             creatingRef.current = creating;
           }}
           onCreated={onCreated}
-          onPlanRequired={onPlanRequired}
         />
       </DialogContent>
     </Dialog>
@@ -101,7 +97,6 @@ interface FormProps {
   onClose: () => void;
   onCreatingChange: (creating: boolean) => void;
   onCreated?: CreateTeamDialogProps["onCreated"];
-  onPlanRequired: () => void;
 }
 
 function CreateTeamForm({
@@ -110,7 +105,6 @@ function CreateTeamForm({
   onClose,
   onCreatingChange,
   onCreated,
-  onPlanRequired,
 }: FormProps): ReactElement {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
@@ -205,7 +199,7 @@ function CreateTeamForm({
           .getState()
           .refresh({ fresh: true })
           .catch(() => undefined);
-        onPlanRequired();
+        setFailure({ kind: "general" });
       } else if (classified.kind === "nameTaken") {
         setNameError({ kind: "taken", name: trimmedName });
         setRefocus("name");
@@ -397,9 +391,6 @@ function CreateTeamForm({
             <div className="h-[38px] animate-pulse rounded-xl bg-foreground/5 dark:bg-white/5" />
           )}
           {peopleError}
-          {emails.length > 0 && !isCreating && (
-            <SpaceInviteSeatNotice workspaceId={workspace.id} addressCount={emails.length} />
-          )}
           {failure?.kind === "general" && bar(t(`${FORM_KEY}.failed`))}
           {failure?.kind === "refused" && bar(failure.message)}
           {(failure?.kind === "notAllowed" || failure?.kind === "ssoRequired") &&

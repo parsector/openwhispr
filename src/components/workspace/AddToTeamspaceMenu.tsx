@@ -31,7 +31,7 @@ import {
   DropdownMenuSubTrigger,
 } from "../ui/dropdown-menu";
 import { useToast } from "../ui/useToast";
-import { accessOf, dialogBoundaryOf } from "./AddToTeamList";
+import { accessOf, dialogBoundaryOf } from "./teamListHelpers";
 import { WorkspaceActionDialog } from "./WorkspaceActionDialog";
 
 const NO_COVERAGE: ReadonlyMap<string, number> = new Map();

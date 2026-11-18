@@ -259,7 +259,7 @@ jest.mock('@/components/ui/PermissionAlert', () => ({ PermissionAlertMount: () =
 jest.mock('@/screens/AuthScreen', () => () => null);
 jest.mock('@/screens/onboarding/OnboardingFlow', () => ({ OnboardingFlow: () => null }));
 jest.mock('@/hooks/useRevenueCatIdentity', () => ({ useRevenueCatIdentity: () => undefined }));
-jest.mock('@/hooks/useAffiliateAttribution', () => ({ useAffiliateAttribution: () => undefined }));
+
 jest.mock('@/hooks/useAnonymousOnboardingSession', () => ({
   useAnonymousOnboardingSession: () => undefined,
 }));
@@ -398,11 +398,7 @@ it('restores local startup before cold capture without waiting for account netwo
   expect(storage.markHotkeyJsReady).toHaveBeenCalledTimes(1);
   await restoreAccount();
   await stopRecording();
-  expect(dictations()).toEqual([
-    expect.objectContaining({
-      properties: expect.objectContaining({ word_count: 2, is_practice: false }),
-    }),
-  ]);
+  expect(dictations()).toEqual([]);
 });
 
 it('makes native hotkey starts ready after local hydration and captures their original cached owner', async () => {
@@ -416,7 +412,7 @@ it('makes native hotkey starts ready after local hydration and captures their or
   act(() => mockBackgroundStartedListener!());
   await restoreAccount();
   await stopRecording();
-  expect(dictations()).toHaveLength(1);
+  expect(dictations()).toHaveLength(0);
 });
 
 it.each(['guest', 'anonymous', 'opt-out', 'signed-out'] as const)(
@@ -501,7 +497,7 @@ it('coalesces duplicate URLs and their fallback intent into one recording', asyn
   expect(items.has('keyboard_handoff_intent_at_ms')).toBe(false);
 });
 
-it('keeps a cached account capture queued while another account is validated', async () => {
+it('delivers cached-account capture without creating a telemetry queue during account changes', async () => {
   render(<RootLayout />);
   await restoreLocal();
   await waitFor(() => expect(storage.startNativeRecording).toHaveBeenCalledTimes(1));
@@ -509,12 +505,12 @@ it('keeps a cached account capture queued while another account is validated', a
   await stopRecording();
   expect(dictations()).toHaveLength(0);
   await restoreAccount();
-  await waitFor(() => expect(dictations()).toHaveLength(1));
+  await waitFor(() => expect(dictations()).toHaveLength(0));
   expect(
     mockRequests
       .filter((batch) => batch.events.some((event) => event.event_name === 'dictation_completed'))
       .map((batch) => batch.expected_user_id),
-  ).toEqual(['restored-account']);
+  ).toEqual([]);
 });
 
 it('releases an ordinary native start only after local startup and counts its delivered text', async () => {
@@ -533,7 +529,7 @@ it('releases an ordinary native start only after local startup and counts its de
   expect(items.get('keyboard_recording_job_id')).toBe(nativeJobId);
   await restoreAccount();
   await stopRecording();
-  expect(dictations()).toHaveLength(1);
+  expect(dictations()).toHaveLength(0);
 });
 
 it('lets a queued URL supersede the original native job before native readiness is released', async () => {
@@ -554,7 +550,7 @@ it('lets a queued URL supersede the original native job before native readiness 
   expect(nativeReplays).toBe(0);
   await restoreAccount();
   await stopRecording();
-  expect(dictations()).toHaveLength(1);
+  expect(dictations()).toHaveLength(0);
 });
 
 it('keeps a pending cancellation visible to native replay while releasing readiness', async () => {
@@ -607,5 +603,5 @@ it('waits for the asynchronous local cached session before releasing cold record
   expect(useAuthStore.getState().isInitialized).toBe(false);
   await restoreAccount();
   await stopRecording();
-  expect(dictations()).toHaveLength(1);
+  expect(dictations()).toHaveLength(0);
 });

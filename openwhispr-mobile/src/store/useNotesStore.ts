@@ -44,7 +44,7 @@ import {
   parseCalendarParticipants,
 } from '@/lib/calendar/meetingContext';
 import { makeContentHash } from '@/lib/utils';
-import { logTranscriptionCompleted } from '@/lib/appsflyer';
+
 import { ReasoningService } from '@/services/reasoning/ReasoningService';
 import type {
   EnrollVoiceProfileInput,
@@ -780,7 +780,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
         },
       );
       if (notesRepository.getSegments(noteId).some((segment) => segment.text.trim())) {
-        logTranscriptionCompleted({ source: 'meeting', provider: 'local' });
+
       }
       set((state) => ({
         meetingSpeakerEmbeddingsByNoteId: {
@@ -818,7 +818,7 @@ export const useNotesStore = create<NotesStore>((set, get) => ({
       notesRepository.replaceSegments(noteId, segments);
       get().transitionStatus(noteId, 'done'); // transcribing -> done (cloud skips diarizing)
       if (segments.some((segment) => segment.text?.trim())) {
-        logTranscriptionCompleted({ source: 'meeting', provider: 'cloud' });
+
       }
       await finalizeMeetingNoteContent(noteId);
     } finally {

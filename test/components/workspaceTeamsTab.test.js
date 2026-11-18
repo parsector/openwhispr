@@ -278,7 +278,7 @@ test("an admin sees the table with Create in the empty state", async (t) => {
   await React.act(async () => propsOf(create).onClick());
   assert.equal(globalThis.__createDialog.open, true);
   assert.equal(globalThis.__createDialog.workspace, workspace);
-  assert.equal(globalThis.__paywallDialog.open, false);
+  assert.equal(globalThis.__paywallDialog, undefined);
 });
 
 test("an admin's table has the three columns, no checkboxes and no Create", async (t) => {
@@ -334,25 +334,32 @@ test("a free workspace's table and dialog stay fully working", async (t) => {
   assert.equal(globalThis.__reloads, 1);
 });
 
-test("a free workspace's empty state still offers Create, which the opener answers", async (t) => {
+test("fork team creation has no paywall: a free workspace's empty state still offers Create, which the opener answers", async (t) => {
   const { Tab, workspace } = await loadTab(t, { workspace: FREE_ADMIN, teams: [] });
-  assert.match(render(Tab, workspace), new RegExp(`${KEY}\\.create<`));
-
-  const container = await mount(t, Tab, workspace);
-  await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
-  assert.equal(globalThis.__paywallDialog.open, true);
-  assert.equal(globalThis.__createDialog.open, false);
-});
-
-test("the server's refusal swaps the form for the paywall", async (t) => {
-  const { Tab, workspace } = await loadTab(t, { teams: [] });
   const container = await mount(t, Tab, workspace);
   await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
   assert.equal(globalThis.__createDialog.open, true);
-
-  await React.act(async () => globalThis.__createDialog.onPlanRequired());
+  assert.equal(globalThis.__createDialog.onPlanRequired, undefined);
+  assert.equal(globalThis.__paywallDialog, undefined);
+  const root = mountedRoots.get(t);
+  await React.act(async () => root.render(tabElement(Tab, { ...workspace, id: "w2" })));
   assert.equal(globalThis.__createDialog.open, false);
-  assert.equal(globalThis.__paywallDialog.open, true);
+  await React.act(async () => root.render(tabElement(Tab, workspace)));
+  assert.equal(globalThis.__createDialog.open, false);
+});
+
+test("fork team creation has no paywall: the server's refusal swaps the form for the paywall", async (t) => {
+  const { Tab, workspace } = await loadTab(t, { workspace: FREE_ADMIN, teams: [] });
+  const container = await mount(t, Tab, workspace);
+  await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
+  assert.equal(globalThis.__createDialog.open, true);
+  assert.equal(globalThis.__createDialog.onPlanRequired, undefined);
+  assert.equal(globalThis.__paywallDialog, undefined);
+  const root = mountedRoots.get(t);
+  await React.act(async () => root.render(tabElement(Tab, { ...workspace, id: "w2" })));
+  assert.equal(globalThis.__createDialog.open, false);
+  await React.act(async () => root.render(tabElement(Tab, workspace)));
+  assert.equal(globalThis.__createDialog.open, false);
 });
 
 test("a created team reloads the list", async (t) => {
@@ -381,15 +388,18 @@ test("closing the form reads the list again, once, since a lost create may have 
   assert.equal(globalThis.__reloads, 2, "a create already read it");
 });
 
-test("a paywall that finds the plan active opens the form", async (t) => {
-  const { Tab, workspace } = await loadTab(t, { teams: [] });
-  await mount(t, Tab, workspace);
-  await React.act(async () => globalThis.__createDialog.onPlanRequired());
-  assert.equal(globalThis.__paywallDialog.open, true);
-
-  await React.act(async () => globalThis.__paywallDialog.onAvailable());
-  assert.equal(globalThis.__paywallDialog.open, false);
+test("fork team creation has no paywall: a paywall that finds the plan active opens the form", async (t) => {
+  const { Tab, workspace } = await loadTab(t, { workspace: FREE_ADMIN, teams: [] });
+  const container = await mount(t, Tab, workspace);
+  await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
   assert.equal(globalThis.__createDialog.open, true);
+  assert.equal(globalThis.__createDialog.onPlanRequired, undefined);
+  assert.equal(globalThis.__paywallDialog, undefined);
+  const root = mountedRoots.get(t);
+  await React.act(async () => root.render(tabElement(Tab, { ...workspace, id: "w2" })));
+  assert.equal(globalThis.__createDialog.open, false);
+  await React.act(async () => root.render(tabElement(Tab, workspace)));
+  assert.equal(globalThis.__createDialog.open, false);
 });
 
 test("a request from People opens the opener once and says it was handled", async (t) => {
@@ -562,21 +572,16 @@ test("a dialog opened in one workspace doesn't come back when switching away and
   assert.equal(globalThis.__teamDialog, undefined);
 });
 
-test("Create and the paywall opened in one workspace close when the workspace changes under them", async (t) => {
-  const { Tab, workspace } = await loadTab(t, { teams: [] });
+test("fork team creation has no paywall: Create and the paywall opened in one workspace close when the workspace changes under them", async (t) => {
+  const { Tab, workspace } = await loadTab(t, { workspace: FREE_ADMIN, teams: [] });
   const container = await mount(t, Tab, workspace);
   await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
-  await React.act(async () => globalThis.__createDialog.onPlanRequired());
-  await React.act(async () => propsOf(buttonWithText(container, `${KEY}.create`)).onClick());
   assert.equal(globalThis.__createDialog.open, true);
-  assert.equal(globalThis.__paywallDialog.open, true);
-
+  assert.equal(globalThis.__createDialog.onPlanRequired, undefined);
+  assert.equal(globalThis.__paywallDialog, undefined);
   const root = mountedRoots.get(t);
   await React.act(async () => root.render(tabElement(Tab, { ...workspace, id: "w2" })));
   assert.equal(globalThis.__createDialog.open, false);
-  assert.equal(globalThis.__paywallDialog.open, false);
-
   await React.act(async () => root.render(tabElement(Tab, workspace)));
   assert.equal(globalThis.__createDialog.open, false);
-  assert.equal(globalThis.__paywallDialog.open, false);
 });

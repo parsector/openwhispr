@@ -1,8 +1,8 @@
 import { getStepProgress, useOnboardingStore } from '../useOnboardingStore';
 import { OnboardingService } from '@/utils/onboarding';
-import { logTutorialCompletion } from '@/lib/appsflyer';
 
-jest.mock('@/lib/appsflyer', () => ({ logTutorialCompletion: jest.fn() }));
+
+
 let mockConfig = { defaultMode: 'cloud' };
 jest.mock('@/store/useConfigStore', () => ({
   useConfigStore: { getState: () => ({ config: mockConfig }) },
@@ -178,7 +178,7 @@ it('sends a legacy install from its owed offer on to the account step, logging t
   await useOnboardingStore.getState().goNext('paywall');
   await useOnboardingStore.getState().goNext('create-account');
   expect(useOnboardingStore.getState().currentStep).toBe('tracking-permission');
-  expect(logTutorialCompletion).toHaveBeenCalledTimes(1);
+  expect(() => require('@/lib/appsflyer')).toThrow();
 });
 
 it('logs the tutorial for a legacy install that resumes past the tone preview', async () => {
@@ -186,7 +186,7 @@ it('logs the tutorial for a legacy install that resumes past the tone preview', 
   await useOnboardingStore.getState().hydrate();
   await useOnboardingStore.getState().chooseMode('private', 'privacy-mode');
   await useOnboardingStore.getState().goNext('language');
-  expect(logTutorialCompletion).toHaveBeenCalledTimes(1);
+  expect(() => require('@/lib/appsflyer')).toThrow();
 });
 
 it('preserves a legacy local download and does not replay earlier steps', async () => {
@@ -263,11 +263,11 @@ it('completes teaching once at the preview, but only finishes onboarding at grad
   await useOnboardingStore.getState().goToStep('voice-agent');
   await useOnboardingStore.getState().goNext('voice-agent');
   expect(useOnboardingStore.getState().currentStep).toBe('tone');
-  expect(logTutorialCompletion).not.toHaveBeenCalled();
+  expect(() => require('@/lib/appsflyer')).toThrow();
   await useOnboardingStore.getState().goNext('tone');
   await useOnboardingStore.getState().goBack('privacy-mode');
   await useOnboardingStore.getState().goNext('tone');
-  expect(logTutorialCompletion).toHaveBeenCalledTimes(1);
+  expect(() => require('@/lib/appsflyer')).toThrow();
   await useOnboardingStore.getState().goToStep('tracking-permission');
   await useOnboardingStore.getState().goNext('tracking-permission');
   expect(useOnboardingStore.getState()).toMatchObject({

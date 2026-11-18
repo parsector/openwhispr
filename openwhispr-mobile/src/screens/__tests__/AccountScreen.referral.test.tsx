@@ -67,12 +67,8 @@ jest.mock('@/store/useUsageStore', () => ({
 jest.mock('@/hooks/useSuperwallGate', () => ({
   useSuperwallGate: () => ({ register: jest.fn() }),
 }));
-jest.mock('@/lib/affiliateOffer', () => ({
-  loadAffiliateOffer: jest.fn().mockResolvedValue(null),
-}));
-jest.mock('@/store/useAffiliateStore', () => ({
-  useAffiliateStore: { getState: () => ({ link: '', prepare: jest.fn() }) },
-}));
+
+
 jest.mock('@/components/AccountCreatorLink', () => ({ AccountCreatorLink: () => null }));
 jest.mock('@/data/remote/billingApi', () => ({ createStripeBillingPortalSession: jest.fn() }));
 jest.mock('@/lib/apiClient', () => ({

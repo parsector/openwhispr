@@ -88,6 +88,8 @@ async function loadMembersTab(
           globalThis.__addMenu = props;
           return React.createElement("span", { "data-add-to-teamspace": "" });
         }
+      `,
+      "/useAddPeopleToTeam": `
         const teamAdd = { teams: { status: "idle", teams: [] }, open() {}, add() {}, dialog: null };
         export function useAddPeopleToTeam(workspace) {
           globalThis.__teamAddWorkspace = workspace;
@@ -1031,7 +1033,7 @@ test("the selection arrives as chips", async (t) => {
   await React.act(async () => globalThis.__addMenu.onCreateTeam());
 
   assert.equal(globalThis.__createDialog.open, true);
-  assert.equal(globalThis.__paywall.open, false);
+  assert.equal(globalThis.__paywall, undefined);
   assert.deepEqual(
     globalThis.__createDialog.initialPeople.map((member) => member.user_id),
     ["u-member", "u-mason"]
@@ -1080,50 +1082,45 @@ test("Cancel keeps the selection", async (t) => {
   assert.match(barText(container), /selection\.count#2/);
 });
 
-test("below Business the paywall opens instead, and the selection stays", async (t) => {
+test("free plans open Create team and retain the selected people", async (t) => {
   const WorkspaceMembersTab = await loadMembersTab(t, { members: PEOPLE });
   globalThis.__authUser = { id: "u-admin" };
   const container = await mount(t, WorkspaceMembersTab, PAYWALL_WORKSPACE);
   await selectTwo(container);
-
   await React.act(async () => globalThis.__addMenu.onCreateTeam());
-
-  assert.equal(globalThis.__paywall.open, true);
-  assert.equal(globalThis.__createDialog.open, false);
-  await React.act(async () => globalThis.__paywall.onOpenChange(false));
+  assert.equal(globalThis.__paywall, undefined);
+  assert.equal(globalThis.__createDialog.open, true);
+  await React.act(async () => globalThis.__createDialog.onOpenChange(false));
   assert.match(barText(container), /selection\.count#2/);
 });
 
-test("a refusal on plan from the form hands over to the paywall", async (t) => {
+test("Create team has no plan-refusal handoff and retains its selection", async (t) => {
   const { container } = await mountPeople(t);
   await selectTwo(container);
   await React.act(async () => globalThis.__addMenu.onCreateTeam());
-
-  await React.act(async () => globalThis.__createDialog.onPlanRequired());
-
-  assert.equal(globalThis.__createDialog.open, false);
-  assert.equal(globalThis.__paywall.open, true);
+  assert.equal(globalThis.__createDialog.onPlanRequired, undefined);
+  assert.equal(globalThis.__createDialog.open, true);
+  assert.equal(globalThis.__paywall, undefined);
   assert.match(barText(container), /selection\.count#2/);
 });
 
-test("Create team and the paywall close when the workspace changes under them", async (t) => {
+test("Create team closes when the workspace changes under them", async (t) => {
   const { WorkspaceMembersTab, container } = await mountPeople(t);
   await selectTwo(container);
   await React.act(async () => globalThis.__addMenu.onCreateTeam());
-  await React.act(async () => globalThis.__createDialog.onPlanRequired());
   await React.act(async () => globalThis.__addMenu.onCreateTeam());
   assert.equal(globalThis.__createDialog.open, true);
-  assert.equal(globalThis.__paywall.open, true);
+  assert.equal(globalThis.__paywall, undefined);
 
   const root = mountedRoots.get(t);
   await React.act(async () =>
     root.render(tabElement(WorkspaceMembersTab, { ...ADMIN_WORKSPACE, id: "w2" }))
   );
   assert.equal(globalThis.__createDialog.open, false);
-  assert.equal(globalThis.__paywall.open, false);
+  assert.equal(globalThis.__paywall, undefined);
   assert.deepEqual(globalThis.__createDialog.initialPeople, []);
 
   await React.act(async () => root.render(tabElement(WorkspaceMembersTab, ADMIN_WORKSPACE)));
   assert.equal(globalThis.__createDialog.open, false);
-  assert.equal(globalThis.__paywall.open, false);
+  assert.equal(globalThis.__paywall, undefined);
 });

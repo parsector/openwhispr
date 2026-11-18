@@ -26,39 +26,12 @@ const defaultConfig: UserConfig = {
   notesLocalModeSplit: true,
 };
 
-let pendingConfigOperation: Promise<void> = Promise.resolve();
-
-function serializeConfigOperation<Arguments extends unknown[]>(
-  operation: (...args: Arguments) => Promise<void>,
-): (...args: Arguments) => Promise<void> {
-  return (...args): Promise<void> => {
-    const result = pendingConfigOperation.then(() => operation(...args));
-    pendingConfigOperation = result.catch(() => undefined);
-    return result;
-  };
-}
-
-async function prepareConfigChange(
-  currentConfig: UserConfig | null,
-  nextConfig: UserConfig,
-): Promise<void> {
-  // Keep the saved opt-out as the restart fence until its old queue is erased.
-  if (
-    currentConfig?.usageAnalyticsEnabled === false &&
-    nextConfig.usageAnalyticsEnabled !== false
-  ) {
-    const { prepareProductEventsOptIn } =
-      require('../lib/productEvents') as typeof import('../lib/productEvents');
-    await prepareProductEventsOptIn();
-  }
-}
-
 export const useConfigStore = create<ConfigState>((set, get) => ({
   config: null,
   isLoading: false,
   error: null,
 
-  loadConfig: serializeConfigOperation(async () => {
+  loadConfig: async () => {
     set({ isLoading: true, error: null });
     try {
       const config = await StorageService.getConfig();
@@ -91,19 +64,18 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
       set({
         error: (error as Error).message,
         isLoading: false,
-        config: { ...defaultConfig, usageAnalyticsEnabled: false },
+        config: defaultConfig,
       });
       useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
     }
-  }),
+  },
 
-  updateConfig: serializeConfigOperation(async (updates: Partial<UserConfig>) => {
+  updateConfig: async (updates: Partial<UserConfig>) => {
     const currentConfig = get().config || defaultConfig;
     const newConfig = { ...currentConfig, ...updates };
 
     set({ isLoading: true, error: null });
     try {
-      await prepareConfigChange(currentConfig, newConfig);
       await StorageService.saveConfig(newConfig);
       const modeStore = useProcessingModeStore.getState();
       if (!modeStore.isUserOverride) {
@@ -113,17 +85,16 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false });
     }
-  }),
+  },
 
-  resetConfig: serializeConfigOperation(async () => {
+  resetConfig: async () => {
     set({ isLoading: true, error: null });
     try {
-      await prepareConfigChange(get().config, defaultConfig);
       await StorageService.clearConfig();
       useProcessingModeStore.getState().resetToDefault(defaultConfig.defaultMode);
       set({ config: defaultConfig, isLoading: false });
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false });
     }
-  }),
+  },
 }));

@@ -286,7 +286,7 @@ const rowNode = (container, name) =>
 const buttonWithText = (root, text) =>
   findNode(root, (node) => node.tagName === "BUTTON" && textOf(node).trim() === text);
 
-const noEvent = { stopPropagation() {} };
+const _noEvent = { stopPropagation() {} };
 
 // The markup of the table row for a name, from its <tr to the next one.
 function rowMarkup(markup, name) {

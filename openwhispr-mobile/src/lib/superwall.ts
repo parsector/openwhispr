@@ -2,7 +2,6 @@ import Constants from 'expo-constants';
 import type { SubscriptionStatus } from 'expo-superwall';
 import type { UsageInfo } from '@/data/remote/usageApi';
 import type { ProcessingMode } from '@/types';
-import { getAffiliateClientConfig } from './affiliateLink';
 
 export const SUPERWALL_APP_ENTITLEMENT_ID = 'pro';
 export const SUPERWALL_WORDS_REMAINING_SENTINEL = 1_000_000_000;
@@ -24,19 +23,8 @@ export const SUPERWALL_PLACEMENTS = {
 
 export type SuperwallPlacement = (typeof SUPERWALL_PLACEMENTS)[keyof typeof SUPERWALL_PLACEMENTS];
 
-// The paywall with the creator-code input has its own Superwall placement, so a
-// build without creator codes never shows it. It is only the name sent to
-// Superwall: the gate keeps the rules of the surface that opened it.
-export const CREATOR_CODE_PAYWALL_PLACEMENT = 'creator_code_paywall';
-
-export function resolveSuperwallPlacementName(
-  placement: SuperwallPlacement,
-  hasCreatorOffer: boolean,
-): string {
-  return getAffiliateClientConfig() &&
-    (hasCreatorOffer || placement === SUPERWALL_PLACEMENTS.onboardingPaywall)
-    ? CREATOR_CODE_PAYWALL_PLACEMENT
-    : placement;
+export function resolveSuperwallPlacementName(placement: SuperwallPlacement): string {
+  return placement;
 }
 
 // Transactional placements require an account and fail closed. onboardingPaywall

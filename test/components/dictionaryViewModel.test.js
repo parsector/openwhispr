@@ -107,64 +107,30 @@ test("SSO and lost access lock the shared lists ahead of any plan state", () => 
   }
 });
 
-test("paused workspace with words is paused, without words is an upgrade state", () => {
-  const lapsed = (role) => workspace({ plan: "free", role });
-  const input = { status: "ready", signedIn: true, serverPaused: true };
-  assert.equal(
-    resolveSharedAccessState({ ...input, workspace: lapsed("owner"), hasWords: true }),
-    "paused"
-  );
-  assert.equal(
-    resolveSharedAccessState({ ...input, workspace: lapsed("member"), hasWords: true }),
-    "paused"
-  );
-  // The API flags every non-Business answer as paused, words or not.
-  assert.equal(
-    resolveSharedAccessState({ ...input, workspace: lapsed("owner"), hasWords: false }),
-    "upgradeAdmin"
-  );
-  assert.equal(
-    resolveSharedAccessState({ ...input, workspace: lapsed("member"), hasWords: false }),
-    "upgradeMember"
-  );
-  const unpaused = {
-    status: "ready",
-    signedIn: true,
-    workspace: lapsed("owner"),
-    hasWords: true,
-  };
-  assert.equal(resolveSharedAccessState({ ...unpaused, serverPaused: false }), "upgradeAdmin");
-  assert.equal(resolveSharedAccessState({ ...unpaused, serverPaused: null }), "upgradeAdmin");
+test("fork shared dictionary ignores plan and server plan-paused flags: paused workspace with words is paused, without words is an upgrade state", () => {
+  for (const plan of ["free", "pro", "business", "enterprise"]) {
+    for (const role of ["owner", "admin", "member"]) {
+      for (const hasWords of [false, true]) {
+        for (const serverPaused of [false, true, null]) {
+          assert.equal(resolveSharedAccessState({status: "ready", signedIn: true,
+            workspace: workspace({plan, role}), hasWords, serverPaused}), "available");
+        }
+      }
+    }
+  }
 });
 
-test("upgrade state follows workspace billing capabilities with a role fallback", () => {
-  const input = { status: "ready", signedIn: true, serverPaused: null, hasWords: false };
-  const free = (role) => workspace({ plan: "free", role });
-  assert.equal(resolveSharedAccessState({ ...input, workspace: free("owner") }), "upgradeAdmin");
-  assert.equal(resolveSharedAccessState({ ...input, workspace: free("admin") }), "upgradeMember");
-  assert.equal(resolveSharedAccessState({ ...input, workspace: free("member") }), "upgradeMember");
-  assert.equal(
-    resolveSharedAccessState({
-      ...input,
-      workspace: workspace({
-        plan: "free",
-        role: "owner",
-        capabilities: { manage_billing: false },
-      }),
-    }),
-    "upgradeMember"
-  );
-  assert.equal(
-    resolveSharedAccessState({
-      ...input,
-      workspace: workspace({ plan: "free", capabilities: { manage_billing: true } }),
-    }),
-    "upgradeAdmin"
-  );
-  assert.equal(
-    resolveSharedAccessState({ ...input, workspace: workspace({ status: "past_due" }) }),
-    "upgradeMember"
-  );
+test("fork shared dictionary ignores plan and server plan-paused flags: upgrade state follows workspace billing capabilities with a role fallback", () => {
+  for (const plan of ["free", "pro", "business", "enterprise"]) {
+    for (const role of ["owner", "admin", "member"]) {
+      for (const hasWords of [false, true]) {
+        for (const serverPaused of [false, true, null]) {
+          assert.equal(resolveSharedAccessState({status: "ready", signedIn: true,
+            workspace: workspace({plan, role}), hasWords, serverPaused}), "available");
+        }
+      }
+    }
+  }
 });
 
 test("buildPicker orders groups and counts applying words", () => {

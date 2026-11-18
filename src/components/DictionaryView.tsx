@@ -1,3 +1,12 @@
+import { dictionaryReachesTranscriptionModel } from "../utils/dictionaryPromptCap";
+import { getSherpaHotwordsScore } from "../utils/sherpaHotwords";
+import { MAX_SHERPA_HOTWORDS } from "../utils/sherpaHotwords";
+import { getParakeetModelInfo } from "../models/ModelRegistry";
+import { selectPolicyEffectiveSettings } from "../stores/settingsStore";
+import { useSettingsStore } from "../stores/settingsStore";
+import { usePolicySnapshot } from "../hooks/usePolicy";
+import { useManagedScopeResolution } from "../stores/enterpriseIdentityStore";
+import { resolveTranscriptionRoute } from "../helpers/transcriptionRoute";
 import {
   useCallback,
   useEffect,
@@ -81,6 +90,29 @@ import {
 import { dictionaryWordKey, getDictionaryHintTiers } from "../utils/snippets";
 import { formatDictionaryPrompt, WHISPER_DECODER_PROMPT_CHARS } from "../utils/dictionaryPromptCap";
 
+interface DragonImportScope {
+  workspaceId: string | null;
+  userId: string | null;
+  isSignedIn: boolean;
+}
+
+interface DragonFile {
+  scope: DragonImportScope;
+  fileName: string;
+  words: string[];
+  unreadableLines: number;
+  tooLong: number;
+  propertiesIgnored: boolean;
+}
+
+// Read and parse error codes → copy. Anything else falls through to "generic".
+const DRAGON_ERROR_KEYS: Record<string, string> = {
+  EMPTY_FILE: "dictionary.dragonImport.error.emptyFile",
+  UNSUPPORTED_XML: "dictionary.dragonImport.error.unsupportedXml",
+  FILE_TOO_LARGE: "dictionary.dragonImport.error.fileTooLarge",
+};
+
+
 const SORT_STORAGE_KEY = "dictionarySort";
 const ADD_TARGET_STORAGE_KEY = "dictionaryAddTarget";
 // A burst of changes (a sync pass, a bulk action in the other window) rereads the mirror once.
@@ -139,8 +171,18 @@ const sameWord = (left: string, right: string): boolean =>
   dictionaryWordKey(left) === dictionaryWordKey(right);
 
 export default function DictionaryView(): ReactElement {
-  const { t } = useTranslation();
-  const { customDictionary, updateCustomDictionary, snippets } = useSettings();
+  const listsOwner = useListsOwnerRevision();
+  return <DictionaryPage key={listsOwner} listsOwner={listsOwner} />;
+}
+
+function DictionaryPage({ listsOwner }: { listsOwner: number }): ReactElement {
+  const { t, i18n } = useTranslation();
+  const { customDictionary, updateCustomDictionary: updateStoredDictionary, snippets } = useSettings();
+  const updateCustomDictionary = useCallback(
+    (changes: { add?: string[]; remove?: string[] }): void =>
+      updateStoredDictionary(changes, listsOwner),
+    [updateStoredDictionary, listsOwner]
+  );
   const { active: workspace } = useWorkspace();
   const { isSignedIn, user } = useAuth();
   const workspaceId = workspace?.id ?? null;

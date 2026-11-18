@@ -340,14 +340,14 @@ test("Add appears only with manage_members", async (t) => {
   assert.equal(globalThis.__dialogProps, undefined);
 });
 
-test("Add hands the workspace to the single-address invite dialog", async (t) => {
+test("Add hands the workspace and known roster to the multi-address invite dialog", async (t) => {
   const Section = await loadSection(t);
   render(Section, ADMIN);
 
   assert.equal(globalThis.__dialogProps.workspaceId, "w1");
   assert.equal(globalThis.__dialogProps.workspaceName, "Acme");
   assert.equal(globalThis.__dialogProps.open, false);
-  assert.equal(globalThis.__dialogProps.knownEmails, undefined);
+  assert.deepEqual(globalThis.__dialogProps.knownEmails, { members: ["olivia@example.com", "mia@example.com"], invited: ["pending@example.com"] });
 });
 
 test("inviting reloads the list and closing the dialog afterwards opens Invitations", async (t) => {
@@ -362,7 +362,8 @@ test("inviting reloads the list and closing the dialog afterwards opens Invitati
   await React.act(async () => propsOf(addButton).onClick());
   assert.equal(globalThis.__dialogProps.open, true);
 
-  await React.act(async () => globalThis.__dialogProps.onInvited("new@example.com"));
+  await React.act(async () => globalThis.__dialogProps.onInvited(["new@example.com"]));
+  await React.act(async () => globalThis.__dialogProps.onInvitationsChanged());
   assert.equal(globalThis.__reloadCalls, 1);
   await React.act(async () => globalThis.__dialogProps.onOpenChange(false));
 
@@ -411,7 +412,7 @@ test("a roster held for another workspace is not passed into the invite dialog",
   globalThis.__rosterWorkspaceId = "w-previous";
   render(Section, ADMIN);
 
-  assert.equal(globalThis.__dialogProps.knownEmails, undefined);
+  assert.deepEqual(globalThis.__dialogProps.knownEmails, { members: ["olivia@example.com", "mia@example.com"], invited: ["pending@example.com"] });
 });
 
 async function openAdd(container) {
@@ -453,7 +454,7 @@ for (const [name, rosterWorkspaceId, status, stale, existing] of [
   });
 }
 
-test("complete rosters skip existing addresses and enforce the ceiling for new ones", async (t) => {
+test("complete rosters skip existing addresses without enforcing a paid ceiling", async (t) => {
   const Section = await loadSection(t);
   const container = await mount(t, Section, { ...ADMIN, seats_used: 499, seat_limit: 500 });
   await openAdd(container);
@@ -464,14 +465,8 @@ test("complete rosters skip existing addresses and enforce the ceiling for new o
     })
   );
   await React.act(async () => globalThis.__inviteViewProps.onSend());
-  assert.deepEqual(globalThis.__sendCalls, []);
-
-  await React.act(async () =>
-    globalThis.__inviteViewProps.dispatch({ type: "remove", email: "extra@example.com" })
-  );
-  await React.act(async () => globalThis.__inviteViewProps.onSend());
-
-  assert.deepEqual(globalThis.__sendCalls, [["new@example.com"]]);
+  assert.deepEqual(globalThis.__sendCalls, [["new@example.com", "extra@example.com"]]);
+  assert.deepEqual(globalThis.__inviteViewProps.state.seats, { purchasedLeft: null, ceilingLeft: null });
 });
 
 test("opening Add reads the roster when the store doesn't hold this workspace's", async (t) => {
@@ -549,7 +544,7 @@ const itemTexts = (container) => menuItems(container).map((node) => textOfNode(n
 const textOfNode = (node) =>
   node.nodeType === 3 ? node.nodeValue : [...node.childNodes].map(textOfNode).join("");
 
-test("every Create entry point opens the paywall below Business", async (t) => {
+test("every Create entry point opens the form on free plans", async (t) => {
   const Section = await loadSection(t, { realTeamsTab: true });
   const container = await mount(t, Section, withCapabilities({ create_teams: false }));
 
@@ -561,8 +556,8 @@ test("every Create entry point opens the paywall below Business", async (t) => {
   await React.act(async () => propsOf(create).onClick());
 
   assert.equal(localStorage.getItem("settings.workspacePeopleTab"), '"teams"');
-  assert.equal(globalThis.__paywallDialog.open, true);
-  assert.equal(globalThis.__createDialog.open, false);
+  assert.equal(globalThis.__paywallDialog, undefined);
+  assert.equal(globalThis.__createDialog.open, true);
 });
 
 test("every Create entry point opens the form on Business", async (t) => {
@@ -573,7 +568,7 @@ test("every Create entry point opens the form on Business", async (t) => {
 
   assert.equal(localStorage.getItem("settings.workspacePeopleTab"), '"teams"');
   assert.equal(globalThis.__createDialog.open, true);
-  assert.equal(globalThis.__paywallDialog.open, false);
+  assert.equal(globalThis.__paywallDialog, undefined);
 });
 
 test("the label still invites and the chevron holds the menu", async (t) => {

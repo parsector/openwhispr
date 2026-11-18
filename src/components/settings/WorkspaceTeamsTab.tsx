@@ -4,7 +4,6 @@ import { useWorkspaceTeams } from "../../hooks/useWorkspaceTeams";
 import { teamCreationFor } from "../../lib/capabilities";
 import { Button } from "../ui/button";
 import CreateTeamDialog from "../CreateTeamDialog";
-import TeamPaywallDialog from "../workspace/TeamPaywallDialog";
 import TeamSettingsDialog from "./TeamSettingsDialog";
 import TeamsTable from "./TeamsTable";
 import type { Workspace } from "../../types/electron";
@@ -27,7 +26,6 @@ export default function WorkspaceTeamsTab({
   const { t } = useTranslation();
   const { status, teams, stale, reload } = useWorkspaceTeams(workspace.id);
   const [createOpen, setCreateOpen] = useState(false);
-  const [paywallOpen, setPaywallOpen] = useState(false);
   const [openTeamId, setOpenTeamId] = useState<string | null>(null);
   // A dialog belongs to the workspace it was opened in: switching away and back doesn't reopen it.
   const [dialogWorkspaceId, setDialogWorkspaceId] = useState(workspace.id);
@@ -36,7 +34,6 @@ export default function WorkspaceTeamsTab({
     setOpenTeamId(null);
     // Create would otherwise send the people of the old workspace to the new one's teams route.
     setCreateOpen(false);
-    setPaywallOpen(false);
   }
   // Read from the list, so a rename or a reload reaches the open dialog; a team the list no
   // longer has (deleted, left) takes its dialog with it.
@@ -49,7 +46,6 @@ export default function WorkspaceTeamsTab({
   const openCreate = (): void => {
     const creation = teamCreationFor(workspace);
     if (creation === "allowed") setCreateOpen(true);
-    else if (creation === "paywall") setPaywallOpen(true);
   };
 
   // A create whose answer was lost may still have made the team, and a Try again under another
@@ -102,20 +98,6 @@ export default function WorkspaceTeamsTab({
         onCreated={async () => {
           createdThisOpening.current = true;
           await reload();
-        }}
-        onPlanRequired={() => {
-          setCreateOpen(false);
-          setPaywallOpen(true);
-        }}
-      />
-
-      <TeamPaywallDialog
-        workspace={workspace}
-        open={paywallOpen}
-        onOpenChange={setPaywallOpen}
-        onAvailable={() => {
-          setPaywallOpen(false);
-          setCreateOpen(true);
         }}
       />
 

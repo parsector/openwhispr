@@ -5,14 +5,10 @@ import { Text } from '@/components/ui/Text';
 import { OnboardingShell } from '@/components/onboarding/OnboardingShell';
 import { SystemIcon, type LucideIconName } from '@/components/ui/SystemIcon';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useAffiliateStore } from '@/store/useAffiliateStore';
-import { loadAffiliateOffer, type AffiliateOffer } from '@/lib/affiliateOffer';
 import { getUsageOwnerKey, useUsageStore } from '@/store/useUsageStore';
 import { useSuperwallGate } from '@/hooks/useSuperwallGate';
 import { SUPERWALL_PLACEMENTS } from '@/lib/superwall';
 import { describeOnboardingError } from '@/lib/onboardingErrors';
-import { getAffiliateClientConfig } from '@/lib/affiliateLink';
-import { TrackingPermissionStep } from './TrackingPermissionStep';
 
 const HIGHLIGHTS: { icon: string; mdIcon: LucideIconName; label: string }[] = [
   { icon: 'cloud', mdIcon: 'Cloud', label: 'Cloud transcription with no word limit' },
@@ -64,32 +60,6 @@ export function PaywallStep() {
   const [presenting, setPresenting] = useState(false);
   const [skipping, setSkipping] = useState(false);
   const [escapeElapsed, setEscapeElapsed] = useState(false);
-  const affiliateEnabled = Boolean(getAffiliateClientConfig());
-  // Only a trusted inbound creator link brings the tracking question forward, so
-  // its offer can be checked; everyone else meets it at its usual step after signup.
-  const [inboundCreator, setInboundCreator] = useState<boolean | null>(
-    affiliateEnabled ? null : false,
-  );
-  const [consentChecked, setConsentChecked] = useState(false);
-  const completeConsent = useCallback(async () => setConsentChecked(true), []);
-  const consentReady = inboundCreator === false || (inboundCreator === true && consentChecked);
-  const userId = user?.id;
-  useEffect(() => {
-    if (!affiliateEnabled) return;
-    let active = true;
-    (async () => {
-      await useAffiliateStore.getState().hydrate();
-      await useAffiliateStore.getState().bindSession();
-    })()
-      .catch(() => {})
-      .finally(() => {
-        if (active) setInboundCreator(useAffiliateStore.getState().inboundOfferPending);
-      });
-    return () => {
-      active = false;
-    };
-  }, [affiliateEnabled, userId]);
-
   const [advanceError, setAdvanceError] = useState<string | null>(null);
   const advance = useCallback(async (): Promise<void> => {
     if (hasAdvancedRef.current) return;
@@ -143,8 +113,6 @@ export function PaywallStep() {
       return;
     }
 
-    if (!consentReady) return;
-
     if (!isConfigured && !readyGraceElapsed) return;
     hasPresentedRef.current = true;
     setPresenting(true);
@@ -162,15 +130,6 @@ export function PaywallStep() {
       useAuthStore.getState().user?.id === user.id &&
       useAuthStore.getState().sessionCookie === sessionCookie;
     (async () => {
-      // Only a trusted inbound-link intent can seed this first presentation.
-      // Ordinary rendering and typed candidates never claim or allocate stock.
-      let creatorOffer: AffiliateOffer | undefined;
-      try {
-        if (affiliateEnabled && (await useAffiliateStore.getState().consumeInboundOffer(isCurrent)))
-          creatorOffer = (await loadAffiliateOffer(isCurrent)) ?? undefined;
-      } catch {
-        // Optional referral storage must not skip ordinary purchasing.
-      }
       if (!isCurrent()) return;
       const latestUsage = useUsageStore.getState();
       if (
@@ -186,7 +145,6 @@ export function PaywallStep() {
       await registerRef.current({
         placement: SUPERWALL_PLACEMENTS.onboardingPaywall,
         signal: controller.signal,
-        creatorOffer,
       });
     })()
       .catch(() => {})
@@ -195,8 +153,6 @@ export function PaywallStep() {
       });
   }, [
     advance,
-    affiliateEnabled,
-    consentReady,
     isConfigured,
     isConfirmedFree,
     readyGraceElapsed,
@@ -225,9 +181,6 @@ export function PaywallStep() {
       </OnboardingShell>
     );
   }
-
-  if (inboundCreator && !consentChecked && user && isConfirmedFree)
-    return <TrackingPermissionStep onComplete={completeConsent} />;
 
   return (
     <OnboardingShell

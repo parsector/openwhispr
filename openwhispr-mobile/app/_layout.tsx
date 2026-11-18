@@ -26,15 +26,12 @@ import { OnboardingFlow } from '@/screens/onboarding/OnboardingFlow';
 import { AnimatedSplash } from '@/components/features/AnimatedSplash';
 import { useKeyboardHandoff } from '@/hooks/useKeyboardHandoff';
 import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
-import { useAffiliateAttribution } from '@/hooks/useAffiliateAttribution';
 import { useAnonymousOnboardingSession } from '@/hooks/useAnonymousOnboardingSession';
 import { useGuestPrivateMode } from '@/hooks/useGuestPrivateMode';
 import { runMigrations } from '@/db/migrate';
 import { initSentry, Sentry } from '@/lib/sentry';
-import { initAppsFlyer, refreshAppsFlyerTrackingAuthorization } from '@/lib/appsflyer';
+
 import { initSyncTriggers } from '@/sync/syncEngine';
-import { initProductEvents } from '@/lib/productEvents';
-import { getCachedSession, type CachedSession } from '@/lib/authClient';
 import { PermissionAlertMount } from '@/components/ui/PermissionAlert';
 import { startKeyboardToneSync } from '@/lib/keyboardToneSync';
 import { startKeyboardAgentSync } from '@/lib/keyboardAgentSync';
@@ -43,20 +40,15 @@ import { OpenWhisprSuperwallProvider } from '@/components/superwall/OpenWhisprSu
 import { eraseProviderCredentialsFromPreviousInstall } from '@/services/providers/ProviderCredentials';
 
 initSentry();
-initAppsFlyer();
+
 runMigrations();
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayout() {
-  const [keyboardStartup, setKeyboardStartup] = useState<{
-    ready: boolean;
-    session: CachedSession | null;
-  }>({ ready: false, session: null });
-  useKeyboardHandoff(keyboardStartup.ready, keyboardStartup.session);
+  useKeyboardHandoff();
   useRevenueCatIdentity();
   useAnonymousOnboardingSession();
-  useAffiliateAttribution();
   useGuestPrivateMode();
 
   const [fontsLoaded] = useFonts({
@@ -93,24 +85,12 @@ function RootLayout() {
   };
 
   useEffect(() => {
-    let mounted = true;
-    const cachedSession = getCachedSession();
     initialize();
-    // Restore local capture state before starting, independently of auth's network request.
-    Promise.allSettled([loadConfig(), hydrateOnboarding(), cachedSession]).then((results) => {
-      if (!mounted) return;
-      const session = results[2];
-      setKeyboardStartup({
-        ready: true,
-        session: session.status === 'fulfilled' ? session.value : null,
-      });
-    });
+    loadConfig();
+    hydrateOnboarding();
     startRetiredPromptSweep();
     // A failure leaves the install unmarked, so the next key access retries the erase.
     eraseProviderCredentialsFromPreviousInstall().catch(() => undefined);
-    return () => {
-      mounted = false;
-    };
   }, [initialize, loadConfig, hydrateOnboarding]);
 
   useEffect(() => {
@@ -142,7 +122,6 @@ function RootLayout() {
 
   useEffect(() => {
     initSyncTriggers();
-    initProductEvents();
   }, []);
 
   // After an interactive sign-in (AuthScreen was shown, then auth completed),
@@ -187,9 +166,7 @@ function RootLayout() {
       if (state === 'active') {
         // ATT can change in iOS Settings while the app is backgrounded. Reapply
         // that system decision before allowing any further attribution events.
-        refreshAppsFlyerTrackingAuthorization().catch((error: unknown): void => {
-          Sentry.captureException(error);
-        });
+
       }
       if (state === 'active' && backgrounded) {
         backgrounded = false;

@@ -66,9 +66,7 @@ jest.mock('@/store/useAuthStore', () => ({
   useAuthStore: { getState: () => ({ user: null }) },
 }));
 
-jest.mock('@/lib/appsflyer', () => ({
-  logTranscriptionCompleted: mockLogTranscriptionCompleted,
-}));
+
 
 jest.mock('../../../modules/audio-tools/src', () => ({
   AudioTools: {

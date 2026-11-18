@@ -299,7 +299,7 @@ test("a refusal answered after the account changed leaves the old mirror and acc
   assert.equal(ctx.useSharedDictionaryStore.getState().status, "ready");
 });
 
-test("a paused workspace probes again and discovers an external upgrade", async (t) => {
+test("a plan-paused workspace keeps dictionary words available without billing refresh", async (t) => {
   const ctx = await setup(t);
   const { cloud, db, service } = ctx;
   const workspace = {
@@ -317,7 +317,7 @@ test("a paused workspace probes again and discovers an external upgrade", async 
   await service.syncSharedDictionaryNow();
   assert.equal(cloud.requestsTo(LIST).length, 1);
   assert.equal(cloud.requestsTo(HIDES).length, 1);
-  assert.deepEqual(ctx.hints(), { space: [], workspace: [] });
+  assert.deepEqual(ctx.hints(), { space: [], workspace: ["Qdrant"] });
 
   await service.syncSharedDictionaryNow();
   assert.equal(cloud.requestsTo(LIST).length, 2, "paused lists are revalidated");
@@ -329,7 +329,7 @@ test("a paused workspace probes again and discovers an external upgrade", async 
     snapshot.entries.map((entry) => entry.word),
     ["Qdrant"]
   );
-  assert.deepEqual(ctx.hints(), { space: [], workspace: [] });
+  assert.deepEqual(ctx.hints(), { space: [], workspace: ["Qdrant"] });
 
   // Billing changed elsewhere; only the server knows about the upgrade.
   const { WorkspacesService } = require("../../src/services/WorkspacesService.ts");
@@ -339,8 +339,8 @@ test("a paused workspace probes again and discovers an external upgrade", async 
   cloud.workspace(W1).paused = false;
   await service.syncSharedDictionaryNow();
   assert.equal(cloud.requestsTo(LIST).length, 3);
-  assert.equal(refresh.mock.callCount(), 1);
-  assert.equal(ctx.useWorkspaceStore.getState().workspaces[0].plan, "business");
+  assert.equal(refresh.mock.callCount(), 0);
+  assert.equal(ctx.useWorkspaceStore.getState().workspaces[0].plan, "pro");
   assert.deepEqual(ctx.hints().workspace, ["Qdrant"]);
   assert.equal(db.callsNamed("replaceSharedDictionary").length, 1);
 });
@@ -1332,7 +1332,7 @@ test("manual shared sync reports a failed mirror reload", async (t) => {
   assert.equal(await ctx.service.syncSharedDictionaryNow(), "failed");
 });
 
-test("an external upgrade retries a failed billing refresh on the next shared pass", async (t) => {
+test("shared passes never call billing refresh or fail for a missing plan", async (t) => {
   const ctx = await setup(t);
   t.mock.method(console, "error", () => {});
   const workspace = {
@@ -1355,12 +1355,12 @@ test("an external upgrade retries a failed billing refresh on the next shared pa
     return [{ ...workspace, plan: "business" }];
   });
   ctx.cloud.workspace(W1).paused = false;
-  assert.equal(await ctx.service.syncSharedDictionaryNow(), "failed");
-  assert.equal(ctx.useWorkspaceStore.getState().error, true);
   assert.equal(await ctx.service.syncSharedDictionaryNow(), "synced");
-  assert.equal(attempts, 2);
   assert.equal(ctx.useWorkspaceStore.getState().error, false);
-  assert.equal(ctx.useWorkspaceStore.getState().workspaces[0].plan, "business");
+  assert.equal(await ctx.service.syncSharedDictionaryNow(), "synced");
+  assert.equal(attempts, 0);
+  assert.equal(ctx.useWorkspaceStore.getState().error, false);
+  assert.equal(ctx.useWorkspaceStore.getState().workspaces[0].plan, "pro");
   assert.deepEqual(ctx.hints().workspace, ["Qdrant"]);
 });
 

@@ -19,9 +19,8 @@ import {
 } from '@/lib/superwall';
 import { Sentry } from '@/lib/sentry';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
-import { logPaywallViewed, logSubscription } from '@/lib/appsflyer';
+
 import { identifyRevenueCatUser, recordRevenueCatPurchase } from '@/lib/revenuecat';
-import { createAffiliatePaywallSession } from '@/lib/affiliatePaywall';
 
 type Props = {
   children: React.ReactNode;
@@ -42,7 +41,6 @@ type PendingGate = {
   cancelled?: boolean;
   awaitingDismissal?: boolean;
   removeAbortListener?: () => void;
-  creatorSession?: ReturnType<typeof createAffiliatePaywallSession>;
   resolve: (granted: boolean) => void;
 };
 
@@ -70,11 +68,6 @@ function PresentationHandler({
   // Each presentation has its own SDK handler identity. Keep cancelled listeners
   // until native sends a terminal event; old callbacks must never reach a new gate.
   const { registerPlacement } = usePlacement({
-    onCustomCallback(callback) {
-      return !gate.closed && !gate.cancelled && gate.creatorSession
-        ? gate.creatorSession.handle(callback)
-        : { status: 'failure' };
-    },
     onPresent(info) {
       if (gate.cancelled) dismiss();
       else if (!gate.closed) callbacks.onPresent?.(info);
@@ -164,7 +157,6 @@ function completeGate(
   if (granted && reportNoPurchaseAccess) reportAccessGrantedWithoutPurchase(gate);
   if (gate.closed) return;
   gate.closed = true;
-  gate.creatorSession?.close();
   gate.removeAbortListener?.();
   gate.resolve(granted);
   if (runFeature && !gate.featureRan) {
@@ -389,7 +381,7 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
         gate.onPresent?.();
       }
       const placement = activePlacementRef.current;
-      if (placement) logPaywallViewed(placement);
+      if (placement) {}
       debugLog('paywall presented', {
         placement,
         paywall: paywallInfo.name,
@@ -406,7 +398,6 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       });
     },
     onDismiss(_paywallInfo, result) {
-      presentationGatesRef.current[0]?.creatorSession?.close();
       setPresentationState({ status: 'dismissed', result });
       const placement = activePlacementRef.current;
       debugLog('paywall dismissed', { placement, result: describePaywallResult(result) });
@@ -426,7 +417,7 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
         if (gate) {
           reportPurchaseCompletion(gate, result.type);
           if (result.type === 'purchased') {
-            logSubscription(result.productId, gate.placement);
+
           }
         }
         const settle = () => {
@@ -525,25 +516,6 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
     });
   }, [dismiss]);
 
-  // Superwall only sees the paywall close after an Apple offer redemption, so the
-  // session reports the confirmed purchase and it completes like any other.
-  const completeCreatorRedemption = useCallback(
-    (gate: PendingGate, productId: string): void => {
-      if (gate.closed) return;
-      gate.terminalEventProcessed = true;
-      presentationGatesRef.current = presentationGatesRef.current.filter((item) => item !== gate);
-      if (pendingGateRef.current === gate) {
-        pendingGateRef.current = null;
-        activePlacementRef.current = null;
-      }
-      completeGate(gate, true, true, false);
-      reportPurchaseCompletion(gate, 'purchased');
-      logSubscription(productId, gate.placement);
-      dismissCancelledOffer();
-    },
-    [dismissCancelledOffer],
-  );
-
   const state = presentationState;
   const sessionCookie = useAuthStore((state) => state.sessionCookie);
   useEffect(() => {
@@ -564,7 +536,6 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
     async ({
       placement,
       params,
-      creatorOffer,
       feature,
       onAccessGrantedWithoutPurchase,
       onPurchaseComplete,
@@ -573,9 +544,7 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       requiresAccount = isTransactionalSuperwallPlacement(placement),
     }: RegisterSuperwallGateOptions): Promise<boolean> => {
       const isOnboarding = placement === SUPERWALL_PLACEMENTS.onboardingPaywall;
-      // A blocked Account creator offer reports failure instead of granting access.
-      // Onboarding still moves on silently, with or without an offer.
-      const passesThroughWhenBlocked = !requiresAccount && (!creatorOffer || isOnboarding);
+      const passesThroughWhenBlocked = !requiresAccount;
       if (signal?.aborted) return false;
       debugLog('register', {
         placement,
@@ -678,11 +647,6 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
           closed: false,
           resolve,
         };
-        gate.creatorSession = createAffiliatePaywallSession(
-          () => !gate.closed && !gate.cancelled && presentationGatesRef.current.includes(gate),
-          (productId) => completeCreatorRedemption(gate, productId),
-          creatorOffer,
-        );
         pendingGateRef.current = gate;
 
         if (signal) {
@@ -721,12 +685,12 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
           if (activePlacementRef.current === placement) activePlacementRef.current = null;
         };
 
-        const superwallPlacement = resolveSuperwallPlacementName(placement, Boolean(creatorOffer));
+        const superwallPlacement = resolveSuperwallPlacementName(placement);
         debugLog('registering placement with Superwall', { placement, superwallPlacement, params });
         const start = (present: NativeRegister): void => {
           present({
             placement: superwallPlacement,
-            params: { ...params, ...gate.creatorSession?.initialParams },
+            params,
             feature: () => {
               if (gate.closed) return;
               debugLog('feature gate granted', { placement });
@@ -772,7 +736,6 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
       });
     },
     [
-      completeCreatorRedemption,
       configurationError,
       isConfigured,
       dismissCancelledOffer,

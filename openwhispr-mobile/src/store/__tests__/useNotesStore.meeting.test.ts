@@ -91,9 +91,7 @@ jest.mock('@/utils/generateTitle', () => ({
 jest.mock('@/lib/localReasoningFallback', () => ({
   promptLocalReasoningFallback: (...args: unknown[]) => mockPromptLocalReasoningFallback(...args),
 }));
-jest.mock('@/lib/appsflyer', () => ({
-  logTranscriptionCompleted: (...args: unknown[]) => mockLogTranscriptionCompleted(...args),
-}));
+
 jest.mock('@/services/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: jest.fn(),

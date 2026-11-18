@@ -125,9 +125,9 @@ test("an admin on Business is allowed to create teams", () => {
   assert.equal(teamCreationFor({ role: "admin", capabilities }), "allowed");
 });
 
-test("an admin below it gets the paywall", () => {
+test("an admin can create teams without a paid plan", () => {
   const capabilities = { ...noCapabilities(), manage_teams: true, create_teams: false };
-  assert.equal(teamCreationFor({ role: "admin", capabilities }), "paywall");
+  assert.equal(teamCreationFor({ role: "admin", capabilities }), "allowed");
 });
 
 test("a member is unavailable", () => {

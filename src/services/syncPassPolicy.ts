@@ -10,19 +10,7 @@ export interface SyncConsent {
   analytics: boolean;
 }
 
-/**
- * What the account has consented to sync. Backup is a blanket copy of private
- * content, so it stays behind the plan, the cloud-backup toggle, and org
- * policy. Sharing a note or joining a team space is per-item consent the user
- * gave deliberately, so it syncs whenever they are signed in — collaboration
- * is not a paid feature, and gating it on the *invitee's* plan silently
- * stranded free teammates in workspaces they had already been added to.
- *
- * Insights counters carry no content and are free, so they answer to their own
- * opt-in rather than the backup toggle or the plan. They still require local
- * history and are user data leaving the device, so org policy gates them like
- * backup.
- */
+/** Backup needs explicit consent and policy; product telemetry stays disabled. */
 export function resolveSyncConsent(state: {
   authValidated: boolean;
   signedIn: boolean;
@@ -35,12 +23,8 @@ export function resolveSyncConsent(state: {
   const shared = state.authValidated && state.signedIn;
   return {
     shared,
-    backup: shared && state.backupEnabled && state.subscribed && state.backupAllowedByPolicy,
-    analytics:
-      shared &&
-      state.insightsSyncEnabled &&
-      state.backupAllowedByPolicy &&
-      state.dataRetentionEnabled,
+    backup: shared && state.backupEnabled && state.backupAllowedByPolicy,
+    analytics: false,
   };
 }
 

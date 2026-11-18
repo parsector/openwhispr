@@ -1,6 +1,4 @@
-jest.mock('@/lib/affiliateOffer', () => ({
-  loadAffiliateOffer: jest.fn().mockResolvedValue(null),
-}));
+
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
@@ -33,9 +31,7 @@ const mockAuthState: {
   deleteAccount: jest.fn(),
 };
 const mockPrepareAffiliate = jest.fn().mockResolvedValue(true);
-jest.mock('@/store/useAffiliateStore', () => ({
-  useAffiliateStore: { getState: () => ({ prepare: mockPrepareAffiliate }) },
-}));
+
 jest.mock('@/components/AccountCreatorLink', () => ({ AccountCreatorLink: () => null }));
 const mockRegisterSuperwallGate = jest.fn();
 const mockRouterReplace = jest.fn();

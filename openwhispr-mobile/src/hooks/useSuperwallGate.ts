@@ -1,5 +1,4 @@
 import { createContext, useContext } from 'react';
-import type { AffiliateOffer } from '@/lib/affiliateOffer';
 import type { PaywallState } from 'expo-superwall';
 import {
   isTransactionalSuperwallPlacement,
@@ -11,8 +10,6 @@ export type SuperwallPurchaseCompletion = 'purchased' | 'restored';
 
 export type RegisterSuperwallGateOptions = {
   placement: SuperwallPlacement;
-  /** Verified app-owned offer from an explicit creator submission; never sent to Superwall. */
-  creatorOffer?: AffiliateOffer;
   params?: Partial<SuperwallAttributes> & Record<string, unknown>;
   feature?: () => void;
   onAccessGrantedWithoutPurchase?: () => void;

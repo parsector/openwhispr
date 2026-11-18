@@ -50,9 +50,7 @@ jest.mock('@/utils/generateTitle', () => ({
 jest.mock('@/lib/localReasoningFallback', () => ({
   promptLocalReasoningFallback: jest.fn(),
 }));
-jest.mock('@/lib/appsflyer', () => ({
-  logTranscriptionCompleted: jest.fn(),
-}));
+
 jest.mock('@/services/reasoning/ReasoningService', () => ({
   ReasoningService: {
     processText: jest.fn(),

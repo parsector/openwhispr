@@ -29,11 +29,11 @@ import { membersView, rosterFor, rosterHasTeams } from "../../lib/peopleRoster";
 import { classifyRowActionError, type RowActionError } from "../../lib/workspaceErrors";
 import { transferReducer } from "../../lib/workspaceTransferFlow";
 import CreateTeamDialog from "../CreateTeamDialog";
-import TeamPaywallDialog from "../workspace/TeamPaywallDialog";
 import { RemoveMembersDialog } from "../workspace/RemoveMembersDialog";
 import { RowCheckbox } from "../dictionary/RowCheckbox";
 import { useAddToTeamspace } from "../workspace/AddToTeamspaceMenu";
-import { PeopleAddMenu, useAddPeopleToTeam } from "../workspace/PeopleAddMenu";
+import { useAddPeopleToTeam } from "../workspace/useAddPeopleToTeam";
+import { PeopleAddMenu } from "../workspace/PeopleAddMenu";
 import { SelectionBar } from "../workspace/SelectionBar";
 import { STATE_ACTION_BUTTON } from "../workspace/dialogButtons";
 import { TransferOwnershipDialog } from "../workspace/TransferOwnershipDialog";
@@ -98,7 +98,6 @@ export default function WorkspaceMembersTab({
   // Create team lives here for the same reason. The form keeps the people it opened with, since
   // the selection clears the moment a team is created while the dialog finishes closing.
   const [createOpen, setCreateOpen] = useState(false);
-  const [paywallOpen, setPaywallOpen] = useState(false);
   const [createPeople, setCreatePeople] = useState<WorkspaceMember[]>([]);
   // A dialog and a selection belong to the workspace they were made in: the page can re-point at
   // another one under them, and Create would then send the old people to the new workspace's teams.
@@ -106,7 +105,6 @@ export default function WorkspaceMembersTab({
   if (workspace.id !== dialogWorkspaceId) {
     setDialogWorkspaceId(workspace.id);
     setCreateOpen(false);
-    setPaywallOpen(false);
     setCreatePeople([]);
     setSelection(new Set());
   }
@@ -285,8 +283,6 @@ export default function WorkspaceMembersTab({
     if (teamCreation === "allowed") {
       setCreatePeople(selectedMembers);
       setCreateOpen(true);
-    } else if (teamCreation === "paywall") {
-      setPaywallOpen(true);
     }
   }
 
@@ -597,20 +593,6 @@ export default function WorkspaceMembersTab({
               // The dialog has toasted; the Team column reads the roster.
               clearSelectionAfterAdding();
               await refreshMembers(workspace.id).catch(() => undefined);
-            }}
-            onPlanRequired={() => {
-              setCreateOpen(false);
-              setPaywallOpen(true);
-            }}
-          />
-          <TeamPaywallDialog
-            workspace={workspace}
-            open={paywallOpen}
-            onOpenChange={setPaywallOpen}
-            onAvailable={() => {
-              setPaywallOpen(false);
-              setCreatePeople(selectedMembers);
-              setCreateOpen(true);
             }}
           />
         </>

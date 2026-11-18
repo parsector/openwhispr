@@ -98,7 +98,7 @@ export function useUsage(): UseUsageResult | null {
   const limit = data?.limit ?? 0;
   const isSubscribed = data?.isSubscribed ?? false;
   const isTrial = data?.isTrial ?? false;
-  const hasPaidAccess = data ? data.isSubscribed || data.isTrial : null;
+  const hasPaidAccess = true;
   const isOverLimit = Boolean(data) && !isSubscribed && limit > 0 && wordsUsed >= limit;
   const isApproachingLimit =
     Boolean(data) && !isSubscribed && limit > 0 && wordsUsed >= limit * 0.8 && !isOverLimit;
@@ -111,7 +111,7 @@ export function useUsage(): UseUsageResult | null {
     retry,
     refetch,
     hasPaidAccess,
-    hasPaidAccessOptimistic: hasPaidAccess !== false,
+    hasPaidAccessOptimistic: true,
     plan: data?.plan ?? "free",
     isPastDue: data ? isPastDueUsage(data) : false,
     wordsUsed,
