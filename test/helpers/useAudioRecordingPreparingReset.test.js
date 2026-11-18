@@ -23,7 +23,7 @@ function arbitration() {
         return class {
           async stopWindowDrag() {}
         };
-      return { NOTIFICATION_WINDOW_CONFIG: { width: 400, height: 100 } };
+      return { NOTIFICATION_WINDOW_CONFIG: { width: 400, height: 100 }, WINDOW_SIZES: { BASE: { width: 400, height: 100 } } };
     };
     loaded._compile(fs.readFileSync(filename, "utf8"), filename);
     return loaded.exports;
@@ -60,6 +60,7 @@ export default class FakeAudioManager {
   emit() { this.callbacks?.onStateChange(this.getState()); }
   setCallbacks(callbacks) { this.callbacks = callbacks; }
   setVoiceAgentRequested(value) { this.voiceAgentRequested = value; }
+  setAssistantSelectionContext() {}
   setTranslationRequested(value) { this.translationRequested = value; }
   shouldUseStreaming() { return false; }
   isSttConfigStale() { return false; }

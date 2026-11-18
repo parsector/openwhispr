@@ -123,8 +123,8 @@ function makeWindowManagerStub() {
     sendCancelActiveDictation: () => {
       calls.cancel += 1;
     },
-    setDictationLifecycleState: (state, kind) => {
-      calls.lifecycle.push([state, kind]);
+    setDictationLifecycleState: (state, attempt, kind) => {
+      calls.lifecycle.push([state, attempt, kind]);
     },
     setDictationAudioLevel: (level) => {
       calls.levels.push(level);
@@ -161,7 +161,7 @@ test.before(() => {
     "set-agent-dictation-pill-interactivity must be registered"
   );
   assert.ok(
-    onHandlers.get("dictation-lifecycle-state-changed"),
+    handlers.get("dictation-lifecycle-state-changed"),
     "dictation-lifecycle-state-changed must be registered"
   );
   assert.ok(
@@ -267,12 +267,15 @@ test("audio levels are accepted only from the dictation renderer", () => {
 test("lifecycle reports are accepted only from the dictation renderer", () => {
   const { stub, calls, mainContents } = makeWindowManagerStub();
   installWindowManager(stub);
-  const lifecycleHandler = onHandlers.get("dictation-lifecycle-state-changed");
+  const lifecycleHandler = handlers.get("dictation-lifecycle-state-changed");
 
-  lifecycleHandler({ sender: {} }, "recording", "dictation");
+  lifecycleHandler({ sender: {} }, "recording", "take-1", "dictation");
   assert.deepEqual(calls.lifecycle, []);
-  lifecycleHandler({ sender: mainContents }, "recording", "dictation");
-  assert.deepEqual(calls.lifecycle, [["recording", "dictation"]]);
+  assert.equal(lifecycleHandler({ sender: mainContents }, "recording", "dictation"), false);
+  assert.equal(lifecycleHandler({ sender: mainContents, senderFrame: {} }, "recording", "take-1", "dictation"), false);
+  assert.deepEqual(calls.lifecycle, []);
+  lifecycleHandler({ sender: mainContents }, "recording", "take-1", "dictation");
+  assert.deepEqual(calls.lifecycle, [["recording", "take-1", "dictation"]]);
 });
 
 // Bonus: the third `ipcMain.on` handler added alongside the two above shares

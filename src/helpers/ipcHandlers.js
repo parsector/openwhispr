@@ -3643,24 +3643,17 @@ class IPCHandlers {
     // in the dictation renderer. Only confirmed renderer state may change the
     // main-process recording gate. Preparing reserves it before the renderer
     // opens the mic; an older attempt cannot release a newer reservation.
-    ipcMain.handle("dictation-lifecycle-state-changed", (event, state, attempt) => {
-      const dictationWindow = this.windowManager.mainWindow;
-      if (!isFromWindow(event, dictationWindow) || typeof attempt !== "string" || !attempt) {
-        return false;
-      }
-      return this.windowManager.setDictationLifecycleState(state, attempt);
-    });
-
-    ipcMain.on("dictation-lifecycle-state-changed", (event, state, inputKind) => {
+    ipcMain.handle("dictation-lifecycle-state-changed", (event, state, attempt, inputKind) => {
       const dictationWindow = this.windowManager.mainWindow;
       if (
-        !dictationWindow ||
-        dictationWindow.isDestroyed() ||
-        event.sender !== dictationWindow.webContents
+        !isFromWindow(event, dictationWindow) ||
+        typeof attempt !== "string" ||
+        !attempt ||
+        ["dictation", "assistant", "translation"].includes(attempt)
       ) {
-        return;
+        return false;
       }
-      this.windowManager.setDictationLifecycleState(state, inputKind);
+      return this.windowManager.setDictationLifecycleState(state, attempt, inputKind);
     });
 
     ipcMain.on("show-agent-dictation-final-transcript", (event, text) => {
@@ -4354,7 +4347,7 @@ class IPCHandlers {
       );
     });
 
-    ipcMain.handle("db-semantic-search-notes", (_event, query, limit = 5, spaceId, folderId) =>
+    ipcMain.handle("db-semantic-search-notes", (_event, query, limit = 5, spaceId, folderId, spaceIds) =>
       searchNotes({
         database: this.databaseManager,
         getSemanticSearch: this.getSemanticSearch,
@@ -4362,6 +4355,7 @@ class IPCHandlers {
         limit,
         spaceId,
         folderId,
+        spaceIds: spaceIdsArgument(spaceIds),
         logger: debugLogger,
       })
     );

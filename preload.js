@@ -193,8 +193,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
-  dictationLifecycleStateChanged: (state, inputKind) =>
-    ipcRenderer.send("dictation-lifecycle-state-changed", state, inputKind),
+  dictationLifecycleStateChanged: (state, attempt, inputKind) =>
+    ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt, inputKind),
 
   // Database functions
   saveTranscription: (text, rawText, options) =>
@@ -1427,8 +1427,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
   takeCloudSpeakerLabels: (noteId, undo = false) =>
     ipcRenderer.invoke("db-take-cloud-speaker-labels", noteId, undo),
-  markNoteCreatesAttempted: (clientNoteIds) =>
-    ipcRenderer.invoke("db-mark-note-creates-attempted", clientNoteIds),
+  markNoteCreatesAttempted: (clientNoteIds, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-mark-note-creates-attempted", clientNoteIds, expectedAuthGeneration),
   acknowledgeNoteCreate: (id, snapshot, cloudId, cloudUpdatedAt, ownerUserId, options) =>
     ipcRenderer.invoke(
       "db-acknowledge-note-create",
@@ -1528,15 +1528,37 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingConversationDeletes: () => ipcRenderer.invoke("db-get-pending-conversation-deletes"),
   getConversationByClientId: (clientId) =>
     ipcRenderer.invoke("db-get-conversation-by-client-id", clientId),
-  upsertConversationFromCloud: (cloudConv, messages) =>
-    ipcRenderer.invoke("db-upsert-conversation-from-cloud", cloudConv, messages),
-  acknowledgeConversationCreate: (id, snapshot, cloudId) =>
-    ipcRenderer.invoke("db-acknowledge-conversation-create", id, snapshot, cloudId),
+  upsertConversationFromCloud: (cloudConv, messages, snapshot, expectedAuthGeneration) =>
+    ipcRenderer.invoke(
+      "db-upsert-conversation-from-cloud",
+      cloudConv,
+      messages,
+      snapshot,
+      expectedAuthGeneration
+    ),
+  acknowledgeConversationCreate: (id, snapshot, cloudId, accountId, authGeneration) =>
+    ipcRenderer.invoke(
+      "db-acknowledge-conversation-create",
+      id,
+      snapshot,
+      cloudId,
+      accountId,
+      authGeneration
+    ),
   markConversationCreateAttempted: (id) =>
     ipcRenderer.invoke("db-mark-conversation-create-attempted", id),
-  markConversationSynced: (id, cloudId) =>
-    ipcRenderer.invoke("db-mark-conversation-synced", id, cloudId),
-  hardDeleteConversation: (id) => ipcRenderer.invoke("db-hard-delete-conversation", id),
+  markConversationSynced: (id, cloudId, snapshot, cloudUpdatedAt, accountId, authGeneration) =>
+    ipcRenderer.invoke(
+      "db-mark-conversation-synced",
+      id,
+      cloudId,
+      snapshot,
+      cloudUpdatedAt,
+      accountId,
+      authGeneration
+    ),
+  hardDeleteConversation: (id, expectedAuthGeneration) =>
+    ipcRenderer.invoke("db-hard-delete-conversation", id, expectedAuthGeneration),
 
   getPendingTranscriptions: () => ipcRenderer.invoke("db-get-pending-transcriptions"),
   getTranscriptionByClientId: (clientId) =>

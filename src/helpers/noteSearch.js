@@ -19,14 +19,18 @@ async function searchNotes({
   limit = 5,
   spaceId,
   folderId,
+  spaceIds,
   logger,
 }) {
+  if (spaceIds != null && (!Array.isArray(spaceIds) || !spaceIds.length)) return [];
   try {
     const overFetch = folderId != null ? limit * 4 : limit * 2;
-    const vectorFilter =
-      spaceId != null ? { must: [{ key: "space_id", match: { value: spaceId } }] } : undefined;
+    const must = [];
+    if (spaceId != null) must.push({ key: "space_id", match: { value: spaceId } });
+    if (spaceIds != null) must.push({ key: "space_id", match: { any: spaceIds } });
+    const vectorFilter = must.length ? { must } : undefined;
     const [ftsResults, vectorResults] = await Promise.all([
-      database.searchNotes(query, overFetch, spaceId, folderId),
+      database.searchNotes(query, overFetch, spaceId, folderId, ...(spaceIds == null ? [] : [spaceIds])),
       getSemanticSearch?.()?.search(query, overFetch, vectorFilter),
     ]);
     if (vectorResults == null) return ftsResults.slice(0, limit);
@@ -34,7 +38,8 @@ async function searchNotes({
       database.getNoteIdsInScope(
         spaceId,
         folderId,
-        vectorResults.map(({ noteId }) => noteId)
+        vectorResults.map(({ noteId }) => noteId),
+        ...(spaceIds == null ? [] : [spaceIds])
       )
     );
     const filtered = vectorResults.filter(
@@ -59,7 +64,7 @@ async function searchNotes({
     return rankedIds.map((id) => noteMap.get(id)).filter(Boolean);
   } catch (error) {
     logger?.error("Semantic search failed, falling back to FTS5", { error: error.message });
-    return database.searchNotes(query, limit, spaceId, folderId);
+    return database.searchNotes(query, limit, spaceId, folderId, ...(spaceIds == null ? [] : [spaceIds]));
   }
 }
 

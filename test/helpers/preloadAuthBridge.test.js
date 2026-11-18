@@ -86,10 +86,10 @@ test("account ownership operations forward the account and credential generation
   ]);
 });
 
-test("checkout forwards the generation separately from the Stripe options", async () => {
+test("checkout is absent from the fork bridge", () => {
   const { api, invocations } = loadPreloadApi();
-  await api.cloudCheckout({ plan: "annual" }, 7);
-  assert.deepEqual(invocations, [["cloud-checkout", { plan: "annual" }, 7]]);
+  assert.equal(api.cloudCheckout, undefined);
+  assert.deepEqual(invocations, []);
 });
 
 test("sync writes forward the sign-in that read them and the account a chat was sent as", async () => {
@@ -205,8 +205,12 @@ test("dictation lifecycle reports reach main", async () => {
   const { api, invocations } = loadPreloadApi();
 
   await api.dictationLifecycleStateChanged("preparing", "take-1");
+  await api.dictationLifecycleStateChanged("preparing", "take-2", "assistant");
 
-  assert.deepEqual(invocations, [["dictation-lifecycle-state-changed", "preparing", "take-1"]]);
+  assert.deepEqual(invocations, [
+    ["dictation-lifecycle-state-changed", "preparing", "take-1", undefined],
+    ["dictation-lifecycle-state-changed", "preparing", "take-2", "assistant"],
+  ]);
 });
 
 test("the agent window's bridges reach their channels and strip the Electron event", async () => {

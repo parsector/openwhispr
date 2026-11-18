@@ -2338,7 +2338,8 @@ declare global {
       micWarmHoldChanged?: (active: boolean) => void;
       dictationLifecycleStateChanged: (
         state: "idle" | "preparing" | "recording" | "processing",
-        attempt: string
+        attempt: string,
+        inputKind?: "dictation" | "assistant" | "translation"
       ) => Promise<boolean>;
 
       // STT config

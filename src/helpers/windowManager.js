@@ -1169,9 +1169,9 @@ this._dictationAttempt = null;
     }
   }
 
-  setDictationLifecycleState(state, inputKindOrAttempt) {
+  setDictationLifecycleState(state, inputKindOrAttempt, requestedInputKind) {
     const isInputKind = Object.values(DICTATION_INPUT_KIND).includes(inputKindOrAttempt);
-    const inputKind = isInputKind ? inputKindOrAttempt : DICTATION_INPUT_KIND.DICTATION;
+    const inputKind = isInputKind ? inputKindOrAttempt : requestedInputKind;
     const attempt = isInputKind ? undefined : inputKindOrAttempt;
     const nextState = normalizeDictationLifecycle(state);
     const nextInputKind = normalizeDictationInputKind(inputKind);
