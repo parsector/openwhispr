@@ -25,7 +25,6 @@ import AuthScreen from '@/screens/AuthScreen';
 import { OnboardingFlow } from '@/screens/onboarding/OnboardingFlow';
 import { AnimatedSplash } from '@/components/features/AnimatedSplash';
 import { useKeyboardHandoff } from '@/hooks/useKeyboardHandoff';
-import { useRevenueCatIdentity } from '@/hooks/useRevenueCatIdentity';
 import { useAnonymousOnboardingSession } from '@/hooks/useAnonymousOnboardingSession';
 import { useGuestPrivateMode } from '@/hooks/useGuestPrivateMode';
 import { runMigrations } from '@/db/migrate';
@@ -47,7 +46,6 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function RootLayout() {
   useKeyboardHandoff();
-  useRevenueCatIdentity();
   useAnonymousOnboardingSession();
   useGuestPrivateMode();
 

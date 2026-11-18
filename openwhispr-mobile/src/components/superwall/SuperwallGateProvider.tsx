@@ -20,7 +20,6 @@ import {
 import { Sentry } from '@/lib/sentry';
 import { reconcileStoreBilling } from '@/lib/billingReconciliation';
 
-import { identifyRevenueCatUser, recordRevenueCatPurchase } from '@/lib/revenuecat';
 
 type Props = {
   children: React.ReactNode;
@@ -186,32 +185,6 @@ function reportPurchaseCompletion(
       extra: { placement: gate.placement, completion },
     });
   }
-}
-
-// Reconciliation asks the backend to ask RevenueCat, which is not guaranteed to
-// have seen a Superwall-completed StoreKit 2 purchase until it is recorded.
-// Identify first so the receipt posts under the billing user, not an anonymous
-// id. Never rejects; the lib reports its own failures.
-async function recordPurchaseForBilling(productId: string): Promise<void> {
-  const billingUserId = useUsageStore.getState().usage?.billingUserId;
-  if (billingUserId) await identifyRevenueCatUser(billingUserId);
-  await recordRevenueCatPurchase(productId);
-}
-
-// The gate stays open while the purchase is recorded, so a hung native call must
-// not leave it (and every later placement) stuck.
-const PURCHASE_RECORD_TIMEOUT_MS = 10_000;
-
-function recordPurchaseWithTimeout(productId: string): Promise<void> {
-  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
-  return Promise.race([
-    recordPurchaseForBilling(productId),
-    new Promise<void>((resolve) => {
-      timeoutHandle = setTimeout(resolve, PURCHASE_RECORD_TIMEOUT_MS);
-    }),
-  ]).finally(() => {
-    if (timeoutHandle) clearTimeout(timeoutHandle);
-  });
 }
 
 async function reconcileAfterPaywall(): Promise<void> {
@@ -436,12 +409,8 @@ export function EnabledSuperwallGateProvider({ children }: Props) {
           settle();
           return;
         }
-        // Hold the gate until the purchase is recorded so consumers that reconcile
-        // on grant (usage-limit recovery) query the backend after RevenueCat can
-        // see the transaction. Marking the gate terminal now stops the native
-        // register promise from releasing it early.
         if (gate) gate.terminalEventProcessed = true;
-        recordPurchaseWithTimeout(result.productId).then(settle);
+        settle();
         return;
       }
 

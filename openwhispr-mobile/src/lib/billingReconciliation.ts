@@ -38,12 +38,8 @@ async function performReconciliation(
   // keeps screens that merely import a usage gate independent of native SDKs.
   const { reconcileMobileBilling } =
     require('@/data/remote/billingApi') as typeof import('@/data/remote/billingApi');
-  const { reconcileRevenueCatPurchases } =
-    require('@/lib/revenuecat') as typeof import('@/lib/revenuecat');
 
   const current = () => isBillingIdentityCurrent(identity);
-  const synced = await reconcileRevenueCatPurchases(identity.billingUserId, current);
-  if (!synced) throw new Error('RevenueCat purchase sync is unavailable');
   if (!current()) throw new Error('Billing account changed');
   const usage = await reconcileMobileBilling(platform, identity.sessionCookie);
   if (!current()) throw new Error('Billing account changed');

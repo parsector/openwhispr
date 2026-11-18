@@ -18,7 +18,7 @@ import type { UsageInfo } from '@/data/remote/usageApi';
 import { createStripeBillingPortalSession } from '@/data/remote/billingApi';
 import { ApiError } from '@/lib/apiClient';
 import { openExternal, openMail } from '@/lib/openExternal';
-import { getAppStorefrontCountryCode, showAppStoreManageSubscriptions } from '@/lib/revenuecat';
+import { getAppStorefrontCountryCode, showAppStoreManageSubscriptions } from '@/lib/appStoreSubscriptions';
 import { confirmAccountDeletion, confirmDestructive } from '@/lib/alerts';
 import { safeHaptics } from '@/lib/utils';
 import { iosColor } from '@/config/colors';

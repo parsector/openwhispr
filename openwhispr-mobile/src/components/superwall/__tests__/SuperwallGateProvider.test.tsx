@@ -76,7 +76,7 @@ jest.mock('@/lib/billingReconciliation', () => ({
 const mockIdentifyRevenueCatUser = jest.fn();
 const mockRecordRevenueCatPurchase = jest.fn();
 
-jest.mock('@/lib/revenuecat', () => ({
+jest.mock('@/lib/appStoreSubscriptions', () => ({
   identifyRevenueCatUser: (userId: string) => mockIdentifyRevenueCatUser(userId),
   recordRevenueCatPurchase: (productId: string) => mockRecordRevenueCatPurchase(productId),
 }));

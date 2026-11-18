@@ -81,7 +81,7 @@ jest.mock('@/lib/apiClient', () => ({
   },
 }));
 jest.mock('@/lib/openExternal', () => ({ openExternal: jest.fn(), openMail: jest.fn() }));
-jest.mock('@/lib/revenuecat', () => ({
+jest.mock('@/lib/appStoreSubscriptions', () => ({
   getAppStorefrontCountryCode: jest.fn(),
   showAppStoreManageSubscriptions: jest.fn(),
 }));

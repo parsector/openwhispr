@@ -159,7 +159,7 @@ jest.mock('@/lib/openExternal', () => ({
   openExternal: (...args: unknown[]) => mockOpenExternal(...args),
   openMail: (...args: unknown[]) => mockOpenMail(...args),
 }));
-jest.mock('@/lib/revenuecat', () => ({
+jest.mock('@/lib/appStoreSubscriptions', () => ({
   getAppStorefrontCountryCode: (...args: unknown[]) => mockGetAppStorefrontCountryCode(...args),
   showAppStoreManageSubscriptions: (...args: unknown[]) =>
     mockShowAppStoreManageSubscriptions(...args),

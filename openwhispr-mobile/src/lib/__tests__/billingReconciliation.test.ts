@@ -1,5 +1,4 @@
 import { reconcileStoreBilling } from '../billingReconciliation';
-import { reconcileRevenueCatPurchases } from '../revenuecat';
 import { reconcileMobileBilling } from '@/data/remote/billingApi';
 
 let mockAuth = { user: { id: 'a' }, sessionCookie: 'cookie-a' };
@@ -8,14 +7,12 @@ jest.mock('@/store/useAuthStore', () => ({ useAuthStore: { getState: () => mockA
 jest.mock('@/store/useUsageStore', () => ({
   useUsageStore: { getState: () => ({ usage: mockUsage }) },
 }));
-jest.mock('../revenuecat', () => ({ reconcileRevenueCatPurchases: jest.fn() }));
 jest.mock('@/data/remote/billingApi', () => ({ reconcileMobileBilling: jest.fn() }));
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockAuth = { user: { id: 'a' }, sessionCookie: 'cookie-a' };
   mockUsage = { billingUserId: 'billing-a' };
-  jest.mocked(reconcileRevenueCatPurchases).mockResolvedValue(true);
   jest.mocked(reconcileMobileBilling).mockResolvedValue({ isSubscribed: true } as never);
 });
 
@@ -27,8 +24,8 @@ it('shares a check only within the same account and retains its original HTTP cr
 });
 
 it('does not share another account’s check or send its result to the new owner', async () => {
-  let release!: (value: boolean) => void;
-  jest.mocked(reconcileRevenueCatPurchases).mockImplementationOnce(
+  let release!: (value: never) => void;
+  jest.mocked(reconcileMobileBilling).mockImplementationOnce(
     () =>
       new Promise((resolve) => {
         release = resolve;
@@ -41,11 +38,12 @@ it('does not share another account’s check or send its result to the new owner
   mockUsage = { billingUserId: 'billing-b' };
   const second = reconcileStoreBilling();
   expect(second).not.toBe(first);
-  release(true);
+  release({ isSubscribed: true } as never);
   await rejected;
   await second;
-  expect(reconcileMobileBilling).toHaveBeenCalledTimes(1);
-  expect(reconcileMobileBilling).toHaveBeenCalledWith('ios', 'cookie-b');
+  expect(reconcileMobileBilling).toHaveBeenCalledTimes(2);
+  expect(reconcileMobileBilling).toHaveBeenNthCalledWith(1, 'ios', 'cookie-a');
+  expect(reconcileMobileBilling).toHaveBeenNthCalledWith(2, 'ios', 'cookie-b');
 });
 
 it('discards an HTTP response after a session change', async () => {

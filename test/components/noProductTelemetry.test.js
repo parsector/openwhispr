@@ -22,6 +22,8 @@ test("removed event and creator subsystems have no queue, IPC or completion call
     "openwhispr-mobile/src/lib/productEvents.ts",
     "openwhispr-mobile/src/lib/affiliateLink.ts",
     "openwhispr-mobile/src/lib/appsflyer.ts",
+    "openwhispr-mobile/src/lib/revenuecat.ts",
+    "openwhispr-mobile/src/hooks/useRevenueCatIdentity.ts",
   ]) {
     assert.equal(fs.existsSync(path.join(root, file)), false, file);
   }
@@ -29,7 +31,7 @@ test("removed event and creator subsystems have no queue, IPC or completion call
     const source = fs.readFileSync(path.join(root, file), "utf8");
     assert.doesNotMatch(
       source,
-      /product-events-record-|createProductEventsStore|\bMetaActivation\b|\brecordProductEventAppSession\b|\brecordOnboardingCompleted\b|\brecordDictationCompleted\b|\b_reportDictation\b|affiliate-(?:get-candidate|save-candidate|resolve-link)|from ['"][^'"]*(?:appsflyer|affiliate(?:Link|Store|Offer|Paywall|Attribution))['"]/,
+      /product-events-record-|createProductEventsStore|\bMetaActivation\b|\brecordProductEventAppSession\b|\brecordOnboardingCompleted\b|\brecordDictationCompleted\b|\b_reportDictation\b|affiliate-(?:get-candidate|save-candidate|resolve-link)|from ['"][^'"]*(?:appsflyer|revenuecat|affiliate(?:Link|Store|Offer|Paywall|Attribution))['"]/,
       file
     );
   }

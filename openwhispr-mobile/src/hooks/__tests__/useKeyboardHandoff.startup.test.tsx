@@ -258,7 +258,6 @@ jest.mock('@/components/features/AnimatedSplash', () => ({ AnimatedSplash: () =>
 jest.mock('@/components/ui/PermissionAlert', () => ({ PermissionAlertMount: () => null }));
 jest.mock('@/screens/AuthScreen', () => () => null);
 jest.mock('@/screens/onboarding/OnboardingFlow', () => ({ OnboardingFlow: () => null }));
-jest.mock('@/hooks/useRevenueCatIdentity', () => ({ useRevenueCatIdentity: () => undefined }));
 
 jest.mock('@/hooks/useAnonymousOnboardingSession', () => ({
   useAnonymousOnboardingSession: () => undefined,
