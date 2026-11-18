@@ -55,22 +55,12 @@ test("joining, leaving or deleting a workspace drops the kept leaderboards", () 
   );
 });
 
-test("Your usage skips only a check for remote changes while its summary is fresh", () => {
+test("Your usage reads only the device and refreshes on local changes", () => {
   const view = read("src/components/InsightsView.tsx");
-
-  assert.ok(
-    view
-      .replace(/\s+/g, " ")
-      .includes(
-        "!dataChanged && !accountReadFailedRef.current && accountId && isInsightFresh(readCachedInsightsSummary(accountId))"
-      ),
-    "a dictation always reloads; focus and the interval wait out a fresh summary, not a failure"
-  );
-  assert.ok(view.includes("else cacheInsightsSummary(accountId, account);"));
-  assert.ok(
-    view.includes('return load(dataChanged ? "refresh" : "allow");'),
-    "only a check may be answered from the API's copy"
-  );
+  const usage = view.slice(view.indexOf("function YourUsage("), view.indexOf("\nexport default function InsightsView"));
+  assert.ok(usage.includes("window.electronAPI.getAnalyticsSummary()"));
+  assert.ok(usage.includes("subscribeToAnalyticsRefresh(load)"));
+  assert.doesNotMatch(usage, /getAccountAnalyticsSummary|cloudApiRequest|cacheInsightsSummary/);
 });
 
 test("clearing or shortening history drops the kept Insights answers", () => {

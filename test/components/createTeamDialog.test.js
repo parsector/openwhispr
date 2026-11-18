@@ -292,7 +292,7 @@ async function mount(
   };
 }
 
-test("a new address says what it costs before the team is made, and Create still goes", async (t) => {
+test("a new address can be invited without a seat gate before the team is made", async (t) => {
   await mount(t, {
     workspaceFields: { has_subscription: true, seats: 8, seats_used: 8, billing_manager: "Olivia" },
   });
@@ -303,8 +303,8 @@ test("a new address says what it costs before the team is made, and Create still
   await addAddress("new@example.com");
   await settle();
 
-  assert.match(text(dialog()), /Using 8 of 8 seats/);
-  assert.match(text(dialog()), /No seats left\. Ask Olivia to add seats\./);
+  assert.doesNotMatch(text(dialog()), /Using 8 of 8 seats/);
+  assert.doesNotMatch(text(dialog()), /No seats left\. Ask Olivia to add seats\./);
   assert.equal(createButton().disabled, false);
 });
 
@@ -544,8 +544,8 @@ test("a session that needs SSO says so and offers no Try again", async (t) => {
   assert.equal(buttonNamed("Try again"), undefined);
 });
 
-test("the server's refusal opens the paywall and refreshes", async (t) => {
-  const { callsTo, closes, toasts, reopen } = await mount(t, {
+test("the server's refusal keeps the form editable and refreshes without a paywall", async (t) => {
+  const { callsTo, closes, toasts } = await mount(t, {
     createTeam: async () => {
       throw new CloudApiError("Upgrade to create teams", 403, "team_plan_required");
     },
@@ -553,16 +553,14 @@ test("the server's refusal opens the paywall and refreshes", async (t) => {
   await type(nameInput(), "Sales");
   await click(createButton());
 
-  assert.equal(callsTo("planRequired").length, 1);
+  assert.equal(callsTo("planRequired").length, 0);
   assert.deepEqual(callsTo("refresh"), [["refresh", { fresh: true }]]);
   assert.deepEqual(toasts(), []);
-  // Closing is the Teams page's call, and the form goes with its entries: upgrading takes the
-  // person to another page, so they start again from the Teams page.
   assert.deepEqual(closes, []);
-  assert.equal(dialog(), null);
-  await reopen();
-  await settle();
-  assert.equal(nameInput().value, "");
+  assert.ok(dialog());
+  assert.equal(nameInput().value, "Sales");
+  assert.ok(buttonNamed("Try again"));
+  assert.ok(alertTexts().length > 0);
   assert.deepEqual(chipTexts(), []);
 });
 

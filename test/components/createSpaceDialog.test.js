@@ -367,7 +367,7 @@ async function mount(
   };
 }
 
-test("a new address says what it costs before the teamspace is made, and Create still goes", async (t) => {
+test("a new address can be invited without a seat gate before the teamspace is made", async (t) => {
   const { refreshes } = await mount(t, {
     workspaceFields: { has_subscription: true, seats: 8, seats_used: 8, billing_manager: "Olivia" },
   });
@@ -378,9 +378,9 @@ test("a new address says what it costs before the teamspace is made, and Create 
   await addAddress("new@example.com");
   await settle();
 
-  assert.match(text(dialog()), /Using 8 of 8 seats/);
-  assert.match(text(dialog()), /No seats left\. Ask Olivia to add seats\./);
-  assert.deepEqual(refreshes, [{ fresh: true }]);
+  assert.doesNotMatch(text(dialog()), /Using 8 of 8 seats/);
+  assert.doesNotMatch(text(dialog()), /No seats left\. Ask Olivia to add seats\./);
+  assert.deepEqual(refreshes, [], "staging an invitation needs no billing refresh");
   assert.equal(createButton().disabled, false);
 });
 

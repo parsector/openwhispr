@@ -139,9 +139,10 @@ test("a token rotation between server start and stream creation keeps the operat
     return server.createOnlineStream({ onError: refusal.resolve });
   });
 
-  assert.throws(() => gate.authorizeCached("transcription", modelName), {
-    code: "POLICY_UNRESOLVABLE",
-  });
+  // An unresolved new identity stays permissive while its policy loads.
+  const pendingLease = gate.authorizeCached("transcription", modelName);
+  assert.equal(pendingLease.signal.aborted, false);
+  gate.release(pendingLease);
   stream.sendPcm16(Buffer.alloc(3200));
   await firstFrame.promise;
 

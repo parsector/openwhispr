@@ -13,11 +13,26 @@ function installFakeIndexedDB(t, seed = []) {
   const keyOf = (row) => [row.sessionId, row.seq];
   const compare = (a, b) => (a[0] === b[0] ? a[1] - b[1] : a[0] < b[0] ? -1 : 1);
   const rows = new Map(seed.map((row) => [JSON.stringify(keyOf(row)), row]));
+  const pending = new Set();
+  rows.flush = async () => {
+    // Let writes chained from openDb enqueue their requests first.
+    await Promise.resolve();
+    while (pending.size) await Promise.all([...pending]);
+  };
   const later = (run) => {
     const request = {};
+    let complete;
+    const settled = new Promise((resolve) => (complete = resolve));
+    pending.add(settled);
     setTimeout(() => {
-      request.result = run();
-      request.onsuccess?.();
+      try {
+        request.result = run();
+        request.onupgradeneeded?.();
+        request.onsuccess?.();
+      } finally {
+        pending.delete(settled);
+        complete();
+      }
     }, 0);
     return request;
   };
@@ -32,22 +47,17 @@ function installFakeIndexedDB(t, seed = []) {
   const db = { createObjectStore() {}, transaction: () => ({ objectStore: () => store }) };
   const originals = { indexedDB: globalThis.indexedDB, IDBKeyRange: globalThis.IDBKeyRange };
   globalThis.indexedDB = {
-    open() {
-      const request = {};
-      setTimeout(() => {
-        request.result = db;
-        request.onupgradeneeded?.();
-        request.onsuccess?.();
-      }, 0);
-      return request;
-    },
+    open: () => later(() => db),
   };
   globalThis.IDBKeyRange = {
     bound: (lower, upper) => ({
       includes: (key) => compare(key, lower) >= 0 && compare(key, upper) <= 0,
     }),
   };
-  t.after(() => Object.assign(globalThis, originals));
+  t.after(async () => {
+    await rows.flush();
+    Object.assign(globalThis, originals);
+  });
   return rows;
 }
 
@@ -65,7 +75,6 @@ async function loadSpool(t) {
   return { ...(await vite.ssrLoadModule("/helpers/recordingSpool.js")), warnings };
 }
 
-const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 const text = (blob) => blob.text();
 const deadRow = (seq, segment, at, chunk) => ({
   sessionId: "dead-page",
@@ -101,7 +110,7 @@ test("a page that died mid-recording hands its audio back once, one blob per rec
   assert.deepEqual(await takeInterruptedRecordings(), [], "a second caller gets nothing");
 
   recording.discard();
-  await settle();
+  await rows.flush();
   assert.equal(rows.size, 0);
 });
 
@@ -118,7 +127,7 @@ test("recordings this page started never come back, and a finished one leaves no
 
   const active = startRecordingSpool();
   active.addSegment("audio/webm")(new Blob(["b"]));
-  await settle();
+  await rows.flush();
 
   assert.deepEqual(await takeInterruptedRecordings(), []);
   assert.deepEqual(
@@ -143,7 +152,6 @@ test("a database that won't open is reported once and the recording goes on unsp
   const append = spool.addSegment("audio/webm");
   for (const chunk of ["a", "b", "c"]) append(new Blob([chunk]));
   spool.finish();
-  await settle();
 
   assert.deepEqual(await takeInterruptedRecordings(), []);
   assert.deepEqual(warnings, ["Recording spool unavailable"]);

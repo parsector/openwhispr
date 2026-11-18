@@ -242,9 +242,9 @@ test("a stream ends only on a settled denial or a lost account, and then closes 
     const accountLost = { code: "POLICY_UNRESOLVABLE", messageKey: "common.policyAccountChanged" };
     for (const [label, change, ending] of [
       [
-        "a settled error ends it",
+        "an unresolved policy keeps it",
         () => ({ status: "error" }),
-        { message: require("../../src/locales/en/translation.json").common.policyAgentRestricted },
+        null,
       ],
       ["a suspended policy keeps it", () => ({ status: "loading", accountId: null }), null],
       ["signing in from a guest keeps it", () => ({ accountId: "new" }), null],

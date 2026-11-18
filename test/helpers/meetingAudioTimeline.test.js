@@ -199,7 +199,8 @@ test("Deepgram anchors native system and AEC mic transcripts to audio after slow
   assert.deepEqual(mic.timestamps, [14000]);
   assert.deepEqual(system.timestamps, [14000]);
   assert.equal(run.context.meetingDiarizationStartedAt, 14000);
-  assert.equal(run.context.meetingLiveSpeakerStartedAt, 14000);
+  assert.equal(run.context.meetingLiveSpeakerStartedAt.system, 14000);
+  assert.equal(run.context.meetingLiveSpeakerStartedAt.mic, null);
 
   now = 15000;
   run.at(now);

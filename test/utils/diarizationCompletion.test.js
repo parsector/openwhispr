@@ -215,8 +215,8 @@ test("diarization preserves the recorder while still numbering in-person voices"
   );
 });
 
-// With no speaker count, every remote line is the one live speaker, and naming
-// it locks that name onto all of them. Diarization then finds several voices.
+// The fork treats a user lock as authoritative for both name and cluster.
+// Final clustering, including legacy split metadata, cannot undo that choice.
 async function mergeIntoLockedRows(lockedName, splitLiveSpeakers) {
   const { mergeSessionDiarization } = await import("../../src/utils/diarizationCompletion.ts");
   const { lockTranscriptSpeaker } = await import("../../src/utils/transcriptSpeakerState.ts");
@@ -245,25 +245,25 @@ async function mergeIntoLockedRows(lockedName, splitLiveSpeakers) {
   }).segments.map((segment) => [segment.speaker, segment.speakerName, segment.speakerLocked]);
 }
 
-test("a name locked onto a live speaker stays only with the voice it went to", async () => {
+test("final split metadata cannot replace a user's locked speaker assignment", async () => {
   const merged = await mergeIntoLockedRows("Alice", {
     speaker_0: { speaker: "speaker_1", name: "Alice" },
   });
 
   assert.deepEqual(merged, [
-    ["speaker_1", "Alice", true],
-    ["speaker_0", null, false],
-    ["speaker_2", "Bob", false],
+    ["speaker_0", "Alice", true],
+    ["speaker_0", "Alice", true],
+    ["speaker_0", "Alice", true],
   ]);
 });
 
-test("a locked name that matched no voice stays on every line it was given to", async () => {
+test("a user's locked name and cluster stay on every line without split metadata", async () => {
   const merged = await mergeIntoLockedRows("Alice", undefined);
 
   assert.deepEqual(merged, [
-    ["speaker_1", "Alice", true],
     ["speaker_0", "Alice", true],
-    ["speaker_2", "Alice", true],
+    ["speaker_0", "Alice", true],
+    ["speaker_0", "Alice", true],
   ]);
 });
 

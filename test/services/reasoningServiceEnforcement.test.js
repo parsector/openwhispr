@@ -93,10 +93,8 @@ test("ReasoningService entry points enforce the org policy", async (t) => {
       });
     };
     assert.equal(await finishUnder({ status: "loading", policy: null }), "answer");
-    // An error is settled, as in main: a managed policy that can't be resolved.
-    await assert.rejects(finishUnder({ status: "error", policy: null }), {
-      code: "POLICY_UNRESOLVABLE",
-    });
+    // Unresolvable policy never blocks local work in the fork.
+    assert.equal(await finishUnder({ status: "error", policy: null }), "answer");
     const denied = buildPolicy({ llmModes: ["local"] });
     denied.llm.allowedLocalModels = [];
     await assert.rejects(finishUnder({ policy: denied }), { code: "POLICY_MODEL_BLOCKED" });

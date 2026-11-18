@@ -172,17 +172,17 @@ test("while usage is unknown, the card follows the saved flag like the chat does
   assert.match(textContent, /connectors\.email\.description/);
 });
 
-test("while usage is unknown and the flag is unset, the card shows an unavailable notice", async (t) => {
+test("while usage is unknown and the flag is unset, connectors remain available", async (t) => {
   const loading = { status: "loading", accountId: "acct" };
   const { textContent } = await renderSection(t, { usageState: loading, subscribedFlag: false });
-  assert.match(textContent, /common\.unavailableInBuild/);
+  assert.doesNotMatch(textContent, /common\.unavailableInBuild/);
 });
 
-test("free users see one unavailable notice above the connectors, which still say what they do", async (t) => {
+test("free users see the available connectors and their descriptions", async (t) => {
   const container = await renderSection(t, { usageState: usage(false) });
-  assert.equal(count(container.textContent, /common\.unavailableInBuild/g), 1);
+  assert.equal(count(container.textContent, /common\.unavailableInBuild/g), 0);
   assert.match(container.textContent, /connectors\.email\.description/);
-  assert.doesNotMatch(container.textContent, /connectors\.email\.targets\.gmail/);
+  assert.match(container.textContent, /connectors\.email\.targets\.gmail/);
   assert.doesNotMatch(container.textContent, /integrations\.api\.viewPlans/);
 });
 
@@ -214,9 +214,9 @@ test("while the policy is unresolved, the card says drafts are unavailable", asy
   assert.equal(fetches, 0);
 });
 
-test("an unresolved policy doesn't hide the unavailable notice from a free user", async (t) => {
+test("an unresolved policy reports service availability without a plan notice", async (t) => {
   const { textContent } = await renderSection(t, { usageState: usage(false), allowed: false });
-  assert.match(textContent, /common\.unavailableInBuild/);
+  assert.doesNotMatch(textContent, /common\.unavailableInBuild/);
   assert.doesNotMatch(textContent, /integrations\.api\.viewPlans/);
 });
 
@@ -273,10 +273,10 @@ test("a stale login offers Reconnect and Disconnect", async (t) => {
   assert.match(staleMarkup, /connectors\.slack\.needsReconnect/);
 });
 
-test("free users with no login see a single unavailable notice and no Connect", async (t) => {
+test("free users with no login can connect", async (t) => {
   const none = await renderSection(t, { isPaid: false, blocked: false });
-  assert.equal(count(none.textContent, /common\.unavailableInBuild/g), 1);
-  assert.equal(buttonWithText(none, "connectors.slack.connect"), null);
+  assert.equal(count(none.textContent, /common\.unavailableInBuild/g), 0);
+  assert.ok(buttonWithText(none, "connectors.slack.connect"));
   // The beta badge sits on the Connectors title, not on each row.
   assert.doesNotMatch(none.textContent, /connectors\.beta/);
 });
@@ -288,7 +288,7 @@ test("free users can always disconnect a login they have", async (t) => {
     statuses: { slack: SLACK },
   });
   assert.match(lapsed.textContent, /connectors\.slack\.disconnect/);
-  assert.equal(count(lapsed.textContent, /common\.unavailableInBuild/g), 1);
+  assert.equal(count(lapsed.textContent, /common\.unavailableInBuild/g), 0);
 });
 
 test("an org that turned connectors off still lets the user remove a login", async (t) => {
