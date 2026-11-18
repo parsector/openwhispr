@@ -49,7 +49,7 @@ test("boot restores the validated scope before any main-process consumer constru
 test("account-scoped accessibility readiness is revalidated before opening the sticky gate", () => {
   const source = read("main.js");
   const handler = source.match(
-    /ipcMain\.on\("mac-accessibility-features-ready"([\s\S]*?)\/\/ Listen for usage limit/
+    /ipcMain\.on\("mac-accessibility-features-ready"([\s\S]*?)\n\}\);/
   );
   assert.ok(handler, "macOS accessibility readiness handler is present");
   assert.ok(handler[1].includes("resolveActiveAccountScope"));

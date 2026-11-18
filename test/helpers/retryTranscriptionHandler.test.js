@@ -954,12 +954,12 @@ const invokeUpload = (payload, bytes = Buffer.from([1, 2, 3, 4])) => {
   );
 };
 
-test("upload: mistral sends x-api-key with a provider-validated model and no language on auto", async () => {
+test("upload: mistral preserves the saved model with x-api-key and no language on auto", async () => {
   fetches.length = 0;
   const result = await invokeUpload({
     apiKey: "mk-mistral",
     baseUrl: "https://api.mistral.ai/v1",
-    model: "gpt-4o-mini-transcribe", // stale from an openai era — must degrade
+    model: "gpt-4o-mini-transcribe", // Unlisted here; never replace the user's configured ID.
     provider: "mistral",
     language: "",
     transcriptionMode: "providers",
@@ -969,7 +969,8 @@ test("upload: mistral sends x-api-key with a provider-validated model and no lan
   assert.equal(fetches[0].init.headers["x-api-key"], "mk-mistral");
   assert.equal(fetches[0].init.headers.Authorization, undefined);
   const body = fetches[0].init.body.toString();
-  assert.match(body, /voxtral-mini-latest/);
+  assert.match(body, /gpt-4o-mini-transcribe/);
+  assert.doesNotMatch(body, /voxtral-mini-latest/);
   assert.doesNotMatch(body, /name="language"/);
 });
 

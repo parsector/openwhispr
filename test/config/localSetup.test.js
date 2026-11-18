@@ -834,8 +834,8 @@ test("local setup accepts an organization-required model published after launch"
   assert.deepEqual(row(updated, "dictation").line, { key: "requiredByOrganization" });
 });
 
-test("local setup never queues retired benchmark picks for a new download", async (t) => {
-  await plan(mac({}));
+test("local setup keeps benchmark picks downloadable despite retirement metadata", async (t) => {
+  const initial = await plan(mac({}));
   await updateCatalog(t, (data) => {
     data.parakeetModels[table.models.dictation.english].retired = true;
     data.localProviders
@@ -847,10 +847,10 @@ test("local setup never queues retired benchmark picks for a new download", asyn
   const downloads = enabledDownloads(updated, { cleanup: true, assistant: true })
     .flatMap((entry) => entry.items)
     .map((item) => item.id);
-  assert.equal(row(updated, "dictation").label, "unavailable");
-  assert.equal(row(updated, "assistant").label, "unavailable");
-  assert.equal(downloads.includes(table.models.dictation.english), false);
-  assert.equal(downloads.includes(table.models.assistant), false);
+  assert.equal(row(updated, "dictation").label, row(initial, "dictation").label);
+  assert.equal(row(updated, "assistant").label, row(initial, "assistant").label);
+  assert.equal(downloads.includes(table.models.dictation.english), true);
+  assert.equal(downloads.includes(table.models.assistant), true);
 });
 
 test("catalog retirement never overrides an organization block", async (t) => {

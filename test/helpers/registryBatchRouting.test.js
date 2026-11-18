@@ -40,14 +40,15 @@ test("new batch selections reach the selected provider without a legacy ID rewri
     assert.equal(route.provider, provider);
     assert.equal(route.model, model);
   }
-  const wrongProvider = resolveTranscriptionRoute({
+  const unlistedForProvider = resolveTranscriptionRoute({
     settings: {
       transcriptionMode: "providers",
       cloudTranscriptionProvider: "groq",
       cloudTranscriptionModel: "gpt-5-transcribe",
     },
   });
-  assert.equal(wrongProvider.model, "whisper-large-v3-turbo");
+  assert.equal(unlistedForProvider.provider, "groq");
+  assert.equal(unlistedForProvider.model, "gpt-5-transcribe");
 });
 
 test("dictation honors a new Gemini batch selection and retains streaming fallbacks", async (t) => {
