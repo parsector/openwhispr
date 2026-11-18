@@ -64,6 +64,6 @@ export function routineEndpointSupportsTools(
 ): boolean {
   if (!choice?.model) return true;
   if (choice.mode === "openwhispr") return false; // /api/reason has no tool loop
-  if (!["providers", "self-hosted", "enterprise", "local"].includes(choice.mode)) return false;
+  if (!["providers", "self-hosted", "enterprise", "local"].includes(choice.mode)) return true;
   return endpointSupportsToolCalls(choice);
 }

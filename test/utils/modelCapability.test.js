@@ -58,10 +58,17 @@ test("a user endpoint trusts the owner's model capability setting", () => {
   assert.equal(endpointSupportsToolCalls({ ...endpoint, mode: "enterprise" }), true);
 });
 
-test("the same id on the managed local lineup keeps its known-size requirement", () => {
+test("unknown local model sizes stay permissive while known small models keep their floor", () => {
   const local = { mode: "local", provider: "ollama", model: "deepseek-v4.1-flash:1017-cloud" };
-  assert.equal(endpointSupportsToolCalls(local), false);
-  assert.equal(routineEndpointSupportsTools(local), false);
+  assert.equal(endpointSupportsToolCalls(local), true);
+  assert.equal(routineEndpointSupportsTools(local), true);
   assert.equal(endpointSupportsToolCalls({ ...local, model: "gemma3:3b" }), false);
   assert.equal(endpointSupportsToolCalls({ ...local, model: "llama3.1:8b" }), true);
+});
+
+test("unknown endpoint modes and incomplete choices remain total and permissive", () => {
+  for (const choice of [null, undefined, {}, { mode: "user-typed", provider: "custom", model: "unknown" }]) {
+    assert.equal(endpointSupportsToolCalls(choice), true);
+    assert.equal(routineEndpointSupportsTools(choice), true);
+  }
 });

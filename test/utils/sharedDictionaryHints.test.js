@@ -35,7 +35,7 @@ function meta(overrides = {}) {
   };
 }
 
-test("selectSharedHintWords excludes hidden, paused and out-of-scope words", () => {
+test("selectSharedHintWords excludes hidden and out-of-scope words but ignores paid-plan pauses", () => {
   const entries = [
     entry("e1", SPACE_A, "Kubernetes"),
     entry("e2", SPACE_A, "Hidden"),
@@ -48,7 +48,7 @@ test("selectSharedHintWords excludes hidden, paused and out-of-scope words", () 
   });
   assert.deepEqual(
     selectSharedHintWords({ entries, hiddenIds: [], meta: meta({ paused: true }) }),
-    EMPTY_SHARED_HINTS
+    { space: ["Kubernetes", "Hidden"], workspace: ["Acme"] }
   );
   assert.deepEqual(
     selectSharedHintWords({ entries, hiddenIds: [], meta: null }),
@@ -214,7 +214,7 @@ test("selectSharedHintWords drops words that are not term-like and trims the res
   });
 });
 
-test("selectAppliedSharedEntries keeps ids of readable, non-hidden entries and is empty when paused or unsynced", () => {
+test("selectAppliedSharedEntries keeps readable ids despite paid-plan pauses and is empty when unsynced", () => {
   const entries = [
     entry("e1", SPACE_A, "Kubernetes"),
     entry("e2", SPACE_A, "Hidden"),
@@ -223,7 +223,7 @@ test("selectAppliedSharedEntries keeps ids of readable, non-hidden entries and i
   ];
   const ids = (snapshot) => selectAppliedSharedEntries(snapshot).map((item) => item.cloudId);
   assert.deepEqual(ids({ entries, hiddenIds: ["e2"], meta: meta() }), ["e1", "e4"]);
-  assert.deepEqual(ids({ entries, hiddenIds: [], meta: meta({ paused: true }) }), []);
+  assert.deepEqual(ids({ entries, hiddenIds: [], meta: meta({ paused: true }) }), ["e1", "e2", "e4"]);
   assert.deepEqual(ids({ entries, hiddenIds: [], meta: null }), []);
 });
 

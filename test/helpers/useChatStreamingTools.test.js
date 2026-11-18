@@ -2002,7 +2002,7 @@ test("an answer typed at another app's caret names nothing to connect", async (t
     { settings: { ...BYOK_SETTINGS, isSignedIn: false } }
   );
   const configs = [];
-  reasoningService.processTextStreamingCloud.mock.mockImplementation((_messages, config) => {
+  reasoningService.processTextStreamingAI.mock.mockImplementation((_messages, _model, _provider, config) => {
     configs.push(config);
     return (async function* () {
       yield { type: "content", text: "Monday works." };
@@ -2012,6 +2012,7 @@ test("an answer typed at another app's caret names nothing to connect", async (t
   await captured.sendToAI("Reply to this email", [], { plainTextResponse: true });
   await captured.sendToAI("Reply to this email", []);
 
+  assert.equal(configs.length, 2);
   assert.doesNotMatch(configs[0].systemPrompt, /still write it in full in your reply/);
   assert.match(configs[1].systemPrompt, /still write it in full in your reply/);
 });
