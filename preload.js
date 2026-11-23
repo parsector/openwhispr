@@ -1419,8 +1419,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getPendingNotes: (spaceKind) => ipcRenderer.invoke("db-get-pending-notes", spaceKind),
   getPendingNoteDeletes: () => ipcRenderer.invoke("db-get-pending-note-deletes"),
   getNoteByClientId: (clientNoteId) => ipcRenderer.invoke("db-get-note-by-client-id", clientNoteId),
-  upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId) =>
-    ipcRenderer.invoke("db-upsert-note-from-cloud", cloudNote, localFolderId, localSpaceId),
+  upsertNoteFromCloud: (cloudNote, localFolderId, localSpaceId, expectedAuthGeneration, options) =>
+    ipcRenderer.invoke(
+      "db-upsert-note-from-cloud",
+      cloudNote,
+      localFolderId,
+      localSpaceId,
+      expectedAuthGeneration,
+      options
+    ),
   takeCloudSpeakerLabels: (noteId, undo = false) =>
     ipcRenderer.invoke("db-take-cloud-speaker-labels", noteId, undo),
   markNoteCreatesAttempted: (clientNoteIds, expectedAuthGeneration) =>

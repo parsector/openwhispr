@@ -5105,14 +5105,6 @@ class IPCHandlers {
     ipcMain.handle("db-get-note-by-client-id", (_, clientNoteId) =>
       this.databaseManager.getNoteByClientId(clientNoteId)
     );
-    ipcMain.handle("db-upsert-note-from-cloud", (_, cloudNote, localFolderId, localSpaceId) => {
-      const note = this.databaseManager.upsertNoteFromCloud(cloudNote, localFolderId, localSpaceId);
-      if (note) {
-        setImmediate(() => broadcastToWindows("note-synced", note));
-        this.notifyVectorChanges();
-      }
-      return note;
-    });
     ipcMain.handle("db-take-cloud-speaker-labels", (_, noteId, undo) => {
       const result = this.databaseManager.takeCloudSpeakerLabels(noteId, undo);
       if (result.success) {
@@ -5121,9 +5113,6 @@ class IPCHandlers {
       }
       return result;
     });
-    ipcMain.handle("db-mark-note-creates-attempted", (_, clientNoteIds) =>
-      this.databaseManager.markNoteCreatesAttempted(clientNoteIds)
-    );
     // A pull passes its sign-in generation so replacement accounts cannot accept its rows.
     ipcMain.handle(
       "db-upsert-note-from-cloud",
@@ -5534,14 +5523,8 @@ class IPCHandlers {
         ? STALE_SYNC_ACK
         : this.databaseManager.claimConversationFromCloud(cloudConv)
     );
-    ipcMain.handle("db-acknowledge-conversation-create", (_, id, snapshot, cloudId) =>
-      this.databaseManager.acknowledgeConversationCreate(id, snapshot, cloudId)
-    );
     ipcMain.handle("db-mark-conversation-create-attempted", (_, id) =>
       this.databaseManager.markConversationCreateAttempted(id)
-    );
-    ipcMain.handle("db-mark-conversation-synced", (_, id, cloudId) =>
-      this.databaseManager.markConversationSynced(id, cloudId)
     );
     // Unlike the other tables' acks, a chat's is never dropped: its copy now
     // exists in the sender's cloud, and an unattributed chat left unlinked would
