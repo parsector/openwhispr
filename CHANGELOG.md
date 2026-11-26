@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-26
+
+### Assistant
+
+- **The assistant gets its own window.** Pill, composer and full modal states, question, key, settings and connect cards that can pause and resume a run, conversation history with forks, regenerate and read aloud. The dictation companion panel stays for delivery and quick follow-ups.
+- **Connectors in the conversation.** Slack thread replies and Gmail drafts, with approvals shown as editable cards.
+
+### Notes
+
+- **Editor blocks, text styles, note links and find & replace.**
+
+### Workspaces
+
+- **Teams, teamspaces, guests and private sections**, with bulk invitations and member removal, Personal in the switcher, and no plan gate on any of it.
+
+### Speakers
+
+- **CAM++ zh-en embeddings with corrected audio features.** Approved voices are re-embedded from their retained encrypted clips; profiles that cannot be rebuilt present as not enrolled with eligibility recomputed, and existing approvals and audit history are kept.
+- **One microphone owner.** Dictation, the agent window and push-to-talk negotiate capture instead of racing for it.
+
+### Models
+
+- **The catalog is ours.** The shipped catalog is authoritative, saved selections are never silently replaced, and provider discovery is advisory rather than a filter.
+
+### Removed
+
+- Product-events reporting, billing, upsell, paywall and entitlements, affiliate and creator checkout, and store attribution on mobile.
+- Dead limit-notification plumbing.
+
+### Fixed
+
+- **Startup crash from duplicate IPC registration.** Several sync channels were registered twice after the merge; registration is now single and guarded by tests.
+- Unmanaged installs stay allowed while policy is loading, errored or unresolvable.
+
 ## [1.13.5] - 2026-11-10
 
 ### Speakers
