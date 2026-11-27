@@ -6647,6 +6647,18 @@
     "legacyRecoveryDisclosure": "Las muestras antiguas recuperadas cuentan normalmente. Las muestras cuyo audio ya ha caducado no pueden recuperarse y quedan excluidas permanentemente del reconocimiento y del cálculo de diversidad de grabaciones. Puede ser necesario volver a registrar la voz. Las muestras pendientes de una identidad de grabación auténtica siguen sin estar disponibles hasta su recuperación.",
     "legacyRecoveryFailed": "No se pudo verificar o recuperar parte del audio aprobado. Las grabaciones de origen se protegen durante siete días desde que las aprobaciones entran en la cola de recuperación, incluidas las que aún esperan ser procesadas. Después termina esa protección y las reglas habituales de retención de grabaciones pueden eliminarlas. Los registros de aprobación se conservan salvo que los borres. Revisa estas muestras y registra audio nuevo.",
     "exemplarPlaybackKeyUnavailable": "No se puede reproducir el clip guardado porque su clave de cifrado no está disponible. Restaura la clave original para escucharlo.",
+    "exemplarAudioUnavailable": "Audio no disponible en este dispositivo: {{reason}}. No cuenta para el registro de voz.",
+    "exemplarDeviceKeyUnavailable": "No se puede acceder a la clave de cifrado de audio en este dispositivo. Restaura el acceso a la credencial original del sistema o a su copia cifrada y reinicia OpenWhispr. Las muestras afectadas no se pueden reproducir ni cuentan para el registro de voz. Tus aprobaciones se conservan.",
+    "exemplarCounts": "Cuenta para el registro de voz.",
+    "exemplarNotCounted": "No cuenta para el registro de voz.",
+    "exemplarAudioReasons": {
+      "exemplar_key_unavailable": "clave del dispositivo no disponible",
+      "exemplar_authentication_failed": "falló la autenticación; la clave original puede ser distinta o el audio guardado puede estar dañado",
+      "exemplar_audio_truncated": "el clip cifrado está incompleto",
+      "exemplar_integrity_failed": "el audio guardado no superó la comprobación de integridad",
+      "exemplar_decryption_failed": "no se pudo descifrar el audio guardado",
+      "exemplar_audio_not_retained": "no se conserva ningún audio"
+    },
     "exemplarCapture": "{{seconds}} s · capturado el {{date}}",
     "enrollmentProgress": "Fragmentos limpios: {{spans}} / 3 · grabaciones: {{meetings}} / 2",
     "voiceUsable": "Voz utilizable",

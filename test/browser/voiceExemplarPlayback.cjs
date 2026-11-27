@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { chromium } = require("playwright");
 
-test("person row wires mocked exemplar WAV playback and preserves missing-key errors without loading notes", async (t) => {
+test("saved clips disclose availability before Listen and show device key failure once", async (t) => {
   const root = path.join(__dirname, "../../src");
   const modulePath = path.join(root, "voice-exemplar-proof.tsx");
   const wav = Buffer.alloc(44 + 4800 * 2);
@@ -22,13 +22,22 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   wav.writeUInt32LE(wav.length - 44, 40);
   const fixture = fs.readFileSync(path.join(__dirname, "fixtures/people-proof.tsx"), "utf8");
   const inject = `
-    rows[0].exemplars = [{ id: "permanent-clip", durationSeconds: 3.5, meetingDate: "2026-10-30 12:00:00", createdAt: "2026-11-05" }];
+    rows[0].exemplars = [
+      { id: "permanent-clip", durationSeconds: 3.5, meetingDate: "2026-10-30 12:00:00", createdAt: "2026-11-05", audio: { state: "available", reason: null }, countsTowardEnrollment: true },
+      { id: "damaged-clip", durationSeconds: 4, meetingDate: "2026-10-30 12:00:00", createdAt: "2026-11-05", audio: { state: "unavailable", reason: "exemplar_authentication_failed" }, countsTowardEnrollment: false },
+    ];
     rows[0].voiceProgress.legacyRecovered = 1;
     rows[0].hasVoice = true;
     rows[0].voiceProgress.cleanSpans = 1;
     rows[0].voiceProgress.meetings = 1;
     rows[1].voiceProgress.unrecoverable = 1;
     rows[1].voiceProgress.recoveryFailed = 1;
+    if (location.search.includes("key-missing")) {
+      for (const person of rows.slice(0, 2)) {
+        person.exemplars = [{ id: "locked-" + person.id, durationSeconds: 4, createdAt: "2026-11-05", audio: { state: "key_unavailable", reason: "exemplar_key_unavailable" }, countsTowardEnrollment: false }];
+        person.voiceProgress.cleanSpans = 0;
+      }
+    }
     window.electronAPI.playVoiceEnrollmentCandidate = async (id) => {
       window.playedExemplar = id;
       return { state: "available", wav: ${JSON.stringify(wav.toString("base64"))} };
@@ -76,7 +85,7 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
   const row = page.locator('[data-person-row="1"]');
   await row.getByText("Recovered legacy samples: 1.", { exact: false }).waitFor();
   const unavailable = page.locator('[data-person-row="2"]');
-  await unavailable.getByText("Voice unavailable", { exact: true }).waitFor();
+  await unavailable.getByText("No voice profile", { exact: true }).waitFor();
   await unavailable
     .getByText(
       "Some approved audio could not be verified or recovered. Its source stays protected for seven days from when approvals enter the recovery queue, including approvals still waiting. Source protection ends after that, and normal recording retention may then delete it. The approval record remains unless you erase it. Review these samples and enrol new audio.",
@@ -93,7 +102,11 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
     )
     .waitFor();
   assert.match(await row.textContent(), /3.5 s/);
-  await row.getByRole("button", { name: "Listen", exact: true }).click();
+  await row.getByText("Counts toward enrolment.", { exact: true }).waitFor();
+  await row.getByText(/Audio unavailable on this device: authentication failed/).waitFor();
+  const listen = row.getByRole("button", { name: "Listen", exact: true });
+  assert.equal(await listen.nth(1).isDisabled(), true);
+  await listen.first().click();
   await page.waitForFunction(() => document.querySelector("audio")?.readyState >= 1);
   assert.equal(await page.evaluate(() => window.playedExemplar), "permanent-clip");
   assert.equal(await page.getByRole("heading", { name: /Transcript/ }).count(), 0);
@@ -118,13 +131,44 @@ test("person row wires mocked exemplar WAV playback and preserves missing-key er
       error: "exemplar_key_unavailable",
     });
   });
-  await row.getByRole("button", { name: "Listen", exact: true }).click();
+  await listen.first().click();
+  await page
+    .getByRole("status")
+    .filter({ hasText: "The audio encryption key cannot be reached on this device." })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByText("The audio encryption key cannot be reached on this device.", { exact: false })
+      .count(),
+    1
+  );
+  assert.equal(await listen.first().isDisabled(), true);
+  assert.equal(await row.getByText("Counts toward enrolment.", { exact: true }).count(), 0);
   await row
     .getByRole("alert")
     .filter({
-      hasText: "The saved clip cannot be played because its encryption key is unavailable.",
+      hasText: "Audio unavailable on this device: device key unavailable.",
     })
     .waitFor();
   assert.doesNotMatch(await row.getByRole("alert").textContent(), /No exemplar was saved/);
+  await page.goto(
+    `http://127.0.0.1:${server.httpServer.address().port}/voice-exemplar-proof.html?key-missing`
+  );
+  await page
+    .getByRole("status")
+    .filter({ hasText: "The audio encryption key cannot be reached on this device." })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByText("The audio encryption key cannot be reached on this device.", { exact: false })
+      .count(),
+    1
+  );
+  assert.equal(await row.getByRole("button", { name: "Listen", exact: true }).isDisabled(), true);
+  assert.equal(
+    await unavailable.getByRole("button", { name: "Listen", exact: true }).isDisabled(),
+    true
+  );
+  assert.equal(await page.evaluate(() => window.playedExemplar), undefined);
   assert.deepEqual(errors, []);
 });

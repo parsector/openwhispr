@@ -132,21 +132,29 @@ function buildReport({
 }) {
   // Expand legacy row-wide/cluster exclusions into explicit evidence records.
   // An evidence-keyed failure affects only that clip or reconstructed interval.
-  exclusions = exclusions.flatMap((item) =>
-    rows
-      .filter((row) =>
-        item.evidenceKey
-          ? evidenceFingerprintKey(row) === item.evidenceKey
-          : item.rowId != null
-            ? row.noteId === item.noteId &&
-              row.rowId === item.rowId &&
-              (item.exemplarId == null || row.exemplarId === item.exemplarId)
-            : item.cluster === JSON.stringify([row.noteId, row.clusterId]) ||
-              item.cluster === `${row.noteId}:${row.clusterId}`
-      )
-      .map((row) => rowExclusion(row, item.reason, item.cluster ? { cluster: item.cluster } : {}))
-  );
-  const savedExemplars = rows.filter((row) => row.exemplarId).length;
+  exclusions = exclusions.flatMap((item) => {
+    const matching = rows.filter((row) =>
+      item.evidenceKey
+        ? evidenceFingerprintKey(row) === item.evidenceKey
+        : item.rowId != null
+          ? row.noteId === item.noteId &&
+            row.rowId === item.rowId &&
+            (item.exemplarId == null || row.exemplarId === item.exemplarId)
+          : item.cluster === JSON.stringify([row.noteId, row.clusterId]) ||
+            item.cluster === `${row.noteId}:${row.clusterId}`
+    );
+    // A verified failure can exclude an exemplar before it enters the selected
+    // rows. Keep that explicit diagnostic even though it contributes no vector.
+    if (!matching.length && item.exemplarId && item.evidenceKey) return [item];
+    return matching.map((row) =>
+      rowExclusion(row, item.reason, item.cluster ? { cluster: item.cluster } : {})
+    );
+  });
+  // Saved is an inventory count, distinct from the verified clips used below.
+  // Keep rejected retained clips visible in that inventory and its diagnostics.
+  const savedExemplars = new Set(
+    [...rows, ...exclusions].map((row) => row.exemplarId).filter(Boolean)
+  ).size;
   const timingProvenanceCounts = {};
   const excludedRows = new Set(
     exclusions.filter((item) => item.rowId != null).map((item) => item.evidenceKey)
@@ -377,6 +385,7 @@ function buildReport({
   };
 }
 function collectRows(database, audioStore, scope, budget, onProgress = () => {}) {
+  require("./voiceExemplarAudio").registerStore(database.db, audioStore);
   const db = database.db;
   const selectedOrigins = new Set();
   const selectOrigin = (key) => {
@@ -436,6 +445,25 @@ function collectRows(database, audioStore, scope, budget, onProgress = () => {})
     noteCentroidCompletions = [];
   let reviewedCount = 0;
   for (const sample of exemplars) {
+    const audio = require("./voiceExemplarAudio").play(db, audioStore, sample.id);
+    if (audio?.state !== "available") {
+      exclusions.push({
+        noteId: sample.note_id,
+        rowId: JSON.parse(sample.row_ids)[0],
+        exemplarId: sample.id,
+        evidenceKey: evidenceFingerprintKey({
+          noteId: sample.note_id,
+          rowId: JSON.parse(sample.row_ids)[0],
+          exemplarId: sample.id,
+          revision: sample.revision,
+          track: sample.track,
+          start: sample.start_sample / 24000,
+          end: sample.end_sample / 24000,
+        }),
+        reason: audio?.error || "audio_unavailable",
+      });
+      continue;
+    }
     reviewedCount++;
     if (rows.length >= budget.rows) continue;
     const person = db
@@ -708,6 +736,7 @@ async function reportStillCurrentLocal(
   audioStore,
   model = require("./speakerEmbeddings")
 ) {
+  require("./voiceExemplarAudio").registerStore(database.db, audioStore);
   if (report?.version !== 3 || !validRowEvidence(report.evidence, report.fingerprints))
     return false;
   if (!model.isAvailable()) return false;

@@ -1,6 +1,36 @@
 const { createHash } = require("node:crypto");
 const crypto = require("./secretCrypto");
 const { durationMatches, integrityError } = require("./voiceAudioIntegrity");
+const debugLogger = require("./debugLogger");
+const stores = new WeakMap();
+const reported = new WeakMap();
+
+function registerStore(db, store) {
+  stores.set(db, store);
+}
+
+function availability(db, id) {
+  const result = play(db, stores.get(db), id);
+  return { state: result?.state || "unavailable", reason: result?.error || null };
+}
+
+function unavailable(db, sample, error, state = "unavailable") {
+  // Report transitions, without repeating one key-store failure for every row.
+  if (!reported.has(db)) reported.set(db, new Map());
+  const key = state === "key_unavailable" ? "device-key" : sample.id;
+  if (reported.get(db).get(key) !== error) {
+    reported.get(db).set(key, error);
+    debugLogger.warn(
+      "Saved exemplar audio unavailable",
+      {
+        reason: error,
+        ...(state === "key_unavailable" ? {} : { sampleId: sample.id }),
+      },
+      "voice-exemplar-audio"
+    );
+  }
+  return { state, error };
+}
 
 // This store belongs to a person, never a note or a recording. Ciphertext lives
 // in the same SQLite transaction as consent; there are no external blob files.
@@ -170,21 +200,34 @@ function save(db, candidate, bytes, ciphertext, embedding) {
 function play(db, store, id) {
   const sample = db.prepare("SELECT * FROM voice_exemplar_audio WHERE id = ?").get(id);
   if (!sample) return null;
+  if (sample.ciphertext.length < 28) return unavailable(db, sample, "exemplar_audio_truncated");
   try {
-    const wav = (store.encryption || crypto).decryptBytes(sample.ciphertext);
+    const wav = (store?.encryption || stores.get(db)?.encryption || crypto).decryptBytes(
+      sample.ciphertext
+    );
     if (
       wav.length !== sample.byte_length ||
       createHash("sha256").update(wav).digest("hex") !== sample.content_hash
     )
-      return { state: "unavailable", error: "exemplar_integrity_failed" };
+      return unavailable(db, sample, "exemplar_integrity_failed");
+    reported.get(db)?.delete(sample.id);
+    reported.get(db)?.delete("device-key");
     return {
       state: "available",
       wav,
       durationSeconds: sample.duration_ms / 1000,
       source: "exemplar",
     };
-  } catch {
-    return { state: "key_unavailable", error: "exemplar_key_unavailable" };
+  } catch (cause) {
+    if (cause.code === "audio_key_unavailable")
+      return unavailable(db, sample, "exemplar_key_unavailable", "key_unavailable");
+    return unavailable(
+      db,
+      sample,
+      cause.code === "audio_corrupt"
+        ? "exemplar_authentication_failed"
+        : "exemplar_decryption_failed"
+    );
   }
 }
 
@@ -334,4 +377,15 @@ function scrubVectorSnapshots(db, scope = null) {
   }
 }
 
-module.exports = { open, repair, list, seal, save, play, sweepOrphans, scrubVectorSnapshots };
+module.exports = {
+  open,
+  repair,
+  list,
+  seal,
+  save,
+  play,
+  availability,
+  registerStore,
+  sweepOrphans,
+  scrubVectorSnapshots,
+};

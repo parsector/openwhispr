@@ -6626,6 +6626,18 @@
     "legacyRecoveryDisclosure": "復元した旧サンプルは通常どおりカウントされます。音声の保存期限がすでに切れたサンプルは復元できず、認識や録音の多様性の計算には永久に使用できません。音声の再登録が必要になる場合があります。実際の録音IDを確認できていないサンプルは、復元されるまで利用できません。",
     "legacyRecoveryFailed": "承認済み音声の一部を検証または復元できませんでした。元の録音は、承認が復元キューに入った時点から7日間保護されます。まだ処理を待っている承認も対象です。その後は元の録音の保護が終了し、通常の録音保存ルールによって削除されることがあります。承認の記録は、ご自身で消去しない限り保持されます。該当するサンプルを確認し、新しい音声を登録してください。",
     "exemplarPlaybackKeyUnavailable": "暗号化キーが利用できないため、保存済みクリップを再生できません。元のキーを復元してお聴きください。",
+    "exemplarAudioUnavailable": "このデバイスでは音声を利用できません：{{reason}}。音声登録には数えられません。",
+    "exemplarDeviceKeyUnavailable": "このデバイスの音声暗号化キーにアクセスできません。OS に保存された元のキーまたは暗号化されたバックアップへのアクセスを復元してから、OpenWhispr を再起動してください。該当するサンプルは再生できず、音声登録には数えられません。承認履歴は保持されます。",
+    "exemplarCounts": "音声登録に数えられます。",
+    "exemplarNotCounted": "音声登録には数えられません。",
+    "exemplarAudioReasons": {
+      "exemplar_key_unavailable": "デバイスのキーを利用できません",
+      "exemplar_authentication_failed": "認証に失敗しました。元のキーが異なるか、保存された音声が破損している可能性があります",
+      "exemplar_audio_truncated": "暗号化されたクリップが途中で切れています",
+      "exemplar_integrity_failed": "保存された音声の整合性チェックに失敗しました",
+      "exemplar_decryption_failed": "保存された音声を復号できませんでした",
+      "exemplar_audio_not_retained": "保存された音声がありません"
+    },
     "exemplarCapture": "{{seconds}} 秒 · 録音日 {{date}}",
     "enrollmentProgress": "適切な区間: {{spans}} / 3 · 録音: {{meetings}} / 2",
     "voiceUsable": "声を使用可能",

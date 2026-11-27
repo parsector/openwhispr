@@ -16,6 +16,86 @@ const BACKUP_FILE = "master-key-backup.enc";
 let mode = null;
 let masterKey = null;
 
+function _pathExists(file) {
+  try {
+    fs.accessSync(file);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+}
+
+// A missing credential is not evidence of a first install. In particular, older
+// installs may have encrypted audio but no safeStorage backup yet.
+function _hasEncryptedData() {
+  const root = app.getPath("userData");
+  if (_pathExists(path.join(root, "secure-keys", "master-key-in-use"))) return true;
+  const credentials = [];
+  const token = path.join(root, "auth-token.bin");
+  if (_pathExists(token)) credentials.push(token);
+  for (const [directory, suffix] of [
+    ["secure-keys", ".enc"],
+    ["connectors", ".bin"],
+    ["enterprise-audio-keys", ".enc"],
+  ]) {
+    const location = path.join(root, directory);
+    if (_pathExists(location))
+      credentials.push(
+        ...fs
+          .readdirSync(location)
+          .filter((name) => name.endsWith(suffix))
+          .map((name) => path.join(location, name))
+      );
+  }
+  const recordings = path.join(root, "meeting-audio");
+  if (_pathExists(recordings) && fs.readdirSync(recordings).some((name) => /^\d+$/.test(name)))
+    return true;
+  const databasePath = path.join(
+    root,
+    process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db"
+  );
+  let db;
+  try {
+    if (_pathExists(databasePath)) {
+      const Database = require("better-sqlite3");
+      db = new Database(databasePath, { readonly: true, fileMustExist: true });
+      if (
+        db.prepare("SELECT 1 FROM sqlite_master WHERE name='voice_exemplar_audio'").get() &&
+        db.prepare("SELECT 1 FROM voice_exemplar_audio LIMIT 1").get()
+      )
+        return true;
+    }
+  } finally {
+    db?.close();
+  }
+  // Legacy safeStorage-only installs have no binary master key yet. Permit
+  // their first key only if every old credential is still readable without it.
+  // Unversioned, unreadable credentials could instead need a lost master key.
+  return credentials.some((file) => {
+    if (!safeStorage.isEncryptionAvailable()) return true;
+    try {
+      safeStorage.decryptString(fs.readFileSync(file));
+      return false;
+    } catch {
+      return true;
+    }
+  });
+}
+
+function _rememberMasterKey() {
+  // Persist the fact that this device has used a key even when safeStorage is
+  // unavailable. The key itself is already persisted in the credential store;
+  // a read-only data directory must not make a reachable key unusable for reads.
+  const marker = path.join(app.getPath("userData"), "secure-keys", "master-key-in-use");
+  try {
+    fs.mkdirSync(path.dirname(marker), { recursive: true });
+    fs.writeFileSync(marker, "1", { mode: 0o600 });
+  } catch (error) {
+    debugLogger.warn("failed to record master key usage", { code: error.code }, "secretCrypto");
+  }
+}
+
 function _backupPath() {
   return path.join(app.getPath("userData"), "secure-keys", BACKUP_FILE);
 }
@@ -65,16 +145,36 @@ function _initKeychain(allowCreate = true) {
       const key = Buffer.from(stored, "base64");
       if (key.length !== KEY_LEN) throw new Error("stored key length invalid");
       masterKey = key;
+      // Existing Keychain keys also need a backup; earlier releases skipped it.
+      if (!fs.existsSync(_backupPath())) _saveMasterKeyBackup();
     } else {
       if (fs.existsSync(_backupPath())) {
         if (!_loadMasterKeyBackup()) throw new Error("Existing master key backup is unreadable");
-      } else if (allowCreate) masterKey = crypto.randomBytes(KEY_LEN);
-      else return false;
+      } else if (allowCreate && !_hasEncryptedData()) {
+        masterKey = crypto.randomBytes(KEY_LEN);
+        debugLogger.info("created master key for new encrypted data", {}, "secretCrypto");
+      } else if (allowCreate) {
+        debugLogger.warn(
+          "master key missing; existing encrypted data prevents replacement",
+          {},
+          "secretCrypto"
+        );
+        return false;
+      } else {
+        debugLogger.warn(
+          "master key missing; read will not create a replacement",
+          {},
+          "secretCrypto"
+        );
+        return false;
+      }
       entry.setPassword(masterKey.toString("base64"));
       // Write a backup only for a newly generated key. Never replace the
       // existing backup after a Keychain read failure or missing entry.
       if (!fs.existsSync(_backupPath())) _saveMasterKeyBackup();
     }
+    _rememberMasterKey();
+    debugLogger.info("loaded master key from OS credential store", {}, "secretCrypto");
     return true;
   } catch (error) {
     debugLogger.warn(
@@ -88,6 +188,11 @@ function _initKeychain(allowCreate = true) {
 
 function _ensureInit(allowCreate = true) {
   if (mode) return;
+  if (!app || !safeStorage) {
+    mode = "unavailable";
+    debugLogger.warn("master key unavailable outside Electron main process", {}, "secretCrypto");
+    return;
+  }
   if (_initKeychain(allowCreate)) {
     mode = "keychain";
     return;
@@ -186,7 +291,7 @@ function encryptBytes(bytes) {
 }
 
 function decryptBytes(blob) {
-  _ensureInit();
+  _ensureInit(false);
   if (mode !== "keychain" || !masterKey) {
     throw Object.assign(
       new Error("Audio encryption key is unavailable in the OS credential store"),
@@ -217,6 +322,9 @@ function clearDeviceKey() {
     }
   } finally {
     fs.rmSync(_backupPath(), { force: true });
+    fs.rmSync(path.join(app.getPath("userData"), "secure-keys", "master-key-in-use"), {
+      force: true,
+    });
     if (masterKey) masterKey.fill(0);
     masterKey = null;
     mode = null;

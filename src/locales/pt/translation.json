@@ -6653,6 +6653,18 @@
     "legacyRecoveryDisclosure": "As amostras antigas recuperadas contam normalmente. As amostras cujo áudio já expirou não podem ser recuperadas e ficam permanentemente inelegíveis para reconhecimento e diversidade de gravações. Poderá ser necessário voltar a registar a voz. As amostras à espera de uma identidade de gravação real permanecem indisponíveis até à recuperação.",
     "legacyRecoveryFailed": "Não foi possível verificar ou recuperar parte do áudio aprovado. As gravações de origem ficam protegidas durante sete dias a partir da entrada das aprovações na fila de recuperação, incluindo as que ainda aguardam processamento. Depois, essa proteção termina e as regras habituais de retenção de gravações podem eliminá-las. Os registos de aprovação são mantidos, a menos que os apagues. Revê estas amostras e regista novo áudio.",
     "exemplarPlaybackKeyUnavailable": "Não é possível reproduzir o clipe salvo porque a chave de criptografia está indisponível. Restaure a chave original para ouvir.",
+    "exemplarAudioUnavailable": "Áudio indisponível neste dispositivo: {{reason}}. Não conta para o registo de voz.",
+    "exemplarDeviceKeyUnavailable": "Não é possível aceder à chave de encriptação de áudio neste dispositivo. Restaure o acesso à credencial original do sistema ou à sua cópia encriptada e reinicie o OpenWhispr. As amostras afetadas não podem ser reproduzidas e não contam para o registo de voz. As suas aprovações são preservadas.",
+    "exemplarCounts": "Conta para o registo de voz.",
+    "exemplarNotCounted": "Não conta para o registo de voz.",
+    "exemplarAudioReasons": {
+      "exemplar_key_unavailable": "chave do dispositivo indisponível",
+      "exemplar_authentication_failed": "falha na autenticação; a chave original pode ser diferente ou o áudio guardado pode estar danificado",
+      "exemplar_audio_truncated": "o clip encriptado está incompleto",
+      "exemplar_integrity_failed": "o áudio guardado falhou na verificação de integridade",
+      "exemplar_decryption_failed": "não foi possível desencriptar o áudio guardado",
+      "exemplar_audio_not_retained": "nenhum áudio guardado foi conservado"
+    },
     "exemplarCapture": "{{seconds}} s · capturado em {{date}}",
     "enrollmentProgress": "Trechos limpos: {{spans}} / 3 · gravações: {{meetings}} / 2",
     "voiceUsable": "Voz utilizável",

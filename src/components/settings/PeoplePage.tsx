@@ -231,6 +231,27 @@ export default function PeoplePage({
     null
   );
   const [exemplarError, setExemplarError] = useState<{ id: string; code: string } | null>(null);
+  const deviceKeyUnavailable =
+    exemplarError?.code === "exemplar_key_unavailable" ||
+    people.some((person) =>
+      person.exemplars?.some((sample) => sample.audio?.state === "key_unavailable")
+    ) ||
+    enrollmentSamples.some((sample) => sample.audio?.state === "key_unavailable");
+  const audioUnavailableText = (reason: string | null) =>
+    t("people.exemplarAudioUnavailable", {
+      reason: t(`people.exemplarAudioReasons.${reason || "exemplar_decryption_failed"}`),
+    });
+  const exemplarUnavailableReason = (sample: {
+    id: string;
+    audio?: { state: string; reason: string | null };
+  }) => {
+    if (sample.audio && sample.audio.state !== "available")
+      return sample.audio.reason || "exemplar_decryption_failed";
+    if (deviceKeyUnavailable) return "exemplar_key_unavailable";
+    if (exemplarError?.id === sample.id && exemplarError.code.startsWith("exemplar_"))
+      return exemplarError.code;
+    return null;
+  };
   const exemplarRequest = useRef(0);
   useEffect(() => {
     if (
@@ -263,8 +284,10 @@ export default function PeoplePage({
         url: URL.createObjectURL(new Blob([bytes], { type: "audio/wav" })),
       });
     } catch (error) {
-      if (request === exemplarRequest.current)
+      if (request === exemplarRequest.current) {
         setExemplarError({ id, code: error instanceof Error ? error.message : "unavailable" });
+        void refresh();
+      }
     }
   };
   const enrollmentPlayer = useRef<HTMLAudioElement | null>(null);
@@ -1138,6 +1161,11 @@ export default function PeoplePage({
           </Button>
         </div>
       </div>
+      {deviceKeyUnavailable && view !== "history" && (
+        <Alert role="status">
+          <AlertDescription>{t("people.exemplarDeviceKeyUnavailable")}</AlertDescription>
+        </Alert>
+      )}
       <div className={view === "people" ? "space-y-4" : "hidden"}>
         {refreshing && !loading && (
           <p role="status" className="text-xs text-muted-foreground">
@@ -1540,6 +1568,11 @@ export default function PeoplePage({
                                     <span className="text-sm">
                                       {sample.noteTitle} · {date(sample.meetingDate)}
                                       {sample.odd && <> · {t("people.oddSample")}</>}
+                                      {exemplarUnavailableReason(sample) && (
+                                        <span className="block mt-1 text-muted-foreground">
+                                          {audioUnavailableText(exemplarUnavailableReason(sample))}
+                                        </span>
+                                      )}
                                     </span>
                                     <div className="flex gap-2">
                                       {sample.odd && (
@@ -1859,11 +1892,30 @@ export default function PeoplePage({
                                 type="button"
                                 size="sm"
                                 variant="secondary"
-                                disabled={listeningId !== null || working}
+                                disabled={
+                                  listeningId !== null ||
+                                  working ||
+                                  !!exemplarUnavailableReason(sample)
+                                }
                                 onClick={() => void playExemplar(sample.id)}
                               >
                                 {t("people.listen")}
                               </Button>
+                              {exemplarUnavailableReason(sample) ? (
+                                <span role={exemplarError?.id === sample.id ? "alert" : undefined}>
+                                  {audioUnavailableText(exemplarUnavailableReason(sample))}
+                                </span>
+                              ) : (
+                                sample.countsTowardEnrollment !== undefined && (
+                                  <span>
+                                    {t(
+                                      sample.countsTowardEnrollment
+                                        ? "people.exemplarCounts"
+                                        : "people.exemplarNotCounted"
+                                    )}
+                                  </span>
+                                )
+                              )}
                               {exemplarPlayback?.id === sample.id && (
                                 <audio
                                   controls
@@ -1873,15 +1925,12 @@ export default function PeoplePage({
                                   aria-label={t("people.approvedSamples")}
                                 />
                               )}
-                              {exemplarError?.id === sample.id && (
-                                <span role="alert">
-                                  {t(
-                                    exemplarError.code === "exemplar_key_unavailable"
-                                      ? "people.exemplarPlaybackKeyUnavailable"
-                                      : "people.enrollmentErrors.unavailable"
-                                  )}
-                                </span>
-                              )}
+                              {exemplarError?.id === sample.id &&
+                                !exemplarUnavailableReason(sample) && (
+                                  <span role="alert">
+                                    {t("people.enrollmentErrors.unavailable")}
+                                  </span>
+                                )}
                             </div>
                           ))}
                         </div>

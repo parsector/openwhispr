@@ -188,6 +188,7 @@ class MeetingAudioStore {
     this.database = database;
     this.now = now;
     this.encryption = encryption;
+    if (database?.db) require("./voiceExemplarAudio").registerStore(database.db, this);
     this.codec = codec;
     this.onEvicted = onEvicted;
     this.onChanged = onChanged;

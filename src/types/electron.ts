@@ -4587,6 +4587,8 @@ declare global {
             durationSeconds: number;
             meetingDate: string;
             createdAt: string;
+            audio?: { state: string; reason: string | null };
+            countsTowardEnrollment?: boolean;
           }>;
           voiceProgress: {
             pendingRecovery?: number;
@@ -4642,6 +4644,8 @@ declare global {
           odd: boolean;
           createdAt?: string;
           permanent?: boolean;
+          audio?: { state: string; reason: string | null };
+          countsTowardEnrollment?: boolean;
         }>
       >;
       removeVoiceEnrollmentSample?: (id: string) => Promise<{ success: boolean; error?: string }>;

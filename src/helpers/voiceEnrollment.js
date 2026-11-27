@@ -156,6 +156,7 @@ function activeSamples(db, profileId) {
   return samples(db, profileId).filter(
     (sample) =>
       sample.durable_audio &&
+      exemplarAudio.availability(db, sample.id).state === "available" &&
       sample.embedding?.length === EMBEDDING_DIM * 4 &&
       clean(db, sample) &&
       unit(vector(sample.embedding)) &&
@@ -183,7 +184,10 @@ function state(db, profileId) {
     (sample) => sample.durable_audio && classifyEvidence(db, sample).state === "resolved"
   );
   const good = resolved.filter(
-    (sample) => sample.embedding?.length === EMBEDDING_DIM * 4 && clean(db, sample)
+    (sample) =>
+      sample.embedding?.length === EMBEDDING_DIM * 4 &&
+      clean(db, sample) &&
+      exemplarAudio.availability(db, sample.id).state === "available"
   );
   const legacy =
     all.some((sample) => sample.embedding?.length !== EMBEDDING_DIM * 4) ||
@@ -254,7 +258,11 @@ function provenanceCounts(db, profileId) {
       .get(profileId).n,
     legacyRecovered: exemplarAudio
       .list(db, profileId)
-      .filter((sample) => sample.revision === "legacy-approval").length,
+      .filter(
+        (sample) =>
+          sample.revision === "legacy-approval" &&
+          exemplarAudio.availability(db, sample.id).state === "available"
+      ).length,
   };
   for (const sample of samples(db, profileId)) {
     const evidence = classifyEvidence(db, sample);
@@ -265,6 +273,7 @@ function provenanceCounts(db, profileId) {
 
 // Conversion uses prior consent and exact approved bytes, outside startup.
 function recoverLegacy(database, store, options) {
+  exemplarAudio.registerStore(database.db, store);
   store.cancelRecovery?.();
   const recovery = require("./voiceEnrollmentRecovery").start(database, store, options);
   store.legacyRecovery = recovery;
@@ -283,7 +292,9 @@ function listSamples(database, profileId) {
       : 1
   );
   const worst = Math.min(...averages.filter((value) => value != null));
-  const conflict = state(db, profileId).conflict;
+  const current = state(db, profileId);
+  const { conflict } = current;
+  const goodIds = new Set(current.good.map((sample) => sample.id));
   return all.map((sample, i) => ({
     id: sample.id,
     profileId,
@@ -295,6 +306,13 @@ function listSamples(database, profileId) {
     meetingDate: sample.meeting_date,
     createdAt: sample.created_at,
     permanent: !!sample.durable_audio,
+    audio: sample.durable_audio
+      ? exemplarAudio.availability(db, sample.id)
+      : {
+          state: "unavailable",
+          reason: "exemplar_audio_not_retained",
+        },
+    countsTowardEnrollment: goodIds.has(sample.id),
     provenance: classifyEvidence(db, sample).state,
     durationSeconds: (sample.end_sample - sample.start_sample) / RATE,
     odd: !clean(db, sample) || (conflict && (vectors.length <= 2 || averages[i] === worst)),
@@ -373,6 +391,7 @@ function captureDate(note, status, startSample) {
     : note.created_at;
 }
 function createEligibilityContext(database, store) {
+  exemplarAudio.registerStore(database.db, store);
   const db = database.db;
   const resolveSpan = store.resolveMeetingAudioSpan || resolveMeetingAudioSpan;
   const statuses = new Map();
@@ -592,6 +611,7 @@ function noteFacts(database, store, note, rows, eligibility, rulesVersion, profi
   return facts;
 }
 function candidateReportImpl(database, store, profileId, rulesVersion = ENROLLMENT_RULES_VERSION) {
+  exemplarAudio.registerStore(database.db, store);
   const db = database.db;
   const reasons = {
     short: 0,
@@ -817,6 +837,7 @@ function locate(database, store, id) {
   return null;
 }
 function play(database, store, id, sender = null) {
+  exemplarAudio.registerStore(database.db, store);
   forgetPlayback(id);
   const exemplar = exemplarAudio.play(database.db, store, id);
   if (exemplar) return exemplar;

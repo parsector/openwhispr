@@ -35,6 +35,7 @@ async function migrate(database, store, { extractor, cancelled = () => false } =
   const db = database.db;
   const enrollment = require("./voiceEnrollment");
   const audio = require("./voiceExemplarAudio");
+  audio.registerStore(db, store);
   const { pcmIdentity, classifyEvidence } = require("./voiceRecordingIdentity");
   const { durationMatches } = require("./voiceAudioIntegrity");
   const people = new Set();

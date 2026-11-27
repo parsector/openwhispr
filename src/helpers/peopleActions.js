@@ -326,7 +326,8 @@ function backfillPeopleIdentities(database) {
     return { created, ran: true };
   })();
 }
-function listPeople(database) {
+function listPeople(database, store = null) {
+  if (store) require("./voiceExemplarAudio").registerStore(database.db, store);
   const db = database.db;
   db.transaction(() => {
     registerContacts(database);

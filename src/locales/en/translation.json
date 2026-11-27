@@ -6626,6 +6626,18 @@
     "legacyRecoveryDisclosure": "Recovered legacy samples count normally. Samples whose audio has already expired cannot be recovered and are permanently ineligible for recognition and recording diversity. Re-enrolment may be needed. Samples awaiting a genuine recording identity remain unavailable until recovery.",
     "legacyRecoveryFailed": "Some approved audio could not be verified or recovered. Its source stays protected for seven days from when approvals enter the recovery queue, including approvals still waiting. Source protection ends after that, and normal recording retention may then delete it. The approval record remains unless you erase it. Review these samples and enrol new audio.",
     "exemplarPlaybackKeyUnavailable": "The saved clip cannot be played because its encryption key is unavailable. Restore the original key to listen.",
+    "exemplarAudioUnavailable": "Audio unavailable on this device: {{reason}}. Does not count toward enrolment.",
+    "exemplarDeviceKeyUnavailable": "The audio encryption key cannot be reached on this device. Restore access to the original OS credential or its encrypted backup, then restart OpenWhispr. Affected samples cannot be played and do not count toward enrolment. Your approvals are preserved.",
+    "exemplarCounts": "Counts toward enrolment.",
+    "exemplarNotCounted": "Does not count toward enrolment.",
+    "exemplarAudioReasons": {
+      "exemplar_key_unavailable": "device key unavailable",
+      "exemplar_authentication_failed": "authentication failed; the original key may be different, or the saved audio may be damaged",
+      "exemplar_audio_truncated": "the encrypted clip is truncated",
+      "exemplar_integrity_failed": "the saved audio failed its integrity check",
+      "exemplar_decryption_failed": "the saved audio could not be decrypted",
+      "exemplar_audio_not_retained": "no saved audio is retained"
+    },
     "exemplarCapture": "{{seconds}} s · captured {{date}}",
     "enrollmentProgress": "Clean spans: {{spans}} / 3 · recordings: {{meetings}} / 2",
     "voiceUsable": "Voice usable",

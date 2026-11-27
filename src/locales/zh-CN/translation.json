@@ -6626,6 +6626,18 @@
     "legacyRecoveryDisclosure": "恢复的旧版样本会正常计入。音频已过期的样本无法恢复，且永久无法用于识别或计算录音多样性，可能需要重新注册声音。尚未取得真实录音标识的样本，在恢复前仍不可用。",
     "legacyRecoveryFailed": "部分已批准音频无法验证或恢复。源录音自批准记录进入恢复队列时起受保护七天，包括仍在等待处理的批准记录。此后，源录音不再受此保护，可能会按常规录音保留规则删除。批准记录会保留，除非您自行删除。请检查这些样本并注册新音频。",
     "exemplarPlaybackKeyUnavailable": "加密密钥不可用，无法播放已保存的片段。请恢复原始密钥以收听。",
+    "exemplarAudioUnavailable": "此设备上的音频不可用：{{reason}}。不计入声音注册。",
+    "exemplarDeviceKeyUnavailable": "无法访问此设备上的音频加密密钥。请恢复对系统中原始凭据或其加密备份的访问，然后重启 OpenWhispr。受影响的样本无法播放，也不计入声音注册。你的批准记录会保留。",
+    "exemplarCounts": "计入声音注册。",
+    "exemplarNotCounted": "不计入声音注册。",
+    "exemplarAudioReasons": {
+      "exemplar_key_unavailable": "设备密钥不可用",
+      "exemplar_authentication_failed": "身份验证失败；原始密钥可能不同，或保存的音频已损坏",
+      "exemplar_audio_truncated": "加密片段不完整",
+      "exemplar_integrity_failed": "保存的音频未通过完整性检查",
+      "exemplar_decryption_failed": "无法解密保存的音频",
+      "exemplar_audio_not_retained": "未保留音频"
+    },
     "exemplarCapture": "{{seconds}} 秒 · 录制于 {{date}}",
     "enrollmentProgress": "干净片段：{{spans}} / 3 · 录音：{{meetings}} / 2",
     "voiceUsable": "声音可用",

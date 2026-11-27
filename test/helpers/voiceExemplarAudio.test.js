@@ -2498,12 +2498,47 @@ test("missing encryption key fails approval closed with exemplar_key_unavailable
   const sample = f.database.db.prepare("SELECT ciphertext FROM voice_exemplar_audio").get();
   assert.equal(sample.ciphertext.includes(playback.wav.subarray(0, 100)), false);
   f.encryption.decryptBytes = () => {
-    throw Error("Lost key");
+    throw Object.assign(Error("Lost key"), { code: "audio_key_unavailable" });
   };
   assert.deepEqual(enrollment.play(f.database, f.store, candidate.id), {
     state: "key_unavailable",
     error: "exemplar_key_unavailable",
   });
+});
+
+test("unverifiable approved audio remains visible but cannot count or rebuild a voice", async (t) => {
+  const f = fixture(t);
+  const { candidate } = await f.approve();
+  f.database.db.prepare("UPDATE voice_exemplar_audio SET revision='legacy-approval'").run();
+  assert.equal(enrollment.progress(f.database, f.person.id).cleanSpans, 1);
+  assert.equal(enrollment.progress(f.database, f.person.id).legacyRecovered, 1);
+  const decrypt = f.encryption.decryptBytes;
+  for (const [code, reason] of [
+    ["audio_key_unavailable", "exemplar_key_unavailable"],
+    ["audio_corrupt", "exemplar_authentication_failed"],
+  ]) {
+    f.encryption.decryptBytes = () => {
+      throw Object.assign(Error("unavailable"), { code });
+    };
+    const [sample] = enrollment.listSamples(f.database, f.person.id);
+    assert.equal(sample.id, candidate.id);
+    assert.equal(sample.audio.reason, reason);
+    assert.equal(sample.countsTowardEnrollment, false);
+    assert.equal(enrollment.progress(f.database, f.person.id).cleanSpans, 0);
+    assert.equal(enrollment.progress(f.database, f.person.id).legacyRecovered, 0);
+    assert.equal(enrollment.resolveProfile(f.database.db, f.person.id).embedding.length, 0);
+    assert.equal(f.database.db.prepare("SELECT count(*) n FROM voice_exemplar_audio").get().n, 1);
+    assert.equal(
+      f.database.db
+        .prepare("SELECT count(*) n FROM voice_enrollment_actions WHERE choice='approve'")
+        .get().n,
+      1
+    );
+  }
+  f.encryption.decryptBytes = decrypt;
+  assert.equal(enrollment.listSamples(f.database, f.person.id)[0].countsTowardEnrollment, true);
+  assert.equal(enrollment.progress(f.database, f.person.id).cleanSpans, 1);
+  assert.equal(enrollment.progress(f.database, f.person.id).legacyRecovered, 1);
 });
 
 for (const expiredHold of [false, true]) test(`startup re-embeds retained legacy-space approval after a previous failed recovery (expired hold: ${expiredHold})`, async t => {

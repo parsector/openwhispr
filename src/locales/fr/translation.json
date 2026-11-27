@@ -6653,6 +6653,18 @@
     "legacyRecoveryDisclosure": "Les anciens échantillons récupérés comptent normalement. Les échantillons dont l’audio a déjà expiré ne peuvent pas être récupérés et sont définitivement exclus de la reconnaissance et du calcul de diversité des enregistrements. Un nouvel enrôlement peut être nécessaire. Les échantillons sans identité réelle d’enregistrement restent indisponibles jusqu’à leur récupération.",
     "legacyRecoveryFailed": "Certains enregistrements approuvés n’ont pas pu être vérifiés ou récupérés. Les enregistrements sources sont protégés pendant sept jours à partir de l’entrée des approbations dans la file de récupération, y compris celles qui attendent encore d’être traitées. Cette protection prend ensuite fin et les règles habituelles de conservation des enregistrements peuvent alors entraîner leur suppression. Les entrées d’approbation sont conservées sauf si vous les effacez. Vérifiez ces échantillons et enregistrez de nouveaux extraits.",
     "exemplarPlaybackKeyUnavailable": "Le clip enregistré ne peut pas être lu car sa clé de chiffrement est indisponible. Restaurez la clé d’origine pour l’écouter.",
+    "exemplarAudioUnavailable": "Audio indisponible sur cet appareil : {{reason}}. Ne compte pas pour l’inscription vocale.",
+    "exemplarDeviceKeyUnavailable": "La clé de chiffrement audio est inaccessible sur cet appareil. Rétablissez l’accès à la clé d’origine du système ou à sa sauvegarde chiffrée, puis redémarrez OpenWhispr. Les échantillons concernés ne peuvent pas être écoutés et ne comptent pas pour l’inscription vocale. Vos approbations sont conservées.",
+    "exemplarCounts": "Compte pour l’inscription vocale.",
+    "exemplarNotCounted": "Ne compte pas pour l’inscription vocale.",
+    "exemplarAudioReasons": {
+      "exemplar_key_unavailable": "clé de l’appareil indisponible",
+      "exemplar_authentication_failed": "échec de l’authentification ; la clé d’origine peut être différente ou l’audio enregistré endommagé",
+      "exemplar_audio_truncated": "le clip chiffré est incomplet",
+      "exemplar_integrity_failed": "l’audio enregistré a échoué au contrôle d’intégrité",
+      "exemplar_decryption_failed": "l’audio enregistré n’a pas pu être déchiffré",
+      "exemplar_audio_not_retained": "aucun audio enregistré n’est conservé"
+    },
     "exemplarCapture": "{{seconds}} s · capturé le {{date}}",
     "enrollmentProgress": "Extraits nets : {{spans}} / 3 · enregistrements : {{meetings}} / 2",
     "voiceUsable": "Voix utilisable",
