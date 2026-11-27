@@ -50,8 +50,8 @@ class AudioActivityDetector extends EventEmitter {
   // `getExcludedProcessIds` lists every pid whose mic use is OpenWhispr's own:
   // the Electron process tree by default, plus any live capture helpers when
   // main.js composes them in (see electronProcessIds.js). `isMeetingAppRunning`
-  // corroborates macOS device activity that cannot be attributed to a process;
-  // without it such activity never prompts.
+  // supplies context when meeting apps change. Device-global activity is never
+  // enough to prompt: it cannot distinguish playback or our input from a call.
   constructor(
     getExcludedProcessIds = () => [...getOwnProcessPids()],
     isMeetingAppRunning = () => false
@@ -94,6 +94,7 @@ class AudioActivityDetector extends EventEmitter {
     this._externalCapturePids = new Set();
     this._promptedCapturePids = new Set();
     this._captureIdleSincePrompt = false;
+    this._requireNewCapture = false;
   }
 
   _markPrompted() {
@@ -236,6 +237,20 @@ class AudioActivityDetector extends EventEmitter {
     this._clearSustainedTimer();
     this.audioActiveStart = null;
     debugLogger.info("Audio detection prompt reset (no cooldown)", {}, "meeting");
+  }
+
+  // Closing a recorded meeting is not a new detection. Keep its source latched
+  // until an actual idle edge, and pause prompt timers during the cooldown.
+  // The passive OS observer stays up to see that edge; it never opens the mic.
+  endMeeting() {
+    this.lastDismissedAt = Date.now();
+    this._requireNewCapture = this._lastKnownMicState;
+    this._markPrompted();
+    this.consecutiveChecks = 0;
+    this.audioActiveStart = null;
+    this._clearSustainedTimer();
+    this._clearResetTimer();
+    this._clearCooldownReevalTimer();
   }
 
   _reset() {
@@ -441,13 +456,12 @@ class AudioActivityDetector extends EventEmitter {
       // from the previous mode is stale.
       this._activeMicPids.clear();
       this._setPidScopedCapability(pidScoped);
-      this._onMicStateChanged(false, pidScoped);
+      this._onMicStateChanged(false, pidScoped, { snapshotReset: true });
       return;
     }
 
-    // Device-wide activity includes playback on combined input/output devices,
-    // so it is recorded as unattributed and only prompts once a running meeting
-    // app corroborates it (see _evaluateMicState).
+    // Device-wide activity includes playback on combined input/output devices.
+    // Retain it for diagnostics but never use it as meeting prompt evidence.
     if (line === "MIC_ACTIVE" || line === "MIC_INACTIVE") {
       this._onMicStateChanged(line === "MIC_ACTIVE", false);
       return;
@@ -696,8 +710,8 @@ class AudioActivityDetector extends EventEmitter {
 
   // Auto-end may only trust the ownership snapshot while a listener is pushing
   // every transition into it. The poller cannot carry that guarantee: it samples
-  // at CHECK_INTERVAL_MS and stops outright while gated by a recording, a warm
-  // hold or a dismissal cooldown — so a snapshot taken before a meeting began
+  // at CHECK_INTERVAL_MS and stops outright while gated by a recording or a
+  // prepared capture — so a snapshot taken before a meeting began
   // would still read as "another app holds the mic" for the whole recording,
   // and the controller's ownership mode would never release it.
   _isOwnershipSnapshotLive() {
@@ -759,9 +773,10 @@ class AudioActivityDetector extends EventEmitter {
   // The listeners are edge-triggered: they announce transitions, never steady
   // state. A gate may swallow the only edge a call will ever produce, so the
   // state is recorded unconditionally and re-evaluated when gates lift.
-  _onMicStateChanged(active, attributed = true) {
+  _onMicStateChanged(active, attributed = true, { snapshotReset = false } = {}) {
     if (!this._running) return;
     this._lastKnownMicState = active;
+    if (!active && !snapshotReset) this._requireNewCapture = false;
     this._lastKnownMicAttributed = attributed;
     this._rearmPromptForSourceChange(active);
     // Before the gates, or the timer could clear the prompt of a call that came back
@@ -807,10 +822,13 @@ class AudioActivityDetector extends EventEmitter {
   }
 
   _isUnattributedActivityCorroborated() {
-    return this._lastKnownMicAttributed || this._isMeetingAppRunning();
+    // A running FaceTime/Zoom process plus device-global activity is not proof
+    // of a call. Combined playback devices and our own input can produce it.
+    return this._lastKnownMicAttributed;
   }
 
   _evaluateMicState(active) {
+    if (active && this._requireNewCapture) return;
     if (this._userRecording) {
       debugLogger.debug("Mic state changed but user recording, ignoring", { active }, "meeting");
       return;
@@ -855,6 +873,7 @@ class AudioActivityDetector extends EventEmitter {
       if (!this._sustainedTimer) {
         this._sustainedTimer = setTimeout(() => {
           this._sustainedTimer = null;
+          if (!this._running || !this._lastKnownMicState || this._requireNewCapture) return;
           if (this._userRecording || this._micWarmHold || this.hasPrompted) return;
           if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
           if (!this._isUnattributedActivityCorroborated()) return;
@@ -906,7 +925,6 @@ class AudioActivityDetector extends EventEmitter {
 
   async _check() {
     if (this._checking) return;
-    if (this.lastDismissedAt && Date.now() - this.lastDismissedAt < COOLDOWN_MS) return;
     if (this._userRecording || this._micWarmHold) {
       // Checks can't see the call behind a gate. The next inactive one restarts the timer.
       this._clearResetTimer();
@@ -914,8 +932,13 @@ class AudioActivityDetector extends EventEmitter {
     }
 
     this._checking = true;
+    const generation = this._startGeneration;
+    const wasRunning = this._running;
     try {
       const active = await this._isMicActive();
+      if (generation !== this._startGeneration || wasRunning !== this._running) return;
+      this._lastKnownMicState = active;
+      if (!active) this._requireNewCapture = false;
       this._rearmPromptForSourceChange(active);
       debugLogger.debug(
         "Mic check",
@@ -924,6 +947,11 @@ class AudioActivityDetector extends EventEmitter {
       );
 
       if (active) {
+        if (this._requireNewCapture || this._cooldownRemainingMs() > 0) {
+          this.consecutiveChecks = 0;
+          this.audioActiveStart = null;
+          return;
+        }
         this._clearResetTimer();
         this.consecutiveChecks++;
         if (!this.audioActiveStart) this.audioActiveStart = Date.now();

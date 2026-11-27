@@ -4275,6 +4275,7 @@ declare global {
         language?: string;
       }) => Promise<{ success: boolean; alreadyPrepared?: boolean } & PolicyFailureMetadata>;
       meetingTranscriptionStart?: (options: {
+        calendarEventId?: string | null;
         enterpriseSetupMode?: ManagedEnterpriseRequestContext["setupMode"];
         enterpriseIdentity?: Pick<
           ManagedEnterpriseRequestContext,

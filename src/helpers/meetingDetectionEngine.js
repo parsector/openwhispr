@@ -15,6 +15,7 @@ const { broadcastToWindows } = require("./windowBroadcast");
 
 const IMMINENT_THRESHOLD_MS = 5 * 60 * 1000;
 const AUTO_END_TICK_MS = 1000;
+const MEETING_END_COOLDOWN_MS = 5 * 60 * 1000;
 
 const PLACEHOLDER_PREFIX = { __detected__: "detected", __manual__: "manual" };
 
@@ -66,6 +67,8 @@ class MeetingDetectionEngine {
     this._notificationQueue = [];
     this._postRecordingCooldown = null;
     this._recordingSession = null;
+    this._meetingCooldownUntil = 0;
+    this._closedCalendarEvents = new Set();
     this._now = now;
     this._setInterval = setInterval;
     this._clearInterval = clearInterval;
@@ -89,9 +92,8 @@ class MeetingDetectionEngine {
   }
 
   _bindListeners() {
-    // Process detection is context-only — a running app never prompts by itself
-    // (FaceTime idles in the background), but it corroborates device activity
-    // the mic detector could not attribute to a process.
+    // Process detection is context-only: a running app cannot prove a call,
+    // even alongside ambiguous device activity (FaceTime can simply be idle).
     this.meetingProcessDetector.on("meeting-process-detected", (data) => {
       debugLogger.info(
         "Meeting app running (context only)",
@@ -256,12 +258,14 @@ class MeetingDetectionEngine {
     ownerWebContents,
     systemAudioAvailable = false,
     noteId = null,
+    calendarEventId = null,
   }) {
     if (this._recordingSession) this._deactivateAutoEnd();
 
     // Recording from a note-only session takes the meeting back over, so Stop
     // releases it the way it does after an automatic start.
     if (this._meetingNoteSession?.noteOnly) this._meetingModeActive = true;
+    const eventId = calendarEventId ?? this._meetingNoteSession?.eventId ?? null;
     this._clearMeetingNoteSession();
     this._recordingSession = {
       sessionId,
@@ -271,6 +275,7 @@ class MeetingDetectionEngine {
       // Lets a second manual start surface this recording instead of opening a
       // new note over it.
       noteId,
+      eventId,
     };
     this._syncMeetingProcessDetector();
 
@@ -333,7 +338,8 @@ class MeetingDetectionEngine {
     // to is over, so the next call (or the next meeting's reminder) must prompt
     // again. Only the narrow layout's "Back to notes" button cleared it before,
     // which in the wide layout meant no prompts for the rest of the app session.
-    if (this._meetingModeActive) this.setMeetingModeActive(false);
+    this._meetingModeActive = false;
+    this._finishMeeting(session.eventId);
     this._syncAudioActivityDetector();
     this._syncMeetingProcessDetector();
     return true;
@@ -355,6 +361,9 @@ class MeetingDetectionEngine {
 
   _handleDetection(source, key, data) {
     const detectionId = `${source}:${key}`;
+
+    if (this._now() < this._meetingCooldownUntil || this._closedCalendarEvents.has(key)) return;
+    if (source === "audio" && !this._hasLiveAudioEvidence()) return;
 
     if (this._isMeetingRecordingDisabled()) {
       debugLogger.info(
@@ -425,11 +434,16 @@ class MeetingDetectionEngine {
   // recordings are tracked by _meetingModeActive.
   _findCalendarEvent() {
     const calendarState = this.reminderScheduler.getActiveMeetingState();
-    if (calendarState.activeMeeting) return calendarState.activeMeeting;
+    if (
+      calendarState.activeMeeting &&
+      !this._closedCalendarEvents.has(calendarState.activeMeeting.id)
+    )
+      return calendarState.activeMeeting;
 
     const now = Date.now();
     return (
       calendarState.upcomingEvents?.find((evt) => {
+        if (this._closedCalendarEvents.has(evt.id)) return false;
         const start = new Date(evt.start_time).getTime();
         return start - now <= IMMINENT_THRESHOLD_MS && start > now;
       }) ?? null
@@ -437,6 +451,15 @@ class MeetingDetectionEngine {
   }
 
   _showPrompt(detectionId, source, key, data) {
+    // Revalidate at delivery too: a queued event is no longer live evidence.
+    if (
+      this._now() < this._meetingCooldownUntil ||
+      this._closedCalendarEvents.has(key) ||
+      (source === "audio" && !this._hasLiveAudioEvidence())
+    ) {
+      this.activeDetections.delete(detectionId);
+      return;
+    }
     const calendarEvent = data?.event ?? this._findCalendarEvent();
     const event = calendarEvent ?? placeholderEvent("__detected__");
     const joinUrl = source === "calendar" ? getMeetingJoinUrl(calendarEvent) : null;
@@ -872,10 +895,16 @@ class MeetingDetectionEngine {
 
   closeMeetingNote(id, { resetAudioPrompt = true } = {}) {
     if (!this._meetingNoteSession || this._meetingNoteSession.id !== id) return;
+    const eventId = this._meetingNoteSession.eventId;
     const noteOnly = this._meetingNoteSession.noteOnly;
     this._clearMeetingNoteSession();
-    if (noteOnly || this._recordingSession) return;
-    this.setMeetingModeActive(false, { resetAudioPrompt });
+    if (this._recordingSession) return;
+    if (noteOnly) {
+      if (resetAudioPrompt) this._finishMeeting(eventId);
+      return;
+    }
+    this._meetingModeActive = false;
+    if (resetAudioPrompt) this._finishMeeting(eventId);
     this._flushNotificationQueue();
   }
 
@@ -893,13 +922,29 @@ class MeetingDetectionEngine {
   }
 
   setMeetingModeActive(active, { resetAudioPrompt = true } = {}) {
+    const wasActive = this._meetingModeActive;
+    const eventId = this._meetingNoteSession?.eventId;
     this._meetingModeActive = active;
     debugLogger.info("Meeting mode active state changed", { active }, "meeting");
     if (!active) {
       this._clearMeetingNoteSession();
-      // Own mic usage during meeting mode sets hasPrompted=true; reset so future detections work
-      if (resetAudioPrompt) this.audioActivityDetector.resetPrompt();
+      if (wasActive && resetAudioPrompt && !this._recordingSession) this._finishMeeting(eventId);
     }
+  }
+
+  _hasLiveAudioEvidence() {
+    const state = this.audioActivityDetector.getExternalMicState();
+    return state.reliable === true && state.externalMicActive === true;
+  }
+
+  _finishMeeting(eventId) {
+    if (eventId) this._closedCalendarEvents.add(eventId);
+    this._clearMeetingNoteSession();
+    this._meetingCooldownUntil = this._now() + MEETING_END_COOLDOWN_MS;
+    this._notificationQueue = [];
+    this.activeDetections.clear();
+    this.windowManager.dismissMeetingNotification({ notifyEngine: false });
+    this.audioActivityDetector.endMeeting?.();
   }
 
   setUserRecording(active) {
@@ -961,6 +1006,8 @@ class MeetingDetectionEngine {
       this._postRecordingCooldown = null;
     }
     this._notificationQueue = [];
+    this._meetingCooldownUntil = 0;
+    this._closedCalendarEvents.clear();
   }
 }
 

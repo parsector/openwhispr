@@ -12878,6 +12878,7 @@ class IPCHandlers {
           autoEndEligible: options.autoEndEligible === true,
           ownerWebContents: event.sender,
           noteId: options.noteId ?? null,
+          calendarEventId: options.calendarEventId ?? null,
           // Renderer loopback may still fail after main chooses its strategy.
           // Auto-end stays fail-safe until the renderer confirms a real source.
           systemAudioAvailable: false,

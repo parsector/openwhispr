@@ -104,6 +104,7 @@ test("a policy-rejected automatic meeting start consumes the request and restore
   let navigationRequest = null;
   const windowManager = {
     notificationPrefs: {},
+    dismissMeetingNotification() {},
     queueMeetingNoteNavigation: async (request) => {
       navigationRequest = request;
     },
@@ -342,7 +343,12 @@ for (const cancel of [false, true]) {
     const engine = new MeetingDetectionEngine(
       { getActiveMeetingState: () => ({}) },
       Object.assign(new EventEmitter(), { stop() {} }),
-      Object.assign(new EventEmitter(), { start() {}, stop() {}, resetPrompt() {} }),
+      Object.assign(new EventEmitter(), {
+        start() {},
+        stop() {},
+        resetPrompt() {},
+        getExternalMicState: () => ({ reliable: true, externalMicActive: true }),
+      }),
       {
         notificationPrefs: {},
         queueMeetingNoteNavigation: async (payload) => navigations.push(payload),

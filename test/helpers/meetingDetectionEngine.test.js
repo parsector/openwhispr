@@ -53,6 +53,8 @@ function createEngine(engineOptions) {
   audioDetector.dismissals = 0;
   audioDetector.dismiss = () => audioDetector.dismissals++;
   audioDetector.resetPrompt = () => {};
+  audioDetector.meetingEnds = 0;
+  audioDetector.endMeeting = () => audioDetector.meetingEnds++;
   audioDetector.getExternalMicState = () => ({ reliable: true, externalMicActive: true });
   audioDetector.setUserRecording = () => {};
   audioDetector.setMicWarmHold = () => {};
@@ -99,6 +101,89 @@ function createEngine(engineOptions) {
     refusals,
   };
 }
+
+test("idle or unreliable microphone evidence cannot show a meeting card", () => {
+  const { engine, audioDetector, shown } = createEngine();
+  engine.setPreferences({ audioDetection: true });
+  for (const state of [
+    { reliable: true, externalMicActive: false },
+    { reliable: false, externalMicActive: true },
+  ]) {
+    audioDetector.getExternalMicState = () => state;
+    audioDetector.emit("sustained-audio-detected", { durationMs: 2000 });
+  }
+  assert.equal(shown.length, 0);
+  engine.stop();
+});
+
+test("meeting stop discards queued evidence and cools down new detections", async () => {
+  let now = 1000;
+  const { engine, audioDetector, shown } = createEngine({ now: () => now });
+  engine.setPreferences({ audioDetection: true });
+  await engine.beginRecordingSession({ sessionId: "ended", autoEndEligible: false });
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000 });
+  engine.endRecordingSession("ended");
+  engine._flushNotificationQueue();
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000 });
+  assert.equal(shown.length, 0);
+  assert.equal(engine._notificationQueue.length, 0);
+  now += 5 * 60 * 1000 - 1;
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000 });
+  assert.equal(shown.length, 0);
+  engine.stop();
+});
+
+test("a closed calendar meeting cannot prompt or label a later call", async () => {
+  let now = Date.now();
+  const { engine, audioDetector, shown } = createEngine({ now: () => now });
+  const event = { id: "closed", end_time: new Date(now + 3_600_000).toISOString() };
+  engine.reminderScheduler.getActiveMeetingState = () => ({ activeMeeting: event });
+  engine.setPreferences({ audioDetection: true });
+  engine._beginMeetingNoteSession(event);
+  await engine.beginRecordingSession({ sessionId: "meeting", autoEndEligible: false });
+  engine.endRecordingSession("meeting");
+  now += 5 * 60 * 1000;
+  engine.handleCalendarReminder(event);
+  assert.equal(shown.length, 0, "the ended meeting stays closed past cooldown");
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000 });
+  assert.equal(shown.length, 1, "a fresh external call can still prompt");
+  assert.notEqual(shown[0].event.id, event.id, "the old calendar event must not be reused");
+  engine.stop();
+});
+
+test("a recording resumed directly from a calendar note retires its event on Stop", async () => {
+  let now = Date.now();
+  const { engine, shown } = createEngine({ now: () => now });
+  await engine.beginRecordingSession({
+    sessionId: "resumed",
+    noteId: 41,
+    calendarEventId: "resumed-event",
+    autoEndEligible: false,
+  });
+  engine.endRecordingSession("resumed");
+  now += 5 * 60 * 1000;
+  engine.handleCalendarReminder({ id: "resumed-event" });
+  assert.equal(shown.length, 0);
+  engine.stop();
+});
+
+test("recording calendar identity wins over a newer queued note navigation", async () => {
+  let now = Date.now();
+  const { engine, shown } = createEngine({ now: () => now });
+  engine._beginMeetingNoteSession({ id: "queued-next" });
+  await engine.beginRecordingSession({
+    sessionId: "recorded",
+    calendarEventId: "recorded-event",
+    autoEndEligible: false,
+  });
+  engine.endRecordingSession("recorded");
+  now += 5 * 60 * 1000;
+  engine.handleCalendarReminder({ id: "recorded-event" });
+  assert.equal(shown.length, 0, "the actual recorded event stays closed");
+  engine.handleCalendarReminder({ id: "queued-next" });
+  assert.equal(shown.length, 1, "an unrecorded event must not be retired instead");
+  engine.stop();
+});
 
 test("an unanswered audio prompt expires without cooling down the mic detector", () => {
   const { engine, audioDetector, shown } = createEngine();
@@ -322,7 +407,8 @@ test("recording from a note-only meeting holds detection until Stop", async () =
   assert.equal(shown.length, 0);
   assert.equal(engine.endRecordingSession("live"), true);
   assert.equal(engine._meetingModeActive, false);
-  assert.equal(promptResets, 1, "Stop releases the prompt identity as after an automatic start");
+  assert.equal(promptResets, 0, "Stop must not re-arm the closed call");
+  assert.equal(engine.audioActivityDetector.meetingEnds, 1);
   engine.stop();
 });
 
@@ -869,6 +955,7 @@ test("Take notes on a mic prompt doesn't prompt that live call again", async (t)
   const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
   const detector = new AudioActivityDetector(() => []);
   detector._isMicActive = async () => true;
+  detector.getExternalMicState = () => ({ reliable: true, externalMicActive: true });
   detector.on("sustained-audio-detected", (data) =>
     c.engine._handleDetection("audio", "sustained-audio", data)
   );
@@ -995,6 +1082,7 @@ for (const [order, joinWhileEarlierCallLive] of [
     const detector = new AudioActivityDetector(() => []);
     let micOn = true;
     detector._isMicActive = async () => micOn;
+    detector.getExternalMicState = () => ({ reliable: true, externalMicActive: micOn });
     const { engine, meetingNavigations, shown } = createEngine();
     engine.preferences.audioDetection = true;
     engine.audioActivityDetector = detector;
@@ -1076,6 +1164,7 @@ test("closing a note-only meeting preserves the current audio prompt until a lat
   const detector = new AudioActivityDetector(() => []);
   let active = true;
   detector._isMicActive = async () => active;
+  detector.getExternalMicState = () => ({ reliable: true, externalMicActive: active });
   const { engine, shown } = createEngine();
   engine.preferences.audioDetection = true;
   engine.audioActivityDetector = detector;
@@ -1095,15 +1184,15 @@ test("closing a note-only meeting preserves the current audio prompt until a lat
   assert.equal(shown.length, 1, "the same live call must not prompt again");
   active = false;
   await detector._check();
-  t.mock.timers.tick(60000);
+  t.mock.timers.tick(5 * 60 * 1000);
   active = true;
   await detector._check();
   await detector._check();
-  assert.equal(shown.length, 2, "a later call still prompts without a dismissal cooldown");
+  assert.equal(shown.length, 2, "a later call still prompts after the end cooldown");
   engine.stop();
 });
 
-test("a failed navigation keeps the prompt identity; a closed note's start resets it", async () => {
+test("a failed navigation keeps prompt identity; closing an opened note starts cooldown", async () => {
   const { engine } = createEngine();
   let promptResets = 0;
   engine.audioActivityDetector.resetPrompt = () => (promptResets += 1);
@@ -1116,7 +1205,8 @@ test("a failed navigation keeps the prompt identity; a closed note's start reset
   engine._meetingModeActive = true;
   engine.closeMeetingNote(id);
   assert.equal(engine._meetingModeActive, false);
-  assert.equal(promptResets, 1);
+  assert.equal(promptResets, 0);
+  assert.equal(engine.audioActivityDetector.meetingEnds, 1);
   engine.stop();
 });
 

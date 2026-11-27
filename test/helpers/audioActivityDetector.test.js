@@ -439,7 +439,7 @@ test("darwin: capability changes are logged at info level", async (t) => {
   );
 });
 
-test("darwin: aggregate activity prompts once a running meeting app corroborates it", async (t) => {
+test("darwin: aggregate activity cannot prompt even with a running meeting app", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("darwin", { isMeetingAppRunning: () => true });
   t.after(() => detector.stop());
@@ -450,15 +450,14 @@ test("darwin: aggregate activity prompts once a running meeting app corroborates
   children[0].stdout.emit("data", "CAPABILITY AGGREGATE\nMIC_ACTIVE\n");
   t.mock.timers.tick(SUSTAINED_MS);
 
-  assert.equal(detections.length, 1);
-  assert.equal(detections[0].attributed, false);
+  assert.equal(detections.length, 0);
   assert.deepEqual(detector.getExternalMicState(), { reliable: false, externalMicActive: false });
 
   children[0].stdout.emit("data", "MIC_INACTIVE\n");
   assert.equal(detector._sustainedTimer, null);
 });
 
-test("darwin: a meeting app launching during aggregate activity is re-evaluated", async (t) => {
+test("darwin: a meeting app launching cannot turn aggregate activity into meeting evidence", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   let meetingAppRunning = false;
   const { detector, children } = createDetector("darwin", {
@@ -476,8 +475,42 @@ test("darwin: a meeting app launching during aggregate activity is re-evaluated"
   meetingAppRunning = true;
   detector.notifyMeetingAppsChanged();
   t.mock.timers.tick(SUSTAINED_MS);
-  assert.equal(detections.length, 1, "the running meeting app corroborates the live device");
-  assert.equal(detections[0].attributed, false);
+  assert.equal(detections.length, 0, "a running app does not prove the device activity is a call");
+});
+
+test("darwin: meeting close pauses detection until a fresh capture and the cooldown", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  detector.endMeeting();
+  assert.equal(detector._sustainedTimer, null);
+  t.mock.timers.tick(COOLDOWN_MS + SUSTAINED_MS);
+  detector.setUserRecording(false);
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 0, "the closed capture cannot re-prompt after cooldown");
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(
+    detections.length,
+    0,
+    "a refreshed listener snapshot cannot resurrect the closed call"
+  );
+  children[0].stdout.emit("data", "MIC_STOP 900\nMIC_START 901\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1, "a later live call remains detectable");
+  children[0].stdout.emit("data", "MIC_STOP 901\n");
+  detector.endMeeting();
+  t.mock.timers.tick(60_000);
+  children[0].stdout.emit("data", "MIC_START 902\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1, "a new capture cannot bypass the end cooldown");
+  children[0].stdout.emit("data", "MIC_STOP 902\n");
+  t.mock.timers.tick(COOLDOWN_MS);
+  assert.equal(detections.length, 1, "idle does not emit from a retained snapshot or timer");
 });
 
 test("darwin: a meeting app quitting before the sustained window cancels the aggregate prompt", async (t) => {

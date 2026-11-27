@@ -88,6 +88,21 @@ test("a live meeting excludes another microphone owner before getUserMedia", asy
   await dictation.release();
 });
 
+test("a directly resumed note carries its calendar identity into the recording session", async (t) => {
+  const { api } = createElectronAPI({ stopResult: () => ({ success: true }) });
+  api.getNote = async () => ({ id: 11, transcript: "", calendar_event_id: "calendar-event" });
+  const start = api.meetingTranscriptionStart;
+  let startedOptions;
+  api.meetingTranscriptionStart = async (options) => {
+    startedOptions = options;
+    return start(options);
+  };
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  assert.equal(startedOptions.calendarEventId, "calendar-event");
+  await store.stopRecording();
+});
+
 test("a completed stop reports that it ended the recording", async (t) => {
   const { api } = createElectronAPI({ stopResult: () => ({ success: true }) });
   const store = await loadStore(t, api);

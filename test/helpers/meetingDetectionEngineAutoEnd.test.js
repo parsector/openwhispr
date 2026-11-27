@@ -118,6 +118,7 @@ function createEngine(windowManagerOverrides = {}) {
   const windowManager = {
     notificationPrefs: {},
     showMeetingNotification: (notification) => shownNotifications.push(notification),
+    dismissMeetingNotification() {},
     ...windowManagerOverrides,
   };
   const engine = new MeetingDetectionEngine(
@@ -409,6 +410,7 @@ test("ending with no tracked session allows teardown to proceed", async () => {
 });
 
 const POST_RECORDING_COOLDOWN_MS = 2500;
+const MEETING_END_COOLDOWN_MS = 5 * 60 * 1000;
 
 const nextMeetingReminder = (clock) => ({
   id: "next",
@@ -416,7 +418,7 @@ const nextMeetingReminder = (clock) => ({
   start_time: new Date(clock.now() + 60_000).toISOString(),
 });
 
-test("a detection during a live recording remains queued after the shared recording flag clears", async (t) => {
+test("a detection during a live recording is retired when the meeting ends", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { clock, engine, owner, shownNotifications } = createEngine();
   engine.setUserRecording(true);
@@ -435,6 +437,10 @@ test("a detection during a live recording remains queued after the shared record
   engine.endRecordingSession("meeting-1");
   engine.setUserRecording(false);
   t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
+  assert.equal(shownNotifications.length, 0);
+  assert.equal(engine._notificationQueue.length, 0);
+  clock.advance(MEETING_END_COOLDOWN_MS);
+  engine.handleCalendarReminder(nextMeetingReminder(clock));
   assert.equal(shownNotifications.length, 1);
   engine.stop();
 });
@@ -458,11 +464,15 @@ test("a post-dictation queue flush holds detections while the meeting session is
   engine.endRecordingSession("meeting-1");
   engine.setUserRecording(false);
   t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
+  assert.equal(shownNotifications.length, 0);
+  assert.equal(engine._notificationQueue.length, 0);
+  clock.advance(MEETING_END_COOLDOWN_MS);
+  engine.handleCalendarReminder(nextMeetingReminder(clock));
   assert.equal(shownNotifications.length, 1);
   engine.stop();
 });
 
-test("a detection-started recording re-enables prompts once its session ends", async (t) => {
+test("a detection-started recording re-enables prompts only after the end cooldown", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const { audioActivityDetector, clock, engine, owner, shownNotifications } = createEngine();
   engine.setPreferences({ audioDetection: true, processDetection: true });
@@ -483,6 +493,12 @@ test("a detection-started recording re-enables prompts once its session ends", a
     detectedAt: clock.now(),
   });
 
+  assert.equal(shownNotifications.length, 0);
+  clock.advance(MEETING_END_COOLDOWN_MS);
+  audioActivityDetector.emit("sustained-audio-detected", {
+    durationMs: 2000,
+    detectedAt: clock.now(),
+  });
   assert.equal(shownNotifications.length, 1);
   assert.equal(shownNotifications[0].detectionId, "audio:sustained-audio");
   engine.stop();
@@ -506,6 +522,9 @@ test("the next reminder prompts after a detection-started recording ends", async
   t.mock.timers.tick(POST_RECORDING_COOLDOWN_MS);
   engine.handleCalendarReminder(nextMeetingReminder(clock));
 
+  assert.equal(shownNotifications.length, 0);
+  clock.advance(MEETING_END_COOLDOWN_MS);
+  engine.handleCalendarReminder(nextMeetingReminder(clock));
   assert.equal(shownNotifications.length, 1);
   assert.equal(shownNotifications[0].detectionId, "calendar:next");
   engine.stop();

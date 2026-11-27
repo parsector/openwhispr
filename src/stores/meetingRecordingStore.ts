@@ -1413,6 +1413,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         return window.electronAPI?.meetingTranscriptionStart?.({
           ...meetingTranscriptionOptions,
           noteId: args.noteId ?? null,
+          calendarEventId: seedNote?.calendar_event_id ?? null,
           sessionId,
           autoEndEligible: args.autoEndEligible,
           aecEnabled: getSettings().meetingAecEnabled,
