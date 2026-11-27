@@ -73,6 +73,7 @@ test('device erasure removes the Keychain key and its on-disk backup', t => {
     const modulePath = require.resolve('../../src/helpers/secretCrypto');
     delete require.cache[modulePath];
     const secrets = require(modulePath);
+    secrets.initializeKey();
     secrets.encryptBytes(Buffer.from('old'));
     const first = password;
     const backup = path.join(dir, 'secure-keys', 'master-key-backup.enc');

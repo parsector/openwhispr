@@ -101,10 +101,9 @@ class EnvironmentManager {
     }
   }
 
-  // Encryption initializes lazily. Probing it eagerly would touch the macOS
-  // Keychain before any window is visible. Migration and _loadAllSecrets are
-  // both no-ops on fresh installs, so neither path triggers Keychain until
-  // the user actually saves their first secret.
+  // Main startup initializes the master key before this step. Lazy crypto
+  // calls only load existing keys; they never inspect the profile for prior
+  // encrypted data while migrating or reading a secret.
   async init() {
     if (!fs.existsSync(this._getMigrationSentinelPath())) {
       await this._migrateToSecureStorage();

@@ -502,6 +502,7 @@ function initializeCoreManagers() {
   }
 
   environmentManager = new EnvironmentManager();
+  require("./src/helpers/secretCrypto").initializeKey();
   const uiLanguage = environmentManager.getUiLanguage(app.getLocale());
   changeLanguage(uiLanguage);
   debugLogger.refreshLogLevel();

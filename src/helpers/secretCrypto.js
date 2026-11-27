@@ -15,6 +15,8 @@ const BACKUP_FILE = "master-key-backup.enc";
 
 let mode = null;
 let masterKey = null;
+let initializationComplete = false;
+let canCreateKey = false;
 
 function _pathExists(file) {
   try {
@@ -28,7 +30,7 @@ function _pathExists(file) {
 
 // A missing credential is not evidence of a first install. In particular, older
 // installs may have encrypted audio but no safeStorage backup yet.
-function _hasEncryptedData() {
+function _hasEncryptedFiles() {
   const root = app.getPath("userData");
   if (_pathExists(path.join(root, "secure-keys", "master-key-in-use"))) return true;
   const credentials = [];
@@ -51,8 +53,25 @@ function _hasEncryptedData() {
   const recordings = path.join(root, "meeting-audio");
   if (_pathExists(recordings) && fs.readdirSync(recordings).some((name) => /^\d+$/.test(name)))
     return true;
+  // Legacy safeStorage-only installs have no binary master key yet. Permit
+  // their first key only if every old credential is still readable without it.
+  // Unversioned, unreadable credentials could instead need a lost master key.
+  return credentials.some((file) => {
+    if (!safeStorage.isEncryptionAvailable()) return true;
+    try {
+      safeStorage.decryptString(fs.readFileSync(file));
+      return false;
+    } catch {
+      return true;
+    }
+  });
+}
+
+// Startup only: even opening a read-only database can stall on a cold profile.
+// Keep this separate from the filesystem guard and all lazy crypto paths.
+function _hasExemplarAudio() {
   const databasePath = path.join(
-    root,
+    app.getPath("userData"),
     process.env.NODE_ENV === "development" ? "transcriptions-dev.db" : "transcriptions.db"
   );
   let db;
@@ -69,18 +88,7 @@ function _hasEncryptedData() {
   } finally {
     db?.close();
   }
-  // Legacy safeStorage-only installs have no binary master key yet. Permit
-  // their first key only if every old credential is still readable without it.
-  // Unversioned, unreadable credentials could instead need a lost master key.
-  return credentials.some((file) => {
-    if (!safeStorage.isEncryptionAvailable()) return true;
-    try {
-      safeStorage.decryptString(fs.readFileSync(file));
-      return false;
-    } catch {
-      return true;
-    }
-  });
+  return false;
 }
 
 function _rememberMasterKey() {
@@ -128,7 +136,7 @@ function _loadMasterKeyBackup() {
   }
 }
 
-function _initKeychain(allowCreate = true) {
+function _initKeychain(allowCreate = false) {
   let Entry;
   try {
     ({ Entry } = require("@napi-rs/keyring"));
@@ -150,16 +158,9 @@ function _initKeychain(allowCreate = true) {
     } else {
       if (fs.existsSync(_backupPath())) {
         if (!_loadMasterKeyBackup()) throw new Error("Existing master key backup is unreadable");
-      } else if (allowCreate && !_hasEncryptedData()) {
+      } else if (allowCreate) {
         masterKey = crypto.randomBytes(KEY_LEN);
         debugLogger.info("created master key for new encrypted data", {}, "secretCrypto");
-      } else if (allowCreate) {
-        debugLogger.warn(
-          "master key missing; existing encrypted data prevents replacement",
-          {},
-          "secretCrypto"
-        );
-        return false;
       } else {
         debugLogger.warn(
           "master key missing; read will not create a replacement",
@@ -173,6 +174,7 @@ function _initKeychain(allowCreate = true) {
       // existing backup after a Keychain read failure or missing entry.
       if (!fs.existsSync(_backupPath())) _saveMasterKeyBackup();
     }
+    canCreateKey = false;
     _rememberMasterKey();
     debugLogger.info("loaded master key from OS credential store", {}, "secretCrypto");
     return true;
@@ -186,14 +188,14 @@ function _initKeychain(allowCreate = true) {
   }
 }
 
-function _ensureInit(allowCreate = true) {
+function _ensureInit(allowCreate = canCreateKey) {
   if (mode) return;
   if (!app || !safeStorage) {
     mode = "unavailable";
     debugLogger.warn("master key unavailable outside Electron main process", {}, "secretCrypto");
     return;
   }
-  if (_initKeychain(allowCreate)) {
+  if (_initKeychain(allowCreate && canCreateKey)) {
     mode = "keychain";
     return;
   }
@@ -203,6 +205,36 @@ function _ensureInit(allowCreate = true) {
     return;
   }
   mode = safeStorage.isEncryptionAvailable() ? "safeStorage" : "unavailable";
+}
+
+// Call explicitly at app startup, before managers can read secrets or audio.
+// A lazy encrypt/decrypt can load an existing key but cannot authorize its
+// creation. Cache failures too: an unreadable profile is never a fresh install.
+function initializeKey() {
+  if (initializationComplete) return;
+  initializationComplete = true;
+  _ensureInit(false);
+  if (mode === "keychain" || !app || !safeStorage) return;
+  try {
+    canCreateKey = !_hasEncryptedFiles() && !_hasExemplarAudio();
+  } catch (error) {
+    debugLogger.warn(
+      "master key initialization could not check existing encrypted data",
+      { code: error.code },
+      "secretCrypto"
+    );
+    return;
+  }
+  if (!canCreateKey) {
+    debugLogger.warn(
+      "master key missing; existing encrypted data prevents replacement",
+      {},
+      "secretCrypto"
+    );
+    return;
+  }
+  mode = null;
+  _ensureInit(true);
 }
 
 // Called once per scheduled key-related recovery retry. Ordinary reads keep
@@ -250,7 +282,7 @@ function encrypt(plaintext) {
 }
 
 function decrypt(blob) {
-  _ensureInit();
+  _ensureInit(false);
   if (mode === "keychain" && blob.length > IV_LEN + TAG_LEN) {
     try {
       const iv = blob.subarray(0, IV_LEN);
@@ -328,6 +360,10 @@ function clearDeviceKey() {
     if (masterKey) masterKey.fill(0);
     masterKey = null;
     mode = null;
+    // Explicit erasure has already removed all recordings. The next write may
+    // create a new key without inspecting the now-erased profile again.
+    canCreateKey = true;
+    initializationComplete = true;
   }
 }
 
@@ -336,6 +372,7 @@ module.exports = {
   // credential-store I/O on the UI thread merely to start a background job.
   getWorkerKey: () => (mode === "keychain" && masterKey ? Buffer.from(masterKey) : null),
   recoverWorkerKey,
+  initializeKey,
   encrypt,
   decrypt,
   isAvailable,

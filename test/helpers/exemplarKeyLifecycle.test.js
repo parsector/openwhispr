@@ -52,11 +52,13 @@ function fixture(t) {
   t.after(() => {
     Module._load = original;
   });
-  const reload = () => {
+  const reload = (initialize = true) => {
     for (const file of ["secretCrypto", "voiceExemplarAudio"])
       delete require.cache[require.resolve(`../../src/helpers/${file}`)];
+    const encryption = require("../../src/helpers/secretCrypto");
+    if (initialize) encryption.initializeKey();
     return {
-      encryption: require("../../src/helpers/secretCrypto"),
+      encryption,
       audio: require("../../src/helpers/voiceExemplarAudio"),
     };
   };
@@ -65,7 +67,7 @@ function fixture(t) {
   db.exec(
     "CREATE TABLE speaker_profiles(id INTEGER PRIMARY KEY); CREATE TABLE notes(id INTEGER PRIMARY KEY, client_note_id TEXT); INSERT INTO speaker_profiles VALUES(1); INSERT INTO notes VALUES(1, 'note')"
   );
-  const first = reload();
+  const first = reload(false);
   first.audio.open(db);
   const bytes = Buffer.alloc(44 + 24000 * 2 * 4);
   bytes.write("RIFF");
@@ -95,6 +97,7 @@ function fixture(t) {
     meetingDate: "2026-11-05",
   };
   const seal = () => {
+    first.encryption.initializeKey();
     first.audio.save(db, candidate, bytes, first.audio.seal(first, bytes), Buffer.alloc(4));
   };
   return {
@@ -221,6 +224,7 @@ test("reading ciphertext on a new install does not create a master key", (t) => 
 test("a readable safeStorage-only install can initialize its first audio key", (t) => {
   const f = fixture(t);
   const legacy = f.legacySecret();
+  f.first.encryption.initializeKey();
   assert.equal(f.first.encryption.decrypt(legacy).value, "legacy-test-value");
   f.seal();
   const next = f.restart();
@@ -229,6 +233,7 @@ test("a readable safeStorage-only install can initialize its first audio key", (
 
 test("an unreadable old master-key credential also prevents silent replacement", (t) => {
   const f = fixture(t);
+  f.first.encryption.initializeKey();
   const encrypted = f.first.encryption.encrypt("old test credential");
   f.loseCredential();
   f.forgetBackup();
