@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.14.1] - 2026-11-27
+
+### Fixed
+
+- **A missing credential no longer mints a new master key.** Previously, an install whose OS credential read came back empty and had no backup silently generated a fresh key, stranding every recording and saved clip sealed under the previous one. Reads never create a key now, writes refuse to replace one while encrypted data exists, and a successful load backfills the backup that earlier releases never wrote.
+- **Unreadable samples stop claiming a restorable key.** A saved clip that cannot be decrypted reports the actual cause inline, with Listen disabled, and no longer counts toward enrolment.
+- **Decrypting no longer touches the filesystem or the database.** The encrypted-data decision is made once at initialization instead of on the first decrypt, cutting the worst main-thread slice from 46 ms to 18 ms under load.
+
 ## [1.14.0] - 2026-11-26
 
 ### Assistant
