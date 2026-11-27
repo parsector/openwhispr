@@ -2,6 +2,8 @@ const { withDevicePolicy } = require("./harness/devicePolicy");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
+const { EventEmitter } = require("node:events");
+const { createMicrophoneCaptureOwner } = require("../../src/helpers/microphoneCaptureOwner");
 
 // Registers the real handler closures against a fake `this` (the scaffolding
 // from granolaImportIpc.test.js) so the sync-notification-preferences adapter
@@ -92,6 +94,38 @@ test.after(() => {
 });
 
 const sync = (prefs) => handlers.get("sync-notification-preferences")({}, prefs);
+
+test("microphone acquisition cannot overtake admitted dictation or agent preparation", () => {
+  const main = new EventEmitter();
+  const agent = new EventEmitter();
+  const panel = new EventEmitter();
+  let dictating = true;
+  let agentRecording = false;
+  target._microphoneCaptureOwner = createMicrophoneCaptureOwner();
+  Object.assign(target.windowManager, {
+    mainWindow: { webContents: main },
+    isDictationActive: () => dictating,
+    agentWindow: {
+      window: { webContents: agent },
+      isRecording: () => agentRecording,
+    },
+  });
+  const acquire = (sender, id) => handlers.get("acquire-microphone-capture")({ sender }, id);
+  const release = (sender, id) => handlers.get("release-microphone-capture")({ sender }, id);
+  assert.equal(acquire(panel, "meeting"), false);
+  assert.equal(acquire(agent, "agent"), false);
+  assert.equal(acquire(main, "dictation"), true);
+  assert.equal(release(main, "dictation"), true);
+  dictating = false;
+  agentRecording = true;
+  assert.equal(acquire(panel, "meeting"), false);
+  assert.equal(acquire(main, "dictation"), false);
+  assert.equal(acquire(agent, "agent"), true);
+  assert.equal(release(agent, "agent"), true);
+  agentRecording = false;
+  assert.equal(acquire(panel, "meeting"), true);
+  assert.equal(release(panel, "meeting"), true);
+});
 
 const ENABLED_SNAPSHOT = {
   notificationsEnabled: true,

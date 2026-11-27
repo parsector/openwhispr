@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { EventEmitter } = require("node:events");
+const { createMicrophoneCaptureOwner } = require("../../src/helpers/microphoneCaptureOwner");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -62,6 +64,30 @@ async function loadStore(t, api) {
   return vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
 }
 
+test("a live meeting excludes another microphone owner before getUserMedia", async (t) => {
+  const owner = createMicrophoneCaptureOwner();
+  const sender = new EventEmitter();
+  const { api } = createElectronAPI({ stopResult: () => ({ success: true }) });
+  api.acquireMicrophoneCapture = async (id) => owner.acquire(sender, id);
+  api.releaseMicrophoneCapture = async (id) => owner.release(sender, id);
+  const store = await loadStore(t, api);
+  assert.equal(await store.startRecording(START_ARGS), true);
+  const { MicrophoneCapture } = await import("../../src/helpers/microphoneCapture.js");
+  const dictation = new MicrophoneCapture();
+  let opens = 0;
+  await assert.rejects(
+    dictation.open(async () => {
+      opens++;
+      return navigator.mediaDevices.getUserMedia({ audio: true });
+    }),
+    /already in use/
+  );
+  assert.equal(opens, 0);
+  await store.stopRecording();
+  await dictation.open(() => navigator.mediaDevices.getUserMedia({ audio: true }));
+  await dictation.release();
+});
+
 test("a completed stop reports that it ended the recording", async (t) => {
   const { api } = createElectronAPI({ stopResult: () => ({ success: true }) });
   const store = await loadStore(t, api);
@@ -72,6 +98,33 @@ test("a completed stop reports that it ended the recording", async (t) => {
   assert.equal(result.stopped, true);
   assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
 });
+
+for (const stopError of [false, true]) {
+  test(`meeting close releases the mic even with disconnect error=${stopError}`, async (t) => {
+    let mainStops = 0;
+    const { api } = createElectronAPI({
+      stopResult: () => {
+        mainStops++;
+        return { success: true };
+      },
+    });
+    const store = await loadStore(t, api);
+    const stream = await navigator.mediaDevices.getUserMedia();
+    const track = stream.getTracks()[0];
+    track.stop = () => {
+      track.readyState = "ended";
+    };
+    if (stopError)
+      globalThis.AudioWorkletNode.prototype.disconnect = () => {
+        throw new Error("graph gone");
+      };
+    assert.equal(await store.startRecording(START_ARGS), true);
+    await store.stopRecording();
+    assert.equal(track.readyState, "ended");
+    assert.equal(mainStops, 1, "renderer teardown errors must still stop main capture");
+    assert.equal(store.useMeetingRecordingStore.getState().isRecording, false);
+  });
+}
 
 // The note header's timer derives its elapsed seconds from this stamp instead of
 // counting ticks, so a note switch (which remounts the editor) keeps the real

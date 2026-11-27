@@ -1559,6 +1559,10 @@ class WindowManager {
     }
 
     this.controlPanelWindow = new BrowserWindow(CONTROL_PANEL_CONFIG);
+    const capturePanel = this.controlPanelWindow;
+    capturePanel.on("hide", () => {
+      capturePanel.webContents.send("release-idle-microphone");
+    });
     this._onboardingRestoreBounds = null;
     this._onboardingWindowMode = null;
     this._onboardingWindowState = null;
@@ -2277,6 +2281,10 @@ class WindowManager {
     if (!this.mainWindow) {
       return;
     }
+    const captureWindow = this.mainWindow;
+    captureWindow.on("hide", () => {
+      captureWindow.webContents.send("release-idle-microphone");
+    });
 
     if (process.platform === "linux" || process.platform === "win32") {
       const win = this.mainWindow;

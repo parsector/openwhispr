@@ -1239,10 +1239,8 @@ export default function SettingsPage({
     microphoneSelectionMode,
     selectedMicDeviceId,
     selectedMicDeviceLabel,
-    micWarmHoldSeconds,
     setMicrophoneSelectionMode,
     setSelectedMicDevice,
-    setMicWarmHoldSeconds,
     setUseLocalWhisper,
     setUiLanguage,
     setWhisperModel,
@@ -2698,10 +2696,8 @@ export default function SettingsPage({
                     microphoneSelectionMode={microphoneSelectionMode}
                     selectedMicDeviceId={selectedMicDeviceId}
                     selectedMicDeviceLabel={selectedMicDeviceLabel}
-                    micWarmHoldSeconds={micWarmHoldSeconds}
                     onSelectionModeChange={setMicrophoneSelectionMode}
                     onDeviceSelect={setSelectedMicDevice}
-                    onMicWarmHoldSecondsChange={setMicWarmHoldSeconds}
                   />
                 </SettingsPanelRow>
               </SettingsPanel>

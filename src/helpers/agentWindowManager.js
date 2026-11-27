@@ -238,6 +238,7 @@ class AgentWindowManager {
     win.on("closed", () => {
       if (this.window === win) this._forget();
     });
+    win.on("hide", () => win.webContents.send("release-idle-microphone"));
     // A reload (development, or the error screen's Reload) is a new renderer:
     // it starts hidden with no take, and says when it is ready again. Only a
     // committed main-frame navigation counts: an in-page one (a footnote link)

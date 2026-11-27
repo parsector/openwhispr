@@ -44,14 +44,14 @@ import {
   recordPcm16SpeechWindow,
 } from "./localSpeechGate";
 import { reacquireIfDead } from "./micTrackHealth";
-import { isMicWarm, WARMUP_ACQUIRE_TIMEOUT_MS } from "./micWarmState";
+import { isMicWarm } from "./micWarmState";
 import {
   PreparedMicCapture,
   disposePreparedCapture,
   discardPreRoll,
   PRE_ROLL_MAX_AGE_MS,
 } from "./preparedMicCapture";
-import { MicStreamHold } from "./micStreamHold";
+import { MicrophoneCapture } from "./microphoneCapture";
 import { PcmTap } from "./pcmTap";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
 import { followsSystemDefaultMic } from "./micSelectionRecovery";
@@ -646,31 +646,14 @@ class AudioManager {
     this._micWarmedAt = 0;
     this._startInProgress = false;
     this._micOpenReported = false;
+    this.microphoneCapture = new MicrophoneCapture();
     this.preparedMicCapture = new PreparedMicCapture({
       dispose: (prepared) => this._disposePrepared(prepared),
       onActiveChange: () => this._syncMicOpenGate(),
     });
     const micSettings = getSettings();
-    this._micHoldSeconds = Number(micSettings.micWarmHoldSeconds) || 0;
     this._micDeviceKey = micDeviceKey(micSettings);
-    this.micStreamHold = new MicStreamHold({
-      holdSeconds: this._micHoldSeconds,
-      onHoldChange: () => this._syncMicOpenGate(),
-      isBusy: () =>
-        this.isRecording ||
-        this.isStreaming ||
-        this.mediaRecorder?.state === "recording" ||
-        this.preparedMicCapture.active,
-    });
-
-    // Every window owns an AudioManager (dictation and the agent overlay), so
-    // the hold has to follow the setting here rather than in one window's hook.
     this._unsubscribeSettings = useSettingsStore.subscribe((state) => {
-      const holdSeconds = Number(state.micWarmHoldSeconds) || 0;
-      if (holdSeconds !== this._micHoldSeconds) {
-        this._micHoldSeconds = holdSeconds;
-        this.micStreamHold.setHoldSeconds(holdSeconds);
-      }
       const deviceKey = micDeviceKey(state);
       if (deviceKey !== this._micDeviceKey) {
         this._micDeviceKey = deviceKey;
@@ -678,7 +661,6 @@ class AudioManager {
         this.rejectedMicDeviceId = null;
         this._micWarmedAt = 0;
         this.cancelPreparedMicCapture();
-        this.micStreamHold.drop();
       }
     });
 
@@ -692,6 +674,11 @@ class AudioManager {
       }
     };
     window.addEventListener("api-key-changed", this._onApiKeyChanged);
+    this._releaseIdleMicrophone = window.electronAPI?.onReleaseIdleMicrophone?.(() => {
+      if (this._startInProgress || this.isRecording || this.isStreaming) return;
+      this.cancelPreparedMicCapture();
+      void this.microphoneCapture.release();
+    });
 
     // Invalidate the pinned mic device when the OS adds/removes/suspends inputs.
     // Otherwise wake-after-idle keeps requesting a stale deviceId that yields silence.
@@ -700,7 +687,6 @@ class AudioManager {
       this._micWarmedAt = 0;
       this.rejectedMicDeviceId = null;
       this.cancelPreparedMicCapture();
-      this.micStreamHold.drop();
       // The main process keeps the OS default mic until told it changed, so
       // re-resolve now rather than on the next hotkey press (~2s on Windows).
       window.electronAPI?.getSystemDefaultMicrophone?.({ refresh: true })?.catch(() => {});
@@ -777,24 +763,25 @@ class AudioManager {
     this._streamingMicSwapPromise = null;
     this.micRecovery = new ActiveMicRecoveryController({
       mediaDevices: navigator.mediaDevices,
-      acquire: async (reason) => {
-        try {
-          const constraints = await this.getAudioConstraints(
-            false,
-            reason === "devicechange" || reason === "devicechange-ended",
-            true
-          );
-          return await navigator.mediaDevices.getUserMedia(constraints);
-        } catch (error) {
-          logger.debug(
-            "Preferred mic unavailable during recovery, falling back to default",
-            { error: error.message },
-            "audio"
-          );
-          const fallback = await this.getAudioConstraints(true, false, true);
-          return navigator.mediaDevices.getUserMedia(fallback);
-        }
-      },
+      acquire: (reason) =>
+        this.microphoneCapture.open(async (openInput) => {
+          try {
+            const constraints = await this.getAudioConstraints(
+              false,
+              reason === "devicechange" || reason === "devicechange-ended",
+              true
+            );
+            return await openInput(constraints);
+          } catch (error) {
+            logger.debug(
+              "Preferred mic unavailable during recovery, falling back to default",
+              { error: error.message },
+              "audio"
+            );
+            const fallback = await this.getAudioConstraints(true, false, true);
+            return openInput(fallback);
+          }
+        }),
       onRecovered: (replacement, previous) => this.replaceActiveMic(replacement, previous),
       onStatusChange: (status) => this.setMicCaptureStatus(status),
     });
@@ -1402,14 +1389,15 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   cancelPreparedMicCapture() {
     this.preparedMicCapture.cancel();
+    if (!this._startInProgress && !this.isRecording && !this.isStreaming)
+      void this.microphoneCapture?.release();
   }
 
   // Tells the main process whether this renderer is holding the mic open outside
-  // a recording — an idle hold or a prepared capture. Recordings are gated by
-  // setUserRecording instead. Without this the device-global macOS/Linux mic
-  // signal reports our own capture as a meeting.
+  // a recording while a key-down prepares capture. Recordings are gated by
+  // setUserRecording instead; preparation reports its own input as ours too.
   _syncMicOpenGate() {
-    const open = this.micStreamHold.active || this.preparedMicCapture.active;
+    const open = this.preparedMicCapture.active;
     if (open === this._micOpenReported) return;
     this._micOpenReported = open;
     window.electronAPI?.micWarmHoldChanged?.(open);
@@ -1462,10 +1450,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._batchPcmTap = null;
   }
 
-  _constraintsKey(constraints) {
-    return JSON.stringify(constraints?.audio ?? constraints ?? {});
-  }
-
   _stampMicWarm() {
     this._micWarmedAt = Date.now();
   }
@@ -1473,71 +1457,28 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Every capture-stream release funnels through here: the driver was
   // demonstrably open, so stamp warmth (a free warm window for the next open,
   // replacing #1284's post-transcription re-warm and its extra device open)
-  // and restart the idle-hold countdown.
+  // and explicitly release the reservation when the take ends.
   _markCaptureStreamReleased() {
     this._stampMicWarm();
-    this.micStreamHold.touch();
+    // Rotation/recovery replaces a stream within the same recording. Keep its
+    // reservation until the take ends, including the gap before the new open.
+    if (this.micRecovery?.started || this._rotatingBatchRecorder) return;
+    void this.microphoneCapture?.release();
   }
 
   async _acquireCaptureStream(constraints) {
-    const key = this._constraintsKey(constraints);
-    const held = this.micStreamHold.acquireClone(key);
-    if (held) {
-      this._stampMicWarm();
-      return held;
-    }
-    const stream = await this.acquireHealthyMicStream(
-      await navigator.mediaDevices.getUserMedia(constraints),
-      constraints
+    this.microphoneCapture ??= new MicrophoneCapture();
+    const stream = await this.microphoneCapture.open(async (openInput) =>
+      this.acquireHealthyMicStream(await openInput(constraints), constraints, openInput)
     );
     this._stampMicWarm();
-    return this.micStreamHold.adoptAndClone(stream, key);
-  }
-
-  // TTL-gated warm-up used only by the streaming-connection warm-up. The
-  // recording paths never warm-then-discard — they open once via
-  // prepareMicCapture and keep the stream. A stream resolving past the deadline
-  // still stamps warmth: the driver did come up, which is exactly what the
-  // slowest machines need recorded (#845).
-  async _warmMicDriverIfCold(logCategory) {
-    // A held master already has the driver up; opening a second device to prove
-    // it is the concurrent double open this replaced.
-    if (this.micStreamHold.active) {
-      this._stampMicWarm();
-      return;
-    }
-    if (isMicWarm(this._micWarmedAt, Date.now())) return;
-    try {
-      const constraints = await this.getAudioConstraints();
-      const streamPromise = navigator.mediaDevices.getUserMedia(constraints);
-      streamPromise
-        .then((stream) => {
-          stream.getTracks().forEach((track) => track.stop());
-          this._stampMicWarm();
-        })
-        .catch(() => {});
-      let timer = null;
-      const deadline = new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error("mic warmup timed out")),
-          WARMUP_ACQUIRE_TIMEOUT_MS
-        );
-      });
-      try {
-        await Promise.race([streamPromise, deadline]);
-      } finally {
-        if (timer !== null) clearTimeout(timer);
-      }
-      logger.debug("Microphone driver pre-warmed", {}, logCategory);
-    } catch (e) {
-      logger.debug("Mic driver warmup failed (non-critical)", { error: e.message }, logCategory);
-    }
+    return stream;
   }
 
   // Recovers a dead/muted capture: retries the same device, then hops to the OS default,
   // remembering a silent pinned device for the session. Throws MicUnusableError when no
   // input delivers audio. See #1152.
-  async acquireHealthyMicStream(rawStream, constraints) {
+  async acquireHealthyMicStream(rawStream, constraints, openInput) {
     const pinnedMicDeviceId = constraints.audio?.deviceId?.exact ?? null;
     let fallbackMicUnusable = false;
     // Keep verifying after a rejection too, otherwise a muted default records silence unnoticed.
@@ -1559,7 +1500,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
               fallbackMicUnusable = true;
             },
           }
-        : null
+        : null,
+      openInput
     );
 
     if (fallbackMicUnusable) {
@@ -1754,6 +1696,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // (and possibly a pre-roll recorder); release it before any retry.
       freshTap?.close();
       if (prepared && !preparedAdopted) this._disposePrepared(prepared);
+      void this.microphoneCapture?.release();
+      this.teardownSpeechGate();
       if (isStaleDeviceError(error) && !forceDefaultMic) {
         // Pinned mic is gone (Chromium rotates IDs / device unplugged). Retry once on the default mic. See #900.
         logger.warn("Pinned microphone unavailable, retrying on default mic", {}, "audio");
@@ -2007,12 +1951,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return true;
     }
     if (this.mediaRecorder?.state === "recording") {
-      this.mediaRecorder.stop();
+      try {
+        this.mediaRecorder.stop();
+      } catch (error) {
+        logger.debug("Batch recorder stop failed", { error: error.message }, "audio");
+        void this.finalizeBatchRecording(null);
+      } finally {
+        this._markCaptureStreamReleased();
+      }
       return true;
     }
     if (this.isRecording && !this.isStreaming) {
       // The mic died mid-recovery, so no live recorder exists; finalize what
       // was captured instead of leaving the recording unstoppable.
+      this._markCaptureStreamReleased();
       void this.finalizeBatchRecording(null);
       return true;
     }
@@ -2080,10 +2032,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // next recording.
       this.resetDiscardedBatchRecordingState();
 
-      recorder.stop();
-
-      if (recorder.stream) {
-        recorder.stream.getTracks().forEach((track) => track.stop());
+      try {
+        recorder.stop();
+      } catch (error) {
+        logger.debug("Batch recorder cancel failed", { error: error.message }, "audio");
+        this.persistDiscardedBatchRecording(discarded);
+      } finally {
         this._markCaptureStreamReleased();
       }
 
@@ -2092,6 +2046,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (this.isRecording && !this.isStreaming) {
       // The mic died mid-recovery, so no live recorder exists; discard what was
       // captured instead of leaving the recording uncancelable.
+      this._markCaptureStreamReleased();
       this.discardBatchRecording();
       return true;
     }
@@ -5038,7 +4993,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     };
   }
 
-  async warmupStreamingConnection({ isSignedIn: isSignedInOverride, warmMic = true } = {}) {
+  async warmupStreamingConnection({ isSignedIn: isSignedInOverride } = {}) {
     if (!this.isRecordingAllowedByPolicy()) {
       logger.debug("Streaming warmup skipped by workspace policy", {}, "streaming");
       return false;
@@ -5103,10 +5058,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           );
         }
 
-        // Warm up the OS audio driver by briefly acquiring the mic, then
-        // releasing. TTL-gated: drivers go cold again after idle, so this must
-        // re-fire once the warm window lapses (#845).
-        if (warmMic) await this._warmMicDriverIfCold("streaming");
+        // Connections and worklet code can warm while idle. The input device
+        // opens only for an admitted preparation or recording.
 
         this.warmupFailureStreak = 0;
         logger.info(
@@ -6692,22 +6645,24 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   cleanup() {
     // Read before cleanupStreaming ends the session below.
     const streamingProviderName = this.getActiveStreamingProviderName();
+    const recorder = this.mediaRecorder;
+    const recorderOwned = this.microphoneCapture?.owns?.(recorder?.stream) ?? false;
     this.micRecovery.stop();
     this._unsubscribeSettings?.();
     this.preparedMicCapture.cancel();
     this._closeBatchPcmTap();
-    this.micStreamHold.drop();
+    void this.microphoneCapture?.release();
+    this._releaseIdleMicrophone?.();
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
     if (this.isStreaming) {
       this.cleanupStreaming();
     }
-    const recorder = this.mediaRecorder;
     if (recorder?.state === "recording") {
       this.stopRecording();
     }
     // onstop may run after the owner unmounts and releases its reservation.
-    recorder?.stream?.getTracks().forEach((track) => track.stop());
+    if (!recorderOwned) recorder?.stream?.getTracks().forEach((track) => track.stop());
     if (this.persistentAudioContext && this.persistentAudioContext.state !== "closed") {
       this.persistentAudioContext.close().catch(() => {});
       this.persistentAudioContext = null;

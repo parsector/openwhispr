@@ -855,6 +855,8 @@ class IPCHandlers {
     this._calendarAuthorizationRequests = new AgentStreamRequestRegistry();
     // webContents id -> its release listener, for renderers holding the mic open.
     this._micHoldSenders = new Map();
+    this._microphoneCaptureOwner =
+      require("./microphoneCaptureOwner").createMicrophoneCaptureOwner();
     this.assemblyAiStreaming = null;
     this.deepgramStreaming = null;
     this.geminiStreaming = null;
@@ -3651,6 +3653,24 @@ class IPCHandlers {
     // in the dictation renderer. Only confirmed renderer state may change the
     // main-process recording gate. Preparing reserves it before the renderer
     // opens the mic; an older attempt cannot release a newer reservation.
+    ipcMain.handle("acquire-microphone-capture", (event, id) => {
+      // Preparing already reserves dictation/agent admission before the device
+      // open. A meeting or probe must not overtake that admitted key-down.
+      if (
+        this.windowManager.isDictationActive?.() &&
+        event.sender !== this.windowManager.mainWindow?.webContents
+      )
+        return false;
+      if (
+        this.windowManager.agentWindow?.isRecording?.() &&
+        event.sender !== this.windowManager.agentWindow.window?.webContents
+      )
+        return false;
+      return this._microphoneCaptureOwner.acquire(event.sender, id);
+    });
+    ipcMain.handle("release-microphone-capture", (event, id) =>
+      this._microphoneCaptureOwner.release(event.sender, id)
+    );
     ipcMain.handle("dictation-lifecycle-state-changed", (event, state, attempt, inputKind) => {
       const dictationWindow = this.windowManager.mainWindow;
       if (
@@ -13348,14 +13368,17 @@ class IPCHandlers {
       clearMeetingSystemAudioSilenceTimer();
       stopMeetingSystemAudioWatchdog();
       try {
-        if (this.audioTapManager) {
-          await this.audioTapManager.stop();
-        }
-        if (this.linuxPortalAudioManager) {
-          await this.linuxPortalAudioManager.stop().catch(() => {});
-        }
-        if (this.windowsLoopbackAudioManager) {
-          await this.windowsLoopbackAudioManager.stop().catch(() => {});
+        const captures = await Promise.allSettled(
+          [
+            this.audioTapManager,
+            this.linuxPortalAudioManager,
+            this.windowsLoopbackAudioManager,
+          ].map(async (manager) => manager?.stop())
+        );
+        for (const result of captures) {
+          if (result.status === "rejected") {
+            debugLogger.warn("Meeting capture stop failed", { error: result.reason?.message });
+          }
         }
 
         flushPendingMeetingMicChunks(true);
@@ -13454,6 +13477,11 @@ class IPCHandlers {
         return { success: true, transcript, diarizationSessionId };
       } catch (error) {
         debugLogger.error("Meeting transcription stop error", { error: error.message });
+        // A teardown error must not retain the previous session's timers,
+        // buffers or streaming connections behind an idle recording UI.
+        await disconnectMeetingStreaming().catch(() => {});
+        resetMeetingLocalState();
+        this.activeMeetingSpeakerConfig = null;
         return { success: false, error: error.message };
       }
     };

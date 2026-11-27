@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { PasteToolsResult } from "../types/electron";
 import { useLocalStorage } from "./useLocalStorage";
 import logger from "../utils/logger";
+import { MicrophoneCapture } from "../helpers/microphoneCapture";
 
 export interface UsePermissionsReturn {
   // State
@@ -193,8 +194,15 @@ export const usePermissions = (
         }
       }
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stopTracks(stream);
+      const capture = new MicrophoneCapture({ releaseOnHide: true });
+      try {
+        const stream = await capture.open(() =>
+          navigator.mediaDevices.getUserMedia({ audio: true })
+        );
+        stopTracks(stream);
+      } finally {
+        await capture.release();
+      }
       setMicPermissionGranted(true);
       setMicPermissionError(null);
     } catch (err) {

@@ -182,6 +182,7 @@ test("Windows tells the renderer when the pill shows or hides and keeps the shap
     assert.deepEqual(win.shapes.at(-1), []);
     assert.deepEqual(win.sent, [
       ["main-window-visibility-changed", true],
+      ["release-idle-microphone", undefined],
       ["main-window-visibility-changed", false],
     ]);
   });
@@ -214,6 +215,17 @@ test("Windows clears a shape that won't fit before the app resizes the window", 
       ["setShape", []],
       ["setBounds", 400, 500],
     ]);
+  });
+});
+
+test("macOS native hide requests idle microphone release", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  await withPlatform("darwin", async () => {
+    const win = fakePillWindow();
+    const manager = Object.assign(Object.create(WindowManager.prototype), { mainWindow: win });
+    manager.registerMainWindowEvents();
+    win.emit("hide");
+    assert.deepEqual(win.sent, [["release-idle-microphone", undefined]]);
   });
 });
 
@@ -312,6 +324,7 @@ test("Linux native visibility reports hide, show, minimize and restore to the re
     minimized = false;
     win.emit("restore");
     assert.deepEqual(notifications, [
+      ["release-idle-microphone"],
       ["main-window-visibility-changed", false],
       ["main-window-visibility-changed", true],
       ["main-window-visibility-changed", false],

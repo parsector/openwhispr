@@ -59,7 +59,13 @@ export const waitForTrackReady = (track, timeoutMs) =>
 // Returns a live stream — the original when it was healthy or the retry failed.
 // Optional fallback = { getConstraints, onDeviceRejected, onFallbackUnusable } adds a second
 // hop to the system default when the retry reopens the same device and it is still silent.
-export const reacquireIfDead = async (stream, getFreshConstraints, logger, fallback = null) => {
+export const reacquireIfDead = async (
+  stream,
+  getFreshConstraints,
+  logger,
+  fallback = null,
+  openInput = (constraints) => navigator.mediaDevices.getUserMedia(constraints)
+) => {
   const track = stream.getAudioTracks()[0];
   if (!track || (await waitForTrackReady(track, TRACK_READY_TIMEOUT_MS))) {
     return stream;
@@ -69,7 +75,7 @@ export const reacquireIfDead = async (stream, getFreshConstraints, logger, fallb
   let current = stream;
   let retryStream = null;
   try {
-    retryStream = await navigator.mediaDevices.getUserMedia(await getFreshConstraints());
+    retryStream = await openInput(await getFreshConstraints());
     stream.getTracks().forEach((t) => t.stop());
     logger.info("Re-acquired microphone after dead/muted track", {}, "audio");
     current = retryStream;
@@ -99,7 +105,7 @@ export const reacquireIfDead = async (stream, getFreshConstraints, logger, fallb
 
   let fallbackStream;
   try {
-    fallbackStream = await navigator.mediaDevices.getUserMedia(await fallback.getConstraints());
+    fallbackStream = await openInput(await fallback.getConstraints());
   } catch (error) {
     logger.warn("Microphone fallback failed, no usable input", { error: error.message }, "audio");
     fallback.onFallbackUnusable();

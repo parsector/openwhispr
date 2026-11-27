@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MicrophoneCapture } from "../../helpers/microphoneCapture";
 import { useSettings } from "../../hooks/useSettings";
 import { getSettings, useSettingsStore } from "../../stores/settingsStore";
 import {
@@ -83,6 +84,7 @@ export function useVoiceDraft({
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const captureRef = useRef(new MicrophoneCapture());
   const contextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const levelBufRef = useRef<Float32Array<ArrayBuffer> | null>(null);
@@ -158,8 +160,8 @@ export function useVoiceDraft({
   }, []);
 
   const teardownCapture = useCallback(() => {
+    void captureRef.current.release();
     recorderRef.current = null;
-    streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     analyserRef.current = null;
     contextRef.current?.close().catch(() => {});
@@ -218,7 +220,7 @@ export function useVoiceDraft({
     const opening = { abandoned: false };
     openingRef.current = opening;
     try {
-      const stream = await openMicrophone();
+      const stream = await captureRef.current.open(openMicrophone);
       streamRef.current = stream;
       if (opening.abandoned) {
         teardownCapture();
@@ -263,8 +265,13 @@ export function useVoiceDraft({
 
   const stop = useCallback(() => {
     if (openingRef.current) openingRef.current.abandoned = true;
-    recorderRef.current?.stop();
-  }, []);
+    try {
+      if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
+    } catch {
+      teardownCapture();
+      setStatus("idle");
+    }
+  }, [teardownCapture]);
 
   // Discards a take that is recording, and abandons one that is transcribing.
   const cancel = useCallback(() => {
@@ -278,6 +285,7 @@ export function useVoiceDraft({
 
   // Discard silently if the surface unmounts mid-take.
   useEffect(() => cancel, [cancel]);
+  useEffect(() => window.electronAPI?.onReleaseIdleMicrophone?.(cancel), [cancel]);
   useEffect(() => subscribeAuthBoundary(cancel), [cancel]);
 
   return { status, elapsed, readLevel, start, stop, cancel, streamingOnlyProvider };

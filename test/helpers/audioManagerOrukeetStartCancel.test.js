@@ -82,7 +82,10 @@ async function load(t, { providerName = "orukeet", stopAbortsStart = true } = {}
     cleanupStreamingAudio() {},
     cleanupStreamingListeners() {},
     cleanupPreview: async () => null,
-    onError: () => calls.errors++,
+    onError: (error) => {
+      calls.errors++;
+      calls.lastError = error;
+    },
     onStateChange: (state) => calls.states.push(state),
   });
   manager._requestStreamingCancellation = () => {
@@ -104,7 +107,7 @@ test("a streaming start reports recording before its provider connect finishes",
     isStreaming: true,
   });
   connect.resolve({ success: true });
-  assert.equal(await starting, true);
+  assert.equal(await starting, true, JSON.stringify(calls.lastError));
 });
 
 test("cancelling managed Orukeet's pending connect aborts it instead of waiting it out", async (t) => {

@@ -193,6 +193,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
     (callback) => (_event, payload) => callback(payload)
   ),
   micWarmHoldChanged: (active) => ipcRenderer.send("mic-warm-hold-changed", active),
+  acquireMicrophoneCapture: (id) => ipcRenderer.invoke("acquire-microphone-capture", id),
+  releaseMicrophoneCapture: (id) => ipcRenderer.invoke("release-microphone-capture", id),
+  onReleaseIdleMicrophone: registerListener(
+    "release-idle-microphone",
+    (callback) => () => callback()
+  ),
   dictationLifecycleStateChanged: (state, attempt, inputKind) =>
     ipcRenderer.invoke("dictation-lifecycle-state-changed", state, attempt, inputKind),
 

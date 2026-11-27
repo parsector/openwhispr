@@ -2336,6 +2336,9 @@ declare global {
         callback: (payload?: { reason?: "timeout" | "reset" | "manual" }) => void
       ) => () => void;
       micWarmHoldChanged?: (active: boolean) => void;
+      acquireMicrophoneCapture?: (id: string) => Promise<boolean>;
+      releaseMicrophoneCapture?: (id: string) => Promise<boolean>;
+      onReleaseIdleMicrophone?: (callback: () => void) => () => void;
       dictationLifecycleStateChanged: (
         state: "idle" | "preparing" | "recording" | "processing",
         attempt: string,

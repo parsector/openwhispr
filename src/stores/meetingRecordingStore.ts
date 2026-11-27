@@ -10,6 +10,7 @@ import {
 import type { SpeakerDecision } from "../types/speakerRoster";
 import { getManagedTranscriptionResolution } from "../services/managedTranscription";
 import { create } from "zustand";
+import { MicrophoneCapture } from "../helpers/microphoneCapture";
 import { getSettings, selectResolvedMeetingTranscription } from "./settingsStore";
 import { useStreamingProvidersStore } from "./streamingProvidersStore";
 import { getMeetingStreamingTranscriptionProviders } from "../models/ModelRegistry";
@@ -512,13 +513,16 @@ const flushAndDisconnectProcessor = async (processor: AudioWorkletNode | null) =
     });
   } catch {}
 
-  processor.port.onmessage = null;
-  processor.disconnect();
+  try {
+    processor.port.onmessage = null;
+    processor.disconnect();
+  } catch {}
 };
 
 // Pipeline lives in module scope — not on React refs — so it survives
 // view changes and re-mounts of the consumer view.
 let micContext: AudioContext | null = null;
+const microphoneCapture = new MicrophoneCapture();
 let micSource: MediaStreamAudioSourceNode | null = null;
 let micProcessor: AudioWorkletNode | null = null;
 let micStream: MediaStream | null = null;
@@ -894,7 +898,9 @@ async function releaseSystemAudioCapture(): Promise<void> {
   await flushAndDisconnectProcessor(systemProcessor);
   systemProcessor = null;
 
-  systemSource?.disconnect();
+  try {
+    systemSource?.disconnect();
+  } catch {}
   systemSource = null;
 
   stopMediaStream(systemStream);
@@ -909,19 +915,21 @@ async function releaseSystemAudioCapture(): Promise<void> {
 async function cleanup(): Promise<void> {
   micRecovery?.stop();
   micRecovery = null;
+  // Release hardware before graph flushes or network teardown can fail/stall.
+  const released = microphoneCapture.release();
+  micStream = null;
   await flushAndDisconnectProcessor(micProcessor);
   micProcessor = null;
 
-  micSource?.disconnect();
+  try {
+    micSource?.disconnect();
+  } catch {}
   micSource = null;
 
-  micAnalyser?.disconnect();
-  micAnalyser = null;
-
   try {
-    micStream?.getTracks().forEach((t) => t.stop());
+    micAnalyser?.disconnect();
   } catch {}
-  micStream = null;
+  micAnalyser = null;
 
   try {
     await micContext?.close();
@@ -930,7 +938,11 @@ async function cleanup(): Promise<void> {
 
   await releaseSystemAudioCapture();
 
-  ipcCleanups.forEach((fn) => fn());
+  ipcCleanups.forEach((fn) => {
+    try {
+      fn();
+    } catch {}
+  });
   ipcCleanups = [];
   // A debounced config push firing after stop would repopulate the session
   // config main just cleared, leaking this session's count into the next one.
@@ -942,6 +954,7 @@ async function cleanup(): Promise<void> {
   isRecordingFlag = false;
   isStartingFlag = false;
   sessionSystemAudioActive = false;
+  await released;
 }
 
 export async function prepareTranscription(): Promise<void> {
@@ -1278,48 +1291,50 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
       const pendingSystemChunks: { chunk: ArrayBuffer; capturedAt: number }[] = [];
       let socketReady = false;
 
-      const micCapturePromise = getMeetingMicConstraints()
-        .then(async (constraints) => {
-          if (!beginCapture()) return null;
-          try {
-            return await navigator.mediaDevices.getUserMedia(constraints);
-          } catch (err) {
-            const hasExactDevice =
-              typeof constraints.audio === "object" &&
-              constraints.audio !== null &&
-              "deviceId" in constraints.audio;
-            if (hasExactDevice && isCurrentStart()) {
-              try {
-                const fallbackStream = await navigator.mediaDevices.getUserMedia({
-                  audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
-                });
-                logger.info(
-                  "Meeting mic capture recovered using default device",
-                  { error: (err as Error).message },
-                  "meeting"
-                );
-                return fallbackStream;
-              } catch (fallbackErr) {
-                logger.error(
-                  "Meeting mic capture failed, continuing with system audio only",
-                  { error: (fallbackErr as Error).message },
-                  "meeting"
-                );
-                return null;
+      const micCapturePromise = microphoneCapture
+        .open(() =>
+          getMeetingMicConstraints().then(async (constraints) => {
+            if (!beginCapture()) return null;
+            try {
+              return await navigator.mediaDevices.getUserMedia(constraints);
+            } catch (err) {
+              const hasExactDevice =
+                typeof constraints.audio === "object" &&
+                constraints.audio !== null &&
+                "deviceId" in constraints.audio;
+              if (hasExactDevice && isCurrentStart()) {
+                try {
+                  const fallbackStream = await navigator.mediaDevices.getUserMedia({
+                    audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
+                  });
+                  logger.info(
+                    "Meeting mic capture recovered using default device",
+                    { error: (err as Error).message },
+                    "meeting"
+                  );
+                  return fallbackStream;
+                } catch (fallbackErr) {
+                  logger.error(
+                    "Meeting mic capture failed, continuing with system audio only",
+                    { error: (fallbackErr as Error).message },
+                    "meeting"
+                  );
+                  return null;
+                }
               }
+              logger.error(
+                "Meeting mic capture failed, continuing with system audio only",
+                { error: (err as Error).message, constraints },
+                "meeting"
+              );
+              return null;
             }
-            logger.error(
-              "Meeting mic capture failed, continuing with system audio only",
-              { error: (err as Error).message, constraints },
-              "meeting"
-            );
-            return null;
-          }
-        })
+          })
+        )
         .then(async (micResult) => {
           if (!micResult) return null;
           if (!isCurrentStart()) {
-            stopMediaStream(micResult);
+            void microphoneCapture.release();
             return null;
           }
           micStream = micResult;
@@ -1327,7 +1342,7 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
           // turns the microphone off now; the rest is torn down once start settles.
           startOperation.onCancel(() => {
             if (micStream !== micResult) return;
-            stopMediaStream(micResult);
+            void microphoneCapture.release();
             micStream = null;
           });
           const ctx = new AudioContext({ sampleRate: 24000 });
@@ -1905,19 +1920,20 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         }
         micRecovery = new ActiveMicRecoveryController({
           mediaDevices: navigator.mediaDevices,
-          acquire: async (reason) => {
-            try {
-              return await navigator.mediaDevices.getUserMedia(
-                await getMeetingMicConstraints(
-                  reason === "devicechange" || reason === "devicechange-ended"
-                )
-              );
-            } catch {
-              return navigator.mediaDevices.getUserMedia({
-                audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
-              });
-            }
-          },
+          acquire: (reason) =>
+            microphoneCapture.open(async () => {
+              try {
+                return await navigator.mediaDevices.getUserMedia(
+                  await getMeetingMicConstraints(
+                    reason === "devicechange" || reason === "devicechange-ended"
+                  )
+                );
+              } catch {
+                return navigator.mediaDevices.getUserMedia({
+                  audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
+                });
+              }
+            }),
           onStatusChange: (status) => {
             if (activeRecordingSessionId !== sessionId) return;
             useMeetingRecordingStore.setState({
@@ -2828,6 +2844,8 @@ if (typeof window !== "undefined") {
 if (typeof window !== "undefined") {
   window.addEventListener("beforeunload", () => {
     void persistLiveTranscript();
+    void microphoneCapture.release();
+    stopMediaStream(systemStream);
   });
 }
 
