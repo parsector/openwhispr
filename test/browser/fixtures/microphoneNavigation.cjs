@@ -1,7 +1,8 @@
 const assert = require("node:assert/strict");
 const http = require("node:http");
 const { once } = require("node:events");
-const { app, BrowserWindow } = require("electron");
+const path = require("node:path");
+const { app, BrowserWindow, ipcMain } = require("electron");
 const { createMicrophoneCaptureOwner } = require("../../../src/helpers/microphoneCaptureOwner");
 
 // Bound startup and every renderer/server await even if Electron stops responding.
@@ -25,6 +26,12 @@ app
     try {
       const url = `http://127.0.0.1:${server.address().port}`;
       const win = new BrowserWindow({ show: false });
+      win.webContents.setWindowOpenHandler(() => ({
+        action: "allow",
+        overrideBrowserWindowOptions: {
+          webPreferences: { preload: path.join(__dirname, "microphoneNavigationPreload.cjs") },
+        },
+      }));
       const owner = createMicrophoneCaptureOwner();
       const contender = new BrowserWindow({ show: false });
       await win.loadURL(url);
@@ -58,7 +65,36 @@ app
       assert.equal(await observer.webContents.executeJavaScript("oldTrack.readyState"), "live");
       assert.equal(owner.acquire(contender.webContents, "next"), false);
 
-      await win.loadURL(`${url}/replacement`);
+      // The observer snapshots the monotonically ending track BEFORE each
+      // synchronous admission request. A successful claim must already have
+      // seen "ended"; querying after loadURL (or after an async IPC) is too late.
+      const claim = (event) => {
+        assert.equal(event.sender, observer.webContents);
+        event.returnValue = owner.acquire(contender.webContents, "next");
+      };
+      ipcMain.on("navigation-contender-acquire", claim);
+      try {
+        const admitted = observer.webContents
+          .executeJavaScript(
+            `(async () => {
+          for (;;) {
+            const beforeAdmission = oldTrack.readyState;
+            if (window.claimMicrophone()) return beforeAdmission;
+            await new Promise(resolve => setTimeout(resolve, 0));
+          }
+        })()`
+          )
+          .then((state) => {
+            assert.equal(
+              state,
+              "ended",
+              "old track must already be ended before contender admission"
+            );
+          });
+        await Promise.all([admitted, win.loadURL(`${url}/replacement`)]);
+      } finally {
+        ipcMain.removeListener("navigation-contender-acquire", claim);
+      }
       assert.equal(
         await observer.webContents.executeJavaScript("oldTrack.readyState"),
         "ended",
