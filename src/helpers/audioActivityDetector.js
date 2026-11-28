@@ -138,6 +138,11 @@ class AudioActivityDetector extends EventEmitter {
     };
   }
 
+  hasLiveMeetingCapture() {
+    this._updateExternalMicState(false);
+    return this._externalMicReliable && this._externalCapturePids.size > 0;
+  }
+
   setUserRecording(active) {
     this._userRecording = active;
     if (active) {
@@ -251,6 +256,9 @@ class AudioActivityDetector extends EventEmitter {
     this._clearSustainedTimer();
     this._clearResetTimer();
     this._clearCooldownReevalTimer();
+    // The inactive edge may precede closing the note. Recreate the idle timer
+    // we just cleared even when no later recording-gate transition will occur.
+    this._reevaluateAfterGate();
   }
 
   _reset() {
@@ -268,6 +276,9 @@ class AudioActivityDetector extends EventEmitter {
   // count, so an unrelated app's mic session ending would report the
   // still-running call as gone.
   _resetListenerState() {
+    // An idle edge may occur while observation is down. A resumed snapshot
+    // starts a new baseline; capability refreshes alone do not clear the latch.
+    this._requireNewCapture = false;
     this._activeMicPids.clear();
     this._nonMeetingCapturePids.clear();
     this._activeSources = 0;

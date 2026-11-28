@@ -56,6 +56,10 @@ function createEngine(engineOptions) {
   audioDetector.meetingEnds = 0;
   audioDetector.endMeeting = () => audioDetector.meetingEnds++;
   audioDetector.getExternalMicState = () => ({ reliable: true, externalMicActive: true });
+  audioDetector.hasLiveMeetingCapture = () => {
+    const state = audioDetector.getExternalMicState();
+    return state.reliable && state.externalMicActive;
+  };
   audioDetector.setUserRecording = () => {};
   audioDetector.setMicWarmHold = () => {};
   audioDetector.meetingAppNotifications = 0;
@@ -114,6 +118,55 @@ test("idle or unreliable microphone evidence cannot show a meeting card", () => 
   }
   assert.equal(shown.length, 0);
   engine.stop();
+});
+
+test("production-only capture cannot validate an expired queued meeting detection", async (t) => {
+  t.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 10_000 });
+  const detectorPath = require.resolve("../../src/helpers/audioActivityDetector");
+  delete require.cache[detectorPath];
+  const call = { properties: { "application.process.id": "900", "media.role": "phone" } };
+  const obs = { properties: { "application.process.id": "901", "media.role": "production" } };
+  const responses = [[call, obs], [obs]];
+  const exec = () => {};
+  exec[Symbol.for("nodejs.util.promisify.custom")] = async () => ({
+    stdout: JSON.stringify(responses.shift()),
+  });
+  Module._load = function (request, parent, isMain) {
+    if (request === "child_process") return { exec };
+    if (request === "./debugLogger") return { info() {}, debug() {}, warn() {}, error() {} };
+    return originalLoad.call(this, request, parent, isMain);
+  };
+  let Detector;
+  try {
+    Detector = require(detectorPath);
+  } finally {
+    Module._load = originalLoad;
+    delete require.cache[detectorPath];
+  }
+  const detector = new Detector(() => []);
+  detector._running = true;
+  detector._eventDriven = true;
+  detector._listenerProcess = { kill() {} };
+  const { engine, shown } = createEngine();
+  engine.audioActivityDetector = detector;
+  engine.preferences.audioDetection = true;
+  detector.on("sustained-audio-detected", (data) =>
+    engine._handleDetection("audio", "sustained-audio", data)
+  );
+  t.after(() => engine.stop());
+  engine.setUserRecording(false);
+  await detector._reconcileLinuxSourceOutputs(detector._startGeneration);
+  t.mock.timers.tick(2000);
+  assert.equal(engine._notificationQueue.length, 1);
+  await detector._reconcileLinuxSourceOutputs(detector._startGeneration);
+  assert.deepEqual([...detector._externalCapturePids], []);
+  assert.deepEqual(
+    detector.getExternalMicState(),
+    { reliable: true, externalMicActive: true },
+    "OBS still holds auto-end ownership"
+  );
+  t.mock.timers.tick(500);
+  assert.equal(shown.length, 0, "delivery requires a current meeting capture");
 });
 
 test("meeting stop discards queued evidence and cools down new detections", async () => {
@@ -201,17 +254,23 @@ test("an unanswered audio prompt expires without cooling down the mic detector",
 test("meeting overlay carries prep note only for the starting variant", () => {
   const { engine, shown } = createEngine();
   engine.databaseManager.db = { prepare: () => ({ get: () => ({ note_id: 88 }) }) };
-  engine.databaseManager._accountScopeCondition = () => ({ sql: '1=1', params: [] });
-  const future = { id: 'event-1', summary: 'Planning', start_time: new Date(Date.now() + 600000).toISOString() };
-  engine._showPrompt('calendar:event-1', 'calendar', 'event-1', { event: future });
-  assert.equal(shown.at(-1).variant, 'starting');
+  engine.databaseManager._accountScopeCondition = () => ({ sql: "1=1", params: [] });
+  const future = {
+    id: "event-1",
+    summary: "Planning",
+    start_time: new Date(Date.now() + 600000).toISOString(),
+  };
+  engine._showPrompt("calendar:event-1", "calendar", "event-1", { event: future });
+  assert.equal(shown.at(-1).variant, "starting");
   assert.equal(shown.at(-1).prepNoteId, 88);
-  engine._showPrompt('calendar:event-1', 'calendar', 'event-1', { event: { ...future, start_time: new Date(Date.now() - 60000).toISOString() } });
-  assert.equal(shown.at(-1).variant, 'underway');
-  assert.equal('prepNoteId' in shown.at(-1), false);
-  engine._showPrompt('audio:mic', 'audio', 'mic', {});
-  assert.equal(shown.at(-1).variant, 'detected');
-  assert.equal('prepNoteId' in shown.at(-1), false);
+  engine._showPrompt("calendar:event-1", "calendar", "event-1", {
+    event: { ...future, start_time: new Date(Date.now() - 60000).toISOString() },
+  });
+  assert.equal(shown.at(-1).variant, "underway");
+  assert.equal("prepNoteId" in shown.at(-1), false);
+  engine._showPrompt("audio:mic", "audio", "mic", {});
+  assert.equal(shown.at(-1).variant, "detected");
+  assert.equal("prepNoteId" in shown.at(-1), false);
   engine.stop();
 });
 
@@ -955,7 +1014,7 @@ test("Take notes on a mic prompt doesn't prompt that live call again", async (t)
   const AudioActivityDetector = require("../../src/helpers/audioActivityDetector");
   const detector = new AudioActivityDetector(() => []);
   detector._isMicActive = async () => true;
-  detector.getExternalMicState = () => ({ reliable: true, externalMicActive: true });
+  detector.hasLiveMeetingCapture = () => true;
   detector.on("sustained-audio-detected", (data) =>
     c.engine._handleDetection("audio", "sustained-audio", data)
   );
@@ -1082,7 +1141,7 @@ for (const [order, joinWhileEarlierCallLive] of [
     const detector = new AudioActivityDetector(() => []);
     let micOn = true;
     detector._isMicActive = async () => micOn;
-    detector.getExternalMicState = () => ({ reliable: true, externalMicActive: micOn });
+    detector.hasLiveMeetingCapture = () => micOn;
     const { engine, meetingNavigations, shown } = createEngine();
     engine.preferences.audioDetection = true;
     engine.audioActivityDetector = detector;
@@ -1164,7 +1223,7 @@ test("closing a note-only meeting preserves the current audio prompt until a lat
   const detector = new AudioActivityDetector(() => []);
   let active = true;
   detector._isMicActive = async () => active;
-  detector.getExternalMicState = () => ({ reliable: true, externalMicActive: active });
+  detector.hasLiveMeetingCapture = () => active;
   const { engine, shown } = createEngine();
   engine.preferences.audioDetection = true;
   engine.audioActivityDetector = detector;

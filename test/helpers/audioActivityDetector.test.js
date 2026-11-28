@@ -1362,6 +1362,47 @@ const COOLDOWN_MS = 5 * 60 * 1000;
 // Mirrors LISTENER_RESPAWN_BASE_MS in audioActivityDetector.js.
 const RESPAWN_MS = 5 * 1000;
 
+test("darwin: closing after MIC_STOP rearms at one idle minute", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  t.after(() => detector.stop());
+  let count = 0;
+  detector.on("sustained-audio-detected", () => count++);
+  await detector.start();
+  const send = (line) => children[0].stdout.emit("data", `${line}\n`);
+  send("CAPABILITY PID");
+  send("MIC_START 900");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(count, 1);
+  send("MIC_STOP 900");
+  detector.endMeeting();
+  t.mock.timers.tick(60_000);
+  assert.equal(detector.hasPrompted, false, "closing an idle call must keep the one-minute rearm");
+  t.mock.timers.tick(5 * 60_000);
+  send("MIC_START 901");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(count, 2);
+});
+
+test("darwin: a new call after observer downtime is not held by the ended-call latch", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  t.after(() => detector.stop());
+  let count = 0;
+  detector.on("sustained-audio-detected", () => count++);
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(count, 1);
+  detector.endMeeting();
+  detector.stop();
+  t.mock.timers.tick(6 * 60_000);
+  await detector.start();
+  children[1].stdout.emit("data", "CAPABILITY PID\nMIC_START 901\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(count, 2, "a call starting during observation downtime needs no further idle edge");
+});
+
 test("darwin: the same PID can prompt for a successive call after Stop during the end cooldown", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("darwin");

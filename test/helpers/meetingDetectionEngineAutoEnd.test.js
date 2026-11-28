@@ -80,6 +80,10 @@ class FakeAudioActivityDetector extends EventEmitter {
     return { ...this.externalMicState };
   }
 
+  hasLiveMeetingCapture() {
+    return this.externalMicState.reliable && this.externalMicState.externalMicActive;
+  }
+
   setUserRecording() {}
   resetPrompt() {}
   dismiss() {}

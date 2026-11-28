@@ -933,8 +933,7 @@ class MeetingDetectionEngine {
   }
 
   _hasLiveAudioEvidence() {
-    const state = this.audioActivityDetector.getExternalMicState();
-    return state.reliable === true && state.externalMicActive === true;
+    return this.audioActivityDetector.hasLiveMeetingCapture();
   }
 
   _finishMeeting(eventId) {

@@ -348,6 +348,7 @@ for (const cancel of [false, true]) {
         stop() {},
         resetPrompt() {},
         getExternalMicState: () => ({ reliable: true, externalMicActive: true }),
+        hasLiveMeetingCapture: () => true,
       }),
       {
         notificationPrefs: {},
