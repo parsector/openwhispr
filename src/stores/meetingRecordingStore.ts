@@ -1921,20 +1921,31 @@ export async function startRecording(args: StartRecordingArgs): Promise<StartRec
         }
         micRecovery = new ActiveMicRecoveryController({
           mediaDevices: navigator.mediaDevices,
-          acquire: (reason) =>
-            microphoneCapture.open(async () => {
+          acquire: async (reason) => {
+            // The live take already owns admission. Resolve device selection
+            // outside open(), so Stop need not wait for an OS device lookup.
+            const recovery = micRecovery;
+            const constraints = await getMeetingMicConstraints(
+              reason === "devicechange" || reason === "devicechange-ended"
+            );
+            if (
+              !recovery?.started ||
+              micRecovery !== recovery ||
+              !isRecordingFlag ||
+              activeRecordingSessionId !== sessionId
+            ) {
+              throw new Error("Meeting microphone recovery cancelled");
+            }
+            return microphoneCapture.open(async (openInput) => {
               try {
-                return await navigator.mediaDevices.getUserMedia(
-                  await getMeetingMicConstraints(
-                    reason === "devicechange" || reason === "devicechange-ended"
-                  )
-                );
+                return await openInput(constraints);
               } catch {
-                return navigator.mediaDevices.getUserMedia({
+                return openInput({
                   audio: MEETING_MIC_PRIMARY_AUDIO_CONSTRAINTS,
                 });
               }
-            }),
+            });
+          },
           onStatusChange: (status) => {
             if (activeRecordingSessionId !== sessionId) return;
             useMeetingRecordingStore.setState({

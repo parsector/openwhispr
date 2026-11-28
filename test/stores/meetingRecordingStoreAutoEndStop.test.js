@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { EventEmitter } = require("node:events");
 const { createMicrophoneCaptureOwner } = require("../../src/helpers/microphoneCaptureOwner");
+const { deferred } = require("../helpers/harness/deferred");
 const {
   createRendererServer,
   installBrowserGlobals,
@@ -62,6 +63,105 @@ async function loadStore(t, api) {
     cachePrefix: "openwhispr-meeting-auto-end-stop-test-",
   });
   return vite.ssrLoadModule("/stores/meetingRecordingStore.ts");
+}
+
+for (const pending of ["constraints", "input", "fallback"]) {
+  test(
+    `meeting recovery cannot open input after Stop (${pending})`,
+    { timeout: 15_000 },
+    async (t) => {
+      const owner = createMicrophoneCaptureOwner();
+      const sender = new EventEmitter();
+      const contender = new EventEmitter();
+      let mainStops = 0;
+      const { api } = createElectronAPI({
+        stopResult: () => {
+          mainStops++;
+          return { success: true };
+        },
+      });
+      api.acquireMicrophoneCapture = (id) => owner.acquire(sender, id);
+      api.releaseMicrophoneCapture = (id) => owner.release(sender, id);
+      const store = await loadStore(t, api);
+      const gate = deferred();
+      const reached = deferred();
+      let recover = false;
+      let stopped = false;
+      let opensAfterStop = 0;
+      const tracks = [];
+      const ended = new EventEmitter();
+      navigator.mediaDevices.enumerateDevices = async () => {
+        if (recover && pending === "constraints") {
+          reached.resolve();
+          await gate.promise;
+        }
+        return [];
+      };
+      navigator.mediaDevices.getUserMedia = async () => {
+        if (stopped) opensAfterStop++;
+        if (recover && pending !== "constraints") {
+          reached.resolve();
+          await gate.promise;
+          if (pending === "fallback") throw new Error("device removed");
+        }
+        const track = {
+          readyState: "live",
+          getSettings: () => ({}),
+          stop() {
+            this.readyState = "ended";
+          },
+          addEventListener: (event, fn) => ended.on(event, fn),
+          removeEventListener: (event, fn) => ended.off(event, fn),
+        };
+        tracks.push(track);
+        return { getTracks: () => [track], getAudioTracks: () => [track] };
+      };
+      try {
+        assert.equal(await store.startRecording(START_ARGS), true);
+        recover = true;
+        tracks[0].readyState = "ended";
+        ended.emit("ended");
+        await reached.promise;
+        const stopping = store.stopRecording();
+        stopped = true;
+        if (pending === "constraints") {
+          let deadline;
+          try {
+            await Promise.race([
+              stopping,
+              new Promise((_, reject) => {
+                deadline = setTimeout(
+                  () => reject(new Error("Stop waited for recovery constraints")),
+                  1000
+                );
+              }),
+            ]);
+          } finally {
+            clearTimeout(deadline);
+          }
+          assert.equal(
+            owner.acquire(contender, "next"),
+            true,
+            "a device lookup cannot delay admission release"
+          );
+        }
+        gate.resolve();
+        await stopping;
+        await new Promise(setImmediate);
+        assert.equal(
+          opensAfterStop,
+          0,
+          "neither primary nor fallback may request hardware after Stop"
+        );
+        assert.equal(mainStops, 1);
+        assert.ok(tracks.every((track) => track.readyState === "ended"));
+        assert.equal(owner.acquire(contender, "next"), true);
+      } finally {
+        gate.resolve();
+        await store.stopRecording();
+      }
+    }
+  );
 }
 
 test("a live meeting excludes another microphone owner before getUserMedia", async (t) => {
