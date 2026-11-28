@@ -143,6 +143,26 @@ test("scoped disposal releases admission despite ended inputs from a health retr
   assert.equal(owner.acquire(new EventEmitter(), "next"), true);
 });
 
+test("scoped disposal followed by the last pending open failing releases admission", async (t) => {
+  const { MicrophoneCapture, owner, stream, track } = await setup(t);
+  const capture = new MicrophoneCapture();
+  const pending = deferred();
+  t.after(() => capture.release());
+  const opening = capture.open(async () => {
+    await pending.promise;
+    throw new Error("device lost");
+  });
+  await capture.open(() => stream);
+  capture.releaseStream(stream);
+  assert.equal(track.readyState, "ended");
+  assert.equal(owner.acquire(new EventEmitter(), "too-early"), false);
+  pending.resolve();
+  await assert.rejects(opening, /device lost/);
+  await capture.releasing;
+  assert.equal(capture.current, null, "an empty settled session must be released");
+  assert.equal(owner.acquire(new EventEmitter(), "next"), true);
+});
+
 test("a close in the opening turn cannot start capture in a later microtask", async (t) => {
   const { MicrophoneCapture, owner, stream } = await setup(t);
   const capture = new MicrophoneCapture();

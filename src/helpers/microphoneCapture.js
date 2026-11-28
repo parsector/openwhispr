@@ -68,6 +68,10 @@ export class MicrophoneCapture {
       throw error;
     } finally {
       session.pending.delete(opening);
+      // Scoped disposal may remove the last successful stream while another
+      // open is pending. Historical success cannot keep that empty session.
+      if (this.current === session && !session.pending.size && !session.streams.size)
+        void this.release();
     }
   }
 
