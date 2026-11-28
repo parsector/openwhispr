@@ -435,7 +435,9 @@ class AudioActivityDetector extends EventEmitter {
 
     return this._spawnListener({
       command: binaryPath,
-      options: { stdio: ["ignore", "pipe", "pipe"] },
+      // The helper watches EOF on this parent-owned pipe. Even SIGKILL or a
+      // main-process crash closes the writer and retires its CoreAudio observers.
+      options: { stdio: ["pipe", "pipe", "pipe"] },
       label: "macos-mic-listener",
       generation,
       onLine: (line) => this._parseDarwinListenerLine(line),
@@ -837,6 +839,15 @@ class AudioActivityDetector extends EventEmitter {
       debugLogger.debug("Mic state changed during warm-hold, ignoring", { active }, "meeting");
       return;
     }
+    // Cooldown gates prompts, not inactivity. Edge-driven listeners will not
+    // send another idle event after cooldown to rearm a reused application PID.
+    if (!active) {
+      this._clearSustainedTimer();
+      this._clearCooldownReevalTimer();
+      this.audioActiveStart = null;
+      if (this.hasPrompted && !this._resetTimer) this._startResetTimer();
+      return;
+    }
     const cooldownRemainingMs = this._cooldownRemainingMs();
     if (cooldownRemainingMs > 0) {
       debugLogger.debug(
@@ -844,11 +855,7 @@ class AudioActivityDetector extends EventEmitter {
         { active, remainingMs: cooldownRemainingMs },
         "meeting"
       );
-      if (active) {
-        this._scheduleCooldownReeval(cooldownRemainingMs);
-      } else {
-        this._clearCooldownReevalTimer();
-      }
+      this._scheduleCooldownReeval(cooldownRemainingMs);
       return;
     }
     if (active && !this._isUnattributedActivityCorroborated()) {
@@ -890,10 +897,6 @@ class AudioActivityDetector extends EventEmitter {
           this.emit("sustained-audio-detected", { durationMs, detectedAt: now, attributed });
         }, SUSTAINED_EVENT_DRIVEN_MS);
       }
-    } else {
-      this._clearSustainedTimer();
-      this.audioActiveStart = null;
-      if (this.hasPrompted) this._startResetTimer();
     }
   }
 

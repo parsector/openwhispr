@@ -552,13 +552,29 @@ func removeAllListeners() {
     }
 }
 
+func shutdown() {
+    removeAllListeners()
+    exit(0)
+}
+
+func setupParentWatcher() {
+    // Electron holds the write end open for this helper's lifetime. EOF also
+    // arrives on abrupt parent death, when no orderly signal can be sent.
+    // Serialize teardown with CoreAudio callbacks and signals on the main queue.
+    FileHandle.standardInput.readabilityHandler = { handle in
+        if handle.availableData.isEmpty {
+            handle.readabilityHandler = nil
+            DispatchQueue.main.async { shutdown() }
+        }
+    }
+}
+
 func setupSignalHandlers() {
     for signalNumber in [SIGTERM, SIGINT] {
         signal(signalNumber, SIG_IGN)
         let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
         source.setEventHandler {
-            removeAllListeners()
-            exit(0)
+            shutdown()
         }
         source.resume()
         signalSources.append(source)
@@ -619,6 +635,7 @@ if CommandLine.arguments.contains("--print-default-input") {
 }
 
 setupSignalHandlers()
+setupParentWatcher()
 if startProcessMonitoring() {
     listenerMode = .process
     announceProcessMonitoring()

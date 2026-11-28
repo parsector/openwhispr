@@ -1184,8 +1184,25 @@ test("closing a note-only meeting preserves the current audio prompt until a lat
   assert.equal(shown.length, 1, "the same live call must not prompt again");
   active = false;
   await detector._check();
-  t.mock.timers.tick(5 * 60 * 1000);
+  t.mock.timers.tick(60_000);
+  assert.equal(
+    detector.hasPrompted,
+    false,
+    "inactivity still rearms within the original one-minute bound"
+  );
   active = true;
+  await detector._check();
+  await detector._check();
+  assert.equal(
+    shown.length,
+    1,
+    "closing a note deliberately suppresses prompts during the end cooldown"
+  );
+  t.mock.timers.tick(4 * 60_000 - 1);
+  await detector._check();
+  await detector._check();
+  assert.equal(shown.length, 1, "the end cooldown must last the full five minutes");
+  t.mock.timers.tick(1);
   await detector._check();
   await detector._check();
   assert.equal(shown.length, 2, "a later call still prompts after the end cooldown");

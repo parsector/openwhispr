@@ -3,7 +3,7 @@ const test = require("node:test");
 const { afterEach } = require("node:test");
 const assert = require("node:assert/strict");
 const Module = require("node:module");
-const { EventEmitter } = require("node:events");
+const { EventEmitter, once } = require("node:events");
 const childProcess = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -130,6 +130,47 @@ const createDeferred = () => {
   return { promise, reject, resolve };
 };
 const PLATFORMS = ["darwin", "win32", "linux"];
+
+test(
+  "darwin: the real listener transport holds stdin open until teardown",
+  { timeout: 10_000 },
+  async (t) => {
+    let child;
+    const Detector = loadDetector(
+      "darwin",
+      (_command, _args, options) => {
+        child = childProcess.spawn(
+          process.execPath,
+          [
+            "-e",
+            `
+      process.stdout.write('READY\\n');
+      process.stdin.on('end', () => process.exit(0));
+      process.stdin.resume();
+    `,
+          ],
+          options
+        );
+        return child;
+      },
+      () => {},
+      []
+    );
+    const detector = new Detector(() => []);
+    t.after(() => detector.stop());
+    await detector.start();
+    assert.ok(child.stdin?.writable, "the parent must own a live stdin pipe, not /dev/null");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(
+      child.exitCode,
+      null,
+      "the EOF-watching helper must survive while its parent lives"
+    );
+    const exited = once(child, "exit", { signal: AbortSignal.timeout(5000) });
+    child.stdin.end();
+    assert.deepEqual(await exited, [0, null]);
+  }
+);
 
 for (const platform of PLATFORMS) {
   test(`${platform}: a listener that fails to launch uses only a safe fallback`, async (t) => {
@@ -1320,6 +1361,28 @@ const SUSTAINED_MS = 2 * 1000;
 const COOLDOWN_MS = 5 * 60 * 1000;
 // Mirrors LISTENER_RESPAWN_BASE_MS in audioActivityDetector.js.
 const RESPAWN_MS = 5 * 1000;
+
+test("darwin: the same PID can prompt for a successive call after Stop during the end cooldown", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (event) => detections.push(event));
+  await detector.start();
+  const send = (line) => children[0].stdout.emit("data", `${line}\n`);
+  send("CAPABILITY PID");
+  send("MIC_START 900");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1);
+  detector.endMeeting();
+  send("MIC_STOP 900");
+  t.mock.timers.tick(60_000);
+  assert.equal(detector.hasPrompted, false, "one idle minute must rearm even inside cooldown");
+  t.mock.timers.tick(5 * 60_000);
+  send("MIC_START 900");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 2, "a reused app PID must detect the next call");
+});
 
 test("darwin: a mic edge swallowed by the recording gate is re-evaluated when recording stops", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
