@@ -681,6 +681,61 @@ test("darwin: a same-PID call after prolonged helper failure prompts again", asy
   assert.equal(detections.length, 2, "same app PID must not preserve an unobserved old call");
 });
 
+for (const transition of [
+  "recording gate",
+  "warm hold",
+  "meeting Stop",
+  "Stop-order",
+  "late Stop-order",
+]) {
+  test(`darwin: prolonged helper outage expiry survives ${transition}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+    const { detector, children } = createDetector("darwin");
+    t.after(() => detector.stop());
+    const detections = [];
+    detector.on("sustained-audio-detected", (data) => detections.push(data));
+    await detector.start();
+    children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+    t.mock.timers.tick(SUSTAINED_MS);
+    assert.equal(detections.length, 1);
+    const stopOrder = transition === "Stop-order" || transition === "late Stop-order";
+    if (stopOrder) detector.setUserRecording(true);
+    else detector.endMeeting();
+    children[0].emit("exit", 1);
+    if (transition === "recording gate") {
+      detector.setUserRecording(true);
+      detector.setUserRecording(false);
+    } else if (transition === "warm hold") {
+      detector.setMicWarmHold(true);
+      detector.setMicWarmHold(false);
+    } else if (transition !== "late Stop-order") {
+      detector.endMeeting();
+      if (transition === "Stop-order") detector.setUserRecording(false);
+    }
+    // Keep the real respawn/backoff path unavailable across the call boundary.
+    let launches = 0;
+    const tryEventDriven = detector._tryEventDriven.bind(detector);
+    detector._tryEventDriven = async (...args) => {
+      if (++launches <= 6) return false;
+      return tryEventDriven(...args);
+    };
+    for (const delay of [5_000, 10_000, 20_000, 40_000, 60_000, 60_000, 60_000]) {
+      t.mock.timers.tick(delay);
+      await flushImmediate();
+    }
+    assert.equal(children.length, 2);
+    if (transition === "late Stop-order") {
+      detector.endMeeting();
+      detector.setUserRecording(false);
+    }
+    children[1].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+    assert.equal(detector.hasLiveMeetingCapture(), true, "restored capture is live and reliable");
+    t.mock.timers.tick(COOLDOWN_MS);
+    t.mock.timers.tick(SUSTAINED_MS);
+    assert.equal(detections.length, 2, "same app PID must not preserve an unobserved old call");
+  });
+}
+
 test("darwin: a brief helper outage preserves suppression for an ongoing same-PID call", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("darwin");
@@ -698,6 +753,43 @@ test("darwin: a brief helper outage preserves suppression for an ongoing same-PI
   t.mock.timers.tick(COOLDOWN_MS);
   assert.equal(count, 1);
 });
+
+for (const transition of ["recording gate", "warm hold", "meeting Stop", "Stop-order"]) {
+  test(`darwin: observed same-PID recovery preserves suppression across ${transition}`, async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+    const { detector, children } = createDetector("darwin");
+    t.after(() => detector.stop());
+    let count = 0;
+    detector.on("sustained-audio-detected", () => count++);
+    await detector.start();
+    children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+    t.mock.timers.tick(SUSTAINED_MS);
+    assert.equal(count, 1);
+    if (transition === "Stop-order") detector.setUserRecording(true);
+    else detector.endMeeting();
+    children[0].emit("exit", 1);
+    if (transition === "recording gate") detector.setUserRecording(true);
+    else if (transition === "warm hold") detector.setMicWarmHold(true);
+    else detector.endMeeting();
+    t.mock.timers.tick(RESPAWN_MS);
+    await flushImmediate();
+    assert.equal(children.length, 2);
+    children[1].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+    assert.equal(detector.hasLiveMeetingCapture(), true);
+    // An observed active snapshot cancels expiry even behind a gate. Keep the
+    // gate up past the original deadline to catch an unconditional outage timer.
+    t.mock.timers.tick(INACTIVE_RESET_MS);
+    assert.equal(detector.hasPrompted, true, "observed capture must retain its prompt identity");
+    assert.equal(count, 1);
+    if (transition === "warm hold") detector.setMicWarmHold(false);
+    else if (transition === "recording gate" || transition === "Stop-order") {
+      detector.setUserRecording(false);
+    }
+    t.mock.timers.tick(COOLDOWN_MS);
+    t.mock.timers.tick(SUSTAINED_MS);
+    assert.equal(count, 1, "an observed ongoing call must not prompt twice");
+  });
+}
 
 test("darwin: stop() cancels a pending listener respawn", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
@@ -1407,6 +1499,8 @@ test("win32: portable native state seam handles reference counts and failures", 
 // Mirrors SUSTAINED_EVENT_DRIVEN_MS and COOLDOWN_MS in audioActivityDetector.js.
 const SUSTAINED_MS = 2 * 1000;
 const COOLDOWN_MS = 5 * 60 * 1000;
+// Mirrors INACTIVE_RESET_MS in audioActivityDetector.js.
+const INACTIVE_RESET_MS = 60 * 1000;
 // Mirrors LISTENER_RESPAWN_BASE_MS in audioActivityDetector.js.
 const RESPAWN_MS = 5 * 1000;
 

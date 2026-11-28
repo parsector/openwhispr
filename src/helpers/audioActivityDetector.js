@@ -74,6 +74,7 @@ class AudioActivityDetector extends EventEmitter {
     this._running = false;
     this._eventDriven = false;
     this._resetTimer = null;
+    this._outageResetDeadline = null;
     this._startGeneration = 0;
     this._micWarmHold = false;
     this._lastKnownMicState = false;
@@ -149,7 +150,7 @@ class AudioActivityDetector extends EventEmitter {
       this.consecutiveChecks = 0;
       this.audioActiveStart = null;
       this._clearSustainedTimer();
-      this._clearResetTimer();
+      this._clearResetTimer({ preserveOutage: true });
     } else {
       this._reevaluateAfterGate();
     }
@@ -166,7 +167,7 @@ class AudioActivityDetector extends EventEmitter {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
     this._clearSustainedTimer();
-    if (active) this._clearResetTimer();
+    if (active) this._clearResetTimer({ preserveOutage: true });
     if (!active) {
       this._reevaluateAfterGate();
     }
@@ -254,7 +255,7 @@ class AudioActivityDetector extends EventEmitter {
     this.consecutiveChecks = 0;
     this.audioActiveStart = null;
     this._clearSustainedTimer();
-    this._clearResetTimer();
+    this._clearResetTimer({ preserveOutage: true });
     this._clearCooldownReevalTimer();
     // The inactive edge may precede closing the note. Recreate the idle timer
     // we just cleared even when no later recording-gate transition will occur.
@@ -302,8 +303,9 @@ class AudioActivityDetector extends EventEmitter {
     }
   }
 
-  _startResetTimer() {
+  _startResetTimer({ observerOutage = false } = {}) {
     this._clearResetTimer();
+    this._outageResetDeadline = observerOutage ? Date.now() + INACTIVE_RESET_MS : null;
     this._resetTimer = setTimeout(() => {
       this._resetTimer = null;
       this.hasPrompted = false;
@@ -312,11 +314,24 @@ class AudioActivityDetector extends EventEmitter {
     }, INACTIVE_RESET_MS);
   }
 
-  _clearResetTimer() {
+  _clearResetTimer({ preserveOutage = false } = {}) {
+    // Gates and meeting Stop pause detection, but cannot restore observation
+    // of a call boundary lost during an outage. Observed active capture still
+    // cancels that expiry before the gates, and teardown clears it normally.
+    if (preserveOutage && this._outageResetDeadline !== null) {
+      // Stop can latch identity again after the timer has already fired. The
+      // same unobserved call boundary still applies until capture is observed.
+      if (Date.now() >= this._outageResetDeadline) {
+        this.hasPrompted = false;
+        this._promptedCapturePids.clear();
+      }
+      return;
+    }
     if (this._resetTimer) {
       clearTimeout(this._resetTimer);
       this._resetTimer = null;
     }
+    this._outageResetDeadline = null;
   }
 
   _killListenerProcess() {
@@ -422,7 +437,7 @@ class AudioActivityDetector extends EventEmitter {
       // A prolonged observer outage can hide the old call's idle edge. Keep
       // brief reconnects latched, but expire prompt identity on the existing
       // reset interval; a restored active snapshot cancels this timer.
-      if (this.hasPrompted) this._startResetTimer();
+      if (this.hasPrompted) this._startResetTimer({ observerOutage: true });
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
         this._startPolling();
