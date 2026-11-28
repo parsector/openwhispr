@@ -131,6 +131,18 @@ test("a failed recovery open preserves the current take's ownership", async (t) 
   await capture.release();
 });
 
+test("scoped disposal releases admission despite ended inputs from a health retry", async (t) => {
+  const { MicrophoneCapture, owner, stream, track } = await setup(t);
+  const capture = new MicrophoneCapture();
+  const deadInput = { getTracks: () => [{ readyState: "ended" }] };
+  await capture.open(() => deadInput);
+  await capture.open(() => stream);
+  capture.releaseStream(stream);
+  await capture.releasing;
+  assert.equal(track.readyState, "ended");
+  assert.equal(owner.acquire(new EventEmitter(), "next"), true);
+});
+
 test("a close in the opening turn cannot start capture in a later microtask", async (t) => {
   const { MicrophoneCapture, owner, stream } = await setup(t);
   const capture = new MicrophoneCapture();

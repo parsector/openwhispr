@@ -75,6 +75,19 @@ export class MicrophoneCapture {
     return this.current?.streams.has(stream) ?? false;
   }
 
+  releaseStream(stream) {
+    const session = this.current;
+    if (!session?.streams.delete(stream)) return;
+    stopStream(stream);
+    // A stale preparation can finish inside a newer take's session. Disposing
+    // its stream must leave every other stream and pending acquisition alone.
+    for (const owned of session.streams) {
+      if (owned.getTracks().every((track) => track.readyState === "ended"))
+        session.streams.delete(owned);
+    }
+    if (!session.streams.size && !session.pending.size) void this.release();
+  }
+
   release() {
     const session = this.current;
     if (!session) return this.releasing;

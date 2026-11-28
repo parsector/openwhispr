@@ -4,6 +4,56 @@ const { loadAudioManager } = require("./harness/audioManager");
 const { installMicCaptureGlobals } = require("../lib/rendererTestHarness");
 const { EventEmitter } = require("node:events");
 const { createMicrophoneCaptureOwner } = require("../../src/helpers/microphoneCaptureOwner");
+const { deferred } = require("./harness/deferred");
+
+test("a cancelled preparation cannot release a newer prepared microphone", async (t) => {
+  installMicCaptureGlobals(t);
+  const { AudioManager, window } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-stale-prepare-",
+    settingsKey: "__stalePrepareSettings",
+    settings: {},
+  });
+  const owner = createMicrophoneCaptureOwner();
+  const sender = new EventEmitter();
+  window.electronAPI.acquireMicrophoneCapture = (id) => owner.acquire(sender, id);
+  window.electronAPI.releaseMicrophoneCapture = (id) => owner.release(sender, id);
+  navigator.mediaDevices.getUserMedia = async () => {
+    const track = {
+      readyState: "live",
+      stop() {
+        this.readyState = "ended";
+      },
+    };
+    return { getTracks: () => [track], getAudioTracks: () => [track] };
+  };
+  const manager = new AudioManager();
+  const constraints = deferred();
+  manager.isRecordingAllowedByPolicy = () => true;
+  manager.shouldUseStreaming = () => true;
+  manager._startPcmTap = () => null;
+  let requests = 0;
+  manager.getAudioConstraints = async () => {
+    if (++requests === 1) await constraints.promise;
+    return { audio: true };
+  };
+  try {
+    const stale = manager.prepareMicCapture();
+    await new Promise(setImmediate);
+    manager.cancelPreparedMicCapture();
+    const current = await manager.prepareMicCapture();
+    assert.equal(current.stream.getTracks()[0].readyState, "live");
+    constraints.resolve();
+    assert.equal(await stale, null);
+    await manager.microphoneCapture.releasing;
+    assert.equal(current.stream.getTracks()[0].readyState, "live");
+    assert.equal(manager.preparedMicCapture.prepared, current);
+    assert.equal(owner.acquire(new EventEmitter(), "contender"), false);
+    assert.equal(await manager.preparedMicCapture.take(), current);
+  } finally {
+    constraints.resolve();
+    manager.cleanup();
+  }
+});
 
 for (const action of ["stopRecording", "cancelRecording"]) {
   for (const pending of ["none", "constraints", "input", "fallback"]) {

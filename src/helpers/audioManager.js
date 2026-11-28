@@ -1406,7 +1406,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   _disposePrepared(prepared) {
     if (!prepared) return;
     disposePreparedCapture(prepared);
-    this._markCaptureStreamReleased();
+    this._markCaptureStreamReleased(prepared.stream);
   }
 
   // Record from the instant the prepared stream delivers frames. If the hold
@@ -1458,8 +1458,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // demonstrably open, so stamp warmth (a free warm window for the next open,
   // replacing #1284's post-transcription re-warm and its extra device open)
   // and explicitly release the reservation when the take ends.
-  _markCaptureStreamReleased() {
+  _markCaptureStreamReleased(stream) {
     this._stampMicWarm();
+    if (stream) {
+      this.microphoneCapture?.releaseStream(stream);
+      return;
+    }
     // Rotation/recovery replaces a stream within the same recording. Keep its
     // reservation until the take ends, including the gap before the new open.
     if (this.micRecovery?.started || this._rotatingBatchRecorder) return;
