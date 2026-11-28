@@ -186,6 +186,23 @@ test("meeting stop discards queued evidence and cools down new detections", asyn
   engine.stop();
 });
 
+test("expired queued audio leaves a valid calendar reminder available for delivery", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { engine, audioDetector, shown } = createEngine();
+  t.after(() => engine.stop());
+  engine.setPreferences({ audioDetection: true });
+  engine.setUserRecording(false);
+  audioDetector.emit("sustained-audio-detected", { durationMs: 2000 });
+  engine.handleCalendarReminder({ id: "upcoming", summary: "Valid calendar reminder" });
+  assert.equal(engine._notificationQueue.length, 2);
+  audioDetector.getExternalMicState = () => ({ reliable: true, externalMicActive: false });
+  t.mock.timers.tick(2500);
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0].detectionId, "calendar:upcoming");
+  assert.equal(engine.activeDetections.has("audio:sustained-audio"), false);
+  assert.equal(engine.activeDetections.has("calendar:upcoming"), true);
+});
+
 test("a closed calendar meeting cannot prompt or label a later call", async () => {
   let now = Date.now();
   const { engine, audioDetector, shown } = createEngine({ now: () => now });

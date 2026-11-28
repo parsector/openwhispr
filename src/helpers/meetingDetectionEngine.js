@@ -452,11 +452,7 @@ class MeetingDetectionEngine {
 
   _showPrompt(detectionId, source, key, data) {
     // Revalidate at delivery too: a queued event is no longer live evidence.
-    if (
-      this._now() < this._meetingCooldownUntil ||
-      this._closedCalendarEvents.has(key) ||
-      (source === "audio" && !this._hasLiveAudioEvidence())
-    ) {
+    if (!this._canDeliverPrompt(source, key)) {
       this.activeDetections.delete(detectionId);
       return;
     }
@@ -830,9 +826,10 @@ class MeetingDetectionEngine {
     this._notificationQueue = [];
     // Queued before its note opened, so the check on arrival couldn't catch it.
     const pending = queued.filter(({ source, key }) => {
-      const belongs = this._belongsToMeetingNote(source, key);
-      if (belongs) this.activeDetections.delete(`${source}:${key}`);
-      return !belongs;
+      const rejected =
+        !this._canDeliverPrompt(source, key) || this._belongsToMeetingNote(source, key);
+      if (rejected) this.activeDetections.delete(`${source}:${key}`);
+      return !rejected;
     });
     if (pending.length === 0) return;
     const [best, ...discarded] = pending;
@@ -934,6 +931,14 @@ class MeetingDetectionEngine {
 
   _hasLiveAudioEvidence() {
     return this.audioActivityDetector.hasLiveMeetingCapture();
+  }
+
+  _canDeliverPrompt(source, key) {
+    return (
+      this._now() >= this._meetingCooldownUntil &&
+      !this._closedCalendarEvents.has(key) &&
+      (source !== "audio" || this._hasLiveAudioEvidence())
+    );
   }
 
   _finishMeeting(eventId) {
