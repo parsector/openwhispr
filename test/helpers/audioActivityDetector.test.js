@@ -651,6 +651,54 @@ test("darwin: repeated listener crashes back off exponentially", async (t) => {
   assert.equal(children.length, 3);
 });
 
+test("darwin: a same-PID call after prolonged helper failure prompts again", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  t.after(() => detector.stop());
+  const detections = [];
+  detector.on("sustained-audio-detected", (data) => detections.push(data));
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 1);
+  detector.endMeeting();
+  children[0].emit("exit", 1);
+  // Real respawn timer, with failed launches spanning the unobserved call boundary.
+  let launches = 0;
+  const tryEventDriven = detector._tryEventDriven.bind(detector);
+  detector._tryEventDriven = async (...args) => {
+    if (++launches <= 6) return false;
+    return tryEventDriven(...args);
+  };
+  for (const delay of [5_000, 10_000, 20_000, 40_000, 60_000, 60_000, 60_000]) {
+    t.mock.timers.tick(delay);
+    await flushImmediate();
+  }
+  assert.equal(children.length, 2);
+  children[1].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  t.mock.timers.tick(COOLDOWN_MS);
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(detections.length, 2, "same app PID must not preserve an unobserved old call");
+});
+
+test("darwin: a brief helper outage preserves suppression for an ongoing same-PID call", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
+  const { detector, children } = createDetector("darwin");
+  t.after(() => detector.stop());
+  let count = 0;
+  detector.on("sustained-audio-detected", () => count++);
+  await detector.start();
+  children[0].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  t.mock.timers.tick(SUSTAINED_MS);
+  assert.equal(count, 1);
+  children[0].emit("exit", 1);
+  t.mock.timers.tick(RESPAWN_MS);
+  await flushImmediate();
+  children[1].stdout.emit("data", "CAPABILITY PID\nMIC_START 900\n");
+  t.mock.timers.tick(COOLDOWN_MS);
+  assert.equal(count, 1);
+});
+
 test("darwin: stop() cancels a pending listener respawn", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 10_000 });
   const { detector, children } = createDetector("darwin");

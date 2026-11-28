@@ -419,6 +419,10 @@ class AudioActivityDetector extends EventEmitter {
       // emit de-dupe would swallow it.
       this._setPidScopedCapability(false);
       this._resetListenerState();
+      // A prolonged observer outage can hide the old call's idle edge. Keep
+      // brief reconnects latched, but expire prompt identity on the existing
+      // reset interval; a restored active snapshot cancels this timer.
+      if (this.hasPrompted) this._startResetTimer();
       if (this._running && this._eventDriven) {
         this._eventDriven = false;
         this._startPolling();
