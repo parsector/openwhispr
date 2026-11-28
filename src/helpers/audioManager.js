@@ -1353,6 +1353,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     ) {
       return null;
     }
+    const generation = this.preparedMicCapture.generation;
     try {
       const prepared = await this.preparedMicCapture.prepare(async () => {
         // Built before the mic opens so its graph is rendering by the time the
@@ -1360,6 +1361,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         const pcmTap = this._startPcmTap();
         try {
           const constraints = await this.getAudioConstraints();
+          if (generation !== this.preparedMicCapture.generation)
+            throw new Error("Microphone preparation cancelled");
           const stream = await this._acquireCaptureStream(constraints);
           const value = {
             stream,

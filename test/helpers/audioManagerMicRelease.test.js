@@ -6,6 +6,43 @@ const { EventEmitter } = require("node:events");
 const { createMicrophoneCaptureOwner } = require("../../src/helpers/microphoneCaptureOwner");
 const { deferred } = require("./harness/deferred");
 
+test("cancelled preparation cannot open input after its constraints resolve", async (t) => {
+  installMicCaptureGlobals(t);
+  const { AudioManager, window } = await loadAudioManager(t, {
+    cachePrefix: "openwhispr-cancel-constraints-",
+    settingsKey: "__cancelConstraintsSettings",
+    settings: {},
+  });
+  const owner = createMicrophoneCaptureOwner();
+  const sender = new EventEmitter();
+  window.electronAPI.acquireMicrophoneCapture = (id) => owner.acquire(sender, id);
+  window.electronAPI.releaseMicrophoneCapture = (id) => owner.release(sender, id);
+  let opens = 0;
+  const getUserMedia = navigator.mediaDevices.getUserMedia;
+  navigator.mediaDevices.getUserMedia = async (...args) => {
+    opens++;
+    return getUserMedia(...args);
+  };
+  const manager = new AudioManager();
+  const constraints = deferred();
+  manager.isRecordingAllowedByPolicy = () => true;
+  manager.shouldUseStreaming = () => true;
+  manager._startPcmTap = () => null;
+  manager.getAudioConstraints = () => constraints.promise;
+  try {
+    const opening = manager.prepareMicCapture();
+    await new Promise(setImmediate);
+    manager.cancelPreparedMicCapture();
+    constraints.resolve({ audio: true });
+    assert.equal(await opening, null);
+    assert.equal(opens, 0, "cancellation must prevent a later hardware request");
+    assert.equal(owner.acquire(new EventEmitter(), "contender"), true);
+  } finally {
+    constraints.resolve({ audio: true });
+    manager.cleanup();
+  }
+});
+
 test("a cancelled preparation cannot release a newer prepared microphone", async (t) => {
   installMicCaptureGlobals(t);
   const { AudioManager, window } = await loadAudioManager(t, {
