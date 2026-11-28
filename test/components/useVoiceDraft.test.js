@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const React = require("react");
+const { EventEmitter } = require("node:events");
 const path = require("node:path");
 const sourceRoot = process.env.OPENWHISPR_TEST_SOURCE || path.resolve(__dirname, "../..");
 const {
@@ -22,6 +23,7 @@ async function mountVoiceDraft(
 ) {
   const bridge = [];
   const scopes = new Set();
+  const events = new EventEmitter();
   let root = null;
   // After hooks run in registration order: unmount while the globals exist.
   t.after(() => root && React.act(async () => root.unmount()));
@@ -35,7 +37,13 @@ async function mountVoiceDraft(
   });
   installBrowserGlobals(t, {
     window: {
+      addEventListener: (event, listener) => events.on(event, listener),
+      removeEventListener: (event, listener) => events.off(event, listener),
       electronAPI: {
+        onReleaseIdleMicrophone: (listener) => {
+          events.on("hide", listener);
+          return () => events.off("hide", listener);
+        },
         getActiveAccountScope: async () => ({ accountId: "a", authGeneration: 1 }),
         onActiveAccountScopeChanged: (listener) => {
           scopes.add(listener);
@@ -132,6 +140,7 @@ async function mountVoiceDraft(
     deleted,
     transcripts,
     bridge,
+    emit: (event) => events.emit(event),
     unmount: () => React.act(async () => root.unmount()).then(() => (root = null)),
   };
 }
@@ -269,6 +278,49 @@ const deferred = () => {
 };
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+for (const phase of ["constraints", "fallback"]) {
+  for (const action of ["stop", "cancel", "hide", "unmount", "beforeunload"]) {
+    test(`voice draft ${action} prevents later ${phase} hardware requests`, async (t) => {
+      const pending = deferred();
+      const reached = deferred();
+      const h = await mountVoiceDraft(t, {
+        settings: SIGNED_IN_CLOUD,
+        getUserMedia: async (_constraints, stream) => {
+          if (phase === "fallback") {
+            reached.resolve();
+            await pending.promise;
+            throw new Error("preferred device lost");
+          }
+          return stream;
+        },
+      });
+      if (phase === "constraints")
+        navigator.mediaDevices.enumerateDevices = async () => {
+          reached.resolve();
+          await pending.promise;
+          return [{ kind: "audioinput", deviceId: "usb-mic", label: "USB Mic" }];
+        };
+      let opening;
+      await React.act(async () => {
+        opening = h.voice().start();
+        await reached.promise;
+      });
+      if (action === "unmount") await h.unmount();
+      else
+        await React.act(async () => {
+          if (action === "beforeunload" || action === "hide") h.emit(action);
+          else h.voice()[action]();
+        });
+      await React.act(async () => {
+        pending.resolve();
+        assert.equal(await opening, false);
+      });
+      assert.equal(h.opened.length, phase === "constraints" ? 0 : 1);
+      assert.deepEqual(h.transcripts, [], "abandoned capture is silent");
+    });
+  }
+}
 
 test("a take can't start while the last one is still transcribing", async (t) => {
   const transcription = deferred();

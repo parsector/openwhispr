@@ -30,19 +30,21 @@ interface UseVoiceDraftOptions {
 
 // The microphone picked in Settings, with dictation's constraints; the default
 // device when that one can't be resolved or opened.
-async function openMicrophone(): Promise<MediaStream> {
+async function openMicrophone(
+  openInput: (constraints: MediaStreamConstraints) => Promise<MediaStream>
+): Promise<MediaStream> {
   try {
     const resolution = await resolvePreferredMicrophone({ settings: getSettings() });
     const deviceId = resolution.device?.deviceId;
     if (deviceId) {
-      return await navigator.mediaDevices.getUserMedia({
+      return await openInput({
         audio: { deviceId: { exact: deviceId }, ...TRANSCRIPTION_AUDIO_CONSTRAINTS },
       });
     }
   } catch {
     // Fall through to the default device.
   }
-  return navigator.mediaDevices.getUserMedia({ audio: { ...TRANSCRIPTION_AUDIO_CONSTRAINTS } });
+  return openInput({ audio: { ...TRANSCRIPTION_AUDIO_CONSTRAINTS } });
 }
 
 /**
@@ -254,9 +256,10 @@ export function useVoiceDraft({
       return true;
     } catch (error) {
       teardownCapture();
-      (onMicErrorRef.current ?? onErrorRef.current)(
-        error instanceof Error ? error.message : String(error)
-      );
+      if (!opening.abandoned)
+        (onMicErrorRef.current ?? onErrorRef.current)(
+          error instanceof Error ? error.message : String(error)
+        );
       return false;
     } finally {
       openingRef.current = null;
@@ -264,7 +267,10 @@ export function useVoiceDraft({
   }, [finishRecording, teardownCapture]);
 
   const stop = useCallback(() => {
-    if (openingRef.current) openingRef.current.abandoned = true;
+    if (openingRef.current) {
+      openingRef.current.abandoned = true;
+      void captureRef.current.release();
+    }
     try {
       if (recorderRef.current?.state !== "inactive") recorderRef.current?.stop();
     } catch {
@@ -284,7 +290,13 @@ export function useVoiceDraft({
   }, [stop]);
 
   // Discard silently if the surface unmounts mid-take.
-  useEffect(() => cancel, [cancel]);
+  useEffect(() => {
+    window.addEventListener("beforeunload", cancel);
+    return () => {
+      window.removeEventListener("beforeunload", cancel);
+      cancel();
+    };
+  }, [cancel]);
   useEffect(() => window.electronAPI?.onReleaseIdleMicrophone?.(cancel), [cancel]);
   useEffect(() => subscribeAuthBoundary(cancel), [cancel]);
 
